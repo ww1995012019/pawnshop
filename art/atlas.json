@@ -215,5 +215,28 @@
       "deal",
       "refuse"
     ]
+  },
+  "dialogueFrame": {
+    "image": "frame-dialogue.png",
+    "width": 2172,
+    "height": 724,
+    "slices": [
+      650,
+      1000,
+      522
+    ]
+  },
+  "actionFrames": {
+    "image": "frame-actions.png",
+    "width": 1254,
+    "height": 1254,
+    "rows": 4
+  },
+  "cabinet": {
+    "image": "cabinet.png",
+    "width": 1448,
+    "height": 1086,
+    "columns": 4,
+    "rows": 3
   }
 }
