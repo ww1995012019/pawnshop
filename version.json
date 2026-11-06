@@ -1,13 +1,13 @@
 {
-  "ui": "fullscreen-v2",
-  "bundle": "index-DJp56NZa.js",
-  "entry": "v2/",
+  "ui": "fullscreen-v3",
+  "bundle": "index-1dWtSJNo.js",
+  "entry": "v3/",
   "changes": [
-    "全屏店铺",
-    "场景内HUD",
-    "纸质交易单",
-    "底部四按钮",
-    "人物进退场",
-    "昼夜转场"
+    "手绘道具图标",
+    "皮革铜角鉴定册",
+    "复古铁路招牌",
+    "立体操作按钮",
+    "人物肖像对白",
+    "暖光与过场动画"
   ]
 }

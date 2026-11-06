@@ -191,5 +191,29 @@
     "image": "shop.png",
     "width": 1672,
     "height": 941
+  },
+  "folio": {
+    "image": "folio.png",
+    "width": 1024,
+    "height": 1536
+  },
+  "uiIcons": {
+    "image": "ui-icons.png",
+    "width": 1774,
+    "height": 887,
+    "logicalWidth": 1024,
+    "logicalHeight": 512,
+    "columns": 4,
+    "rows": 2,
+    "frames": [
+      "watch",
+      "purse",
+      "keys",
+      "seal",
+      "inspect",
+      "notes",
+      "deal",
+      "refuse"
+    ]
   }
 }
