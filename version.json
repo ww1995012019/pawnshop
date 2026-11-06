@@ -1,0 +1,13 @@
+{
+  "ui": "fullscreen-v2",
+  "bundle": "index-DJp56NZa.js",
+  "entry": "v2/",
+  "changes": [
+    "全屏店铺",
+    "场景内HUD",
+    "纸质交易单",
+    "底部四按钮",
+    "人物进退场",
+    "昼夜转场"
+  ]
+}
