@@ -205,26 +205,13 @@
     "logicalHeight": 512,
     "columns": 4,
     "rows": 2,
-    "frames": [
-      "watch",
-      "purse",
-      "keys",
-      "seal",
-      "inspect",
-      "notes",
-      "deal",
-      "refuse"
-    ]
+    "frames": ["watch", "purse", "keys", "seal", "inspect", "notes", "deal", "refuse"]
   },
   "dialogueFrame": {
     "image": "frame-dialogue.png",
     "width": 2172,
     "height": 724,
-    "slices": [
-      650,
-      1000,
-      522
-    ]
+    "slices": [650, 1000, 522]
   },
   "actionFrames": {
     "image": "frame-actions.png",
@@ -238,5 +225,40 @@
     "height": 1086,
     "columns": 4,
     "rows": 3
+  },
+  "noticeBoard": {
+    "image": "notice-board.png",
+    "width": 1122,
+    "height": 1402
+  },
+  "manualBook": {
+    "image": "manual-book.png",
+    "width": 1536,
+    "height": 1024
+  },
+  "receiptPaper": {
+    "image": "receipt-paper.png",
+    "width": 1122,
+    "height": 1402
+  },
+  "commission": {
+    "image": "commission.png",
+    "width": 1254,
+    "height": 1254,
+    "logicalWidth": 1536,
+    "logicalHeight": 1536,
+    "columns": 3,
+    "rows": 3,
+    "frames": [
+      "旧铜线",
+      "搪瓷杯",
+      "旧站车票",
+      "齿轮零件",
+      "棉布手套",
+      "褪色明信片",
+      "维修箱",
+      "生活用品箱",
+      "收藏箱"
+    ]
   }
 }
