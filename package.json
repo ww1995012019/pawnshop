@@ -1,16 +1,17 @@
 {
-  "name": "greyline-pawnshop",
-  "version": "0.2.0",
+  "name": "orbital-secondhand",
+  "version": "0.3.0",
   "private": true,
   "type": "3d",
-  "description": "灰线旧货铺 — Cocos Creator 3.8.8 浏览器版",
+  "description": "轨道旧货局 — Cocos Creator 空间站经营网页版",
   "scripts": {
     "engine:prepare": "node scripts/prepare-engine.mjs",
     "build:web": "node scripts/build-web.mjs",
     "preview": "node scripts/serve.mjs",
-    "test": "node scripts/test-model.mjs",
+    "test": "node scripts/test-model.mjs && node scripts/test-orbital.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.web.json",
-    "build:pages": "npm run build:web && node scripts/stage-pages.mjs"
+    "build:pages": "npm run build:web && node scripts/stage-pages.mjs",
+    "test:orbital": "node scripts/test-orbital.mjs"
   },
   "devDependencies": {
     "@babel/plugin-proposal-export-default-from": "7.17.12",

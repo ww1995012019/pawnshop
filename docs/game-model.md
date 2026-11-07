@@ -1,67 +1,73 @@
-# 灰线旧货铺：纯 TypeScript 游戏模型
+# 轨道旧货局 TypeScript 游戏模型
 
-`data.ts` 保留原网页的 12 件货物、6 位客人、对话、鉴定线索、每日故事和 6 件委托物资。
-`model.ts` 是无渲染器、无 DOM、无存储依赖的不可变 reducer。`save.ts` 负责存档验证和旧版本迁移。
+新版模型位于 `assets/scripts/orbital/`。`data.ts` 定义 P0 内容，`types.ts` 定义状态和动作，`model.ts` 提供不依赖 Cocos、DOM 或设备存储的 reducer。界面先提交规则，再播放表现；动画完成回调不负责支付、生成物品或推进日期。
 
 ```ts
-import { createGame, reduce, parseSave, serializeGame, SAVE_KEY, LEGACY_SAVE_KEY } from './game/model';
-let state = parseSave(storage.getItem(SAVE_KEY))
-  ?? parseSave(storage.getItem(LEGACY_SAVE_KEY))
-  ?? createGame();
-state = reduce(state, { type: 'ARRIVE' });
-storage.setItem(SAVE_KEY, serializeGame(state));
+import {
+  ORBITAL_SAVE_KEY, createOrbital, reduceOrbital,
+  parseOrbital, serializeOrbital,
+} from './orbital/model';
+
+let state = parseOrbital(storage.getItem(ORBITAL_SAVE_KEY)) ?? createOrbital();
+state = reduceOrbital(state, { type: 'ARRIVE' });
+storage.setItem(ORBITAL_SAVE_KEY, serializeOrbital(state));
 ```
 
-状态与动作的类型从 `model.ts` 导入：`GameState`、`GameAction`、`ItemInstance`、`Trade`、
-`DayReport`、`Check`（也可用 `CheckType`）、`Category`。数值和文本均不依赖 Cocos。
+## 开局、日期与经济
 
-## UI 接口
+`createOrbital(seed?)` 建立 schema 3 档案：第1天、12 AP、1200 Cr、关注度12；站务署/拾荒者互助会/旧轨商盟关系分别为30/35/20。初始保留六件有来源记录的自有货物，每种基础材料两份。当前来客与首三天教学货源按日程生成；`seed` 存入档案，不应将其描述为已完成的随机事件系统。
 
-- `createGame(seed?)`：180 票、3 件已鉴定初始货物、7 天试营业。相同种子得到相同来客和行情。
-- `reduce(state, action)`：返回新状态；旧快照不受影响。无效动作一般返回原状态，规则阻挡说明见 `state.notice`。
-- `ARRIVE`：接待客人；`trade.role` 是 `seller`（玩家收购）或 `buyer`（玩家出售）。
-- `SELECT {uid}`：为买家选择可交易的陈列商品。`currentItem(state)` 统一取得当前商品。
-- `START_CHECK {uid, check}`：扣除 4/8/12 分钟，创建 `inspection`。前置交互由 UI 完成，
-  `CHECK_STEP` 记入证据：外观共 3 次，功能/编号各 1 次。过程中存档可继续，已完成项目不重复收费。
-- `OFFER {price, acknowledge?}` / `ACCEPT`：每轮 4 分钟，最多 3 轮。达成后 `trade.locked=true`。
-  `wouldOffend(state, price)` 可供 UI 前置提示，明确确认后传 `acknowledge:true`，同一交易只扣 2 点信誉。
-- `DELIVER {tradeId}`：再用 6 分钟交割；必须传当前 `trade.id`，防止动画回调或重复点击交割。
-  `deliveryBlocker(state)` 返回不能交割的原因。
-- `REFUSE` 或 `DISMISS`：礼貌结束当前来访，耗时 2 分钟，无信誉惩罚。
-- `DISPLAY {uid, riskLabel?}`：上架/撤下。`PLACE {uid, slot, riskLabel?}`：指定 0–7 号格，
-  有货时交换原位置；`slot:null` 撤下。未核验商品必须明确传 `riskLabel:true`。
-  `displaySlots(inventory)` 返回 8 个稳定格位。`PRICE {uid, price}` 更新标价。
-- `START_COMMISSION`（别名 `COMMISSION`）：预扣 90 分钟。`SORT {index, category}` 正确归类后，
-  6 件全部完成获得 40 票，每日一次。`SORT_ALL` 是保留的辅助动作。
-- `RECYCLE {uid}`：6 分钟，取得真实当前价值的 35% 向下取整，每天最多 2 次，不计售出数量。
-- `CLOSE` → `SETTLE` → `NEXT`：日结扣耗材 15，第三天租金 90，第七天 210。
-  `BACK` 可在仍有时间时从待结算页返回营业。进行中的鉴定/委托必须先完成。
+每笔交割消耗1 AP。同一实例首次取得鉴定证据支付1 AP，此后换工具和复看不重复收费；工作灯升级后该费用为0。还价最多3次，不另扣AP。维修按配方消耗1 AP，组装消耗2 AP，拆解消耗1 AP。预览和三道维修准备不提前扣材料，最终确认才一次提交。
 
-`appraisal(item, market)` 提供 `{center, exact, low, high, price}`。`price` 是模型真实价值，
-UI 在 `exact=false` 时只应展示区间。`trueValue`、`reservationPrice` 供内部规则、调试使用。
-`eligibleItems` 筛选当前买家愿意交易的商品；`clockLabel`、`remainingMinutes`、`rentDue` 供 HUD 使用。
+每天维护20 Cr，租金在第7/14/21天分别收取450/495/545 Cr。`SETTLE` 扣费并生成报告，重复调用不重复扣款；`NEXT` 清空当日AP和来客进度，保留库存、证据、订单与材料。第21天结算后产生经营路线结果，下一步进入终局，不生成第22天。当前结果按关注度和派系关系等模型条件产生，不代表所有P1分支剧情已制作。
 
-## 存档与去重
+## 商品、证据与交易
 
-`parseSave(raw)` 接收 JSON 字符串，校验失败返回 `null`，永不抛出解析错误。
-优先读取 `greyline-save-v2`，再尝试旧 `greyline-save-v1`；成功迁移后写入新键，保留旧键供回退。
-模型不会自行读写设备存储。
+`OrbitalItem` 以 `uid` 标识原物实例，记录定义ID、所有权、品相、功能、真伪、来源、独立工具证据、成本、位置/占格、封存与订单占用。`owner` 区分店铺自有、顾客原物和抵押保管；来源核验不等于功能正常，修复也不自动修改真伪或来源。
 
-新格式同时带 `schema:2` 和 `version:2`。所有商品使用唯一实例 `uid`，所有账本变动使用唯一
-`transactionId`；`completedTrades` 与交易账本互相核对，已交割交易 ID 不能再次结算。
-迁移保留种子、随机数状态、当前来客、鉴定进度、库存和日结；缺失的旧陈列格恢复为稳定位置，
-旧 `nextId` 按已存在身份向上修正。仅复制经过验证的字段，拒绝负数、重复 UID、重复交易、
-非法引用、超限数组、伪造类别及超大存档。
+| 动作/函数 | 规则 |
+| --- | --- |
+| `ARRIVE` | 建立当前来访；每日四位预约，首三天货源支持教学节奏 |
+| `CHECK {uid,tool}` | 保存一条 `TOL-001..006` 工具证据；已有同一证据时免费复看，不重复扣AP |
+| `estimate(item)` | 物证不足时显示区间；至少两条相关且独立的工具证据后才给精确估值 |
+| `OFFER {price,evidence?}` | 价格必须为正整数；只能引用已取得证据，证据参与可接受报价判断，最多三轮 |
+| `ACCEPT` | 锁定价格，不提前支付 |
+| `SELECT_TRADE {uid}` | 推荐自有、来源合规且未隔离/预留的实物；当前选中货物不能跨页面同时移动、拆解或交出 |
+| `DELIVER {tradeId}` | 核对当前交易ID、资金、AP、归属和仓位；现金、原物实例与账本一次提交，重复ID不重放 |
+| `REFUSE` | 结束当前来访，原物收回，不改资金和归属 |
+| `PAWN {tradeId}` | 两条独立物证后按估值区间中位数的40%支付抵押本金，消耗1AP；原物进入保管柜而非自有库存 |
+| `REDEEM {uid}` | 三日赎期加一日宽限；本金回收与8%服务费分别记账，原物离开保管柜 |
 
-七日结清费用后，现金至少 120、信誉至少 40、售出至少 12 为 `win`，否则为 `survive`；
-结算费用不足为 `bankrupt`。`report.gross` 只算销售减商品收购成本，回收不混入销售毛利。
+当前价格模型按物品基值、品相、功能和真伪计算，不声称已实现全部P1市场/拍卖需求系统。抵押到期处理会保持物品实例，转为可经营归属并寻找不重叠仓位；保管期内不能销售、拆解或加工。
 
-## 验证
+## 仓储与来源核验
+
+普通仓库10×6格。`canPlace` 检查按定义尺寸、90°旋转后的边界和重叠；`MOVE` 失败保留原坐标。销售架24位、隔离柜12位、抵押柜16位与普通仓格分开。`DISPLAY` 要求自有、来源通过、至少两条物证，且未被订单/当前交易占用。`PRICE` 修改挂牌价；货架升级目前使合法陈列报价提高5%，不改变普通仓库尺寸。
+
+`SCAN` 保存扫描记录，不直接把不明来源变合法。`REGISTER` 要求扫描和相应物证，成功后收取35 Cr与1 AP，降低关注度6；重复登记不重复扣费。`ISOLATE` 将争议件封存，来源尚未通过时不能解除隔离。`RETURN_ITEM` 返还原物，不生成虚假来源或额外报酬。第三天起，未处理的来源争议会阻止安检结算；登记、隔离或归还均可形成有效处理路径。
+
+## 维修、组装与订单
+
+`REPAIR_STEP {uid,stage}` 依序记录0/1/2三道准备，不能跳级。`REPAIR {uid,recipeId}` 核对诊断、配方兼容、三道工序、AP与材料，成功后一次扣料并改变功能/品相，保留原物UID和所有权，重复修复不刷价值。五条维修配方使用开盖、换件、接线或校准及复测等可见操作；同类货物可共享兼容配方。
+
+`DISMANTLE` 不可逆移除合法自有原物，消耗1 AP并回收导电纤维×2、标准微线圈×1。顾客、抵押、隔离、预留、来源不明或当前交易中的物品不能拆解。界面在提交前单独确认。
+
+`CRAFT {recipeId:'REC-006'}` 需要真实舱门伺服器与磁悬轴承、三道槽位/端子准备及配方材料，一次消耗主料与2 AP，生成 `BND-001` 舱门维护套组。成品需要3×2仓位；条件不足时不消耗主料或材料。
+
+12张订单用 `available/active/done/failed` 记录阶段，`orderEarliest` 限制开放日。`TAKE_ORDER` 为委修单登记顾客原物，`DELIVER_ORDER` 校验具体UID、归属、型号、品相、维修、物证及来源，交付与报酬同时提交。顾客原物不能用店铺同型号货替换；超期仍保留原物所有权，不能借失败状态据为己有。维修补料通过 `BUY_MATERIAL` 支付实际现金。
+
+首次欠费可开放一次限期清仓窗口。`EMERGENCY_SALE` 只出售真实、合规、未占用的自有库存，按当前价值55%变现且不耗AP；不会凭空增加救济金，同一实例不能重复出售。补齐后可重新结算，窗口不能逐日刷取。
+
+## 存档与兼容边界
+
+`serializeOrbital` 输出JSON；`parseOrbital` 对schema、数值、ID、UID去重、格位重叠、订单、材料和保管上限等校验，失败返回 `null`。新版键为 `orbital-save-v3`，设置键为 `orbital-prefs-v3`。旧 `greyline-save-v1/v2` 是不同世界与经济规则，保留原键但不自动转换；旧模型与迁移测试仍在 `assets/scripts/game/` 中供回归。
+
+## 检查
 
 ```sh
-node_modules/.bin/tsc --strict --target ES2019 --module commonjs --moduleResolution node --skipLibCheck --outDir work/model-test assets/scripts/game/data.ts assets/scripts/game/model.ts assets/scripts/game/save.ts
-node tests/model.test.cjs "$PWD/work/model-test/model.js"
+npm run test:orbital
+npm test
+npm run typecheck
 ```
 
-测试覆盖完整七日结算、两次租金、各结局边界、鉴定中断恢复、三轮议价、交易去重、
-商品实例转移、陈列交换、社区委托、回收和恶意/旧存档处理。
+新版模型80项检查已通过，覆盖三天交易/维修/安检/升级、原子交割、原物归属、占格、配方提交、抵押/赎回、租金、救济和损坏存档。模型通过不替代真实浏览器操作和美术验收；完整三天浏览器110项检查已通过；末次专项补查见 [验证记录](validation.md)。

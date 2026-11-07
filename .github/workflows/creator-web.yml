@@ -25,5 +25,5 @@ jobs:
       - run: npm run build:web
       - uses: actions/upload-artifact@v4
         with:
-          name: greyline-creator-web
+          name: orbital-creator-web
           path: dist/
