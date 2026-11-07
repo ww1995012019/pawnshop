@@ -1,5 +1,5 @@
 // Generates the v12 game-UI atlases from vector sources so they stay editable:
-//   assets/resources/art/orbital-hud.png    8×3 icon atlas, 128px cells
+//   assets/resources/art/orbital-hud.png    8×4 icon atlas, 128px cells
 //   assets/resources/art/orbital-ui-kit.png 2×1 surface atlas, 512px cells (thermal paper, CRT bezel)
 // Run: node scripts/generate-ui-art.mjs
 import sharp from 'sharp';
@@ -90,9 +90,17 @@ const icons=[
   ()=>glyph('M54 18h20v36h36v20H74v36H54V74H18V54h36Z','steel'),
   // 23 minus
   ()=>glyph('M18 54h92v20H18Z','steel'),
+  // 24 help: brass "?" medallion
+  ()=>glyph(circle(64,64,50),'brass')+`<path d="M46 50a18 18 0 1 1 26 16c-6 3-8 6-8 12v4" fill="none" stroke="${INK}" stroke-width="12" stroke-linecap="round"/><circle cx="64" cy="98" r="7" fill="${INK}"/>`,
+  // 25 next arrow
+  ()=>glyph('M24 50h44V28l40 36-40 36V78H24Z','cyan'),
+  // 26 tutorial / lightbulb
+  ()=>glyph('M64 12a36 36 0 0 1 22 64c-4 4-6 8-6 14H48c0-6-2-10-6-14a36 36 0 0 1 22-64Z','brass')+glyph(rect(46,94,36,18,5),'steel')+line('M52 52c4-10 12-14 20-14','#FFF6DE',4,.8),
+  // 27 trophy / goal
+  ()=>glyph('M34 18h60v20a30 30 0 0 1-60 0Z','brass')+line('M34 26H16c0 18 10 26 22 26M94 26h18c0 18-10 26-22 26',INK,12)+line('M34 26H16c0 18 10 26 22 26M94 26h18c0 18-10 26-22 26','#E9BC7E',5)+glyph(rect(56,66,16,22,3),'brass')+glyph(rect(38,88,52,20,5),'steel'),
 ];
 
-const CELL=128,COLS=8,ROWS=3;
+const CELL=128,COLS=8,ROWS=4;
 const cells=await Promise.all(icons.map(async(draw,i)=>({
   input:await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${CELL}" height="${CELL}" viewBox="0 0 128 128">${defs}${draw()}</svg>`)).png().toBuffer(),
   left:(i%COLS)*CELL,top:Math.floor(i/COLS)*CELL,
@@ -126,4 +134,4 @@ const crt=`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
 </svg>`;
 const kit=await Promise.all([paper,crt].map(async(svg,i)=>({input:await sharp(Buffer.from(svg)).png().toBuffer(),left:i*512,top:0})));
 await sharp({create:{width:1024,height:512,channels:4,background:{r:0,g:0,b:0,alpha:0}}}).composite(kit).png({compressionLevel:9}).toFile(resolve(art,'orbital-ui-kit.png'));
-console.log('UI art written: orbital-hud.png (24 icons), orbital-ui-kit.png (paper, CRT).');
+console.log('UI art written: orbital-hud.png (28 icons), orbital-ui-kit.png (paper, CRT).');

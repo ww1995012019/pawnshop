@@ -1,4 +1,4 @@
-import {Component,Node,BlockInputEvents,Canvas,Camera,UITransform,Layers,Color,Vec2,Vec3,Rect,Size,SpriteFrame,Graphics,Mask,Label,EditBox,UIOpacity,EventTouch,EventMouse,game,input,Input,EventKeyboard,KeyCode,view,ResolutionPolicy,sys,AudioSource,AudioClip,assetManager,resources} from 'cc';
+import {tween,Component,Node,BlockInputEvents,Canvas,Camera,UITransform,Layers,Color,Vec2,Vec3,Rect,Size,SpriteFrame,Graphics,Mask,Label,EditBox,UIOpacity,EventTouch,EventMouse,game,input,Input,EventKeyboard,KeyCode,view,ResolutionPolicy,sys,AudioSource,AudioClip,assetManager,resources} from 'cc';
 import type {ButtonOptions} from '../ui/GameUI';
 import {OrbitalUI,ORBITAL_PALETTE as C,PAPER_INK as INK,type HudIcon} from './OrbitalUI';
 import {OrbitalMotion} from './OrbitalMotion';
@@ -15,6 +15,8 @@ import {customerNeed,offerBounds} from './Negotiation';
 import {getItemClue,getItemMark} from './ItemReadings';
 import {dailyVisitLimit,marketNpcId} from './Market';
 import {openGoodsHandbook} from './GoodsHandbook';
+import {Coach} from './Coach';
+import {TUTORIAL,PAGE_TIPS,openManual} from './Guide';
 
 const INSPECTION_AREA:InspectionRect={x:212,y:200,width:1008,height:440};
 const INSPECTION_LOCAL:InspectionRect={x:-202,y:-202,width:404,height:404};
@@ -70,6 +72,13 @@ export class OrbitalMain extends Component implements OrbitalHost {
   private pointerCleanup:(()=>void)|null=null;
   private pointerCanvas:HTMLCanvasElement|null=null;
   private titleScreen:Node|null=null;
+  private coach!:Coach;
+  // HUD juice: the cash read-out counts towards the committed balance; AP losses float up.
+  private hudCash:number|null=null;
+  private hudCashLabel:Label|null=null;
+  private hudAp:number|null=null;
+  private lastPage:PageId|null=null;
+  private evidenceSeen=new Map<string,number>();
   private readonly cancelPointer=()=>{const cleanup=this.pointerCleanup;this.pointerCleanup=null;cleanup?.();this.ui?.resetPointer();};
 
   start():void{void this.boot().catch(error=>{console.error('Orbital game initialization failed',error);const el=document.getElementById('load-status');if(el)el.textContent='空间站载入失败，请刷新重试。';});}
@@ -84,11 +93,15 @@ export class OrbitalMain extends Component implements OrbitalHost {
     try{this.state=parseOrbital(sys.localStorage.getItem(SAVE))||createOrbital();this.prefs={...this.prefs,...JSON.parse(sys.localStorage.getItem(PREFS)||'{}')};}catch{this.state=createOrbital();}
     this.selected=this.state.inventory[0]?.uid||'';
     await this.ui.preload();if(this.disposed)return;
-    this.motion=new OrbitalMotion(this.ui,root);this.motion.setRegions({contentArea:{x:24,y:108,width:1552,height:700},inspectionArea:INSPECTION_AREA});this.panels=new OrbitalPanels(this);this.render();
+    this.motion=new OrbitalMotion(this.ui,root);this.motion.setRegions({contentArea:{x:24,y:108,width:1552,height:700},inspectionArea:INSPECTION_AREA});this.panels=new OrbitalPanels(this);
+    this.coach=new Coach({ui:this.ui,state:()=>this.state,page:()=>this.page,busy:()=>this.busy,reducedMotion:()=>this.prefs.reducedMotion,
+      blocked:()=>!!this.titleScreen?.isValid||this.ui.root.children.some(n=>n.name==='modal-overlay'&&n.activeInHierarchy),
+      button:(parent,text,x,y,w,h,fn,options)=>this.button(parent,text,x,y,w,h,fn,options)});
+    this.render();
     input.on(Input.EventType.KEY_DOWN,this.onKey,this);void this.loadAudio();
     this.pointerCanvas=game.canvas;this.pointerCanvas?.addEventListener('pointerleave',this.cancelPointer);this.pointerCanvas?.addEventListener('mouseleave',this.cancelPointer);
     window.addEventListener('blur',this.cancelPointer);window.addEventListener('pointercancel',this.cancelPointer);window.addEventListener('resize',this.cancelPointer);
-    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v12',start:()=>this.startFromTitle(false),title:()=>!!this.titleScreen?.isValid,snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>{this.dismissTitle();this.dispatch(a);},open:(p:PageId,uid?:string)=>{this.dismissTitle();this.navigate(p,uid);},reset:(seed='ORBITAL-TUTORIAL')=>{this.dismissTitle();this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
+    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v13',start:()=>this.startFromTitle(false),title:()=>!!this.titleScreen?.isValid,snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({coach:this.coach?.active?this.coachStep():null,page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>{this.dismissTitle();this.dispatch(a);},open:(p:PageId,uid?:string)=>{this.dismissTitle();this.navigate(p,uid);},reset:(seed='ORBITAL-TUTORIAL')=>{this.dismissTitle();this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
     (window as unknown as {__ORBITAL__:typeof debug;__GREYLINE__:typeof debug}).__ORBITAL__=debug;(window as unknown as {__GREYLINE__:typeof debug}).__GREYLINE__=debug;
     document.dispatchEvent(new CustomEvent('greyline-ready'));
     this.showTitle();
@@ -118,11 +131,17 @@ export class OrbitalMain extends Component implements OrbitalHost {
       this.button(m.body,'返回',24,190,310,58,()=>m.close(),{tone:'quiet'});
       this.button(m.body,'确认新开',356,190,310,58,()=>{m.close();this.resetGame();this.startFromTitle(true);},{tone:'danger'});
     },{tone:'quiet',size:20,name:'title-new'});
-    this.button(o,'设置',118,656,400,58,()=>{this.dismissTitle();this.navigate('settings');},{tone:'quiet',size:20,name:'title-settings'});
+    this.button(o,'玩法说明',118,656,192,58,()=>this.openHelp(),{tone:'quiet',size:20,name:'title-help'});
+    this.button(o,'设置',326,656,192,58,()=>{this.dismissTitle();this.navigate('settings');},{tone:'quiet',size:20,name:'title-settings'});
     this.ui.label(o,'Enter 开始',W-260,H-58,220,28,{size:15,color:C.muted,align:'right',verticalAlign:'center',wrap:false});
-    this.ui.label(o,'orbital-p0-v12 · Cocos Creator 3.8.8',40,H-58,500,28,{size:13,color:'#6F7A78',verticalAlign:'center',wrap:false});
+    this.ui.label(o,'orbital-p0-v13 · Cocos Creator 3.8.8',40,H-58,500,28,{size:13,color:'#6F7A78',verticalAlign:'center',wrap:false});
     this.focused=start;this.ui.focusButton(start);
     this.ui.animateIn(o);
+  }
+  private coachStep():string{return (this.coach as unknown as {steps:{id:string}[];index:number}).steps[(this.coach as unknown as {index:number}).index]?.id??'';}
+  /** Open the illustrated manual; it can replay the guided tour. */
+  openHelp(section=0):void{
+    openManual(this,()=>{this.navigate('counter');this.coach.start(TUTORIAL,{persist:true});},section);
   }
   private dismissTitle():void{
     const o=this.titleScreen;this.titleScreen=null;
@@ -132,8 +151,10 @@ export class OrbitalMain extends Component implements OrbitalHost {
   }
   private startFromTitle(animate:boolean):void{
     if(!this.titleScreen?.isValid)return;
+    const fresh=this.state.day===1&&this.state.ledger.length===0&&!this.state.trade&&this.state.completedTrades.length===0;
     this.dismissTitle();this.sound('open');
     if(animate)void this.play(()=>this.motion.sceneEntry());
+    if(fresh&&!Coach.tutorialDone())this.coach.start(TUTORIAL,{persist:true});
   }
   private save():void{try{sys.localStorage.setItem(SAVE,serializeOrbital(this.state));this.saveFailed=false;}catch{this.saveFailed=true;}}
   savePrefs():void{try{sys.localStorage.setItem(PREFS,JSON.stringify(this.prefs));}catch{}this.motion.configure({reducedMotion:this.prefs.reducedMotion});this.render();}
@@ -175,14 +196,14 @@ export class OrbitalMain extends Component implements OrbitalHost {
       const actor=this.actor;void this.motion.react(actor,after.trade.locked?'agree':after.trade.rounds>=2?'refuse':'counter');
     }else if((action.type==='REFUSE'||action.type==='OFFER')&&before.trade&&!after.trade){this.ui.setMood(before.trade.npcId,'reject');this.sound('reject');void this.play(()=>this.motion.exit(before.trade!.npcId));}
     else if(action.type==='CHECK'&&after.ap<=before.ap&&findItem(after,action.uid)?.evidence.includes(action.tool)){
-      const effect=['magnify','uv','spectrum','probe','scale','pulse'][tools.findIndex(t=>t.id===action.tool)];this.effect(effect,this.content,this.inspectionEffectRect());
-    }else if(action.type==='REPAIR'&&findItem(after,action.uid)?.repaired&&!findItem(before,action.uid)?.repaired)this.effect('repair',this.content,{x:480,y:260,width:500,height:350});
+      this.toolEffect(action.tool,this.content);
+    }else if(action.type==='REPAIR'&&findItem(after,action.uid)?.repaired&&!findItem(before,action.uid)?.repaired){this.effect('repair',this.content,{x:480,y:260,width:500,height:350});setTimeout(()=>{if(!this.disposed&&this.page==='repair')this.effect('shine',this.content,{x:440,y:200,width:580,height:400},{x:470,y:240,width:520,height:340});},850);}
     else if(action.type==='CRAFT'&&after.inventory.length!==before.inventory.length)this.effect('assemble',this.content,{x:470,y:250,width:500,height:350});
-    else if(action.type==='SCAN'&&after.scanned.length>before.scanned.length)this.effect('scan',this.content,{x:785,y:278,width:279,height:283});
-    else if(action.type==='SETTLE'&&after.phase==='report'&&before.phase!=='report')this.effect('day',this.content);
-    else if(action.type==='NEXT'&&after.day!==before.day)this.effect('day',this.content);
+    else if(action.type==='SCAN'&&after.scanned.length>before.scanned.length)this.effect('scan',this.content,{x:792,y:286,width:265,height:268});
+    else if(action.type==='SETTLE'&&after.phase==='report'&&before.phase!=='report')this.effect('stamp',this.content,{x:740,y:600,width:190,height:150},undefined,'已结算');
+    else if(action.type==='NEXT'&&after.day!==before.day)void this.play(()=>this.motion.dayTransition(after.day,after.day%7===0?'今天是租金日 · 留足现金':'回环九号 · 舱门开启'));
     else if(action.type==='UPGRADE'&&!before.upgrades[action.id]&&after.upgrades[action.id])this.effect('upgrade',this.content);
-    else if(action.type==='DELIVER_ORDER'&&after.cash!==before.cash){this.effect('stamp',this.content,{x:1230,y:600,width:230,height:64});this.ui.toast(`委托报酬已入账 +${after.cash-before.cash} Cr`,'success');}
+    else if(action.type==='DELIVER_ORDER'&&after.cash!==before.cash){this.effect('stamp',this.content,{x:1150,y:540,width:200,height:160},undefined,'已交付');void this.motion.coins(after.cash-before.cash,{x:1255,y:610});this.ui.toast(`委托报酬已入账 +${after.cash-before.cash} Cr`,'success');}
     else if(action.type==='DISPLAY'||action.type==='MOVE'){
       const it=findItem(after,action.uid),prior=findItem(before,action.uid);
       if(it&&prior&&(it.x!==prior.x||it.y!==prior.y||it.location!==prior.location)){
@@ -190,11 +211,16 @@ export class OrbitalMain extends Component implements OrbitalHost {
       }else if(after.notice)this.ui.toast(after.notice);
     }else if(after.notice&&after.notice!==before.notice)this.ui.toast(after.notice);
   }
-  effect(kind:string,parent:Node,at?:{x:number;y:number;width?:number;height?:number}):void{
+  effect(kind:string,parent:Node,at?:{x:number;y:number;width?:number;height?:number},focus?:{x:number;y:number;width?:number;height?:number},label?:string):void{
     if(this.busy)return;
     // Local instrument beats are interruptible and do not freeze navigation.
     if(this.motion.snapshot().nodes.some(n=>n.kind===kind))return;
-    void this.motion.effect(kind,parent,at);
+    void this.motion.effect(kind,parent,at,focus,label);
+  }
+  /** Inspection instruments play over the whole mat, centred on the item. */
+  private toolEffect(tool:ToolId,parent:Node):void{
+    const kind=['magnify','uv','spectrum','probe','scale','pulse'][tools.findIndex(t=>t.id===tool)];
+    this.effect(kind,parent,INSPECTION_AREA,this.inspectionEffectRect());
   }
   private async play(run:(active:()=>boolean)=>Promise<void>):Promise<void>{
     const epoch=++this.epoch;this.busy=true;this.ui.pointer.refresh();this.motion.configure({reducedMotion:this.prefs.reducedMotion});
@@ -230,10 +256,25 @@ export class OrbitalMain extends Component implements OrbitalHost {
     else if(this.page==='counter'||this.page==='trade')this.counter();
     else if(this.page==='inspect')this.inspection();
     else this.panels.draw(this.page,this.content);
+    if(this.hudAp!==null&&this.state.ap<this.hudAp&&!this.titleScreen)void this.motion.float(`−${this.hudAp-this.state.ap} AP`,{x:930,y:92});
+    this.hudAp=this.state.ap;
     const pageContent=this.content;this.chrome=this.ui.container(this.ui.root,0,0,W,H,'persistent-chrome');this.content=this.chrome;this.header();this.footer();for(const n of [...this.dialogueNodes,...this.counterTags])if(n.isValid)n.setParent(this.chrome);this.content=pageContent;
     // The title shows only the painted shop; page UI and HUD return when play starts.
     if(this.titleScreen?.isValid){this.titleScreen.setSiblingIndex(this.ui.root.children.length-1);this.chrome.active=false;pageContent.active=false;}
     this.motion.bindAmbient({parent:this.content,actor:this.actor||undefined,area:{x:310,y:160,width:860,height:500}});
+    // Page change: the new workspace rises in; the HUD and dock stay put.
+    if(this.lastPage!==null&&this.lastPage!==this.page&&!this.prefs.reducedMotion&&!this.titleScreen){
+      const node=pageContent,o=node.getComponent<UIOpacity>(UIOpacity)||node.addComponent<UIOpacity>(UIOpacity);
+      o.opacity=0;node.setPosition(node.position.x,node.position.y-16);const y=node.position.y+16;
+      tween<UIOpacity>(o).to(.22,{opacity:255},{easing:'quadOut'}).start();
+      tween<Node>(node).to(.26,{position:new Vec3(node.position.x,y,0)},{easing:'cubicOut'}).start();
+    }
+    this.lastPage=this.page;
+    if(this.coach&&!this.titleScreen){
+      const tip=PAGE_TIPS[this.page];
+      if(!this.coach.active&&tip&&Coach.tutorialDone()&&!Coach.tipSeen(tip.id))this.coach.start([tip],{onFinish:()=>Coach.markTip(tip.id)});
+      this.coach.refresh();
+    }
   }
   private header():void{
     const s=this.state,p=this.content;
@@ -267,7 +308,8 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.ui.label(g,`${s.ap}/12`,452,30,72,32,{size:22,mono:true,color:'#8BEDE6',glow:'#4FD6CF88',verticalAlign:'center',wrap:false});
     sep(528);
     this.ui.hudIcon(g,'credits',542,12,52,52);caption('现金 Cr',600);
-    this.ui.label(g,s.cash.toFixed(s.cash%1?2:0),600,28,122,36,{size:28,mono:true,color:'#FFCB8E',glow:'#E0893A88',verticalAlign:'center',wrap:false,overflow:'shrink'});
+    if(this.hudCash===null)this.hudCash=s.cash;
+    this.hudCashLabel=this.ui.label(g,this.hudCash.toFixed(this.hudCash%1?2:0),600,28,122,36,{size:28,mono:true,color:'#FFCB8E',glow:'#E0893A88',verticalAlign:'center',wrap:false,overflow:'shrink'}).getComponent<Label>(Label);
     // Round instrument keys on the right; captions appear on hover.
     const key=(icon:HudIcon,x:number,tip:string,fn:()=>void,name:string)=>{
       const b=this.button(p,'',x,18,64,64,fn,{tone:'quiet',name});this.ui.attachIcon(b,icon,40);this.ui.tooltip(b,tip);
@@ -275,11 +317,12 @@ export class OrbitalMain extends Component implements OrbitalHost {
       if(this.ui.touch)this.ui.label(p,tip.split(' ')[0].replace(/：.*/,''),x-12,84,88,22,{size:15,color:'#E4DFD2',align:'center',verticalAlign:'center',wrap:false,outline:'#05080B',outlineWidth:2});
       return b;
     };
-    key('handbook',1222,'货物图鉴',()=>openGoodsHandbook(this),'button-货物图鉴');
-    const station=key('alert',1310,`站务 · 关注度 ${s.risk}/100`,()=>this.stationDetails(),'button-站务');
+    key('help',1188,'玩法说明',()=>this.openHelp(),'button-帮助');
+    key('handbook',1265,'货物图鉴',()=>openGoodsHandbook(this),'button-货物图鉴');
+    const station=key('alert',1342,`站务 · 关注度 ${s.risk}/100`,()=>this.stationDetails(),'button-站务');
     this.ui.badge(station,String(s.risk),58,6,s.risk>=60?C.danger:C.orange);
-    key(this.prefs.sound?'soundOn':'soundOff',1398,this.prefs.sound?'声音：开':'声音：关',()=>{this.prefs.sound=!this.prefs.sound;this.savePrefs();this.sound('check');},'button-切换声音');
-    key('settings',1486,'设置',()=>this.navigate('settings'),'button-设置');
+    key(this.prefs.sound?'soundOn':'soundOff',1419,this.prefs.sound?'声音：开':'声音：关',()=>{this.prefs.sound=!this.prefs.sound;this.savePrefs();this.sound('check');},'button-切换声音');
+    key('settings',1496,'设置',()=>this.navigate('settings'),'button-设置');
   }
   private stationDetails():void{
     const s=this.state,m=this.ui.modal('站务与经营记录',{width:680,height:440});
@@ -540,6 +583,15 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.ui.label(est,'参考估值',16,10,140,20,{size:14,color:'#86E6DF',glow:'#3FC9C170',verticalAlign:'center',wrap:false});
     this.ui.label(est,`${it.evidence.length}/6 物证`,140,10,124,20,{size:14,mono:true,color:'#86E6DF',align:'right',verticalAlign:'center',wrap:false});
     this.ui.label(est,`${a.exact?a.low:`${a.low}–${a.high}`} Cr`,16,36,252,52,{size:32,mono:true,color:'#FFCB8E',glow:'#FF9A4AAA',verticalAlign:'center',wrap:false,overflow:'shrink'});
+    const seen=this.evidenceSeen.get(it.uid)??it.evidence.length;this.evidenceSeen.set(it.uid,it.evidence.length);
+    if(it.evidence.length>seen&&!this.prefs.reducedMotion){
+      // A freshly recorded proof lights its segment and flashes the estimate screen.
+      const fresh=tools.findIndex(t=>t.id===it.evidence[it.evidence.length-1]);
+      const glow=this.ui.panel(side,24+fresh*46-4,181,46,16,{fill:'#8BEDE6',lineWidth:0,radius:6,name:'evidence-segment-flash'});
+      const o=glow.addComponent<UIOpacity>(UIOpacity);o.opacity=255;tween<UIOpacity>(o).to(.9,{opacity:0},{easing:'quadOut'}).start();
+      const flash=this.ui.panel(est,0,0,280,104,{fill:'#8BEDE660',lineWidth:0,radius:10,name:'estimate-flash'});
+      const fo=flash.addComponent<UIOpacity>(UIOpacity);fo.opacity=200;tween<UIOpacity>(fo).to(.6,{opacity:0}).start();
+    }
     tools.forEach((t,i)=>this.ui.panel(side,24+i*46,187,38,4,{fill:it.evidence.includes(t.id)?C.cyan:'#405253',lineWidth:0,radius:2}));
     it.evidence.slice(-3).forEach((tool,i)=>{
       this.ui.toolIcon(side,tool,24,220+i*99,35,35);this.row(side,getTool(tool).name,71,220+i*99,221,25,16,C.text);
@@ -583,12 +635,15 @@ export class OrbitalMain extends Component implements OrbitalHost {
   }
   private toolInteraction(p:Node,it:OrbitalItem,d:Draft):void{
     const already=it.evidence.includes(this.tool),tool=getTool(this.tool);
-    const widget=this.ui.texturePanel(p,212,706,1008,90,{skin:'strip',materialOpacity:.32,fill:'#0A151CF5',stroke:'#6D8F8B70',lineWidth:1,radius:3,name:'instrument-readout'});
-    this.ui.line(widget,0,12,0,78,this.tool==='TOL-002'?C.purple:this.tool==='TOL-006'?C.orange:C.cyan,3);
-    this.text(widget,this.tool==='TOL-001'?'侧光观察 / 点击三处接缝疑点，逐一记录痕迹。':tool.instruction,18,3,972,27,15,C.muted);
+    // Tool desk: a riveted strip whose content sits inside the rim (body is inset 8px).
+    const desk=this.ui.texturePanel(p,212,698,1008,104,{skin:'strip',name:'instrument-readout'});
+    const widget=this.ui.container(desk,0,8,1008,92,'instrument-readout-body');
+    const accent=this.tool==='TOL-002'?C.purple:this.tool==='TOL-006'?C.orange:C.cyan;
+    this.ui.toolIcon(widget,this.tool,16,2,30,30);
+    this.ui.label(widget,`${tool.short} · ${this.tool==='TOL-001'?'点击实物上三处接缝疑点，逐一记录痕迹。':tool.instruction}`,52,2,930,30,{size:15,color:accent,verticalAlign:'center',wrap:false,overflow:'shrink'});
     if(already){
       if(this.tool==='TOL-004')this.probeInteraction(widget,d,true);
-      this.baseline(widget,'✓ 证据已保存 · 可以免费复测',18,66,620,20,C.cyan);this.button(widget,'复测读数',795,38,194,42,()=>this.effect(['magnify','uv','spectrum','probe','scale','pulse'][tools.findIndex(t=>t.id===this.tool)],p,this.inspectionEffectRect()),{tone:'quiet'});return;
+      this.baseline(widget,'✓ 证据已保存 · 可以免费复测',18,66,620,20,C.cyan);this.button(widget,'复测读数',795,38,194,42,()=>this.toolEffect(this.tool,p),{tone:'quiet'});return;
     }
     if(this.tool==='TOL-001'){
       const spots=[[.28,.34],[.68,.47],[.5,.73]];
@@ -632,7 +687,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
         [10,20,50].forEach((n,i)=>this.button(widget,`${d.weights.has(n)?'✓ ':''}${n}g`,419+i*85,46,77,40,()=>{if(d.weights.has(n))d.weights.delete(n);else d.weights.add(n);this.render();},{tone:d.weights.has(n)?'green':'quiet'}));
         this.button(widget,'平衡采证',795,38,194,42,()=>this.finishTool(it),{disabled:sum!==target});
       }
-      const scale=this.ui.container(p,554,479,400,79,'balance-instrument');const g=scale.addComponent<Graphics>(Graphics);g.lineWidth=4;g.strokeColor=new Color(C.cyan);g.moveTo(200,0);g.lineTo(200,-73);g.moveTo(110,-73);g.lineTo(290,-73);g.stroke();const tilt=Math.max(-18,Math.min(18,(sum-target)*.4));g.moveTo(30,-20+tilt);g.lineTo(370,-20-tilt);g.stroke();g.strokeColor=new Color(C.orange);g.roundRect(25,-43+tilt,90,21,4);g.stroke();g.roundRect(285,-43-tilt,90,21,4);g.stroke();
+      const scale=this.ui.container(p,516,560,400,79,'balance-instrument');const g=scale.addComponent<Graphics>(Graphics);g.lineWidth=4;g.strokeColor=new Color(C.cyan);g.moveTo(200,0);g.lineTo(200,-73);g.moveTo(110,-73);g.lineTo(290,-73);g.stroke();const tilt=Math.max(-18,Math.min(18,(sum-target)*.4));g.moveTo(30,-20+tilt);g.lineTo(370,-20-tilt);g.stroke();g.strokeColor=new Color(C.orange);g.roundRect(25,-43+tilt,90,21,4);g.stroke();g.roundRect(285,-43-tilt,90,21,4);g.stroke();
     }else{
       this.baseline(widget,`负载 ${Math.round(d.load*100)}% / 安全采样区 65–85%`,18,74,400,20,C.cyan);
       const track=this.ui.panel(widget,427,60,200,6,{fill:'#284B56',lineWidth:0});const knob=this.ui.panel(track,d.load*180,-14,22,33,{fill:C.orange,lineWidth:0,radius:3,name:'pulse-load'});
@@ -725,6 +780,12 @@ export class OrbitalMain extends Component implements OrbitalHost {
     const ambient=this.clips.get('ambient_loop');
     if(ambient){if(!this.ambience){this.ambience=this.node.addComponent<AudioSource>(AudioSource);this.ambience.clip=ambient;this.ambience.loop=true;this.ambience.volume=.075;}if(!this.ambience.playing)this.ambience.play();}
   }
-  update(dt:number):void{this.motion?.update(dt);this.panels?.update(dt);this.presentation.update(dt);this.updateInspectionFeedback(dt);}
+  update(dt:number):void{
+    if(this.hudCash!==null&&this.hudCash!==this.state.cash){
+      const diff=this.state.cash-this.hudCash,step=Math.sign(diff)*Math.max(1,Math.abs(diff)*Math.min(1,dt*6));
+      this.hudCash=this.prefs.reducedMotion||Math.abs(step)>=Math.abs(diff)?this.state.cash:Math.round(this.hudCash+step);
+      if(this.hudCashLabel?.isValid){this.hudCashLabel.string=this.hudCash.toFixed(this.hudCash%1?2:0);this.hudCashLabel.color=new Color(this.hudCash===this.state.cash?'#FFCB8E':diff>0?'#C8FFB0':'#FF9A7A');}
+    }
+    this.motion?.update(dt);this.coach?.update(dt);this.coach?.animate(dt);this.panels?.update(dt);this.presentation.update(dt);this.updateInspectionFeedback(dt);}
   onDestroy():void{this.cancelPointer();this.pointerCanvas?.removeEventListener('pointerleave',this.cancelPointer);this.pointerCanvas?.removeEventListener('mouseleave',this.cancelPointer);window.removeEventListener('blur',this.cancelPointer);window.removeEventListener('pointercancel',this.cancelPointer);window.removeEventListener('resize',this.cancelPointer);this.disposed=true;this.ambience?.stop();this.presentation.dispose();this.disposeInspectionFeedback();this.motion?.dispose();this.panels?.dispose();input.off(Input.EventType.KEY_DOWN,this.onKey,this);}
 }

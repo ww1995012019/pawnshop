@@ -62,8 +62,12 @@ export class InspectionFeedback {
     this.flashes.push({node,ink,at,elapsed:0,duration:.36,color});
     this.paintFlash(this.flashes[this.flashes.length-1],this.reducedMotion ? .7 : 0);
     if(destination&&!this.reducedMotion){
-      const token=this.ui.container(this.layer,at.x,at.y,13,9,'inspection-evidence-transfer'),g=token.addComponent<Graphics>(Graphics);
-      g.fillColor=new Color('#B6D6CE');g.roundRect(-6,-4,12,8,1);g.fill();g.strokeColor=new Color('#0D2830');g.lineWidth=1;g.moveTo(-3,0);g.lineTo(3,0);g.stroke();
+      // A small printed evidence slip flies from the contact point into the evidence book.
+      const token=this.ui.container(this.layer,at.x,at.y,1,1,'inspection-evidence-transfer');
+      const slip=this.ui.paperSlip(token,-30,-20,60,40,{name:'evidence-slip',torn:true,shadow:true});
+      const g=slip.addComponent<Graphics>(Graphics);g.strokeColor=new Color('#8C7A5C');g.lineWidth=2;
+      for(let i=0;i<3;i++){g.moveTo(10,-9-i*8);g.lineTo(i===2?32:50,-9-i*8);}g.stroke();
+      g.fillColor=new Color(color);g.circle(50,-26,5);g.fill();
       this.flights.push({node:token,from:at,to:destination,elapsed:0});
     }
   }
@@ -106,9 +110,9 @@ export class InspectionFeedback {
       if(p>=1){this.drop(flash.node);this.flashes.splice(this.flashes.indexOf(flash),1);}
     }
     for(const flight of [...this.flights]){
-      flight.elapsed+=delta;const p=clamp(flight.elapsed/.48),t=1-Math.pow(1-p,3);
-      flight.node.setPosition(flight.from.x+(flight.to.x-flight.from.x)*t,-flight.from.y-(flight.to.y-flight.from.y)*t+Math.sin(p*Math.PI)*24);
-      flight.node.angle=-8+16*p;
+      flight.elapsed+=delta;const p=clamp(flight.elapsed/.75),t=1-Math.pow(1-p,3);
+      flight.node.setPosition(flight.from.x+(flight.to.x-flight.from.x)*t,-flight.from.y-(flight.to.y-flight.from.y)*t+Math.sin(p*Math.PI)*90);
+      flight.node.angle=-14+28*p;const sc=p<.15?.4+4*p:1-.45*clamp((p-.7)/.3);flight.node.setScale(sc,sc,1);
       if(p>=1){this.drop(flight.node);this.flights.splice(this.flights.indexOf(flight),1);}
     }
   }

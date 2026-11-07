@@ -1,9 +1,11 @@
 {
-  "ui": "orbital-p0-v12",
+  "ui": "orbital-p0-v13",
   "engine": "Cocos Creator 3.8.8",
   "sourceEngine": "411f98df047c25902f93440d4b22925c2fb65461",
   "art": "webp",
   "features": [
+    "新手引导与经营手册",
+    "工具/扫描/维修/交割/换天动作动画",
     "标题画面与游戏化HUD",
     "金属铭牌面板/CRT读数/热敏纸票据UI",
     "台后半身人物与实体仪器UI",

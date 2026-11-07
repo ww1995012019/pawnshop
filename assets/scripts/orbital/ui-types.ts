@@ -13,7 +13,7 @@ export interface OrbitalHost {
   select(uid:string):void;
   render():void;
   button(parent:Node,text:string,x:number,y:number,w:number,h:number,fn:()=>void,options?:ButtonOptions):Node;
-  effect(kind:string,parent:Node,at?:{x:number;y:number;width?:number;height?:number}):void;
+  effect(kind:string,parent:Node,at?:{x:number;y:number;width?:number;height?:number},focus?:{x:number;y:number;width?:number;height?:number},label?:string):void;
   savePrefs():void;
   exportSave():void;
   resetGame():void;
