@@ -1,9 +1,10 @@
 {
-  "ui": "orbital-p0-v3",
+  "ui": "orbital-p0-v4",
   "engine": "Cocos Creator 3.8.8",
   "sourceEngine": "411f98df047c25902f93440d4b22925c2fb65461",
   "art": "webp",
   "features": [
+    "台后半身人物与实体仪器UI",
     "空间站三场景",
     "24件P0货物与正反面",
     "六种不同鉴定操作",
