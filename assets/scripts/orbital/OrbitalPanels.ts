@@ -1,4 +1,4 @@
-import {Color,EventKeyboard,EventTouch,Graphics,input,Input,KeyCode,Label,Node,UITransform,Vec3} from 'cc';
+import {Color,EventKeyboard,EventTouch,Graphics,input,Input,KeyCode,Label,Node,UIOpacity,UITransform,Vec3} from 'cc';
 import type {OrbitalHost} from './ui-types';
 import type {OrbitalItem,OrderDef,PageId,RecipeDef} from './types';
 import {getDef,getOrder,materials,recipes,orderDefs,orderEarliest} from './data';
@@ -43,8 +43,9 @@ export class OrbitalPanels {
   }
   dispose():void {input.off(Input.EventType.KEY_DOWN,this.key,this);}
   closeModal():boolean {
-    if(!this.modal?.isValid)return false;
-    this.modal.removeFromParent();this.modal.destroy();this.modal=null;return true;
+    const overlay=this.modal;this.modal=null;
+    if(!overlay?.isValid)return false;
+    overlay.removeFromParent();if(overlay.isValid)overlay.destroy();return true;
   }
   private key(e:EventKeyboard):void {
     if(this.h.busy||this.modal?.isValid)return;
@@ -74,6 +75,20 @@ export class OrbitalPanels {
   private ownership(item:OrbitalItem):string {return item.owner==='customer'?'顾客委修 · 归属锁定':item.owner==='pawn'?'抵押保管 · 禁止出售':'店铺自有';}
   private dims(item:OrbitalItem):[number,number] {const s=getDef(item.defId).size;return item.rotated?[s[1],s[0]]:[s[0],s[1]];}
   private effect(kind:string,at:{x:number;y:number;width?:number;height?:number}):void {if(this.parent?.isValid)this.h.effect(kind,this.parent,at);}
+  private dragWithin(node:Node,dx:number,dy:number,bounds:{left:number;top:number;right:number;bottom:number}):void {
+    const size=node.getComponent<UITransform>(UITransform)!.contentSize;
+    const width=size.width*Math.abs(node.scale.x),height=size.height*Math.abs(node.scale.y);
+    const x=Math.max(bounds.left,Math.min(bounds.right-width,node.position.x+dx));
+    const y=Math.max(bounds.top,Math.min(bounds.bottom-height,-node.position.y-dy));
+    node.setPosition(x,-y,node.position.z);
+  }
+  private dragOpacity(node:Node,dragging:boolean):void {
+    const opacity=node.getComponent<UIOpacity>(UIOpacity)||node.addComponent<UIOpacity>(UIOpacity);opacity.opacity=dragging?205:255;
+  }
+  private repairHint(p:Node,t:string,color=C.text):void {
+    this.h.ui.panel(p,466,588,516,19,{fill:'#0B151DEE',lineWidth:0,radius:3,name:'repair-action-caption'});
+    this.row(p,t,478,588,492,19,14,color,'center');
+  }
   private button(p:Node,t:string,x:number,y:number,w:number,h:number,fn:()=>void,tone:'gold'|'green'|'danger'|'quiet'='quiet',disabled=false):Node {
     return this.h.button(p,t,x,y,w,h,fn,{tone,disabled,size:19});
   }
@@ -112,8 +127,7 @@ export class OrbitalPanels {
     this.h.ui.texturePanel(p,326,218,480,67,{skin:'strip',fill:'#0C151CC2',lineWidth:0,materialOpacity:.24,name:'repair-object-label'});
     this.row(p,`${def.id} · ${def.name}`,341,222,450,31,23);
     this.row(p,this.ownership(item),341,257,450,23,14,item.owner==='shop'?C.muted:C.purple);
-    const enlarged=progress<=1&&!item.repaired;
-    this.h.ui.object(p,item.defId,enlarged?466:525,enlarged?248:290,enlarged?516:382,enlarged?352:260,{back:progress>0,opened:progress>0,repaired:item.repaired,damaged:!item.working});
+    this.h.ui.object(p,item.defId,466,256,516,336,{back:progress>0,repaired:item.repaired,damaged:!item.working});
     this.h.ui.texturePanel(p,334,610,790,65,{skin:'strip',fill:'#0A141BD4',stroke:'#7D82742D',materialOpacity:.37,name:'repair-process-rail'});
     this.line(p,357,630,721,'#81887748');
     (recipe?.steps||['检查物件','选择兼容配方','复核条件']).forEach((step,i)=>{
@@ -141,11 +155,11 @@ export class OrbitalPanels {
       if(!item.repaired&&progress===0){
         this.h.ui.line(p,865,346,902,346,'#C38A4D80',1);
         this.button(p,'拆开检修盖',902,320,190,52,()=>this.repairStep(item,0),'gold');
-        this.row(p,'01 / 观察接缝，取下检修盖',440,571,570,27,16,C.text,'center');
+        this.repairHint(p,'01 / 观察接缝，取下检修盖');
       }else if(!item.repaired&&progress===1)this.replacementInteraction(p,item,recipe);
       else if(!item.repaired&&progress===2)recipe.id==='REC-002'||recipe.id==='REC-005'?this.calibrationInteraction(p,item,recipe):this.weldInteraction(p,item);
       else if(item.repaired){
-        this.text(p,'修复标记已写回原物',500,501,465,30,20,C.cyan,'center');
+        this.repairHint(p,'修复标记已写回原物',C.cyan);
         this.drawWave(p,936,330,180,118,true);
       }
     }else{
@@ -168,17 +182,18 @@ export class OrbitalPanels {
     this.h.ui.texturePanel(p,355,306,144,206,{skin:'socket',fill:'#141C20B8',stroke:'#777F7150',materialOpacity:.80,name:'replacement-parts-tray'});this.row(p,'替换件托盘',365,318,124,28,15,C.muted,'center');
     const slot=this.h.ui.texturePanel(p,878,360,126,114,{skin:'socket',fill:'#0C181E88',stroke:C.cyan,materialOpacity:.77,name:'repair-part-slot'});
     this.row(slot,'兼容插槽',10,75,106,27,16,C.cyan,'center');
-    const sg=slot.addComponent<Graphics>(Graphics);sg.lineWidth=2;sg.strokeColor=new Color(C.cyan);sg.roundRect(28,-59,70,43,6);sg.stroke();
+    const sg=this.h.ui.container(slot,0,0,126,114,'replacement-socket-outline').addComponent<Graphics>(Graphics);sg.lineWidth=2;sg.strokeColor=new Color(C.cyan);sg.roundRect(28,-59,70,43,6);sg.stroke();
     const part=this.h.ui.texturePanel(p,370,380,112,106,{skin:'socket',fill:'#273036E8',stroke:'#C38A4D90',materialOpacity:.57,name:'replacement-coil'});
     const materialId=Object.keys(recipe.materials).find(id=>id!=='MAT-004')||'MAT-003';
     this.h.ui.materialIcon(part,materialId,19,10,74,62);
     this.row(part,'拖入插槽',5,77,102,25,15,C.orange,'center');
-    let start=part.position.clone(),moving=false;
-    part.on(Node.EventType.TOUCH_START,()=>{if(this.h.busy)return;start=part.position.clone();moving=true;part.setSiblingIndex(p.children.length-1);});
-    part.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(!moving)return;const d=e.getUIDelta();part.setPosition(part.position.x+d.x,part.position.y+d.y);});
-    part.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{if(!moving)return;moving=false;part.setPosition(start);if(slot.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation()))this.repairStep(item,1);else this.h.ui.toast('接口没有对齐，请把替换件拖进右侧青色插槽。');});
-    part.on(Node.EventType.TOUCH_CANCEL,()=>{moving=false;part.setPosition(start);});
-    this.row(p,'02 / 将兼容零件拖入右侧接口',424,571,622,27,16,C.text,'center');
+    let start=part.position.clone(),moving=false,sibling=part.getSiblingIndex();
+    const restore=()=>{part.setPosition(start);part.setSiblingIndex(sibling);this.dragOpacity(part,false);};
+    part.on(Node.EventType.TOUCH_START,()=>{if(this.h.busy)return;start=part.position.clone();sibling=part.getSiblingIndex();moving=true;this.dragOpacity(part,true);part.setSiblingIndex(p.children.length-1);});
+    part.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(!moving||this.h.busy)return;const d=e.getUIDelta();this.dragWithin(part,d.x,d.y,{left:350,top:300,right:1128,bottom:555});});
+    part.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{if(!moving)return;moving=false;restore();if(slot.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation()))this.repairStep(item,1);else this.h.ui.toast('接口没有对齐，请把替换件拖进右侧青色插槽。');});
+    part.on(Node.EventType.TOUCH_CANCEL,()=>{if(!moving)return;moving=false;restore();});
+    this.repairHint(p,'02 / 将兼容零件拖入右侧接口');
     this.button(p,'辅助装入',1010,480,117,37,()=>this.repairStep(item,1),'quiet');
   }
   private weldInteraction(p:Node,item:OrbitalItem):void {
@@ -199,7 +214,7 @@ export class OrbitalPanels {
     });
     layer.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{if(!began)return;began=false;wire.clear();if(travel>170&&b.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation()))this.repairStep(item,2);else this.h.ui.toast('回路尚未闭合，从橙色供电端拖到青色负载端。');});
     layer.on(Node.EventType.TOUCH_CANCEL,()=>{began=false;wire.clear();});
-    this.text(p,'03 / 由供电端接至负载端，闭合回路',370,520,735,27,16,C.text,'center');
+    this.repairHint(p,'03 / 由供电端接至负载端，闭合回路');
     this.button(p,'辅助闭合回路',936,480,190,37,()=>this.repairStep(item,2),'quiet');
   }
   private coil(g:Graphics,x:number,y:number,r:number):void {
@@ -208,9 +223,9 @@ export class OrbitalPanels {
   }
   private calibrationInteraction(p:Node,item:OrbitalItem,recipe:RecipeDef):void {
     const optical=recipe.id==='REC-002';
-    const instrument=this.h.ui.texturePanel(p,825,292,280,183,{skin:'socket',fill:'#0C171CEB',stroke:'#738C8055',materialOpacity:.84,name:'calibration-instrument'});
-    const g=instrument.addComponent<Graphics>(Graphics);let offset=optical?30:40;
-    const readout=this.text(instrument,optical?'三色标靶对齐':'配重置于误差圈',8,149,264,25,15,C.orange,'center').getComponent<Label>(Label)!;
+    const instrument=this.h.ui.texturePanel(p,900,305,280,183,{skin:'socket',fill:'#0C171CEB',stroke:'#738C8055',materialOpacity:.84,name:'calibration-instrument'});instrument.setScale(.8,.8,1);
+    const g=this.h.ui.container(instrument,0,0,280,183,'calibration-readout').addComponent<Graphics>(Graphics);let offset=optical?30:40;
+    const readout=this.row(instrument,optical?'三色标靶对齐':'配重置于误差圈',8,149,264,25,18,C.orange,'center').getComponent<Label>(Label)!;
     const paint=()=>{
       g.clear();g.strokeColor=new Color('#536C7D');g.lineWidth=1;
       for(let x=18;x<270;x+=20){g.moveTo(x,-25);g.lineTo(x,-132);g.stroke();}
@@ -229,10 +244,10 @@ export class OrbitalPanels {
       readout.color=new Color(Math.abs(offset)<5?C.cyan:C.orange);
     };
     paint();
-    this.button(p,'← 微调',830,483,104,36,()=>{offset=Math.max(-60,offset-10);paint();},'quiet');
-    this.button(p,'微调 →',945,483,104,36,()=>{offset=Math.min(60,offset+10);paint();},'quiet');
-    this.button(p,'记录校准',534,476,209,41,()=>Math.abs(offset)<5?this.repairStep(item,2):this.h.ui.toast(optical?'三色轮廓尚未重合，继续逐格微调。':'配重仍偏离中心误差圈，继续调整位置。'),'gold');
-    this.text(p,optical?'03 / 逐格微调，让三色轮廓重合':'03 / 微调配重，将砝码置于中心误差圈',370,522,735,27,16,C.text,'center');
+    this.button(p,'← 微调',900,469,104,36,()=>{offset=Math.max(-60,offset-10);paint();},'quiet');
+    this.button(p,'微调 →',1015,469,104,36,()=>{offset=Math.min(60,offset+10);paint();},'quiet');
+    this.button(p,'记录校准',900,516,219,36,()=>Math.abs(offset)<5?this.repairStep(item,2):this.h.ui.toast(optical?'三色轮廓尚未重合，继续逐格微调。':'配重仍偏离中心误差圈，继续调整位置。'),'gold');
+    this.repairHint(p,optical?'03 / 逐格微调，让三色轮廓重合':'03 / 微调配重，将砝码置于中心误差圈');
   }
   private materialShelf(p:Node,x:number,y:number,w:number):void {
     this.h.ui.rail(p,x,y,w,70,{fill:'#10191DC9',stroke:'#8B86704A',name:'repair-material-rail'});
@@ -254,26 +269,28 @@ export class OrbitalPanels {
     const servo=s.inventory.find(it=>it.defId===recipe.itemId&&it.owner==='shop'&&!it.orderId&&it.working&&!it.sealed&&it.location!=='isolation');
     const bearing=s.inventory.find(it=>it.defId==='ITM-027'&&it.owner==='shop'&&!it.orderId&&it.working&&!it.sealed&&it.location!=='isolation');
     if(!servo||!bearing){this.h.ui.toast('组装需要自有正常伺服器与已注销轴承，委修原件、封存件不可作主料。');return;}
-    this.modal?.removeFromParent();this.modal?.destroy();
+    this.closeModal();
     const m=this.h.ui.modal('组装舱门维护套组',{width:1170,height:690,onClose:()=>{this.modal=null;}});this.modal=m.overlay;
     const p=m.body;
-    this.text(p,'主料先对齐插槽，再闭合端子；最后确认时统一消耗原件、材料与2 AP。',15,1,1070,45,20,C.muted);
+    this.paragraph(p,'主料先对齐插槽，再闭合端子；最后确认时统一消耗原件、材料与2 AP。',15,1,1070,45,20,C.muted);
     const slots=[this.box(p,401,94,178,153,C.cyan,'#17303DE0','craft-servo-slot'),this.box(p,670,94,178,153,C.cyan,'#17303DE0','craft-bearing-slot')];
-    this.text(slots[0],'伺服器槽',8,115,162,28,17,C.cyan,'center');this.text(slots[1],'注销轴承槽',8,115,162,28,17,C.cyan,'center');
-    this.h.ui.line(p,579,160,670,160,C.line,4);
+    this.row(p,'01 / 伺服器槽',401,64,178,24,14,C.muted,'center');this.row(p,'02 / 注销轴承槽',670,64,178,24,14,C.muted,'center');
+    this.row(p,'主料托盘',15,64,347,24,14,C.muted);
+    this.h.ui.line(p,579,160,670,160,C.line,2);
     const labels=['拖入伺服器','拖入注销轴承','连接端子 / 验证限位'];
-    const progressLabel=this.text(p,'',15,365,1060,43,23,C.cyan,'center');
-    const readyLabel=this.text(p,'',15,415,1060,53,19,C.muted,'center');
-    const close=()=>{m.overlay.removeFromParent();m.overlay.destroy();this.modal=null;};
+    const progressLabel=this.row(p,'',15,365,1060,43,23,C.cyan,'center');
+    const readyLabel=this.row(p,'',15,415,1060,53,19,C.muted,'center');
+    const close=()=>{const overlay=m.overlay;this.modal=null;if(!overlay.isValid)return;overlay.removeFromParent();if(overlay.isValid)overlay.destroy();};
     const confirm=this.button(p,'确认组装并消耗主料',590,502,478,54,()=>{
       if((this.h.state.repairProgress[servo.uid]||0)!==3){this.h.ui.toast('先将两件主料放入插槽并连通端子。');return;}
       close();this.h.dispatch({type:'CRAFT',recipeId:recipe.id});if(!findItem(this.h.state,servo.uid))this.effect('repair',{x:530,y:300,width:380,height:280});
     },'gold');
     this.button(p,'撤回预览',15,502,478,54,close,'quiet');
     const wire=this.h.ui.container(p,385,244,480,98,'craft-terminal-wire').addComponent<Graphics>(Graphics);
-    const start=this.box(p,425,267,104,54,C.orange,'#122B3C','craft-positive');this.text(start,'供电端',0,15,104,29,17,C.orange,'center');
-    const end=this.box(p,728,267,104,54,C.cyan,'#122B3C','craft-limit');this.text(end,'限位端',0,15,104,29,17,C.cyan,'center');
+    const start=this.box(p,425,267,104,54,C.orange,'#122B3C','craft-positive');const startLabel=this.row(start,'供电端',0,0,104,54,17,C.orange,'center').getComponent<Label>(Label)!;
+    const end=this.box(p,728,267,104,54,C.cyan,'#122B3C','craft-limit');const endLabel=this.row(end,'限位端',0,0,104,54,17,C.cyan,'center').getComponent<Label>(Label)!;
     let dragging=false,travel=0;
+    const partNodes:Node[]=[],partLabels:Label[]=[];
     const terminal=this.h.ui.container(p,400,254,460,84,'craft-terminal-track');
     const refresh=()=>{
       const step=this.h.state.repairProgress[servo.uid]||0;
@@ -281,31 +298,42 @@ export class OrbitalPanels {
       readyLabel.getComponent<Label>(Label)!.string=Object.entries(recipe.materials).map(([id,q])=>`${materials.find(x=>x.id===id)?.name||id} ${this.h.state.materials[id]||0}/${q}`).join('  ·  ')+'  ·  2 AP';
       const affordable=this.h.state.ap>=recipe.ap&&Object.entries(recipe.materials).every(([id,q])=>(this.h.state.materials[id]||0)>=q);
       this.h.ui.setButtonEnabled(confirm,step===3&&affordable);
+      this.h.ui.setButtonEnabled(auxiliary,step===2);
+      startLabel.color=new Color(step===2?C.orange:step===3?C.cyan:C.muted);endLabel.color=new Color(step>=2?C.cyan:C.muted);
+      partNodes.forEach((part,index)=>{
+        const completed=step>index,active=step===index;
+        if(completed)part.setPosition(401+index*269,-94);
+        partLabels[index].string=`${index===0?'伺服器':'磁悬轴承'}${completed?' · 已就位':''}`;
+        partLabels[index].color=new Color(completed?C.cyan:active?C.text:C.muted);
+        const opacity=part.getComponent<UIOpacity>(UIOpacity)||part.addComponent<UIOpacity>(UIOpacity);opacity.opacity=completed?235:active?255:190;
+      });
       wire.clear();if(step>=3){wire.lineWidth=4;wire.strokeColor=new Color(C.cyan);wire.moveTo(92,-51);wire.lineTo(395,-51);wire.stroke();}
     };
     const advance=(stage:number)=>{this.h.dispatch({type:'REPAIR_STEP',uid:servo.uid,stage});refresh();};
     const stageParts=[servo,bearing];
     stageParts.forEach((it,index)=>{
       const completed=(this.h.state.repairProgress[servo.uid]||0)>index;
-      const part=this.box(p,completed?401+index*269:15+index*181,completed?94:94,completed?178:167,153,C.orange,'#152D3CF0',`craft-input-${index}`);
-      this.h.ui.object(part,it.defId,15,10,137,104,{repaired:it.repaired});this.text(part,index===0?'伺服器':'磁悬轴承',8,116,151,27,17,C.text,'center');
-      let origin=part.position.clone(),moving=false;
-      part.on(Node.EventType.TOUCH_START,()=>{if(this.h.busy||(this.h.state.repairProgress[servo.uid]||0)!==index)return;origin=part.position.clone();moving=true;part.setSiblingIndex(p.children.length-1);});
-      part.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(!moving)return;const d=e.getUIDelta();part.setPosition(part.position.x+d.x,part.position.y+d.y);});
+      const part=this.box(p,completed?401+index*269:15+index*181,94,178,153,C.orange,'#152D3CF0',`craft-input-${index}`);
+      this.h.ui.object(part,it.defId,21,10,137,104,{repaired:it.repaired});partNodes.push(part);partLabels.push(this.row(part,index===0?'伺服器':'磁悬轴承',8,116,162,27,16,C.text,'center').getComponent<Label>(Label)!);
+      let origin=part.position.clone(),moving=false,sibling=part.getSiblingIndex();
+      const restore=()=>{part.setPosition(origin);part.setSiblingIndex(sibling);this.dragOpacity(part,false);};
+      part.on(Node.EventType.TOUCH_START,()=>{if(this.h.busy||(this.h.state.repairProgress[servo.uid]||0)!==index)return;origin=part.position.clone();sibling=part.getSiblingIndex();moving=true;this.dragOpacity(part,true);part.setSiblingIndex(p.children.length-1);});
+      part.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(!moving||this.h.busy)return;const d=e.getUIDelta();this.dragWithin(part,d.x,d.y,{left:15,top:90,right:1069,bottom:340});});
       part.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{
-        if(!moving)return;moving=false;
+        if(!moving)return;moving=false;restore();
         if(slots[index].getComponent<UITransform>(UITransform)?.hitTest(e.getLocation())){part.setPosition(401+index*269,-94);advance(index);}
-        else {part.setPosition(origin);this.h.ui.toast('把主料放入同轮廓插槽，匹配后再连接端子。');}
+        else this.h.ui.toast('把主料放入同轮廓插槽，匹配后再连接端子。');
       });
-      part.on(Node.EventType.TOUCH_CANCEL,()=>{moving=false;part.setPosition(origin);});
+      part.on(Node.EventType.TOUCH_CANCEL,()=>{if(!moving)return;moving=false;restore();});
     });
-    terminal.on(Node.EventType.TOUCH_START,(e:EventTouch)=>{dragging=(this.h.state.repairProgress[servo.uid]||0)===2&&!!start.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation());travel=0;});
+    terminal.on(Node.EventType.TOUCH_START,(e:EventTouch)=>{dragging=!this.h.busy&&(this.h.state.repairProgress[servo.uid]||0)===2&&!!start.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation());travel=0;});
     terminal.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{
-      if(!dragging)return;const d=e.getUIDelta();travel+=Math.abs(d.x)+Math.abs(d.y);const t=Math.min(1,travel/300);
+      if(!dragging||this.h.busy)return;const d=e.getUIDelta();travel+=Math.abs(d.x)+Math.abs(d.y);const t=Math.min(1,travel/300);
       wire.clear();wire.strokeColor=new Color(C.orange);wire.lineWidth=4;wire.moveTo(92,-51);wire.lineTo(92+303*t,-51);wire.stroke();
     });
     terminal.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{if(!dragging)return;dragging=false;if(travel>130&&end.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation()))advance(2);else{refresh();this.h.ui.toast('从供电端连接到限位端，完成双向回路。');}});
-    this.button(p,'辅助连接端子',851,268,218,51,()=>{if((this.h.state.repairProgress[servo.uid]||0)===2)advance(2);else this.h.ui.toast('先将两件主料拖入插槽。');},'quiet');
+    terminal.on(Node.EventType.TOUCH_CANCEL,()=>{dragging=false;refresh();});
+    const auxiliary=this.button(p,'辅助连接端子',851,268,218,51,()=>{if((this.h.state.repairProgress[servo.uid]||0)===2)advance(2);else this.h.ui.toast('先将两件主料拖入插槽。');},'quiet');
     refresh();
   }
 
@@ -334,21 +362,27 @@ export class OrbitalPanels {
       const node=this.box(p,xx,yy,iw*cw-4,ih*ch-4,it.uid===this.h.selected?C.cyan:'#8D968559',it.uid===this.h.selected?'#203438C9':'#141F22A6',`warehouse-item-${it.uid}`);
       this.h.ui.object(node,it.defId,4,3,iw*cw-12,ih*ch-13,{repaired:it.repaired,damaged:!it.working});
       this.row(node,it.sourceVerified?'✓':it.owner==='customer'?'委':'?',3,3,20,18,12,it.sourceVerified?C.cyan:C.orange,'center');
-      let start=new Vec3(),distance=0,drag=false;
+      let start=new Vec3(),distance=0,drag=false,sibling=node.getSiblingIndex(),previewSibling=preview.node.getSiblingIndex();
       const target=(e:EventTouch)=>cells.find(c=>!!c.node.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation()));
-      node.on(Node.EventType.TOUCH_START,()=>{if(this.h.busy)return;drag=true;distance=0;start=node.position.clone();this.h.selected=it.uid;node.setSiblingIndex(p.children.length-1);});
+      const drawPreview=(x:number,y:number,outside=false)=>{
+        preview.clear();const valid=!outside&&canPlace(s,it.uid,x,y,it.rotated),px=x*cw,py=y*ch,pw=Math.min(iw*cw-3,cw*10-px-1),ph=Math.min(ih*ch-3,ch*6-py-1);
+        preview.fillColor=valid?new Color(118,186,187,85):new Color(209,141,119,105);preview.rect(px,-py-ph,pw,ph);preview.fill();
+        preview.fillColor=valid?new Color(118,186,187,240):new Color(209,141,119,240);
+        for(const [rx,ry,rw,rh]of [[px,-py-2,pw,2],[px,-py-ph,pw,2],[px,-py-ph,2,ph],[px+pw-2,-py-ph,2,ph]]){preview.rect(rx,ry,rw,rh);preview.fill();}
+        if(!valid){preview.strokeColor=new Color(209,141,119,220);preview.lineWidth=2;for(let k=-ph;k<pw;k+=14){const from=Math.max(0,-k),to=Math.min(ph,pw-k);if(to<=from)continue;preview.moveTo(px+k+from,-py-from);preview.lineTo(px+k+to,-py-to);preview.stroke();}}
+      };
+      const restore=()=>{node.setPosition(start);this.dragOpacity(node,false);preview.clear();preview.node.setSiblingIndex(previewSibling);node.setSiblingIndex(sibling);};
+      node.on(Node.EventType.TOUCH_START,()=>{if(this.h.busy)return;drag=true;distance=0;start=node.position.clone();sibling=node.getSiblingIndex();previewSibling=preview.node.getSiblingIndex();this.h.selected=it.uid;this.dragOpacity(node,true);preview.node.setSiblingIndex(p.children.length-1);node.setSiblingIndex(p.children.length-1);drawPreview(it.x,it.y);});
       node.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{
-        if(!drag||this.h.busy)return;const d=e.getUIDelta();distance+=Math.abs(d.x)+Math.abs(d.y);node.setPosition(node.position.x+d.x,node.position.y+d.y);
-        const cell=target(e);preview.clear();if(!cell)return;
-        const valid=canPlace(s,it.uid,cell.x,cell.y,it.rotated);preview.fillColor=new Color(valid?'#6EE0DE44':'#E38B7755');preview.rect(cell.x*cw,-cell.y*ch-ih*ch,iw*cw-3,ih*ch-3);preview.fill();
-        if(!valid){preview.strokeColor=new Color(C.red);preview.lineWidth=2;for(let k=0;k<iw*cw;k+=14){preview.moveTo(cell.x*cw+k,-cell.y*ch);preview.lineTo(cell.x*cw+Math.min(iw*cw,k+ih*ch),-cell.y*ch-ih*ch);preview.stroke();}}
+        if(!drag||this.h.busy)return;const d=e.getUIDelta();distance+=Math.abs(d.x)+Math.abs(d.y);this.dragWithin(node,d.x,d.y,{left:gx,top:gy,right:gx+cw*10,bottom:gy+ch*6});
+        const cell=target(e);if(cell)drawPreview(cell.x,cell.y);else drawPreview(Math.min(9,Math.max(0,Math.floor((node.position.x-gx)/cw))),Math.min(5,Math.max(0,Math.floor((-node.position.y-gy)/ch))),true);
       });
       node.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{
-        if(!drag)return;drag=false;node.setPosition(start);preview.clear();
+        if(!drag)return;drag=false;restore();
         const cell=target(e);if(distance>8&&cell){this.h.dispatch({type:'MOVE',uid:it.uid,x:cell.x,y:cell.y,rotated:it.rotated});}
         else this.h.select(it.uid);
       });
-      node.on(Node.EventType.TOUCH_CANCEL,()=>{drag=false;node.setPosition(start);preview.clear();});
+      node.on(Node.EventType.TOUCH_CANCEL,()=>{if(!drag)return;drag=false;restore();});
     });
     this.row(p,'拖动实物入格 · R 旋转 · 红色斜纹表示重叠或越界',47,588,680,22,15,C.muted);
     this.h.ui.rail(p,30,622,720,149,{fill:'#121A1CA8',stroke:'#8B86704A',name:'warehouse-sales-rack'});
@@ -454,15 +488,18 @@ export class OrbitalPanels {
     this.row(p,'原件与合格库存 / 点击或拖入交付盘',948,452,602,30,15,C.muted);
     const tray=this.h.ui.texturePanel(p,1080,553,350,111,{skin:'socket',fill:'#182326D2',stroke:'#C38A4D8F',materialOpacity:.90,name:'order-delivery-tray'});
     this.row(tray,'交付盘 / 确认前可撤回',10,82,330,24,14,C.orange,'center');
+    const dropGlow=this.h.ui.container(tray,3,3,344,105,'order-drop-guide').addComponent<Graphics>(Graphics);
     candidates.slice(0,5).forEach((it,i)=>{
       const x=948+i*119,y=492;
       const card=this.h.ui.texturePanel(p,x,y,109,54,{skin:'socket',fill:'#1C292DD1',stroke:it.uid===this.stagedUid?C.cyan:C.line,materialOpacity:.60,name:`order-candidate-${it.uid}`});
-      this.h.ui.object(card,it.defId,3,2,65,49,{repaired:it.repaired,damaged:!it.working});this.row(card,it.repaired?'修':'原',74,0,27,54,15,it.repaired?C.cyan:C.muted,'center');
-      let start=new Vec3(),travel=0;
-      card.on(Node.EventType.TOUCH_START,()=>{if(this.h.busy)return;start=card.position.clone();travel=0;card.setSiblingIndex(p.children.length-1);});
-      card.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(this.h.busy)return;const d=e.getUIDelta();travel+=Math.abs(d.x)+Math.abs(d.y);card.setPosition(card.position.x+d.x,card.position.y+d.y);});
-      card.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{card.setPosition(start);if(travel<8||tray.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation())){this.stagedUid=it.uid;this.h.render();}else this.h.ui.toast('把原物拖入橙色交付盘，或点选原物预览。');});
-      card.on(Node.EventType.TOUCH_CANCEL,()=>card.setPosition(start));
+      this.h.ui.object(card,it.defId,3,2,65,49,{repaired:it.repaired,damaged:!it.working});this.row(card,it.uid===this.stagedUid?'盘':it.repaired?'修':'原',74,0,27,54,15,it.uid===this.stagedUid||it.repaired?C.cyan:C.muted,'center');
+      let start=new Vec3(),travel=0,moving=false,sibling=card.getSiblingIndex();
+      const guide=(hovered:boolean)=>{dropGlow.clear();dropGlow.strokeColor=new Color(hovered?C.cyan:C.orange);dropGlow.lineWidth=2;dropGlow.rect(0,-105,344,105);dropGlow.stroke();};
+      const restore=()=>{card.setPosition(start);card.setSiblingIndex(sibling);this.dragOpacity(card,false);dropGlow.clear();};
+      card.on(Node.EventType.TOUCH_START,()=>{if(this.h.busy)return;start=card.position.clone();sibling=card.getSiblingIndex();travel=0;moving=true;this.dragOpacity(card,true);card.setSiblingIndex(p.children.length-1);guide(false);});
+      card.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(!moving||this.h.busy)return;const d=e.getUIDelta();travel+=Math.abs(d.x)+Math.abs(d.y);this.dragWithin(card,d.x,d.y,{left:948,top:492,right:1550,bottom:664});guide(!!tray.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation()));});
+      card.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{if(!moving)return;moving=false;restore();if(travel<8||tray.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation())){this.stagedUid=it.uid;this.h.render();}else this.h.ui.toast('把原物拖入橙色交付盘，或点选原物预览。');});
+      card.on(Node.EventType.TOUCH_CANCEL,()=>{if(!moving)return;moving=false;restore();});
     });
     if(!candidates.length)this.text(p,'仓库暂无相同型号，先取得原物或接收委修件。',948,494,602,45,18,C.muted);
     if(staged){
@@ -538,8 +575,14 @@ export class OrbitalPanels {
     options.forEach(([name,id,desc],i)=>{
       const xx=991+i*285,disabled=s.phase!=='report'||s.day<3||upgraded||s.upgrades[id]||s.cash<(id==='lamp'?120:160);
       const card=this.h.button(p,'',xx,570,273,95,()=>{this.h.dispatch({type:'UPGRADE',id});if(this.h.state.upgrades[id])this.effect('stamp',{x:xx+130,y:610});},{tone:'quiet',selected:s.upgrades[id],disabled,name:`upgrade-${id}`});
-      this.h.ui.toolIcon(card,id==='lamp'?'TOL-001':'TOL-005',10,12,62,63);
-      this.row(card,name,83,13,177,29,19,s.upgrades[id]?C.cyan:C.text);this.row(card,s.upgrades[id]?'已安装':`${id==='lamp'?120:160} Cr · ${desc}`,83,51,177,28,15,C.muted);
+      this.h.ui.panel(card,0,0,273,95,{fill:s.upgrades[id]?'#1A2A30F0':'#101A22F0',lineWidth:0,radius:3,name:'upgrade-card-backing'}).setSiblingIndex(0);
+      const icon=this.h.ui.toolIcon(card,id==='lamp'?'TOL-001':'TOL-005',10,12,62,63);
+      if(disabled&&!s.upgrades[id])(icon.getComponent<UIOpacity>(UIOpacity)||icon.addComponent<UIOpacity>(UIOpacity)).opacity=160;
+      this.row(card,name,83,8,177,27,18,s.upgrades[id]?C.cyan:disabled?C.muted:C.text);
+      this.row(card,desc,83,38,177,21,13,C.muted);
+      this.baseline(card,s.upgrades[id]?'已安装':`${id==='lamp'?120:160} Cr`,83,82,70,13,s.upgrades[id]?C.cyan:disabled?C.muted:C.orange);
+      const status=s.upgrades[id]?'':s.day<3?'第3日开放':s.phase!=='report'?'打烊后可选':upgraded?'今日已改造':s.cash<(id==='lamp'?120:160)?'资金不足':'可安装';
+      this.baseline(card,status,157,82,103,12,disabled?C.muted:C.cyan,'right');
     });
     if(s.phase==='open')this.button(p,'确认打烊并结算',991,705,558,48,()=>this.confirmDialog('确认结束本日营业',`本日还剩 ${s.ap} AP。\n能源维护 ${maintenance} Cr，租金 ${rent} Cr。\n未完成订单保留到期日；确认后一次扣款并生成报告。`,()=>this.h.dispatch({type:'SETTLE'})),'gold');
     else if(ended)this.button(p,'重新接手当铺',991,705,558,48,()=>this.confirmDialog('重新开始经营','将为新店建立独立经营进度。建议先导出本轮档案。',()=>this.h.resetGame()),'gold');
@@ -547,6 +590,7 @@ export class OrbitalPanels {
   }
   private settings(p:Node):void {
     this.title(p,'SYSTEM / 操作与档案','暂停与设置');
+    this.h.ui.panel(p,53,205,945,34,{fill:'#0B151DEE',lineWidth:0,radius:3,name:'settings-preferences-caption'});
     this.row(p,'操作偏好 / CONSOLE PREFERENCES',53,211,930,23,12,C.muted);
     const settings:[keyof typeof this.h.prefs,string,string][]=[['sound','游戏声音','操作、扫描与成交提示音'],['reducedMotion','减少动态','省略位移与装饰动态，保留状态和必要反馈'],['largeText','放大文字','增大主要说明与按钮文字']];
     settings.forEach(([key,title,desc],i)=>{
@@ -574,10 +618,10 @@ export class OrbitalPanels {
   }
   private confirmDialog(title:string,body:string,confirm:()=>void):void {
     if(this.h.busy)return;
-    this.modal?.removeFromParent();this.modal?.destroy();
+    this.closeModal();
     const m=this.h.ui.modal(title,{width:970,height:480,onClose:()=>{this.modal=null;}});this.modal=m.overlay;
     this.text(m.body,body,15,15,876,180,23,C.text);
-    const close=()=>{m.overlay.removeFromParent();m.overlay.destroy();this.modal=null;};
+    const close=()=>{const overlay=m.overlay;this.modal=null;if(!overlay.isValid)return;overlay.removeFromParent();if(overlay.isValid)overlay.destroy();};
     this.button(m.body,'取消',16,231,405,56,close,'quiet');
     this.button(m.body,'确认执行',453,231,405,56,()=>{close();confirm();},'gold');
   }

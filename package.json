@@ -1,6 +1,6 @@
 {
   "name": "orbital-secondhand",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "private": true,
   "type": "3d",
   "description": "轨道旧货局 — Cocos Creator 空间站经营网页版",
@@ -8,10 +8,11 @@
     "engine:prepare": "node scripts/prepare-engine.mjs",
     "build:web": "node scripts/build-web.mjs",
     "preview": "node scripts/serve.mjs",
-    "test": "node scripts/test-model.mjs && node scripts/test-orbital.mjs",
+    "test": "node scripts/test-model.mjs && node scripts/test-orbital.mjs && node scripts/test-inspection-geometry.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.web.json",
     "build:pages": "npm run build:web && node scripts/stage-pages.mjs",
-    "test:orbital": "node scripts/test-orbital.mjs"
+    "test:orbital": "node scripts/test-orbital.mjs",
+    "test:inspection-geometry": "node scripts/test-inspection-geometry.mjs"
   },
   "devDependencies": {
     "@babel/plugin-proposal-export-default-from": "7.17.12",

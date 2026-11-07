@@ -1,8 +1,10 @@
-import {Color,Graphics,Mask,Node,Tween,UIOpacity,Vec3} from 'cc';
+import {Color,Graphics,Mask,Node,Rect,Size,Sprite,SpriteFrame,Tween,UIOpacity,UITransform,Vec2,Vec3} from 'cc';
 import type {OrbitalUI} from './OrbitalUI';
 
 export interface OrbitalPoint {x:number;y:number}
 export interface OrbitalRect extends OrbitalPoint {width?:number;height?:number}
+export interface OrbitalMotionRegions {contentArea?:OrbitalRect;inspectionArea?:OrbitalRect}
+interface Bounds extends OrbitalPoint {width:number;height:number}
 interface Task {kind:string;elapsed:number;duration:number;ended:boolean;alive:()=>boolean;frame:(p:number)=>void;complete:()=>void;resolve:()=>void}
 interface Tracked {node:Node;kind:string}
 interface Particle {node:Node;x:number;y:number;phase:number;speed:number}
@@ -16,8 +18,10 @@ const TAU=Math.PI*2;
 export class OrbitalMotion {
   reducedMotion=false;
   private readonly layer:Node;
+  private readonly aperture:Node;
   private readonly tasks:Task[]=[];
   private readonly tracked:Tracked[]=[];
+  private readonly owned=new Set<Node>();
   private readonly moving=new Set<Node>();
   private ambient:Node|null=null;
   private ambientParent:Node|null=null;
@@ -25,12 +29,28 @@ export class OrbitalMotion {
   private actorBase=new Vec3();
   private actorAngle=0;
   private particles:Particle[]=[];
-  private lights:Node[]=[];
+  private ambientKey='';
+  private contentArea:Bounds={x:24,y:108,width:1552,height:700};
+  private inspectionArea:Bounds={x:244,y:216,width:992,height:366};
   private clock=0;
   private disposed=false;
 
   constructor(private readonly ui:OrbitalUI,private readonly root:Node){
-    this.layer=ui.container(root,0,0,1600,900,'orbital-motion-overlay');
+    const a=this.contentArea;
+    this.aperture=ui.container(root,a.x,a.y,a.width,a.height,'orbital-motion-workspace');
+    this.aperture.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
+    // Preserve the public screen-coordinate API inside a clipped content viewport.
+    this.layer=ui.container(this.aperture,-a.x,-a.y,1600,900,'orbital-motion-overlay');
+    this.aperture.active=false;
+  }
+  setRegions(regions:OrbitalMotionRegions):void {
+    if(this.disposed)return;
+    const content=this.bounds(regions.contentArea,this.contentArea),inspection=this.bounds(regions.inspectionArea,this.inspectionArea);
+    if(JSON.stringify(content)===JSON.stringify(this.contentArea)&&JSON.stringify(inspection)===JSON.stringify(this.inspectionArea))return;
+    this.finish();this.contentArea=content;this.inspectionArea=inspection;
+    this.aperture.setPosition(content.x,-content.y);
+    this.aperture.getComponent<UITransform>(UITransform)!.setContentSize(content.width,content.height);
+    this.layer.setPosition(-content.x,content.y);
   }
   configure(settings:{reducedMotion:boolean}):void {
     this.reducedMotion=settings.reducedMotion;
@@ -44,49 +64,62 @@ export class OrbitalMotion {
       if(task.ended)continue;
       if(!task.alive()){this.end(task,false);continue;}
       task.elapsed+=delta;const p=this.reducedMotion?1:clamp(task.elapsed/task.duration);
-      task.frame(p);if(p>=1)this.end(task,false);
+      try{task.frame(p);if(p>=1)this.end(task,false);}
+      catch(error){console.warn('[OrbitalMotion] Presentation frame stopped.',error);this.end(task,false);}
     }
     this.updateAmbient();
   }
-  finish():void {for(const task of [...this.tasks])this.end(task,true);}
+  finish():void {
+    for(const task of [...this.tasks])this.end(task,true);
+    // Also remove orphan wrappers whose scene was detached before its next frame.
+    for(const node of [...this.owned])this.drop(node);
+    this.moving.clear();this.restoreActor();
+    if(this.aperture.isValid)this.aperture.active=false;
+  }
   dispose():void {
-    if(this.disposed)return;this.finish();this.clearAmbient();
-    for(const child of [...this.layer.children])this.drop(child);
-    this.drop(this.layer);this.tracked.length=0;this.moving.clear();this.disposed=true;
+    if(this.disposed)return;this.disposed=true;this.finish();this.clearAmbient();
+    this.drop(this.aperture);this.tracked.length=0;this.moving.clear();
   }
   snapshot():{phase:string;activeCount:number;busy:boolean;nodes:{id:string;kind:string;x:number;y:number;opacity:number}[];ambientClock:number}{
     const origin=this.root.worldPosition;
-    const nodes=this.tracked.filter(t=>t.node.isValid).map(t=>{
+    const nodes=this.tracked.filter(t=>this.attached(t.node)).map(t=>{
       const p=t.node.worldPosition;return {id:t.node.uuid,kind:t.kind,x:p.x-origin.x,y:origin.y-p.y,opacity:t.node.getComponent<UIOpacity>(UIOpacity)?.opacity??255};
     });
-    if(this.actor?.isValid){const p=this.actor.worldPosition;nodes.push({id:this.actor.uuid,kind:'npc-breath',x:p.x-origin.x,y:origin.y-p.y,opacity:255});}
+    if(this.actor&&this.attached(this.actor)){const p=this.actor.worldPosition;nodes.push({id:this.actor.uuid,kind:'npc-breath',x:p.x-origin.x,y:origin.y-p.y,opacity:255});}
     return {phase:this.tasks[this.tasks.length-1]?.kind??'idle',activeCount:this.tasks.length,busy:!!this.tasks.length,nodes,ambientClock:this.clock};
   }
 
-  bindAmbient(binding:{parent:Node;actor?:Node|null;area?:OrbitalRect}):void {
-    this.actor=binding.actor?.isValid?binding.actor:null;
+  bindAmbient(binding:{parent:Node;actor?:Node|null;area?:OrbitalRect;enabled?:boolean}):void {
+    if(this.disposed)return;
+    const enabled=binding.enabled??/^page-(counter|trade)$/.test(binding.parent.name);
+    const actor=enabled&&binding.actor?.isValid?binding.actor:null;
+    const area=this.intersect(this.bounds(binding.area,{x:390,y:165,width:790,height:390}),this.contentArea);
+    const key=`${enabled}:${area.x}:${area.y}:${area.width}:${area.height}`;
+    if(this.ambientParent===binding.parent&&this.actor===actor&&this.ambientKey===key&&(!enabled||this.ambient?.isValid))return;
+    // A redraw invalidates old scene-bound animation, even before deferred destroy runs.
+    if(this.ambientParent&&this.ambientParent!==binding.parent)this.finish();
+    this.clearAmbient();if(!this.attached(binding.parent))return;
+    this.ambientParent=binding.parent;this.ambientKey=key;this.actor=actor;
     if(this.actor){this.actorBase=this.actor.position.clone();this.actorAngle=this.actor.angle;}
-    if(this.ambientParent===binding.parent&&this.ambient?.isValid&&this.ambient.parent===binding.parent)return;
-    this.clearAmbient();if(!binding.parent.isValid)return;
-    this.ambientParent=binding.parent;
-    this.ambient=this.ui.container(binding.parent,0,0,1600,900,'orbital-atmosphere');
-    const area={x:binding.area?.x??230,y:binding.area?.y??140,width:binding.area?.width??960,height:binding.area?.height??560};
-    for(let i=0;i<16;i++){
-      const x=area.x+((i*197+17)%997)/997*area.width;
-      const y=area.y+((i*131+59)%991)/991*area.height;
-      const n=this.ui.container(this.ambient,x,y,4,4,'station-dust');const g=n.addComponent<Graphics>(Graphics);
-      g.fillColor=this.color(i%4===0?'#C38A4D70':'#C7C5AC48');g.circle(0,0,i%4===0?1.8:1.1);g.fill();
-      this.particles.push({node:n,x,y,phase:i*1.53,speed:.23+(i%4)*.05});
-    }
-    for(let i=0;i<3;i++){
-      const n=this.ui.container(this.ambient,area.x+70+i*area.width*.37,area.y+12,80,3,'station-status-light');
-      const g=n.addComponent<Graphics>(Graphics);g.fillColor=this.color(i===1?'#C38A4D36':'#76BABB22');g.roundRect(0,-3,80,3,1.5);g.fill();this.lights.push(n);
+    if(!enabled||area.width<=0||area.height<=0)return;
+    this.ambient=this.ui.container(binding.parent,area.x,area.y,area.width,area.height,'orbital-atmosphere');
+    this.ambient.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
+    // Only a few dim motes in the shop; instruments and management pages stay still.
+    for(let i=0;i<4;i++){
+      const x=18+((i*197+117)%997)/997*Math.max(0,area.width-36);
+      const y=18+((i*131+159)%991)/991*Math.max(0,area.height-36);
+      const n=this.ui.container(this.ambient,x,y,3,3,'station-dust');const g=n.addComponent<Graphics>(Graphics);
+      g.fillColor=this.color('#C7C5AC44');g.circle(0,0,1);g.fill();
+      this.particles.push({node:n,x,y,phase:i*1.53,speed:.14+i*.02});
     }
   }
 
   sceneEntry():Promise<void>{
-    this.top();
-    const hatch=this.ui.panel(this.layer,0,0,1600,900,{fill:'#121B20',stroke:'#48504E',radius:0,name:'station-opening-hatch'});
+    if(this.disposed||!this.root.isValid)return Promise.resolve();
+    // The opening is the only full-screen presentation; its entire layer is temporary.
+    const entry=this.own(this.ui.container(this.root,0,0,1600,900,'orbital-opening-overlay'));
+    entry.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
+    const hatch=this.ui.panel(entry,0,0,1600,900,{fill:'#121B20',stroke:'#48504E',radius:0,name:'station-opening-hatch'});
     const g=hatch.addComponent<Graphics>(Graphics);
     for(let y=25;y<900;y+=72){g.strokeColor=this.color('#293631');g.lineWidth=2;g.moveTo(0,-y);g.lineTo(1600,-y);g.stroke();}
     g.strokeColor=this.color(C.orange);g.lineWidth=5;g.moveTo(785,0);g.lineTo(785,-900);g.stroke();
@@ -94,17 +127,18 @@ export class OrbitalMotion {
     this.ui.label(hatch,'轨道旧货局',410,335,780,86,{size:62,color:C.white,align:'center',bold:true});
     this.ui.label(hatch,'回环九号 · 下层旧港',410,439,780,44,{size:25,color:C.muted,align:'center'});
     this.ui.label(hatch,'舱门气压平衡完成',410,507,780,32,{size:18,color:C.orange,align:'center'});
+    entry.setSiblingIndex(this.root.children.length-1);
     this.track(hatch,'station-hatch');
-    return this.run('scene-entry',1.05,()=>hatch.isValid,p=>{
+    return this.run('scene-entry',1.05,()=>this.attached(hatch),p=>{
       const e=ease(clamp((p-.12)/.88));hatch.setPosition(0,980*e);this.opacity(hatch).opacity=Math.round(255*(1-Math.max(0,p-.8)/.2));
-    },()=>this.drop(hatch));
+    },()=>this.drop(entry));
   }
   enter(actor:Node):Promise<void>{
-    if(!actor.isValid)return Promise.resolve();
-    const dest=actor.position.clone(),scale=actor.scale.clone(),angle=actor.angle;
+    if(this.disposed||!this.attached(actor))return Promise.resolve();
+    const dest=this.actor===actor?this.actorBase.clone():actor.position.clone(),scale=actor.scale.clone(),angle=this.actor===actor?this.actorAngle:actor.angle;
     this.moving.add(actor);this.track(actor,'npc-walk-in');
-    return this.run('npc-enter',.82,()=>actor.isValid,p=>{
-      const e=ease(p);actor.setPosition(dest.x-260*(1-e),dest.y-25*(1-e)+Math.sin(p*Math.PI*8)*4*(1-p),dest.z);
+    return this.run('npc-enter',.68,()=>this.attached(actor),p=>{
+      const e=ease(p);actor.setPosition(dest.x-105*(1-e),dest.y-4*(1-e)+Math.sin(p*Math.PI*6)*1.6*(1-p),dest.z);
       actor.setScale(scale.x*(.96+.04*e),scale.y*(.96+.04*e),scale.z);actor.angle=angle+Math.sin(p*Math.PI*8)*1.4*(1-p);
       this.opacity(actor).opacity=Math.round(255*Math.min(1,p*3.3));
     },()=>{
@@ -113,63 +147,103 @@ export class OrbitalMotion {
     });
   }
   exit(npcId:string):Promise<void>{
+    if(this.disposed)return Promise.resolve();
     this.top();
     // The transient exit lives above the scene, so keep the same worktop occlusion as the resident customer.
-    const aperture=this.ui.container(this.layer,0,0,1600,565,'customer-exit-aperture');aperture.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
-    const actor=this.ui.customer(aperture,npcId,445,138,460,440);this.track(actor,'npc-walk-out');
-    return this.run('npc-exit',.82,()=>actor.isValid,p=>{
-      const e=smooth(p);actor.setPosition(445-850*e,-138-25*e+Math.sin(p*Math.PI*8)*4);actor.angle=Math.sin(p*Math.PI*8)*1.2;
-      this.opacity(actor).opacity=Math.round(255*(1-Math.max(0,p-.58)/.42));
-    },()=>{this.drop(actor);this.drop(aperture);});
+    const region=this.intersect(this.contentArea,{x:330,y:108,width:720,height:457});
+    const aperture=this.own(this.ui.container(this.layer,region.x,region.y,region.width,region.height,'customer-exit-aperture'));
+    aperture.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
+    const actor=this.ui.customer(aperture,npcId,445-region.x,138-region.y,460,440);this.track(actor,'npc-walk-out');
+    return this.run('npc-exit',.68,()=>this.attached(actor),p=>{
+      const e=smooth(p);actor.setPosition(445-region.x-180*e,-138+region.y-3*e+Math.sin(p*Math.PI*6)*1.6);actor.angle=Math.sin(p*Math.PI*6)*.45;
+      this.opacity(actor).opacity=Math.round(255*(1-Math.max(0,p-.35)/.65));
+    },()=>this.drop(aperture));
   }
 
   handoff(itemId:string,from:OrbitalPoint,to:OrbitalPoint,onPlaced?:()=>void):Promise<void>{
+    if(this.disposed){onPlaced?.();return Promise.resolve();}
     this.top();const size=170,side=to.x>=from.x?'right':'left',handWidth=216,handHeight=198;
-    const shadow=this.ui.container(this.layer,from.x,from.y+61,180,20,'object-contact-shadow');const sg=shadow.addComponent<Graphics>(Graphics);
-    sg.fillColor=this.color('#06101999');sg.ellipse(0,0,65,10);sg.fill();
-    const handWindow=this.ui.container(this.layer,0,0,1600,800,'handoff-safe-window');handWindow.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
-    const hand=this.ui.container(handWindow,0,0,handWidth,handHeight,'orbital-handoff-glove');
+    const safe=this.intersect(this.contentArea,{x:310,y:108,width:930,height:700});
+    const handWindow=this.own(this.ui.container(this.layer,safe.x,safe.y,safe.width,safe.height,'handoff-safe-window'));
+    handWindow.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
+    const stage=this.ui.container(handWindow,-safe.x,-safe.y,1600,900,'handoff-screen-space');
+    const shadow=this.ui.container(stage,from.x,from.y+size*.39,180,20,'object-contact-shadow');const sg=shadow.addComponent<Graphics>(Graphics);
+    sg.fillColor=this.color('#06101988');sg.ellipse(0,0,58,8);sg.fill();
+    const hand=this.ui.container(stage,0,0,handWidth,handHeight,'orbital-handoff-glove');
     const open=this.ui.hand(hand,side==='right'?'right_open':'left_open',0,0,handWidth,handHeight);
     const grip=this.ui.hand(hand,side==='right'?'right_grip':'left_grip',0,0,handWidth,handHeight);
-    const object=this.ui.item(this.layer,itemId,from.x-size/2,from.y-size/2,size,size);
+    // Reuse the actual cloth at the atlas wrist cut. No painted rectangle or new art asset.
+    const sleeveFrame=this.sleeveFrame(grip,side);
+    const sleeveWidth=handWidth*.34;
+    const sleeve=sleeveFrame?this.sleeve(stage,sleeveFrame,sleeveWidth,'handoff-forearm','#B8B19A'):null;
+    const cuff=sleeveFrame?this.sleeve(stage,sleeveFrame,sleeveWidth,'handoff-cuff-join','#D4CBB3'):null;
+    // The overlap is behind the original cuff, so the atlas cut cannot open a gap.
+    if(sleeve)sleeve.setSiblingIndex(stage.children.indexOf(hand));
+    if(cuff)cuff.setSiblingIndex(stage.children.indexOf(hand));
+    const object=this.ui.item(stage,itemId,from.x-size/2,from.y-size/2,size,size);
     this.track(object,'handoff-object');this.track(hand,`hand-${side}-open`);this.track(shadow,'contact-shadow');
-    const rest={x:side==='right'?Math.max(from.x,to.x)+100:Math.min(from.x,to.x)-100,y:880};
-    return this.run('handoff',1.02,()=>object.isValid,p=>{
-      const t=clamp((p-.14)/.65),e=smooth(t);const x=from.x+(to.x-from.x)*e,y=from.y+(to.y-from.y)*e-Math.sin(t*Math.PI)*72;
-      object.setPosition(x-size/2,-y+size/2);object.angle=Math.sin(t*Math.PI)*6;object.setScale(1+.06*Math.sin(t*Math.PI),1+.06*Math.sin(t*Math.PI),1);
-      shadow.setPosition(x,-from.y-(to.y-from.y)*e-61);shadow.setScale(1-.32*Math.sin(t*Math.PI),1,1);
+    if(sleeve)this.track(sleeve,'handoff-forearm');
+    const rest={x:side==='right'?Math.min(1160,Math.max(from.x,to.x)+90):Math.max(390,Math.min(from.x,to.x)-90),y:815};
+    return this.run('handoff',.94,()=>this.attached(object),p=>{
+      const t=clamp((p-.16)/.64),e=smooth(t),lift=Math.sin(t*Math.PI)*42;
+      const x=from.x+(to.x-from.x)*e,groundY=from.y+(to.y-from.y)*e,y=groundY-lift;
+      object.setPosition(x-size/2,-y+size/2);object.angle=Math.sin(t*Math.PI)*2;
+      // Hand contact follows the lifted item; its shadow follows the same projected ground point.
+      shadow.setPosition(x,-groundY-size*.39);shadow.setScale(1-lift/150,1-lift/210,1);
+      this.opacity(shadow).opacity=Math.round(210-lift*1.7);
       const contact={x:x+(side==='right'?size*.15:-size*.15),y:y+size*.17};const reach=smooth(clamp(p/.16)),retreat=smooth(clamp((p-.82)/.18));
       let px=rest.x+(contact.x-rest.x)*reach,py=rest.y+(contact.y-rest.y)*reach;px+=(rest.x-px)*retreat;py+=(rest.y-py)*retreat;
       hand.setPosition(px-handWidth*(side==='right'?.36:.64),-py+handHeight*.42);
-      const gripping=p>=.13&&p<.82;open.active=!gripping;grip.active=gripping;
+      if(sleeve&&cuff){
+        const wrist={x:hand.position.x+handWidth*(side==='right'?.806:.191),y:-hand.position.y+handHeight*.968};
+        cuff.setPosition(wrist.x,-wrist.y+13);cuff.angle=hand.angle;
+        cuff.getComponent<UITransform>(UITransform)!.setContentSize(sleeveWidth,40);
+        const join={x:wrist.x,y:wrist.y+14};
+        const endX=Math.min(safe.x+safe.width-44,Math.max(join.x+130,1125));
+        const dx=endX-join.x,dy=Math.max(50,safe.y+safe.height+64-join.y),length=Math.hypot(dx,dy),overlap=28;
+        sleeve.setPosition(join.x-dx/length*overlap,-join.y+dy/length*overlap);
+        sleeve.angle=Math.atan2(dx,dy)*180/Math.PI;
+        sleeve.getComponent<UITransform>(UITransform)!.setContentSize(sleeveWidth*1.02,length+overlap+40);
+      }
+      const gripping=p>=.14&&p<.82;open.active=!gripping;grip.active=gripping;
       const record=this.tracked.find(r=>r.node===hand);if(record)record.kind=`hand-${side}-${gripping?'grip':'open'}`;
-      this.opacity(hand).opacity=Math.round(255*Math.min(1,p*9)*(1-Math.max(0,p-.91)/.09));
-    },()=>{onPlaced?.();this.drop(object);this.drop(shadow);this.drop(hand);this.drop(handWindow);});
+      const alpha=Math.round(255*Math.min(1,p*9)*(1-Math.max(0,p-.91)/.09));
+      this.opacity(hand).opacity=alpha;if(sleeve)this.opacity(sleeve).opacity=alpha;if(cuff)this.opacity(cuff).opacity=alpha;
+    },()=>{try{onPlaced?.();}finally{this.drop(handWindow);sleeveFrame?.destroy();}});
   }
 
   async deal(amount:number,itemId?:string):Promise<void>{
-    this.top();const wallet={x:848,y:61},counter={x:879,y:583};const from=amount>=0?counter:wallet,to=amount>=0?wallet:counter;
+    if(this.disposed)return;
+    // Credits stay on the counter terminal. The HUD already contains the committed balance.
+    this.top();const wallet={x:1065,y:656},counter={x:879,y:583};const from=amount>=0?counter:wallet,to=amount>=0?wallet:counter;
     const tokens:Node[]=[];
-    for(let i=0;i<6;i++){const n=this.token(from.x,from.y);tokens.push(n);this.track(n,'credit-token');}
-    const value=this.ui.label(this.layer,`${amount>0?'+':''}${amount.toFixed(amount%1?2:0)} Cr`,995,490,300,58,{size:34,color:C.white,align:'center',bold:true});this.track(value,'cash-value');
-    const cash=this.run('credit-transfer',1.08,()=>value.isValid,p=>{
-      tokens.forEach((n,i)=>{const t=clamp((p-i*.035)/.72),e=smooth(t);n.setPosition(from.x+(to.x-from.x)*e+Math.sin(t*Math.PI)*(i-2.5)*19,-from.y-(to.y-from.y)*e+Math.sin(t*Math.PI)*58);n.angle=t*180;this.opacity(n).opacity=Math.round(255*(1-Math.max(0,t-.9)/.1));});
-      value.setPosition(995,-490+ease(p)*75);this.opacity(value).opacity=Math.round(255*Math.min(1,p*6)*(1-Math.max(0,p-.72)/.28));
+    for(let i=0;i<3;i++){const n=this.own(this.token(from.x,from.y));tokens.push(n);this.track(n,'credit-token');}
+    const value=this.own(this.ui.label(this.layer,`${amount>0?'+':''}${amount.toFixed(amount%1?2:0)} Cr`,980,687,230,34,{size:24,color:C.white,align:'center',bold:true}));this.track(value,'cash-value');
+    const cash=this.run('credit-transfer',.94,()=>this.attached(value),p=>{
+      tokens.forEach((n,i)=>{const t=clamp((p-i*.045)/.76),e=smooth(t);n.setPosition(from.x+(to.x-from.x)*e+Math.sin(t*Math.PI)*(i-1)*10,-from.y-(to.y-from.y)*e+Math.sin(t*Math.PI)*22);n.angle=t*30;this.opacity(n).opacity=Math.round(220*(1-Math.max(0,t-.8)/.2));});
+      value.setPosition(980,-687+ease(p)*10);this.opacity(value).opacity=Math.round(255*Math.min(1,p*6)*(1-Math.max(0,p-.72)/.28));
     },()=>{tokens.forEach(n=>this.drop(n));this.drop(value);});
     const jobs=[cash,this.receipt(amount)];
     if(itemId)jobs.push(this.handoff(itemId,counter,amount>=0?{x:675,y:450}:{x:1120,y:635}));
     await Promise.all(jobs);
   }
 
-  effect(kind:string,parent:Node,rect:OrbitalRect={x:440,y:195,width:620,height:390}):Promise<void>{
-    const width=rect.width??620,height=rect.height??390;
-    const node=this.ui.container(parent,rect.x,rect.y,width,height,`effect-${kind}`);const g=node.addComponent<Graphics>(Graphics);
+  effect(kind:string,parent:Node,rect?:OrbitalRect):Promise<void>{
+    if(this.disposed||!this.attached(parent))return Promise.resolve();
+    const compact=kind==='stamp'||kind==='day'||kind==='upgrade';
+    const defaults:Bounds=kind==='stamp'?{x:700,y:556,width:160,height:58}:compact?{x:600,y:334,width:360,height:116}:this.inspectionArea;
+    let area=this.intersect(this.bounds(rect,defaults),this.contentArea);
+    if(parent.name==='page-inspect')area=this.intersect(area,this.inspectionArea);
+    // A clipped effect has no input listeners; the underlying controls remain the input owners.
+    if(area.width<8||area.height<8)return Promise.resolve();
+    const width=area.width,height=area.height;
+    const clip=this.own(this.ui.container(parent,area.x,area.y,width,height,`effect-${kind}-clip`));
+    clip.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
+    const node=this.ui.container(clip,0,0,width,height,`effect-${kind}`);const g=node.addComponent<Graphics>(Graphics);
     this.track(node,kind);
-    const labelText:Record<string,string>={magnify:'侧光与焦距',uv:'紫外显影',spectrum:'光谱峰对齐',probe:'双触点回路',scale:'微重力称量',pulse:'脉冲负载验证',repair:'接合 · 复测',scan:'来源与容器扫描',stamp:'证据已记录',day:'营业日交接',upgrade:'设备升级完成',assemble:'组件兼容性验证'};
-    const accent=kind==='uv'?C.purple:['repair','day','upgrade','assemble','stamp'].includes(kind)?C.orange:['spectrum','probe','scale','pulse','scan'].includes(kind)?C.cyan:C.white;
-    const label=this.ui.label(node,labelText[kind]??'操作完成',0,height+4,width,30,{size:18,color:accent,align:'center'});
-    const duration=['repair','assemble','upgrade'].includes(kind)?1.2:kind==='day'?1.15:1.03;
-    return this.run(kind,duration,()=>parent.isValid&&node.isValid,p=>{
+    // The business panel owns action/readout text. Effects add no competing floating captions.
+    const duration=kind==='stamp'?.42:['repair','assemble','upgrade'].includes(kind)?.88:kind==='day'?.72:.82;
+    return this.run(kind,duration,()=>this.attached(parent)&&this.attached(node),p=>{
       g.clear();
       if(kind==='stamp'){this.drawStamp(g,width,height,p);}
       else if(kind==='day'){this.drawDay(g,node,width,height,p);}
@@ -182,8 +256,8 @@ export class OrbitalMotion {
       else if(kind==='uv'){this.drawUV(g,width,height,p);}
       else if(kind==='scan'){this.drawScanner(g,width,height,p);}
       else this.drawMagnify(g,width,height,p);
-      this.opacity(label).opacity=Math.round(180+Math.sin(p*TAU)*60);
-    },()=>this.drop(node));
+      this.opacity(node).opacity=Math.round(220*Math.min(1,p*8)*(1-Math.max(0,p-.78)/.22));
+    },()=>this.drop(clip));
   }
 
   private drawMagnify(g:Graphics,w:number,h:number,p:number):void {
@@ -191,7 +265,7 @@ export class OrbitalMotion {
     g.fillColor=this.color('#D6D2C70D');g.moveTo(x-125,-h*.12);g.lineTo(x+120,-h*.88);g.lineTo(x-30,-h*.88);g.close();g.fill();
     g.fillColor=this.color('#D6D2C710');g.circle(x,y,59);g.fill();g.strokeColor=this.color(C.white);g.lineWidth=3;g.circle(x,y,59);g.stroke();
     g.strokeColor=this.color('#304D5E');g.lineWidth=15;g.moveTo(x+40,y-42);g.lineTo(x+84,y-91);g.stroke();g.strokeColor=this.color(C.orange);g.lineWidth=3;g.moveTo(x+40,y-42);g.lineTo(x+84,y-91);g.stroke();
-    g.strokeColor=this.color('#D9EFDEAA');g.lineWidth=1;g.moveTo(x-12,y);g.lineTo(x+12,y);g.moveTo(x,y-12);g.lineTo(x,y+12);g.stroke();this.corners(g,w,h,C.muted);
+    g.strokeColor=this.color('#D9EFDEAA');g.lineWidth=1;g.moveTo(x-12,y);g.lineTo(x+12,y);g.moveTo(x,y-12);g.lineTo(x,y+12);g.stroke();
   }
   private drawUV(g:Graphics,w:number,h:number,p:number):void {
     const x=w*(.07+.86*smooth(p));g.fillColor=this.color('#998CA81A');g.rect(Math.max(0,x-65),-h,130,h);g.fill();
@@ -199,10 +273,9 @@ export class OrbitalMotion {
     for(let i=0;i<5;i++){const xx=w*(.23+i*.12),yy=-h*(.35+.06*(i%2));if(xx>x+35)continue;
       g.strokeColor=this.color('#B8ABC5');g.lineWidth=1.5;g.arc(xx,yy,18+i*3,.2,Math.PI*1.6,false);g.stroke();
       for(let j=0;j<4;j++){g.moveTo(xx-20+j*8,yy-h*.18);g.lineTo(xx-20+j*8,yy-h*.18-22-(j%2)*10);g.stroke();}}
-    this.corners(g,w,h,C.purple);
   }
   private drawSpectrum(g:Graphics,w:number,h:number,p:number):void {
-    const base=-h*.78;g.fillColor=this.color('#101B22E0');g.roundRect(w*.12,-h*.88,w*.76,h*.7,8);g.fill();
+    const base=-h*.78;g.fillColor=this.color('#101B226B');g.roundRect(w*.12,-h*.88,w*.76,h*.7,8);g.fill();
     g.strokeColor=this.color('#385161');g.lineWidth=1;for(let i=0;i<6;i++){const y=-h*(.24+i*.105);g.moveTo(w*.15,y);g.lineTo(w*.85,y);g.stroke();}
     [C.cyan,C.orange,C.purple].forEach((c,i)=>{
       const peak=w*(.31+i*.19)+Math.sin((1-p)*2.6+i)*w*.08*(1-p);
@@ -213,16 +286,12 @@ export class OrbitalMotion {
     const sx=w*(.15+.7*p);g.strokeColor=this.color('#D6D2C780');g.lineWidth=1;g.moveTo(sx,-h*.2);g.lineTo(sx,base);g.stroke();
   }
   private drawProbe(g:Graphics,w:number,h:number,p:number):void {
-    const length=clamp(p*3.2);[0,1].forEach(i=>{
-      const a={x:w*(i===0?.12:.88),y:-h*.91},b={x:w*(i===0?.39:.65),y:-h*.46};
-      const c={x:(a.x+b.x)/2,y:-h*.98};const curve=(t:number):OrbitalPoint=>({x:(1-t)*(1-t)*a.x+2*(1-t)*t*c.x+t*t*b.x,y:(1-t)*(1-t)*a.y+2*(1-t)*t*c.y+t*t*b.y});
-      g.strokeColor=this.color(i?C.orange:C.cyan);g.lineWidth=4;g.moveTo(a.x,a.y);for(let n=1;n<=30;n++){const q=curve(n/30*length);g.lineTo(q.x,q.y);}g.stroke();
-      const tip=curve(length);g.fillColor=this.color('#D1DEE0');g.circle(tip.x,tip.y,6);g.fill();
-      for(let j=0;j<3;j++){const t=(p*2.4+j*.3)%1;if(t>length)continue;const q=curve(t);g.fillColor=this.color('#EBF4DD');g.circle(q.x,q.y,3.5);g.fill();}
-      g.strokeColor=this.color('#D6D2C7');g.lineWidth=2;g.circle(b.x,b.y,12);g.stroke();
-    });
-    if(p>.32){g.fillColor=this.color('#101B22E0');g.roundRect(w*.71,-h*.28,w*.27,h*.21,4);g.fill();g.strokeColor=this.color(C.cyan);g.lineWidth=2;
-      for(let n=0;n<65;n++){const x=w*(.73+n/65*.23),y=-h*.18+Math.sin(n*.32-p*TAU*3)*h*.045;if(n===0)g.moveTo(x,y);else g.lineTo(x,y);}g.stroke();}
+    // Physical terminals belong to the transformed object. This effect only
+    // displays the sampled current, so it cannot invent a second pair of pins.
+    g.fillColor=this.color('#101B22D0');g.roundRect(w*.66,-h*.27,w*.32,h*.21,4);g.fill();
+    g.strokeColor=this.color(C.cyan);g.lineWidth=1.8;
+    for(let n=0;n<65;n++){const x=w*(.68+n/65*.27),y=-h*.165+Math.sin(n*.32-p*TAU*3)*h*.043;if(n===0)g.moveTo(x,y);else g.lineTo(x,y);}g.stroke();
+    g.fillColor=this.color(C.orange);g.circle(w*.685,-h*.24,2);g.fill();
   }
   private drawScale(g:Graphics,w:number,h:number,p:number):void {
     const cx=w*.5,cy=-h*.6,settle=Math.sin(p*TAU*3)*(1-p)*.21,span=w*.28;
@@ -234,7 +303,7 @@ export class OrbitalMotion {
     g.strokeColor=this.color(p>.7?C.cyan:C.orange);g.lineWidth=3;g.arc(cx,-h*.79,25,0,Math.PI,false);g.stroke();g.moveTo(cx,-h*.79);g.lineTo(cx+Math.sin(settle*4)*22,-h*.79+22);g.stroke();
   }
   private drawPulse(g:Graphics,w:number,h:number,p:number):void {
-    g.fillColor=this.color('#101B22E3');g.roundRect(w*.1,-h*.88,w*.8,h*.7,8);g.fill();
+    g.fillColor=this.color('#101B226B');g.roundRect(w*.1,-h*.88,w*.8,h*.7,8);g.fill();
     g.strokeColor=this.color('#345363');g.lineWidth=1;for(let x=w*.13;x<w*.88;x+=w*.06){g.moveTo(x,-h*.23);g.lineTo(x,-h*.82);g.stroke();}
     const scan=w*(.14+.72*p);g.fillColor=this.color('#C38A4D10');g.rect(w*.13,-h*.82,Math.max(1,scan-w*.13),h*.57);g.fill();
     g.strokeColor=this.color(C.orange);g.lineWidth=3;for(let n=0;n<=120;n++){const x=w*.14+n/120*w*.72,t=n/120*5-p*2;const sq=(Math.sin(t*TAU)>.3?1:0);const y=-h*(.69-.29*sq);if(n===0)g.moveTo(x,y);else g.lineTo(x,y);}g.stroke();
@@ -245,7 +314,8 @@ export class OrbitalMotion {
     this.corners(g,w,h,C.cyan);const y=-h*(.08+.84*smooth(p));
     g.fillColor=this.color('#76BABB0C');g.rect(12,y-42,w-24,84);g.fill();g.strokeColor=this.color(C.cyan);g.lineWidth=3;g.moveTo(8,y);g.lineTo(w-8,y);g.stroke();
     for(let i=0;i<8;i++){g.fillColor=this.color(i/8<p?C.cyan:'#36505C');g.rect(w*.25+i*w*.062,-h*.97,w*.045,6);g.fill();}
-    if(p>.72){g.strokeColor=this.color(C.cyan);g.lineWidth=5;g.moveTo(w*.43,-h*.43);g.lineTo(w*.49,-h*.51);g.lineTo(w*.6,-h*.32);g.stroke();}
+    // A scan records observations; it must not imply a cleared/legitimate source.
+    if(p>.72){for(let i=0;i<3;i++){g.strokeColor=this.color('#76BABB99');g.lineWidth=2;g.moveTo(w*.72,-h*(.25+i*.045));g.lineTo(w*.82,-h*(.25+i*.045));g.stroke();}}
   }
   private drawRepair(g:Graphics,w:number,h:number,p:number,assemble:boolean):void {
     const cx=w*.5,cy=-h*.5,t=smooth(clamp(p/.68));
@@ -256,24 +326,23 @@ export class OrbitalMotion {
     const x=w*(.28+.44*t),y=-h*(.5+.06*Math.sin(t*Math.PI*2));
     g.strokeColor=this.color('#566F7E');g.lineWidth=9;g.moveTo(w*.17,-h*.9);g.lineTo(x,y);g.stroke();g.strokeColor=this.color(C.orange);g.lineWidth=3;g.moveTo(w*.17,-h*.9);g.lineTo(x,y);g.stroke();
     g.fillColor=this.color('#F4D99C');g.circle(x,y,5+Math.sin(p*TAU*7)*2);g.fill();
-    for(let i=0;i<13;i++){const a=i*2.4+p*6,r=(8+(i%5)*8)*(1+.5*Math.sin(p*TAU*5+i));g.strokeColor=this.color(i%3===0?'#F6E0AD':C.orange);g.lineWidth=i%3===0?2:1;g.moveTo(x+Math.cos(a)*r*.35,y+Math.sin(a)*r*.35);g.lineTo(x+Math.cos(a)*r,y+Math.sin(a)*r);g.stroke();}
+    for(let i=0;i<5;i++){const a=i*2.4+p*3,r=(5+(i%3)*5)*(1+.25*Math.sin(p*TAU*3+i));g.strokeColor=this.color(i%3===0?'#F6E0ADAA':'#C38A4D99');g.lineWidth=1;g.moveTo(x+Math.cos(a)*r*.35,y+Math.sin(a)*r*.35);g.lineTo(x+Math.cos(a)*r,y+Math.sin(a)*r);g.stroke();}
     g.strokeColor=this.color(C.white);g.lineWidth=2;g.moveTo(w*.28,-h*.5);g.lineTo(x,y);g.stroke();
-    if(p>.72){g.strokeColor=this.color('#D6D2C770');g.lineWidth=2;g.circle(cx,cy,35+80*ease((p-.72)/.28));g.stroke();}
+    if(p>.72){g.strokeColor=this.color('#D6D2C770');g.lineWidth=1.5;g.arc(x,y,20+8*ease((p-.72)/.28),.15,Math.PI*1.5,false);g.stroke();}
   }
   private drawUpgrade(g:Graphics,w:number,h:number,p:number):void {
-    const e=ease(p),cx=w*.5,cy=-h*.5;g.fillColor=this.color('#101B22D9');g.roundRect(0,-h,w,h,10);g.fill();
+    const e=ease(p),cx=w*.5,cy=-h*.5;g.fillColor=this.color('#101B2288');g.roundRect(0,-h,w,h,8);g.fill();
     for(let i=0;i<3;i++){const yy=-h*(.28+i*.22);g.strokeColor=this.color(i===2?C.orange:C.muted);g.lineWidth=3;g.moveTo(w*.2,yy);g.lineTo(w*(.2+.6*clamp((p-i*.12)/.5)),yy);g.stroke();}
-    g.strokeColor=this.color('#C38A4D70');g.lineWidth=4;g.circle(cx,cy,Math.max(10,h*.35*e));g.stroke();g.strokeColor=this.color(C.white);g.lineWidth=4;g.moveTo(cx-30,cy+15);g.lineTo(cx,cy+45);g.lineTo(cx+45,cy-15);g.stroke();
+    g.strokeColor=this.color('#C38A4D70');g.lineWidth=2;g.arc(cx,cy,Math.max(8,Math.min(26,h*.24)*e),0,TAU*.8,false);g.stroke();
   }
   private drawStamp(g:Graphics,w:number,h:number,p:number):void {
-    const cx=w*.5,cy=-h*.48,s=1.4-.4*ease(clamp(p/.23)),ww=Math.min(265,w*.65)*s,hh=92*s;
-    g.strokeColor=this.color(C.orange);g.lineWidth=3;g.roundRect(cx-ww/2,cy-hh/2,ww,hh,5);g.stroke();
-    g.lineWidth=1;g.roundRect(cx-ww/2+9,cy-hh/2+9,ww-18,hh-18,3);g.stroke();
-    g.lineWidth=5;g.moveTo(cx-38,cy+1);g.lineTo(cx-8,cy-24);g.lineTo(cx+42,cy+31);g.stroke();
+    const cx=w*.5,cy=-h*.48,s=1.06-.06*ease(clamp(p/.25)),r=Math.min(15,w*.12,h*.26)*s;
+    g.strokeColor=this.color('#C38A4DBB');g.lineWidth=1.5;g.circle(cx,cy,r);g.stroke();
+    g.lineWidth=2;g.moveTo(cx-r*.5,cy);g.lineTo(cx-r*.1,cy-r*.35);g.lineTo(cx+r*.55,cy+r*.4);g.stroke();
   }
   private drawDay(g:Graphics,node:Node,w:number,h:number,p:number):void {
     const alpha=p<.22?p/.22:p>.75?(1-p)/.25:1;this.opacity(node).opacity=Math.round(255*alpha);
-    g.fillColor=this.color('#101B22F0');g.rect(0,-h,w,h);g.fill();g.strokeColor=this.color(C.orange);g.lineWidth=3;g.moveTo(0,-h*.36);g.lineTo(w,-h*.36);g.moveTo(0,-h*.66);g.lineTo(w,-h*.66);g.stroke();
+    g.fillColor=this.color('#101B22B8');g.roundRect(0,-h,w,h,8);g.fill();g.strokeColor=this.color('#C38A4D88');g.lineWidth=1;g.moveTo(w*.16,-h*.28);g.lineTo(w*.84,-h*.28);g.stroke();
     const scan=w*clamp((p-.1)/.8);g.fillColor=this.color('#C38A4D0D');g.rect(scan-30,-h,60,h);g.fill();
     for(let i=0;i<7;i++){g.fillColor=this.color(i/7<p?C.orange:'#324852');g.rect(w*.25+i*w*.075,-h*.53,w*.05,13);g.fill();}
   }
@@ -283,17 +352,31 @@ export class OrbitalMotion {
   }
 
   private receipt(amount:number):Promise<void>{
-    const n=this.ui.panel(this.layer,1245,150,270,208,{fill:'#202A2EF2',stroke:'#807A6680',radius:3,name:'orbital-transaction-receipt'});
-    this.ui.label(n,'轨道旧货局 · 交易回执',16,14,238,28,{size:18,color:C.white,align:'center'});
-    this.ui.line(n,15,56,255,56,'#B9AD8248',1);
-    this.ui.label(n,`${amount>=0?'销售入账':'采购支出'}\n${amount>0?'+':''}${amount.toFixed(amount%1?2:0)} Cr`,19,72,232,78,{size:27,color:C.white,align:'center'});
-    const seal=this.ui.panel(n,137,157,113,36,{fill:'#C38A4D1C',stroke:C.orange,radius:2,name:'transaction-confirmation'});
-    this.ui.label(seal,'已结算',6,3,101,30,{size:21,color:C.orange,align:'center'});
+    const n=this.own(this.ui.panel(this.layer,395,638,245,86,{fill:'#202A2EE8',stroke:'#807A6660',radius:3,name:'orbital-transaction-receipt'}));
+    this.ui.label(n,'交易回执  /  已结算',13,10,219,21,{size:13,color:C.muted,align:'center'});
+    this.ui.label(n,`${amount>=0?'入账':'支出'}  ${amount>0?'+':''}${amount.toFixed(amount%1?2:0)} Cr`,13,38,219,33,{size:23,color:C.white,align:'center'});
     this.track(n,'receipt-print');
-    return this.run('receipt-print',1.24,()=>n.isValid,p=>{
-      n.setPosition(1245,-150+120*(1-ease(clamp(p/.35))));this.opacity(n).opacity=Math.round(255*Math.min(1,p*6)*(1-Math.max(0,p-.86)/.14));
-      const s=ease(clamp((p-.4)/.16));seal.setScale(1.35-.35*s,1.35-.35*s,1);this.opacity(seal).opacity=Math.round(255*s);
+    return this.run('receipt-print',1.04,()=>this.attached(n),p=>{
+      n.setPosition(395,-638-10*(1-ease(clamp(p/.3))));this.opacity(n).opacity=Math.round(235*Math.min(1,p*6)*(1-Math.max(0,p-.78)/.22));
     },()=>this.drop(n));
+  }
+  private sleeveFrame(hand:Node,side:'right'|'left'):SpriteFrame|null {
+    const find=(node:Node):SpriteFrame|null=>{
+      const frame=node.getComponent<Sprite>(Sprite)?.spriteFrame;if(frame)return frame;
+      for(const child of node.children){const found=find(child);if(found)return found;}return null;
+    };
+    const source=find(hand);if(!source)return null;
+    const r=source.rect,w=Math.max(1,Math.round(r.width*.34)),h=Math.max(1,Math.round(r.height*.067));
+    const x=Math.round(r.width*(side==='right'?.636:.021)),y=Math.round(r.height*.902);
+    const frame=new SpriteFrame();
+    frame.reset({texture:source.texture,rect:new Rect(r.x+x,r.y+y,Math.min(w,r.width-x),Math.min(h,r.height-y)),originalSize:new Size(w,h),offset:new Vec2(0,0)});
+    return frame;
+  }
+  private sleeve(parent:Node,frame:SpriteFrame,width:number,name:string,tint:string):Node {
+    const node=this.ui.container(parent,0,0,width,1,name);
+    node.getComponent<UITransform>(UITransform)!.setAnchorPoint(.5,1);
+    const sprite=node.addComponent<Sprite>(Sprite);sprite.sizeMode=Sprite.SizeMode.CUSTOM;sprite.spriteFrame=frame;sprite.color=this.color(tint);
+    return node;
   }
   private token(x:number,y:number):Node {
     const n=this.ui.container(this.layer,x,y,22,22,'credit-token');const g=n.addComponent<Graphics>(Graphics);
@@ -304,23 +387,64 @@ export class OrbitalMotion {
     if(this.disposed){complete();return Promise.resolve();}
     let resolvePromise:()=>void=()=>{};const promise=new Promise<void>(resolve=>{resolvePromise=resolve;});
     const t:Task={kind,duration:Math.max(.01,duration),elapsed:0,ended:false,alive,frame,complete,resolve:resolvePromise};this.tasks.push(t);
-    if(this.reducedMotion)this.end(t,true);else if(alive())frame(0);else this.end(t,false);return promise;
+    if(this.reducedMotion)this.end(t,true);
+    else if(alive()){try{frame(0);}catch(error){console.warn('[OrbitalMotion] Presentation could not start.',error);this.end(t,false);}}
+    else this.end(t,false);
+    return promise;
   }
   private end(task:Task,toEnd:boolean):void {
-    if(task.ended)return;task.ended=true;if(toEnd&&task.alive())task.frame(1);
-    try{task.complete();}finally{const i=this.tasks.indexOf(task);if(i>=0)this.tasks.splice(i,1);task.resolve();}
+    if(task.ended)return;task.ended=true;
+    try{if(toEnd&&task.alive())task.frame(1);}
+    catch(error){console.warn('[OrbitalMotion] Presentation fast-forward stopped.',error);}
+    finally{
+      try{task.complete();}
+      catch(error){console.warn('[OrbitalMotion] Presentation cleanup stopped.',error);}
+      finally{
+        const i=this.tasks.indexOf(task);if(i>=0)this.tasks.splice(i,1);task.resolve();
+        if(!this.tasks.length&&this.aperture.isValid)this.aperture.active=false;
+      }
+    }
   }
-  private top():void {if(this.layer.isValid)this.layer.setSiblingIndex(this.root.children.length-1);}
-  private track(node:Node,kind:string):void {this.tracked.push({node,kind});}
+  private bounds(input:OrbitalRect|undefined,fallback:Bounds):Bounds {
+    const finite=(n:number|undefined,v:number):number=>typeof n==='number'&&Number.isFinite(n)?n:v;
+    const x=finite(input?.x,fallback.x),y=finite(input?.y,fallback.y),w=finite(input?.width,fallback.width),h=finite(input?.height,fallback.height);
+    return {x:x+Math.min(0,w),y:y+Math.min(0,h),width:Math.abs(w),height:Math.abs(h)};
+  }
+  private intersect(a:Bounds,b:Bounds):Bounds {
+    const x=Math.max(a.x,b.x),y=Math.max(a.y,b.y);
+    return {x,y,width:Math.max(0,Math.min(a.x+a.width,b.x+b.width)-x),height:Math.max(0,Math.min(a.y+a.height,b.y+b.height)-y)};
+  }
+  private attached(node:Node):boolean {
+    if(!node.isValid||!this.root.isValid)return false;
+    let current:Node|null=node;while(current){if(current===this.root)return true;current=current.parent;}
+    return false;
+  }
+  private own(node:Node):Node {this.owned.add(node);return node;}
+  private top():void {
+    if(!this.aperture.isValid)return;this.aperture.active=true;
+    const siblings=this.root.children,chrome=siblings.find(n=>n.name==='persistent-chrome');
+    const index=chrome?siblings.indexOf(chrome)-(siblings.indexOf(this.aperture)<siblings.indexOf(chrome)?1:0):siblings.length-1;
+    this.aperture.setSiblingIndex(Math.max(0,index));
+  }
+  private track(node:Node,kind:string):void {this.untrack(node);this.tracked.push({node,kind});}
   private untrack(node:Node):void {for(let i=this.tracked.length-1;i>=0;i--)if(this.tracked[i].node===node)this.tracked.splice(i,1);}
   private opacity(node:Node):UIOpacity {return node.getComponent<UIOpacity>(UIOpacity)??node.addComponent<UIOpacity>(UIOpacity);}
   private color(v:string):Color {return new Color().fromHEX(v);}
-  private drop(node:Node):void {this.untrack(node);if(!node.isValid)return;this.stop(node);node.removeFromParent();node.destroy();}
+  private drop(node:Node):void {
+    const forget=(n:Node):void=>{this.untrack(n);this.owned.delete(n);this.moving.delete(n);for(const child of n.children)forget(child);};
+    forget(node);if(!node.isValid)return;this.stop(node);node.removeFromParent();node.destroy();
+  }
   private stop(node:Node):void {Tween.stopAllByTarget(node);const o=node.getComponent<UIOpacity>(UIOpacity);if(o)Tween.stopAllByTarget(o);for(const c of node.children)this.stop(c);}
-  private clearAmbient():void {if(this.ambient?.isValid)this.drop(this.ambient);this.ambient=null;this.ambientParent=null;this.particles=[];this.lights=[];}
+  private restoreActor():void {
+    if(this.actor?.isValid&&!this.moving.has(this.actor)){this.actor.setPosition(this.actorBase);this.actor.angle=this.actorAngle;}
+  }
+  private clearAmbient():void {
+    this.restoreActor();if(this.ambient?.isValid)this.drop(this.ambient);
+    this.ambient=null;this.ambientParent=null;this.ambientKey='';this.actor=null;this.particles=[];
+  }
   private updateAmbient():void {
-    if(this.actor?.isValid&&!this.moving.has(this.actor)){this.actor.setPosition(this.actorBase.x,this.actorBase.y+(this.reducedMotion?0:Math.sin(this.clock*1.7)*1.2),this.actorBase.z);this.actor.angle=this.actorAngle+(this.reducedMotion?0:Math.sin(this.clock)*.22);}
-    for(const p of this.particles){if(!p.node.isValid)continue;p.node.active=!this.reducedMotion;if(!this.reducedMotion){p.node.setPosition(p.x+Math.sin(this.clock*p.speed+p.phase)*14,-p.y+Math.cos(this.clock*p.speed*.7+p.phase)*18);this.opacity(p.node).opacity=Math.round(80+Math.sin(this.clock*.5+p.phase)*55);}}
-    this.lights.forEach((n,i)=>{if(n.isValid)this.opacity(n).opacity=this.reducedMotion?175:Math.round(180+Math.sin(this.clock*.65+i*1.7)*50);});
+    if(this.ambientParent&&!this.attached(this.ambientParent)){this.clearAmbient();return;}
+    if(this.actor&&this.attached(this.actor)&&!this.moving.has(this.actor)){this.actor.setPosition(this.actorBase.x,this.actorBase.y+(this.reducedMotion?0:Math.sin(this.clock*1.7)*.65),this.actorBase.z);this.actor.angle=this.actorAngle+(this.reducedMotion?0:Math.sin(this.clock)*.12);}
+    for(const p of this.particles){if(!p.node.isValid)continue;p.node.active=!this.reducedMotion;if(!this.reducedMotion){p.node.setPosition(p.x+Math.sin(this.clock*p.speed+p.phase)*5,-p.y+Math.cos(this.clock*p.speed*.7+p.phase)*6);this.opacity(p.node).opacity=Math.round(65+Math.sin(this.clock*.4+p.phase)*20);}}
   }
 }

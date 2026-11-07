@@ -11,7 +11,7 @@ import {
 import type { ToolId } from './types';
 
 export const ORBITAL_PALETTE = {
-  background: '#0B1118', deep: '#0D151C', panel: '#101B2466', raised: '#243039',
+  background: '#0B1118', deep: '#0D151C', panel: '#101B24F5', raised: '#243039',
   cyan: '#86C7C5', orange: '#E0A16C', purple: '#AB9AB9', text: '#ECE7D9',
   muted: '#A0ACA9', line: '#737B795C', danger: '#C58879', green: '#98BDB0',
 };
@@ -45,7 +45,6 @@ export class OrbitalUI extends GameUI {
   private readonly missingMoodAssets=new Set<string>();
   private orbitalFocus:Node|null=null;
   private orbitalToastRoot:Node|null=null;
-  private orbitalToastCount=0;
 
   constructor(root:Node,assets:UIAssets={}) {
     super(root,assets);
@@ -104,7 +103,12 @@ export class OrbitalUI extends GameUI {
 
   /** Native nine-sliced instrument casing. All coordinates remain logical canvas pixels. */
   texturePanel(parent:Node,x:number,y:number,width:number,height:number,options:OrbitalSurfaceOptions={}):Node {
-    return this.orbitalPanel(parent,x,y,width,height,options,options.skin??'glass',options.materialOpacity);
+    const skin=options.skin??'glass',fill=color(options.fill??ORBITAL_PALETTE.panel);
+    // Text surfaces are a stable reading plane. The scene remains visible around them,
+    // rather than moving bright scenery through every line of body copy.
+    fill.a=Math.max(fill.a,skin==='socket'?232:246);
+    const limits:Record<OrbitalSurface,number>={glass:.22,strip:.17,socket:.58,rail:.32};
+    return this.orbitalPanel(parent,x,y,width,height,{...options,fill},skin,Math.min(options.materialOpacity??limits[skin],limits[skin]));
   }
   rail(parent:Node,x:number,y:number,width:number,height:number,options:PanelOptions={}):Node {
     return this.texturePanel(parent,x,y,width,height,{name:'console-rail',fill:'#0A1118B8',...options,skin:'rail',materialOpacity:.80});
@@ -117,10 +121,9 @@ export class OrbitalUI extends GameUI {
     const cut=Math.min(radius,width/5,height/4);
     const decorated=(options.lineWidth??1)>0&&width>=120&&height>=44;
     if(options.shadow){g.fillColor=color('#00000070');polygon(g,3,-5,width,height,cut);g.fill();}
-    // Large glass panes stay translucent; their framing is darker than their lettering.
+    // Plain panels deliberately have no automatic metal skin; texture is explicit.
     g.fillColor=color(options.fill??ORBITAL_PALETTE.panel);polygon(g,0,0,width,height,cut);g.fill();
-    const surface=skin??(decorated?(height<=100?'strip':'glass'):undefined);
-    if(surface)this.orbitalSkin(node,surface,0,0,width,height,materialOpacity??(surface==='glass'?.55:.70));
+    if(skin)this.orbitalSkin(node,skin,0,0,width,height,materialOpacity??.2);
     if((options.lineWidth??1)>0){
       const rim=this.container(node,0,0,width,height,'instrument-rim').addComponent<Graphics>(Graphics);
       rim.lineWidth=Math.min(1.2,options.lineWidth??.8);
@@ -142,7 +145,7 @@ export class OrbitalUI extends GameUI {
     const visual=this.container(node,0,0,width,height,'tech-button-surface');
     const ink=visual.addComponent<Graphics>(Graphics);
     const tone=options.tone??'green';
-    const skin=tone!=='quiet'&&width>=65&&height>=30?this.orbitalSkin(visual,tone==='gold'?'amber':'graphite',0,0,width,height,tone==='gold'?.94:.50):null;
+    const skin=tone==='gold'&&width>=65&&height>=30?this.orbitalSkin(visual,'amber',0,0,width,height,.94):null;
     const edge=this.container(visual,0,0,width,height,'control-edge').addComponent<Graphics>(Graphics);
     const textSize=options.size??19,padding=Math.min(12,Math.round(width*.12));
     const labelNode=this.label(visual,text,padding,0,Math.max(1,width-padding*2),height,{size:textSize,lineHeight:textSize,bold:tone==='gold',align:'center',verticalAlign:'center',wrap:false});
@@ -173,6 +176,7 @@ export class OrbitalUI extends GameUI {
 
   override modal(title:string,options:ModalOptions={}):ModalHandle {
     const width=options.width??1500,height=options.height??830;
+    if(this.orbitalToastRoot?.isValid){this.clear(this.orbitalToastRoot);this.orbitalToastRoot.active=false;}
     const overlay=this.panel(this.root,0,0,1600,900,{name:'modal-overlay',fill:'#070D16E8',lineWidth:0,radius:0});
     overlay.addComponent<BlockInputEvents>(BlockInputEvents);
     const surface=this.texturePanel(overlay,(1600-width)/2,(900-height)/2,width,height,{name:'modal-surface',fill:'#0B141CEB',stroke:'#8A847350',lineWidth:1,radius:5,shadow:true,materialOpacity:.66});
@@ -181,8 +185,23 @@ export class OrbitalUI extends GameUI {
     this.label(surface,'ORBITAL EXCHANGE / OPERATIONS',31,65,width-108,18,{size:10,color:'#A49E8C'});
     this.line(surface,31,88,width-31,88,'#D3C7AA28');
     const body=this.container(surface,30,96,width-60,height-123,'modal-body');
-    let closed=false;
-    const close=()=>{if(closed)return;closed=true;this.animateOut(surface,()=>{if(overlay.isValid){overlay.removeFromParent();overlay.destroy();}options.onClose?.();});};
+    let closed=false,released=false;
+    const release=()=>{
+      if(released)return;released=true;closed=true;
+      if(this.orbitalToastRoot?.isValid){this.clear(this.orbitalToastRoot);this.orbitalToastRoot.active=!this.orbitalHasModal(overlay);}
+      options.onClose?.();
+    };
+    // Esc and confirmed actions can remove the overlay directly. Both paths use
+    // the same one-time release as close(), without a counter that can go stale.
+    overlay.on(Node.EventType.PARENT_CHANGED,()=>{if(overlay.parent!==this.root)release();});
+    overlay.once(Node.EventType.NODE_DESTROYED,release);
+    overlay.on(Node.EventType.ACTIVE_IN_HIERARCHY_CHANGED,()=>{
+      if(this.orbitalToastRoot?.isValid)this.orbitalToastRoot.active=!this.orbitalHasModal();
+    });
+    const close=()=>{if(closed)return;closed=true;this.animateOut(surface,()=>{
+      if(overlay.isValid){overlay.removeFromParent();overlay.destroy();}
+      release();
+    });};
     if(!options.disableClose)this.button(surface,'×',width-65,19,39,39,close,{tone:'quiet',size:30});
     this.animateIn(surface);return{overlay,body,close};
   }
@@ -203,16 +222,25 @@ export class OrbitalUI extends GameUI {
 
   override toast(message:string,tone:'info'|'success'|'error'='info'):Node {
     if(!this.orbitalToastRoot?.isValid)this.orbitalToastRoot=this.container(this.root,0,0,1600,900,'orbital-notifications');
+    // One quiet notification slot in the reserved gap below the HUD. Repeated
+    // actions replace the message instead of stacking across the customer's face.
+    this.clear(this.orbitalToastRoot);
+    this.orbitalToastRoot.active=!this.orbitalHasModal();
     this.orbitalToastRoot.setSiblingIndex(this.root.children.length-1);
-    const index=this.orbitalToastCount++,width=Math.min(1130,Math.max(380,message.length*22+70));
+    const width=Math.min(1120,Math.max(320,message.length*15+48));
     const tint=tone==='error'?ORBITAL_PALETTE.danger:tone==='success'?ORBITAL_PALETTE.green:ORBITAL_PALETTE.cyan;
-    const node=this.panel(this.orbitalToastRoot,(1600-width)/2,95+(index%3)*65,width,55,{name:'toast',fill:'#102331FA',stroke:tint,lineWidth:1.6,radius:8,shadow:true});
-    this.label(node,message,22,5,width-44,45,{size:21,color:ORBITAL_PALETTE.text,align:'center',verticalAlign:'center'});
+    const node=this.panel(this.orbitalToastRoot,(1600-width)/2,98,width,28,{name:'toast',fill:'#0B151DF7',lineWidth:0,radius:3});
+    this.line(node,0,3,0,25,tint,2);
+    this.label(node,message,15,0,width-30,28,{size:15,lineHeight:15,color:ORBITAL_PALETTE.text,align:'center',verticalAlign:'center',wrap:false});
     const opacity=node.getComponent<UIOpacity>(UIOpacity)??node.addComponent<UIOpacity>(UIOpacity);
     opacity.opacity=this.reducedMotion?255:0;const sequence=tween<UIOpacity>(opacity);
-    if(!this.reducedMotion)sequence.to(.12,{opacity:255});
-    sequence.delay(2.7).to(.2,{opacity:0}).call(()=>{if(node.isValid){node.removeFromParent();node.destroy();}this.orbitalToastCount=Math.max(0,this.orbitalToastCount-1);}).start();
+    if(!this.reducedMotion)sequence.to(.1,{opacity:255});
+    sequence.delay(1.8).to(this.reducedMotion?0:.16,{opacity:0}).call(()=>{if(node.isValid){node.removeFromParent();node.destroy();}}).start();
     return node;
+  }
+
+  private orbitalHasModal(exclude?:Node):boolean {
+    return this.root.children.some(node=>node!==exclude&&node.isValid&&node.name==='modal-overlay'&&node.activeInHierarchy);
   }
 
   override progress(parent:Node,value:number,x:number,y:number,width:number,height=8,tint:UIColour=ORBITAL_PALETTE.cyan):Node {
@@ -220,10 +248,10 @@ export class OrbitalUI extends GameUI {
     if(value>0)this.panel(node,0,0,width*Math.min(1,value),height,{fill:tint,lineWidth:0,radius:2});return node;
   }
   override paper(parent:Node,x:number,y:number,width:number,height:number,options:PaperOptions={}):Node {
-    return this.texturePanel(parent,x,y,width,height,{name:options.name??'terminal-ticket',fill:options.tint??'#101A2260',stroke:'#9E9A8050',radius:3,opacity:options.opacity,skin:'strip',materialOpacity:.58});
+    return this.panel(parent,x,y,width,height,{name:options.name??'terminal-ticket',fill:options.tint??'#101A22F5',stroke:'#9E9A8030',radius:3,opacity:options.opacity});
   }
   override dialogueFrame(parent:Node,x:number,y:number,width:number,height:number):Node {
-    return this.texturePanel(parent,x,y,width,height,{name:'terminal-dialogue',fill:'#101A2270',stroke:'#9E9A8048',radius:3,skin:'strip',materialOpacity:.62});
+    return this.panel(parent,x,y,width,height,{name:'terminal-dialogue',fill:'#101A22F7',stroke:'#9E9A8030',radius:3});
   }
   override cabinetCell(parent:Node,slot:number,x:number,y:number,width:number,height:number):Node {
     return this.texturePanel(parent,x,y,width,height,{name:`storage-cell-${slot}`,fill:'#0B11186B',stroke:'#69706B40',radius:3,skin:'socket',materialOpacity:.72});
@@ -240,7 +268,7 @@ export class OrbitalUI extends GameUI {
   }
   statusChip(parent:Node,text:string,x:number,y:number,width:number,height=30,accent:UIColour=ORBITAL_PALETTE.cyan):Node {
     const node=this.container(parent,x,y,width,height,'instrument-status');
-    const g=node.addComponent<Graphics>(Graphics);g.fillColor=color('#07101666');g.rect(0,-height,width,height);g.fill();
+    const g=node.addComponent<Graphics>(Graphics);g.fillColor=color('#0B151DEF');g.rect(0,-height,width,height);g.fill();
     const marker=color(accent);marker.a=Math.min(marker.a,185);g.fillColor=marker;g.rect(0,-height*.64,2,Math.max(6,height*.28));g.fill();
     this.label(node,text,9,0,width-15,height,{size:Math.min(14,height*.55),color:accent,align:'left',verticalAlign:'center',wrap:false});return node;
   }
@@ -297,7 +325,7 @@ export class OrbitalUI extends GameUI {
   object(parent:Node,itemId:string,x:number,y:number,width:number,height:number,options:ObjectOptions={}):Node {
     if(itemId==='BND-001')return this.maintenanceBundle(parent,x,y,width,height,options);
     const index=P0_ITEMS.indexOf(Number(itemId.replace(/^ITM-/i,'')));
-    const key=options.back?'orbital-items-back':'orbital-items-front';
+    const key=options.back||options.opened?'orbital-items-back':'orbital-items-front';
     const source=index>=0?this.orbitalCrop(key,index,6,4,.035):undefined;
     const node=this.frame(parent,source,x,y,width,height,{name:`item-${itemId}`,fit:'contain',...options});
     const short=Math.min(width,height);
@@ -307,23 +335,18 @@ export class OrbitalUI extends GameUI {
       const cx=width*.49,cy=-height*.47;g.moveTo(cx-short*.13,cy+short*.12);g.lineTo(cx-short*.04,cy+short*.035);g.lineTo(cx-short*.065,cy-short*.035);g.lineTo(cx+short*.03,cy-short*.11);g.stroke();
       g.strokeColor=color('#C0D1CE88');g.lineWidth=Math.max(1,short*.003);g.moveTo(cx-short*.12,cy+short*.11);g.lineTo(cx-short*.035,cy+short*.03);g.stroke();
     }
-    if(options.opened){
-      const layer=this.container(node,width*.19,height*.35,width*.62,height*.38,'exposed-components');const g=layer.addComponent<Graphics>(Graphics);
-      const w=width*.62,h=height*.38;
-      g.fillColor=color('#0A1119');g.roundRect(0,-h,w,h,Math.min(9,short*.025));g.fill();g.strokeColor=color('#779AA3');g.lineWidth=2;g.roundRect(0,-h,w,h,Math.min(9,short*.025));g.stroke();
-      g.fillColor=color('#23534C');g.rect(w*.08,-h*.82,w*.62,h*.65);g.fill();
-      g.strokeColor=color('#B78E58');g.lineWidth=Math.max(2,short*.007);
-      for(let i=0;i<4;i++){const yy=h*(.25+i*.14);g.moveTo(w*.14,-yy);g.lineTo(w*.34,-yy);g.lineTo(w*.44,-yy-h*.08);g.lineTo(w*.66,-yy-h*.08);g.stroke();}
-      g.fillColor=color('#253946');g.roundRect(w*.3,-h*.67,w*.28,h*.38,4);g.fill();
-      g.fillColor=color('#6EE0DE');g.circle(w*.8,-h*.31,short*.018);g.fill();
-      for(const [sx,sy]of [[.08,.12],[.92,.12],[.08,.88],[.92,.88]]){g.fillColor=color('#A9B5B5');g.circle(w*sx,-h*sy,short*.014);g.fill();g.strokeColor=color('#263843');g.lineWidth=1;g.moveTo(w*sx-short*.007,-h*sy);g.lineTo(w*sx+short*.007,-h*sy);g.stroke();}
-    }
     if(options.repaired){
-      const layer=this.container(node,width*.51,height*.61,width*.22,height*.13,'repair-patch');layer.angle=-9;
-      const g=layer.addComponent<Graphics>(Graphics),w=width*.22,h=height*.13;
-      g.fillColor=color('#8CA6A5');g.roundRect(0,-h,w,h,2);g.fill();g.strokeColor=color('#B7D5CF');g.lineWidth=1.5;g.roundRect(0,-h,w,h,2);g.stroke();
-      g.fillColor=color('#435F65');g.circle(w*.13,-h*.5,Math.max(1.5,short*.006));g.circle(w*.87,-h*.5,Math.max(1.5,short*.006));g.fill();
-      for(let i=0;i<3;i++){g.strokeColor=color('#5B777E');g.moveTo(w*.34+i*w*.12,-h*.25);g.lineTo(w*.28+i*w*.12,-h*.73);g.stroke();}
+      const picture=node.getChildByName('sprite'),bounds=picture?.getComponent<UITransform>(UITransform);
+      const drawW=bounds?.width??width,drawH=bounds?.height??height,detail=Math.min(drawW,drawH);
+      if(detail>=80){
+        const px=(picture?.position.x??0)+drawW*.56,py=-(picture?.position.y??0)+drawH*.57;
+        const w=drawW*.065,h=drawH*.025;
+        const layer=this.container(node,px,py,w,h,'repair-patch');layer.angle=-9;
+        const g=layer.addComponent<Graphics>(Graphics);
+        g.fillColor=color('#858B7CCB');g.roundRect(0,-h,w,h,Math.min(1.4,h*.2));g.fill();
+        g.strokeColor=color('#C9C5AA85');g.lineWidth=.7;g.roundRect(0,-h,w,h,Math.min(1.4,h*.2));g.stroke();
+        g.fillColor=color('#33454A');g.circle(w*.15,-h*.5,detail*.0018);g.circle(w*.85,-h*.5,detail*.0018);g.fill();
+      }
     }
     return node;
   }
