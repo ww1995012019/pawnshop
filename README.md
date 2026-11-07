@@ -27,7 +27,7 @@ npm run build:web
 npm run preview
 ```
 
-打开 `http://localhost:4174`。`dist/` 是静态网站，可放到支持 HTTPS 的普通静态服务器。首次准备引擎需要 Git、Node.js 22 或更新版本及网络，编译会花费数分钟；后续复用 `.cache/cocos/`。
+打开 `http://localhost:4174`。`dist/` 是静态网站，可放到支持 HTTPS 的普通静态服务器。现有仓库以 `gh-pages` 作为发布分支，因此同时保留 `play/` 网页产物和根入口跳转；合并迁移分支后原地址仍能进入游戏。更新发布文件使用 `npm run build:pages`，不要手工修改 `play/game.js`。首次准备引擎需要 Git、Node.js 22 或更新版本及网络，编译会花费数分钟；后续复用 `.cache/cocos/`。
 
 源码引擎固定为 `cocos/cocos-engine` 提交 `411f98df047c25902f93440d4b22925c2fb65461`。无编辑器验证链使用官方测试 effect 生成必要的 WebGL 内置材质；Creator 编辑器构建使用正常的编辑器资源流水线。两条路径的差异见 `vendor/README.md`。
 
