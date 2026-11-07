@@ -29,6 +29,6 @@ await cp(join(root,'favicon.svg'),join(dist,'favicon.svg'));
 await cp(join(root,'web/index.html'),join(dist,'index.html'));
 const source=(await readFile(join(root,'web/entry.ts'),'utf8')).replace('__ART_EXT__',artExt);
 await build({stdin:{contents:source,resolveDir:join(root,'web'),sourcefile:'entry.ts',loader:'ts'},bundle:true,format:'esm',platform:'browser',target:'es2020',alias:{cc:engine},outfile:join(dist,'game.js'),minify:true,sourcemap:'external',tsconfig:join(root,'tsconfig.web.json'),legalComments:'linked',define:{'process.env.NODE_ENV':'"production"'}});
-await writeFile(join(dist,'version.json'),JSON.stringify({ui:'creator-web-v1',engine:'Cocos Creator 3.8.8',sourceEngine:'411f98df047c25902f93440d4b22925c2fb65461',art:artExt,features:['柜台交易','原生拖拽鉴定','陈列换位','七日经营','旧存档迁移']},null,2));
+await writeFile(join(dist,'version.json'),JSON.stringify({ui:'creator-web-v2',engine:'Cocos Creator 3.8.8',sourceEngine:'411f98df047c25902f93440d4b22925c2fb65461',art:artExt,features:['手绘实体界面','客人进出与手持递物','动态扫描与测试波形','钱币票据与上架动画','柜台交易','原生拖拽鉴定','陈列换位','七日经营','旧存档迁移']},null,2));
 await writeFile(join(dist,'.nojekyll'),'');
 console.log('Creator Web build ready: dist/');

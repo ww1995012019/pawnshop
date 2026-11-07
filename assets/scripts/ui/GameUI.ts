@@ -34,9 +34,12 @@ export interface ModalOptions {
   width?: number; height?: number; onClose?: () => void; disableClose?: boolean;
 }
 export interface ModalHandle { overlay: Node; body: Node; close: () => void }
+export interface PaperOptions extends NodeOptions { kind?: 'note' | 'receipt'; tint?: UIColour }
+export type HandPose = 'left_open' | 'left_grip' | 'right_open' | 'right_grip';
+export type UIIcon = 'watch' | 'purse' | 'keys' | 'seal' | 'inspect' | 'notes' | 'deal' | 'refuse';
 
 interface ButtonView {
-  component: Button; visual: Node; graphics: Graphics; text: Label;
+  component: Button; visual: Node; graphics: Graphics; edge: Graphics; skin: Sprite | null; text: Label;
   width: number; height: number; tone: ButtonTone;
   selected: boolean; focused: boolean; hovered: boolean; pressed: boolean; disabled: boolean;
 }
@@ -50,9 +53,10 @@ export const UI_PALETTE = {
 
 const ART_KEYS = [
   'shop', 'items', 'characters', 'cabinet', 'frame-dialogue', 'frame-actions',
-  'folio', 'ui-icons', 'manual-book', 'notice-board', 'receipt-paper', 'commission',
+  'folio', 'ui-icons', 'manual-book', 'notice-board', 'receipt-paper', 'commission', 'hands',
 ] as const;
-const INITIAL_ART_KEYS = ['shop', 'items', 'characters', 'notice-board'] as const;
+const INITIAL_ART_KEYS = ['shop', 'items', 'characters', 'notice-board', 'frame-actions', 'frame-dialogue', 'receipt-paper', 'cabinet', 'ui-icons', 'hands'] as const;
+const ICON_NAMES: UIIcon[] = ['watch', 'purse', 'keys', 'seal', 'inspect', 'notes', 'deal', 'refuse'];
 const NPC_IDS = ['lin', 'zhou', 'tao', 'wen', 'que', 'kou'];
 const ITEM_RECTS: AtlasRect[] = Array.from({ length: 12 }, (_, index) => ({
   x: index % 4 * 362, y: Math.floor(index / 4) * 362, w: 362, h: 362,
@@ -72,6 +76,7 @@ export class GameUI {
   private readonly pendingFrames = new Map<string, Promise<SpriteFrame>>();
   private readonly buttons = new WeakMap<Node, ButtonView>();
   private readonly crops = new Map<string, SpriteFrame>();
+  private readonly slicedFrames = new Map<string, SpriteFrame>();
   private readonly coverFrames = new WeakMap<SpriteFrame, Map<string, SpriteFrame>>();
   private readonly toastLayer: Node;
   private focusedButton: Node | null = null;
@@ -148,6 +153,7 @@ export class GameUI {
       graphics.roundRect(lineWidth / 2, -height + lineWidth / 2, width - lineWidth, height - lineWidth, radius);
       graphics.stroke();
     }
+    if (lineWidth > 0 && radius > 0 && width >= 100 && height >= 45) this.panelDetail(node, width, height, colour(options.fill ?? UI_PALETTE.panel));
     this.opacity(node, options.opacity);
     return node;
   }
@@ -183,7 +189,10 @@ export class GameUI {
     const node = this.container(parent, x, y, width, height, options.name ?? `button-${text}`);
     const visual = this.container(node, 0, 0, width, height, 'button-visual');
     const graphics = visual.addComponent<Graphics>(Graphics);
-    const textNode = this.label(visual, text, 10, 0, width - 20, height, {
+    const painted = width >= 104 && height >= 39 ? this.actionSkin(visual, options.tone ?? 'gold', width, height) : null;
+    const edge = this.container(visual, 0, 0, width, height, 'button-edge').addComponent<Graphics>(Graphics);
+    const inset = painted ? Math.min(width * 0.17, height * 0.4 + 5) : 10;
+    const textNode = this.label(visual, text, inset, 0, width - inset * 2, height, {
       size: options.size ?? 22, bold: true, align: 'center', verticalAlign: 'center', wrap: false,
     });
     const label = textNode.getComponent<Label>(Label)!;
@@ -191,13 +200,13 @@ export class GameUI {
     component.transition = Button.Transition.NONE;
     component.interactable = !options.disabled;
     const view: ButtonView = {
-      component, visual, graphics, text: label, width, height,
+      component, visual, graphics, edge, skin: painted, text: label, width, height,
       tone: options.tone ?? 'gold', selected: options.selected ?? false,
       disabled: options.disabled ?? false, focused: options.focused ?? false, hovered: false, pressed: false,
     };
     this.buttons.set(node, view);
     this.drawButton(view);
-    node.on(Node.EventType.MOUSE_ENTER, () => { view.hovered = true; this.drawButton(view); });
+    node.on(Node.EventType.MOUSE_ENTER, () => { if (!view.disabled) view.hovered = true; this.drawButton(view); });
     node.on(Node.EventType.MOUSE_LEAVE, () => { view.hovered = false; this.drawButton(view); });
     node.on(Node.EventType.TOUCH_START, () => {
       if (view.disabled) return;
@@ -225,6 +234,10 @@ export class GameUI {
     view.disabled = !enabled;
     view.component.interactable = enabled;
     view.pressed = false;
+    if (!enabled) {
+      view.hovered = false; view.focused = false;
+      if (this.focusedButton === node) this.focusedButton = null;
+    }
     this.pressButton(view, false);
     this.drawButton(view);
   }
@@ -242,9 +255,9 @@ export class GameUI {
       const previous = this.buttons.get(this.focusedButton);
       if (previous) { previous.focused = false; this.drawButton(previous); }
     }
-    this.focusedButton = node;
-    if (node) {
-      const current = this.buttons.get(node);
+    this.focusedButton = node && !this.buttons.get(node)?.disabled ? node : null;
+    if (this.focusedButton) {
+      const current = this.buttons.get(this.focusedButton);
       if (current) { current.focused = true; this.drawButton(current); }
     }
   }
@@ -341,7 +354,7 @@ export class GameUI {
   clear(parent: Node): void {
     for (const child of [...parent.children]) {
       if (child === this.toastLayer) continue;
-      Tween.stopAllByTarget(child);
+      this.stopMotionTree(child);
       child.removeFromParent();
       child.destroy();
     }
@@ -356,20 +369,26 @@ export class GameUI {
     });
     overlay.addComponent<BlockInputEvents>(BlockInputEvents);
     const surface = this.panel(overlay, (1600 - width) / 2, (900 - height) / 2, width, height, {
-      name: 'modal-surface', fill: UI_PALETTE.ink, stroke: UI_PALETTE.gold, radius: 13, lineWidth: 2, shadow: true,
+      name: 'modal-surface', fill: '#152B24', stroke: '#C7A25E', radius: 11, lineWidth: 2, shadow: true,
     });
-    this.label(surface, title, 32, 16, width - 130, 44, { size: 30, bold: true, color: UI_PALETTE.goldLight });
-    this.line(surface, 32, 66, width - 32, 66, '#9D855444');
-    const body = this.container(surface, 32, 82, width - 64, height - 108, 'modal-body');
+    this.actionSkin(surface, 'green', width - 12, 77, 6, 4);
+    this.ornament(surface, 4, height - 29, 26, 26);
+    this.ornament(surface, width - 30, height - 29, 26, 26);
+    this.line(surface, 15, 91, 15, height - 22, '#815C31', 4);
+    this.line(surface, width - 15, 91, width - 15, height - 22, '#815C31', 4);
+    this.label(surface, title, 63, 17, width - 174, 43, { size: 30, bold: true, color: UI_PALETTE.goldLight });
+    this.line(surface, 27, 79, width - 27, 79, '#D2B5716B');
+    const body = this.container(surface, 32, 91, width - 64, height - 117, 'modal-body');
     let closed = false;
     const close = (): void => {
       if (closed) return;
       closed = true;
-      overlay.removeFromParent();
-      overlay.destroy();
-      options.onClose?.();
+      this.animateOut(surface, () => {
+        if (overlay.isValid) { overlay.removeFromParent(); overlay.destroy(); }
+        options.onClose?.();
+      });
     };
-    if (!options.disableClose) this.button(surface, '×', width - 76, 15, 44, 40, close, { tone: 'quiet', size: 31 });
+    if (!options.disableClose) this.button(surface, '×', width - 72, 19, 40, 38, close, { tone: 'quiet', size: 31 });
     this.animateIn(surface);
     return { overlay, body, close };
   }
@@ -404,9 +423,116 @@ export class GameUI {
     }
     opacity.opacity = 0;
     const destination = node.position.clone();
-    node.setPosition(destination.x, destination.y - 12, destination.z);
-    tween<Node>(node).delay(delay).to(0.22, { position: destination }, { easing: 'quadOut' }).start();
+    node.setPosition(destination.x, destination.y - 24, destination.z);
+    node.setScale(0.985, 0.985, 1);
+    tween<Node>(node).delay(delay).to(0.26, { position: destination, scale: new Vec3(1, 1, 1) }, { easing: 'cubicOut' }).start();
     tween<UIOpacity>(opacity).delay(delay).to(0.22, { opacity: 255 }).start();
+  }
+
+  /** Native painted-paper note: the clip and seal are not stretched across a HUD label. */
+  paper(parent: Node, x: number, y: number, width: number, height: number, options: PaperOptions = {}): Node {
+    const node = this.container(parent, x, y, width, height, options.name ?? 'paper');
+    const receipt = options.kind === 'receipt';
+    const source = this.cropFrame('receipt-paper', receipt ? 'paper-receipt' : 'paper-note', receipt
+      ? { x: 0, y: 0, w: 1122, h: 1402 } : { x: 105, y: 115, w: 900, h: 880 });
+    if (source) this.sliced(node, source, 0, 0, width, height, receipt
+      ? { left: 118, right: 118, top: 185, bottom: 265, scale: Math.min(width / 1122, height / 1402) }
+      : { left: 70, right: 70, top: 70, bottom: 70, scale: Math.min(0.38, height / 260) }, options.tint);
+    else this.panel(node, 0, 0, width, height, { fill: UI_PALETTE.paper, stroke: UI_PALETTE.gold, radius: 3 });
+    this.opacity(node, options.opacity); return node;
+  }
+
+  icon(parent: Node, name: UIIcon, x: number, y: number, width: number, height: number): Node {
+    const index = ICON_NAMES.indexOf(name);
+    return this.frame(parent, this.cropFrame('ui-icons', `icon-${name}`, {
+      x: index % 4 * 443.5, y: Math.floor(index / 4) * 443.5, w: 443.5, h: 443.5,
+    }), x, y, width, height, { name: `icon-${name}`, fit: 'contain' });
+  }
+
+  /** Four illustrated glove poses, cropped at the source sheet's exact pixel boundaries. */
+  hand(parent: Node, pose: HandPose, x: number, y: number, width: number, height: number, options: ImageOptions = {}): Node {
+    const poses: Record<HandPose, AtlasRect> = {
+      left_open: { x: 0, y: 0, w: 656, h: 599 },
+      left_grip: { x: 656, y: 0, w: 656, h: 599 },
+      right_open: { x: 0, y: 599, w: 656, h: 600 },
+      right_grip: { x: 656, y: 599, w: 656, h: 600 },
+    };
+    return this.frame(parent, this.cropFrame('hands', `hand-${pose}`, poses[pose]), x, y, width, height,
+      { name: `hand-${pose}`, fit: 'contain', ...options });
+  }
+
+  /** Keeps the oval cap, paper centre and ink bottle at their original proportions. */
+  dialogueFrame(parent: Node, x: number, y: number, width: number, height: number): Node {
+    const node = this.container(parent, x, y, width, height, 'dialogue-frame');
+    const source = this.frames.get('frame-dialogue');
+    if (source) this.sliced(node, source, 0, 0, width, height, { left: 650, right: 522, top: 185, bottom: 185, scale: height / 724 });
+    else this.paper(node, 0, 0, width, height);
+    return node;
+  }
+
+  cabinetCell(parent: Node, slot: number, x: number, y: number, width: number, height: number): Node {
+    const index = Math.max(0, Math.min(11, slot));
+    return this.frame(parent, this.cropFrame('cabinet', `cabinet-${index}`, {
+      x: index % 4 * 362, y: Math.floor(index / 4) * 362, w: 362, h: 362,
+    }), x, y, width, height, { name: `cabinet-cell-${slot}`, fit: 'stretch' });
+  }
+
+  ornament(parent: Node, x: number, y: number, width = 24, height = 24): Node {
+    return this.frame(parent, this.cropFrame('frame-actions', 'brass-fixing', { x: 34, y: 32, w: 124, h: 124 }), x, y, width, height, { name: 'brass-fixing', fit: 'contain' });
+  }
+
+  animateOut(node: Node, completed: () => void, duration = 0.2): void {
+    if (!node.isValid || this.reducedMotion) { completed(); return; }
+    const opacity = node.getComponent<UIOpacity>(UIOpacity) ?? node.addComponent<UIOpacity>(UIOpacity);
+    Tween.stopAllByTarget(node); Tween.stopAllByTarget(opacity);
+    tween<Node>(node).to(duration, { position: new Vec3(node.position.x, node.position.y - 18, node.position.z), scale: new Vec3(0.985, 0.985, 1) }, { easing: 'quadIn' }).start();
+    tween<UIOpacity>(opacity).to(duration, { opacity: 0 }).call(completed).start();
+  }
+
+  private stopMotionTree(node: Node): void {
+    for (const child of node.children) this.stopMotionTree(child);
+    Tween.stopAllByTarget(node);
+    const opacity = node.getComponent<UIOpacity>(UIOpacity); if (opacity) Tween.stopAllByTarget(opacity);
+  }
+
+  private actionSkin(parent: Node, tone: ButtonTone, width: number, height: number, x = 0, y = 0): Sprite | null {
+    const rows: Record<ButtonTone, number> = { green: 0, gold: 1, quiet: 2, danger: 3 };
+    const source = this.cropFrame('frame-actions', `action-${tone}`, { x: 0, y: rows[tone] * 313.5, w: 1254, h: 313.5 });
+    if (!source) return null;
+    const skin = this.sliced(parent, source, x, y, width, height, { left: 172, right: 172, top: 63, bottom: 63, scale: height / 313.5 });
+    return skin.getChildByName('sliced-sprite')?.getComponent<Sprite>(Sprite) ?? null;
+  }
+
+  private sliced(parent: Node, source: SpriteFrame, x: number, y: number, width: number, height: number,
+    caps: { left: number; right: number; top: number; bottom: number; scale: number }, tint?: UIColour): Node {
+    const key = `${source.rect.x}:${source.rect.y}:${source.rect.width}:${source.rect.height}:${caps.left}:${caps.right}:${caps.top}:${caps.bottom}`;
+    let sliced = this.slicedFrames.get(key);
+    if (!sliced) {
+      sliced = this.makeFrame(source.texture, { x: source.rect.x, y: source.rect.y, w: source.rect.width, h: source.rect.height });
+      sliced.insetLeft = caps.left; sliced.insetRight = caps.right; sliced.insetTop = caps.top; sliced.insetBottom = caps.bottom;
+      this.slicedFrames.set(key, sliced);
+    }
+    const node = this.container(parent, x, y, width, height, 'painted-skin');
+    const scale = Math.max(0.01, Math.min(caps.scale, width / (caps.left + caps.right + 1), height / (caps.top + caps.bottom + 1)));
+    const picture = this.container(node, 0, 0, width / scale, height / scale, 'sliced-sprite'); picture.setScale(scale, scale, 1);
+    const sprite = picture.addComponent<Sprite>(Sprite); sprite.type = Sprite.Type.SLICED; sprite.sizeMode = Sprite.SizeMode.CUSTOM; sprite.spriteFrame = sliced;
+    if (tint) sprite.color = colour(tint);
+    return node;
+  }
+
+  private panelDetail(node: Node, width: number, height: number, fill: Color): void {
+    const paper = fill.r + fill.g + fill.b > 450;
+    if (paper && width > 180 && height > 85 && this.frames.has('receipt-paper')) {
+      this.frame(node, this.cropFrame('receipt-paper', 'panel-paper-grain', { x: 170, y: 170, w: 750, h: 780 }), 3, 3, width - 6, height - 6, { fit: 'cover', opacity: 0.23 });
+    }
+    const detail = this.container(node, 0, 0, width, height, 'panel-detail').addComponent<Graphics>(Graphics);
+    detail.lineWidth = 1; detail.strokeColor = colour(paper ? '#87653538' : '#DAC28B35');
+    detail.roundRect(5, -height + 5, width - 10, height - 10, 5); detail.stroke();
+    const corner = Math.min(15, height * 0.18); detail.strokeColor = colour(paper ? '#8E6B3B88' : '#C8A56677');
+    for (const [x, y, dx, dy] of [[9, -9, 1, -1], [width - 9, -9, -1, -1], [9, -height + 9, 1, 1], [width - 9, -height + 9, -1, 1]]) {
+      detail.moveTo(x + dx * corner, y); detail.lineTo(x, y); detail.lineTo(x, y + dy * corner); detail.stroke();
+      detail.fillColor = colour(paper ? '#A4834B88' : '#C9A66A'); detail.circle(x, y, 1.4); detail.fill();
+    }
   }
 
   private opacity(node: Node, value?: number): void {
@@ -421,16 +547,16 @@ export class GameUI {
       view.visual.setPosition(0, 0, 0);
       return;
     }
-    const scale = pressed ? 0.975 : 1;
-    tween<Node>(view.visual).to(0.09, {
+    const scale = pressed ? 0.985 : 1;
+    tween<Node>(view.visual).to(pressed ? 0.08 : 0.16, {
       scale: new Vec3(scale, scale, 1),
-      position: new Vec3(view.width * (1 - scale) / 2, -view.height * (1 - scale) / 2, 0),
+      position: new Vec3(view.width * (1 - scale) / 2, pressed ? -2 : 0, 0),
     }, { easing: 'quadOut' }).start();
   }
 
   private drawButton(view: ButtonView): void {
     const colors: Record<ButtonTone, [string, string, string]> = {
-      gold: ['#CBA45E', '#F0D08E', '#24362B'],
+      gold: ['#9D6B2D', '#D6A65B', '#F8E5B7'],
       green: ['#3D6551', '#6B9172', '#F3E4BE'],
       danger: ['#744536', '#AE6D51', '#F7E2BA'],
       quiet: ['#24392F', '#3C5646', '#E1CEA4'],
@@ -440,20 +566,31 @@ export class GameUI {
     const border = view.disabled ? '#555D4E' : view.selected || view.focused || view.hovered ? '#F9E2A5' : '#9D8554';
     const graphics = view.graphics;
     graphics.clear();
+    // Painted skins already contain their full textured interior and silhouette.
+    // Keep the generated fill inset so alpha cut-outs around the metal stay clear.
     graphics.fillColor = colour(fill);
-    graphics.roundRect(0, -view.height, view.width, view.height, 7);
+    if (view.skin) graphics.roundRect(12, -view.height + 9, view.width - 24, view.height - 18, 4);
+    else graphics.roundRect(0, -view.height, view.width, view.height, 7);
     graphics.fill();
-    graphics.lineWidth = view.selected || view.focused || view.hovered ? 2.5 : 1.5;
-    graphics.strokeColor = colour(border);
-    graphics.roundRect(1, -view.height + 1, view.width - 2, view.height - 2, 7);
-    graphics.stroke();
-    if (view.selected || view.focused) {
+    if (!view.skin) {
+      graphics.lineWidth = view.selected || view.focused || view.hovered ? 2.5 : 1.5;
+      graphics.strokeColor = colour(border);
+      graphics.roundRect(1, -view.height + 1, view.width - 2, view.height - 2, 7);
+      graphics.stroke();
+    }
+    if (!view.skin && (view.selected || view.focused)) {
       graphics.lineWidth = 1;
       graphics.strokeColor = colour('#F9E2A588');
       graphics.roundRect(5, -view.height + 5, view.width - 10, view.height - 10, 4);
       graphics.stroke();
     }
-    view.text.color = colour(view.disabled ? '#828779' : text);
+    if (view.skin) view.skin.color = colour(view.disabled ? '#6F7665' : view.pressed ? '#C5A875' : view.hovered || view.focused || view.selected ? '#FFFFFF' : '#E2DEC7');
+    const edge = view.edge; edge.clear();
+    if (view.focused || view.selected || view.hovered) {
+      edge.lineWidth = view.focused ? 2.5 : 1.5; edge.strokeColor = colour(view.focused ? '#FFF3BBDD' : '#F9E2A577');
+      edge.roundRect(6, -view.height + 6, view.width - 12, view.height - 12, 4); edge.stroke();
+    }
+    view.text.color = colour(view.disabled ? '#A29C80' : text);
   }
 
   private cropFrame(key: string, name: string, rect: AtlasRect): SpriteFrame | undefined {

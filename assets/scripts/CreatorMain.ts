@@ -1,10 +1,11 @@
 import {
   _decorator, Component, Node, Canvas, Camera, UITransform, Layers, Color,
   Vec2, Vec3, EventTouch, EventMouse, input, Input, EventKeyboard, KeyCode,
-  ResolutionPolicy, view, tween, Graphics, AudioSource, AudioClip, resources,
+  ResolutionPolicy, view, tween, Graphics, AudioSource, AudioClip, resources, Label, UIOpacity, Tween,
   assetManager, sys,
 } from 'cc';
 import { GameUI } from './ui/GameUI';
+import { MotionDirector } from './ui/MotionDirector';
 import { itemDefs, npcs, categories, checks, dayStories, commissionParts, getItemDef, getNpc } from './game/data';
 import type { Check, Category } from './game/data';
 import { createGame, reduce, appraisal, trueValue, remainingMinutes, rentDue, clockLabel, serializeGame, parseSave } from './game/model';
@@ -40,8 +41,17 @@ export class CreatorMain extends Component {
   private audio!: AudioSource;
   private clips = new Map<string, AudioClip>();
   private saveFailed = false;
-  private sceneClock = 0;
-  private ambience: Node[] = [];
+  private motion!:MotionDirector;
+  private busy=false;
+  private motionEpoch=0;
+  private busyHint:Node|null=null;
+  private actorNode:Node|null=null;
+  private counterItemNode:Node|null=null;
+  private lampNode:Node|null=null;
+  private inspectBody:Node|null=null;
+  private cashLabel:Node|null=null;
+  private cashTween:{from:number;to:number;elapsed:number;node:Node}|null=null;
+  private poses=new Map<string,{x:number;y:number;angle:number;zoom:number}>();
   private disposed = false;
   private focused:Node|null=null;
   private focusIndex=-1;
@@ -78,7 +88,10 @@ export class CreatorMain extends Component {
     this.load();
     await this.ui.preload();
     if (this.disposed) return;
+    this.motion=new MotionDirector(this.ui);
+    this.motion.configure({reducedMotion:this.prefs.reducedMotion});
     this.render();
+    void this.playMotion(async()=>this.motion.sceneEntry());
     input.on(Input.EventType.KEY_DOWN, this.onKey, this);
     void this.loadAudio();
     if (typeof window !== 'undefined') {
@@ -87,8 +100,9 @@ export class CreatorMain extends Component {
         snapshot: () => JSON.parse(JSON.stringify(this.state)),
         dispatch: (action: GameAction) => this.dispatch(action),
         open: (panel: Panel, uid?: string) => { if(uid)this.selected=this.inspected=uid;this.panel=panel;this.render(); },
-        reset: (seed='TUTORIAL-001') => {this.state=createGame(seed);this.panel=null;this.save();this.render();},
+        reset: (seed='TUTORIAL-001') => {this.skipMotion();this.motion.reset();this.state=createGame(seed);this.panel=null;this.save();this.render();},
         controls: () => this.collectControls(),
+        diagnostics: () => ({busy:this.busy,phase:this.state.phase,motion:this.motion.snapshot()}),
         click: (name:string) => this.clickControl(name),
       };
       (window as unknown as { __GREYLINE__: typeof debug }).__GREYLINE__ = debug;
@@ -100,7 +114,7 @@ export class CreatorMain extends Component {
     try {
       const saved = sys.localStorage.getItem(SAVE_KEY) || sys.localStorage.getItem('greyline-save-v1');
       this.state = parseSave(saved) || createGame();
-      const prefs = JSON.parse(sys.localStorage.getItem(PREFS_KEY) || '{}');
+      const prefs = JSON.parse(sys.localStorage.getItem(PREFS_KEY) || sys.localStorage.getItem('greyline-prefs') || '{}');
       this.prefs = { sound: prefs.sound === true, reducedMotion: prefs.reducedMotion === true, largeText: prefs.largeText === true };
       this.selected = this.state.inventory[0]?.uid || '';
     } catch { this.state=createGame(); }
@@ -110,53 +124,133 @@ export class CreatorMain extends Component {
     catch {this.saveFailed=true;}
   }
   private dispatch(action: GameAction): void {
+    if(this.busy)return;
     const before=this.state;
-    this.state=reduce(this.state,action);
+    const priorItem=before.trade?.role==='seller'?before.trade.item:before.inventory.find(i=>i.uid===before.trade?.selected);
+    this.state=reduce(before,action);
     this.save();
-    if(action.type==='ARRIVE')this.offer=this.state.trade?.price || 0;
-    if(action.type==='CHECK_STEP')this.sound('check');
-    else if(action.type==='DELIVER')this.sound('coin');
-    else if(action.type==='REFUSE')this.sound('reject');
-    else this.sound('click');
+    if(action.type==='ARRIVE')this.offer=this.state.trade?.price||0;
+    if(action.type==='START_CHECK'){this.marks.clear();this.probe=0;this.compared=false;}
     if(this.state.phase==='report'||this.state.phase==='ending')this.panel=null;
-    if(action.type==='START_CHECK') {this.marks.clear();this.probe=0;this.compared=false;}
+    this.sound(action.type==='DELIVER'?'coin':action.type==='CHECK_STEP'?'check':action.type==='REFUSE'?'reject':'click');
     this.render();
-    if(before===this.state&&this.state.notice)this.ui.toast(this.state.notice);
+    const after=this.state;
+    if(action.type==='ARRIVE'&&after.trade&&!before.trade){
+      const actor=this.actorNode,counter=this.counterItemNode,item=after.trade.item;
+      if(counter)this.setOpacity(counter,0);
+      void this.playMotion(async active=>{
+        if(actor)await this.motion.npcEnter(actor);
+        if(active()&&item)await this.motion.handoff(item.defId,{x:558,y:496},{x:804,y:561},{size:192,duration:1.05,label:'轻放在柜台上',kind:'arrive',onPlaced:()=>{if(counter?.isValid)this.setOpacity(counter,255);}});
+        if(counter?.isValid)this.setOpacity(counter,255);
+      });
+    }else if(action.type==='DELIVER'&&before.trade&&!after.trade&&before.cash!==after.cash){
+      const npc=getNpc(before.trade.npc),incoming=before.trade.role==='seller';
+      this.beginCashCount(before.cash,after.cash);
+      void this.playMotion(async active=>{
+        await this.motion.deal(after.cash-before.cash,{itemId:priorItem?.defId,from:{x:804,y:561},to:incoming?{x:1020,y:340}:{x:540,y:500}});
+        if(active())await this.motion.npcExit(npc.sprite,{x:310,y:202},{x:-330,y:228});
+      });
+    }else if((action.type==='REFUSE'||action.type==='DISMISS')&&before.trade&&!after.trade){
+      const npc=getNpc(before.trade.npc);
+      void this.playMotion(async()=>this.motion.npcExit(npc.sprite,{x:310,y:202},{x:-330,y:235}));
+    }else if(action.type==='START_CHECK'&&after.inspection&&after.minute>before.minute&&this.inspectBody){
+      const mode=action.check==='condition'?'magnify':action.check==='function'?'spectrum':'number';
+      const b=this.inspectBody;
+      void this.playMotion(async()=>this.motion.scan(b,{x:225,y:92,width:490,height:348},{mode,duration:0.9,label:action.check==='function'?'测试台预热':action.check==='authenticity'?'展开旧站档案':'侧光掠过使用痕迹'}));
+    }else if(action.type==='CHECK_STEP'&&before.inspection){
+      const now=this.findItem(before.inspection.uid);
+      const complete=!!now?.revealed[before.inspection.check];
+      void this.playMotion(async()=>this.motion.stamp(complete?'已核验':'已记录',complete?{x:1248,y:290}:{x:1168,y:360},complete?'success':'warning'));
+    }else if(action.type==='PLACE'||action.type==='DISPLAY'){
+      const it=after.inventory.find(i=>i.uid===action.uid);
+      const prior=before.inventory.find(i=>i.uid===action.uid);
+      if(it?.displayed&&(!prior?.displayed||prior.displaySlot!==it.displaySlot))void this.playMotion(async()=>this.motion.handoff(it.defId,{x:530,y:420},{x:141+(it.displaySlot||0)*109,y:728},{size:94,duration:0.85,label:'陈列位置已保存',kind:'store'}));
+      else if(after.notice)this.ui.toast(after.notice);
+    }else if(action.type==='ACCEPT'&&after.trade?.locked&&!before.trade?.locked){
+      void this.playMotion(async()=>this.motion.stamp('议价达成',{x:1320,y:471},'success'));
+    }else if(action.type==='SETTLE'&&after.phase==='report'&&before.phase!=='report'){
+      void this.playMotion(async()=>this.motion.dayTransition(after.day,true));
+    }else if(action.type==='NEXT'&&after.day!==before.day){
+      void this.playMotion(async()=>this.motion.dayTransition(after.day,false));
+    }else if(after.commission==='done'&&before.commission!=='done'){
+      this.beginCashCount(before.cash,after.cash);
+      void this.playMotion(async()=>this.motion.deal(40,{from:{x:830,y:490},to:{x:736,y:66}}));
+    }else if(after.notice!==before.notice&&after.minute===before.minute&&after.cash===before.cash){
+      this.ui.toast(after.notice);
+    }
+  }
+  private findItem(uid:string):ItemInstance|undefined {
+    return this.state.inventory.find(i=>i.uid===uid)||(this.state.trade?.item?.uid===uid?this.state.trade.item:undefined);
+  }
+  private setOpacity(node:Node,value:number):void {
+    (node.getComponent<UIOpacity>(UIOpacity)||node.addComponent<UIOpacity>(UIOpacity)).opacity=value;
+  }
+  private async playMotion(run:(active:()=>boolean)=>Promise<void>):Promise<void>{
+    const epoch=++this.motionEpoch;
+    this.busy=true;
+    this.motion.configure({reducedMotion:this.prefs.reducedMotion});
+    this.busyHint?.destroy();
+    this.busyHint=this.ui.container(this.ui.root,570,867,445,28,'motion-skip');
+    this.label(this.busyHint,'点击此处或按空格快进',0,0,445,28,16,colors.gold,'center');
+    this.busyHint.on(Node.EventType.TOUCH_END,()=>this.skipMotion());
+    try{await run(()=>epoch===this.motionEpoch);}finally{
+      if(epoch===this.motionEpoch){this.busy=false;this.busyHint?.removeFromParent();this.busyHint?.destroy();this.busyHint=null;}
+      if(this.counterItemNode?.isValid)this.setOpacity(this.counterItemNode,255);
+    }
+  }
+  private skipMotion():void{
+    this.motionEpoch++;this.motion?.finish();this.busy=false;
+    this.busyHint?.removeFromParent();this.busyHint?.destroy();this.busyHint=null;
+    if(this.counterItemNode?.isValid)this.setOpacity(this.counterItemNode,255);
+    if(this.cashTween){const n=this.cashTween.node.getComponent<Label>(Label);if(n)n.string=`${this.cashTween.to}票`;this.cashTween=null;}
+  }
+  private beginCashCount(from:number,to:number):void {
+    if(this.prefs.reducedMotion||!this.cashLabel)return;
+    this.cashTween={from,to,elapsed:0,node:this.cashLabel};
+    this.cashLabel.getComponent<Label>(Label)!.string=`${from}票`;
   }
   private label(parent:Node,text:string,x:number,y:number,w:number,h:number,size=22,color=colors.ink,align:'left'|'center'|'right'='left'):Node {
     return this.ui.label(parent,text,x,y,w,h,{size:size*(this.prefs.largeText?1.12:1),color,align});
   }
   private button(parent:Node,text:string,x:number,y:number,w:number,h:number,fn:()=>void,tone:'gold'|'green'|'danger'|'quiet'='green',disabled=false):Node {
-    const node=this.ui.button(parent,text,x,y,w,h,()=>{this.sound('click');fn();},{tone,size:this.prefs.largeText?23:21,disabled});
-    (node as unknown as {__action:()=>void;__enabled:boolean}).__action=disabled?()=>{}:fn;
+    const invoke=()=>{if(this.busy||disabled)return;this.sound('click');fn();};
+    const node=this.ui.button(parent,text,x,y,w,h,invoke,{tone,size:this.prefs.largeText?23:21,disabled});
+    (node as unknown as {__action:()=>void;__enabled:boolean}).__action=invoke;
     (node as unknown as {__enabled:boolean}).__enabled=!disabled;
     return node;
   }
   private open(panel:Panel,uid?:string):void {
+    if(panel==='closing'&&this.state.phase==='open'){
+      this.state=reduce(this.state,{type:'CLOSE'});this.save();
+      if(this.state.phase!=='closing'){this.ui.toast(this.state.notice);return;}
+    }
     if(uid)this.selected=this.inspected=uid;
     this.panel=panel;
-    if(panel==='inspect'){this.objectZoom=1;this.plate=false;this.marks.clear();this.probe=0;this.compared=false;const progress=this.state.inspection?.uid===this.inspected?this.state.inspection.progress:0;for(let i=0;i<progress;i++)this.marks.add(i);}
+    if(panel==='inspect'){this.objectZoom=this.poses.get(this.inspected)?.zoom||1;this.plate=false;this.marks.clear();this.probe=0;this.compared=false;const progress=this.state.inspection?.uid===this.inspected?this.state.inspection.progress:0;for(let i=0;i<progress;i++)this.marks.add(i);}
     this.sound('page');this.render();
+  }
+  private closePanel():void {
+    if(this.panel==='closing'){this.state=reduce(this.state,{type:'BACK'});this.save();}
+    this.panel=null;this.render();
   }
   private render():void {
     if(!this.ui)return;
+    if(this.object?.isValid)this.poses.set(this.inspected,{x:this.object.position.x,y:this.object.position.y,angle:this.object.angle,zoom:this.objectZoom});
     this.modalRoot?.removeFromParent();this.modalRoot?.destroy();this.modalRoot=null;this.object=null;this.focused=null;
     this.ui.reducedMotion=this.prefs.reducedMotion;
-    this.ui.clear(this.shell);this.ambience=[];
+    this.ui.clear(this.shell);this.actorNode=null;this.counterItemNode=null;this.lampNode=null;this.inspectBody=null;this.cashLabel=null;
     const s=this.state;
     this.ui.image(this.shell,'shop',0,0,W,H,{fit:'cover'});
-    this.ui.panel(this.shell,0,0,W,116,{fill:'#142B25E8',stroke:'#977B43',radius:0});
-    this.ui.panel(this.shell,0,670,W,230,{fill:'#142B25F2',stroke:'#977B43',radius:0});
-    this.ui.panel(this.shell,24,20,398,80,{fill:'#1A3934',stroke:colors.gold,radius:12});
-    this.label(this.shell,'灰线旧货铺',45,27,356,42,35,colors.pale);
-    this.label(this.shell,'GREYLINE  ·  旧物有来处，灯火有归人',48,73,350,20,15,colors.gold);
-    this.hud('试营业',`${String(s.day).padStart(2,'0')} / 07 日`,454);
-    this.hud('手头现金',`${s.cash} 票`,660);
-    this.hud('店铺信誉',`${s.reputation} / 100`,866);
-    const nextRent=s.day<=3?`第3日 · 90票`:`第7日 · 210票`;
-    this.hud('租约提醒',nextRent,1072);
-    this.button(this.shell,this.prefs.sound?'声音 开':'声音 关',1290,33,132,52,()=>this.toggle('sound'),'quiet');
-    this.button(this.shell,'设置',1434,33,138,52,()=>this.open('settings'),'quiet');
+    this.ui.panel(this.shell,0,0,W,115,{fill:'#11281FB8',stroke:'#977B4350',radius:0});
+    this.ui.panel(this.shell,0,670,W,230,{fill:'#142B25D8',stroke:'#977B4370',radius:0});
+    this.button(this.shell,'灰线旧货铺',20,10,413,96,()=>this.open('catalog'),'green');
+    this.label(this.shell,'旧站台 · 拾物记  /  七日试营业',58,79,340,20,14,colors.gold,'center');
+    this.hud('试营业',`第${String(s.day).padStart(2,'0')}天`,454,'watch');
+    this.hud('手头现金',`${s.cash}票`,660,'purse');
+    this.hud(s.day<=3?'第3天到期':'第7天到期',s.day<=3?'90票':'210票',866,'keys');
+    this.hud('店铺信誉',`${s.reputation} / 100`,1072,'seal');
+    this.button(this.shell,this.prefs.sound?'声音 开':'声音 关',1290,30,132,56,()=>this.toggle('sound'),'quiet');
+    this.button(this.shell,'设置',1430,30,150,56,()=>this.open('settings'),'quiet');
     this.drawWorld();
     this.drawNotice();
     this.drawActions();
@@ -165,59 +259,72 @@ export class CreatorMain extends Component {
     if(s.phase==='report')this.drawReport();
     else if(s.phase==='ending')this.drawEnding();
     else if(this.panel)this.drawPanel();
+    this.motion?.bindAmbient({parent:this.shell,actor:this.actorNode||undefined,lamp:this.lampNode||undefined,area:{x:420,y:135,width:720,height:470}});
   }
-  private hud(title:string,value:string,x:number):void {
-    this.ui.panel(this.shell,x,24,190,74,{fill:'#E9D7A8',stroke:'#A48950',radius:5});
-    this.label(this.shell,title,x+14,31,160,22,16,'#786D51');
-    this.label(this.shell,value,x+14,56,164,32,25,colors.ink);
+  private hud(title:string,value:string,x:number,icon:'watch'|'purse'|'keys'|'seal'):void {
+    const tag=this.ui.container(this.shell,x,6,194,100,`hud-${icon}`);
+    this.ui.paper(tag,10,5,184,92,{kind:'note'});
+    this.ui.icon(tag,icon,-8,29,67,67);
+    this.label(tag,title,60,16,125,25,16,'#786748');
+    const n=this.label(tag,value,60,44,125,41,28,'#493D25');
+    if(icon==='purse')this.cashLabel=n;
   }
   private drawWorld():void {
-    const s=this.state, trade=s.trade;
-    const npcId=trade?.npc||s.queue[s.cursor];
-    if(npcId) {
+    const s=this.state,trade=s.trade,npcId=trade?.npc||s.queue[s.cursor];
+    if(npcId){
       const npc=getNpc(npcId);
-      const actor=this.ui.portrait(this.shell,npc.sprite,118,204,285,453);
-      this.ambience.push(actor);
-      this.ui.panel(this.shell,103,590,310,60,{fill:'#17362DDF',stroke:colors.gold});
-      this.label(this.shell,npc.name,119,597,270,30,27,colors.pale,'center');
-      this.label(this.shell,trade?npc.title:'门口的来客',119,628,270,20,14,colors.gold,'center');
+      const active=!!trade;
+      this.actorNode=this.ui.portrait(this.shell,npc.sprite,active?310:115,active?202:250,active?310:220,active?465:390);
+      const badge=this.ui.container(this.shell,active?276:91,active?585:592,active?338:269,62,'customer-name');
+      this.ui.paper(badge,0,0,active?338:269,62,{kind:'note'});
+      this.label(badge,npc.name,18,4,active?302:233,31,25,colors.ink,'center');
+      this.label(badge,active?npc.title:'有人在门口等候',18,35,active?302:233,20,14,'#806B42','center');
     }
-    const visible=s.inventory.filter(x=>x.displayed).sort((a,b)=>(a.displaySlot||0)-(b.displaySlot||0));
-    this.label(this.shell,`店内陈列  ${visible.length}/8`,770,158,330,32,23,colors.pale);
-    for(let slot=0;slot<8;slot++) {
-      const item=visible.find(x=>x.displaySlot===slot);
-      const x=765+(slot%4)*100,y=207+Math.floor(slot/4)*116;
-      this.ui.panel(this.shell,x,y,94,106,{fill:'#233D2A8C',stroke:'#BFA26470',radius:5});
-      if(item) {
-        this.ui.item(this.shell,item.defId,x+5,y+2,84,77);
-        this.button(this.shell,getItemDef(item.defId).name,x+1,y+78,92,27,()=>this.open('inspect',item.uid),'quiet');
-      } else this.button(this.shell,'＋',x+6,y+22,82,66,()=>this.open('inventory'),'quiet');
-    }
-    this.ui.panel(this.shell,448,420,690,220,{fill:'#503C25A0',stroke:'#C2A264',radius:8});
-    if(trade) {
-      const item=trade.role==='seller'?trade.item:s.inventory.find(i=>i.uid===trade.selected);
-      if(item) {
-        const obj=this.ui.item(this.shell,item.defId,684,425,210,164);
-        this.ambience.push(obj);
-        this.button(this.shell,'拿起 · 检查实物',625,590,325,42,()=>this.open('inspect',item.uid),'gold');
-      } else {
-        this.label(this.shell,'顾客正在寻找合适的旧物',480,453,625,44,26,colors.pale,'center');
-        this.button(this.shell,'从货架选一件',640,534,300,54,()=>this.open('inventory'),'gold');
+    const visible=s.inventory.filter(x=>x.displayed);
+    this.label(this.shell,`店内陈列 ${visible.length}/8`,804,147,315,35,22,colors.pale,'center');
+    for(let slot=0;slot<8;slot++){
+      const item=visible.find(x=>x.displaySlot===slot),x=772+(slot%4)*101,y=209+Math.floor(slot/4)*128;
+      const hot=this.ui.container(this.shell,x,y,96,118,`scene-shelf-${slot}`);
+      if(item){
+        const art=this.ui.item(hot,item.defId,4,2,88,88);
+        this.ui.paper(hot,3,92,90,23,{kind:'note'});
+        this.label(hot,`${item.listPrice}票`,7,92,82,23,15,colors.ink,'center');
+        art.on(Node.EventType.MOUSE_ENTER,()=>{if(!this.prefs.reducedMotion)tween(art).to(0.16,{scale:new Vec3(1.1,1.1,1)}).start();});
+        art.on(Node.EventType.MOUSE_LEAVE,()=>{Tween.stopAllByTarget(art);art.setScale(1,1,1);});
+        art.on(Node.EventType.TOUCH_END,()=>{if(!this.busy)this.open('inspect',item.uid);});
+      }else{
+        const glow=this.ui.panel(hot,2,1,91,111,{fill:'#FFE2B014',stroke:'#D4B66B80',radius:5,opacity:0});
+        this.label(glow,'＋',0,36,91,40,28,colors.gold,'center');
+        hot.on(Node.EventType.MOUSE_ENTER,()=>this.setOpacity(glow,160));
+        hot.on(Node.EventType.MOUSE_LEAVE,()=>this.setOpacity(glow,0));
+        hot.on(Node.EventType.TOUCH_END,()=>{if(!this.busy)this.open('inventory');});
       }
-    } else {
-      this.label(this.shell,'把旧物交给需要它的人',474,463,640,48,29,colors.pale,'center');
-      this.label(this.shell,'点击货架细看物品，或招呼门口的顾客',474,520,640,40,19,colors.gold,'center');
     }
-    // Dust and indicator lights are native Cocos nodes, independent of game logic.
-    for(let i=0;i<10;i++) {
-      const dust=this.ui.panel(this.shell,460+(i*137)%680,160+(i*83)%480,3,3,{fill:'#EBD6A380',stroke:'#EBD6A300',radius:1});
-      this.ambience.push(dust);
+    // A separate glow lives over the painted lamp; it is not baked into the backdrop.
+    this.lampNode=this.ui.panel(this.shell,695,116,130,88,{fill:'#FFD79F0B',stroke:'#FFD79F00',radius:42});
+    if(trade){
+      const item=trade.role==='seller'?trade.item:s.inventory.find(i=>i.uid===trade.selected);
+      if(item){
+        const shadow=this.ui.container(this.shell,679,603,250,30,'counter-shadow');
+        const g=shadow.addComponent<Graphics>(Graphics);g.fillColor=new Color('#0B100966');g.ellipse(125,-15,119,13);g.fill();
+        this.counterItemNode=this.ui.item(this.shell,item.defId,684,448,240,200);
+        this.counterItemNode.on(Node.EventType.TOUCH_END,()=>{if(!this.busy)this.open('inspect',item.uid);});
+        this.button(this.shell,'拿起 · 检查实物',634,616,340,48,()=>this.open('inspect',item.uid),'gold');
+      }else{
+        this.ui.paper(this.shell,660,530,380,78,{kind:'note'});
+        this.label(this.shell,'顾客在等一件合适的旧物',680,542,340,48,22,colors.ink,'center');
+        this.button(this.shell,'从货架选一件',684,614,330,49,()=>this.open('inventory'),'gold');
+      }
+    }else{
+      this.ui.paper(this.shell,700,553,312,72,{kind:'note'});
+      this.label(this.shell,'今日营业中',726,562,260,29,24,colors.ink,'center');
+      this.label(this.shell,'轻触架上旧物 · 拿到桌面细看',719,596,274,22,14,'#806B42','center');
     }
   }
   private drawNotice():void {
     const s=this.state,t=s.trade;
     this.ui.image(this.shell,'notice-board',1170,130,408,532,{fit:'stretch'});
-    this.ui.panel(this.shell,1200,170,344,450,{fill:'#EEE0B8F0',stroke:'#B59B64',radius:4});
+    this.ui.paper(this.shell,1200,170,344,450,{kind:'note'});
     this.label(this.shell,t?'当前交易':'今日告示',1220,185,304,42,30,colors.ink,'center');
     if(t) {
       this.label(this.shell,t.role==='seller'?'旧物收购单':'顾客采购单',1222,240,300,34,22);
@@ -241,8 +348,9 @@ export class CreatorMain extends Component {
   private drawActions():void {
     const s=this.state,t=s.trade;
     const line=t?`${getNpc(t.npc).name}：${t.line}`:s.notice||'旧物的故事，等你亲手翻开。';
-    this.ui.panel(this.shell,28,687,1544,78,{fill:colors.paper,stroke:colors.gold,radius:8});
-    this.label(this.shell,line,48,700,1500,54,24);
+    this.ui.dialogueFrame(this.shell,20,680,1560,104);
+    this.ui.icon(this.shell,t?'deal':'notes',45,696,69,69);
+    this.label(this.shell,line,132,726,1360,42,24,colors.ink);
     if(!t) {
       this.button(this.shell,'招呼顾客  ·  6分钟',30,783,350,65,()=>this.dispatch({type:'ARRIVE'}),'gold',s.phase!=='open'||s.cursor>=s.queue.length||remainingMinutes(s)<6);
       this.button(this.shell,'整理货架',395,783,260,65,()=>this.open('inventory'));
@@ -262,7 +370,7 @@ export class CreatorMain extends Component {
   }
   private drawPanel():void {
     const title:Record<Exclude<Panel,null>,string>={inventory:'库存与陈列',inspect:'旧物鉴定台',catalog:'旧物图鉴',ledger:'经营账本',commission:'社区分拣委托',settings:'暂停与设置',closing:'今天，就到这里吧'};
-    const modal=this.ui.modal(title[this.panel!],{width:1510,height:836,onClose:()=>{this.panel=null;this.render();}});
+    const modal=this.ui.modal(title[this.panel!],{width:1510,height:836,onClose:()=>this.closePanel()});
     this.modalRoot=modal.overlay;
     const b=modal.body;
     if(this.panel==='inventory')this.drawInventory(b);
@@ -278,25 +386,26 @@ export class CreatorMain extends Component {
     this.label(b,`全部库存 ${s.inventory.length}/12   ·   拖动旧物到陈列格，或点选后摆放`,14,0,1000,35,22,colors.pale);
     for(let i=0;i<12;i++) {
       const item=s.inventory[i],x=14+(i%4)*219,y=48+Math.floor(i/4)*146;
-      const card=this.ui.panel(b,x,y,205,134,{fill:item?.uid===this.selected?'#B49759':'#D9C79B',stroke:colors.gold,radius:7});
+      const card=this.ui.cabinetCell(b,i,x,y,205,134);
+      if(item?.uid===this.selected)this.ui.panel(card,3,3,199,128,{fill:'#DFC47920',stroke:'#FFE0A5',radius:4,lineWidth:2});
       if(item) {
         this.ui.item(card,item.defId,38,3,132,90);
-        this.label(card,getItemDef(item.defId).name,7,99,191,29,18,colors.ink,'center');
-        if(item.displayed)this.label(card,'陈列中',9,8,80,23,13,'#285342');
+        this.label(card,getItemDef(item.defId).name,7,99,191,29,18,colors.pale,'center');
+        if(item.displayed)this.label(card,'陈列中',9,8,80,23,13,colors.gold);
         this.draggable(card,()=>{this.selected=item.uid;this.render();},slot=>this.dispatch({type:'PLACE',uid:item.uid,slot}));
-      } else this.label(card,'空置',10,48,180,35,22,'#887D61','center');
+      } else this.label(card,'空置',10,48,180,35,22,'#C0AB78','center');
     }
     this.label(b,'店内陈列  ·  拖放换位，格位自动保存',14,500,900,35,23,colors.pale);
     for(let slot=0;slot<8;slot++) {
       const x=14+slot*109,y=550,item=s.inventory.find(v=>v.displayed&&v.displaySlot===slot);
-      const n=this.ui.panel(b,x,y,100,111,{fill:'#314238',stroke:'#C6AD71',radius:6});
+      const n=this.ui.cabinetCell(b,slot,x,y,100,111);
       n.name=`ShelfSlot:${slot}`;
       if(item){this.ui.item(n,item.defId,7,2,86,77);this.label(n,String(slot+1).padStart(2,'0'),6,83,88,20,15,colors.gold,'center');}
       else this.label(n,`＋\n${slot+1}`,8,25,84,70,24,colors.gold,'center');
       n.on(Node.EventType.TOUCH_END,()=>this.selected&&this.dispatch({type:'PLACE',uid:this.selected,slot}));
     }
     const item=s.inventory.find(i=>i.uid===this.selected)||s.inventory[0];
-    this.ui.panel(b,920,0,495,688,{fill:colors.paper,stroke:colors.gold,radius:8});
+    this.ui.paper(b,920,0,495,688,{kind:'note'});
     if(!item){this.label(b,'库房还是空的，去柜台收一件旧物吧。',950,250,435,110,25);return;}
     this.selected=item.uid;
     this.ui.item(b,item.defId,1043,20,248,210);
@@ -312,10 +421,11 @@ export class CreatorMain extends Component {
   }
   private draggable(node:Node,click:()=>void,drop:(slot:number)=>void):void {
     let start=new Vec3(),moved=0;
-    node.on(Node.EventType.TOUCH_START,()=>{start=node.position.clone();moved=0;node.setSiblingIndex(node.parent!.children.length-1);});
-    node.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{const d=e.getUIDelta();moved+=Math.abs(d.x)+Math.abs(d.y);node.setPosition(node.position.x+d.x,node.position.y+d.y);});
+    node.on(Node.EventType.TOUCH_START,()=>{if(this.busy)return;start=node.position.clone();moved=0;node.setSiblingIndex(node.parent!.children.length-1);});
+    node.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(this.busy)return;const d=e.getUIDelta();moved+=Math.abs(d.x)+Math.abs(d.y);node.setPosition(node.position.x+d.x,node.position.y+d.y);});
     node.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{
-      const hit=this.allNodes(this.modalRoot!).find(n=>n.name.startsWith('ShelfSlot:')&&this.hit(n,e.getUILocation()));
+      if(this.busy)return;
+      const hit=this.allNodes(this.modalRoot!).find(n=>n.name.startsWith('ShelfSlot:')&&this.hit(n,e.getLocation()));
       node.setPosition(start);
       if(moved>8&&hit)drop(Number(hit.name.split(':')[1]));else click();
     });
@@ -325,22 +435,24 @@ export class CreatorMain extends Component {
     const s=this.state,item=s.inventory.find(i=>i.uid===this.inspected)||(s.trade?.item?.uid===this.inspected?s.trade.item:null);
     if(!item){this.label(b,'这件物品已经交给了它的新主人。',50,100,1200,80,30,colors.pale);return;}
     const def=getItemDef(item.defId);
+    this.inspectBody=b;
     this.ui.panel(b,10,0,920,690,{fill:'#24453B',stroke:colors.gold,radius:8});
     this.label(b,`${def.id} / ${def.subtitle}`,30,18,870,32,21,colors.gold);
     this.label(b,'拿起 · 拖到工具旁，或点击工具；滚轮缩放，R旋转，F查看铭牌',30,57,860,32,18,colors.pale);
     const object=this.ui.container(b,245,105,450,330,'InspectionObject');
-    this.object=object;object.setScale(this.objectZoom,this.objectZoom,1);
+    this.object=object;const pose=this.poses.get(item.uid);if(pose){object.setPosition(pose.x,pose.y);object.angle=pose.angle;}object.setScale(this.objectZoom,this.objectZoom,1);
     this.ui.item(object,item.defId,35,10,380,300);
     object.on(Node.EventType.TOUCH_START,()=>this.sound('drop'));
-    object.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{const d=e.getUIDelta();object.setPosition(object.position.x+d.x,object.position.y+d.y);});
+    object.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(this.busy)return;const d=e.getUIDelta();object.setPosition(object.position.x+d.x,object.position.y+d.y);});
     object.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{
+      if(this.busy)return;
       const tools=this.allNodes(b).filter(n=>n.name.startsWith('Tool:'));
-      const target=tools.find(n=>this.hit(n,e.getUILocation()));
+      const target=tools.find(n=>this.hit(n,e.getLocation()));
       if(target)this.startCheck(item,target.name.split(':')[1] as Check);
     });
-    object.on(Node.EventType.MOUSE_WHEEL,(e:EventMouse)=>this.zoom(e.getScrollY()>0?0.1:-0.1));
+    object.on(Node.EventType.MOUSE_WHEEL,(e:EventMouse)=>!this.busy&&this.zoom(e.getScrollY()>0?0.1:-0.1));
     if(this.plate) {
-      this.ui.panel(object,65,128,320,114,{fill:colors.paper,stroke:colors.gold,radius:5});
+      this.ui.paper(object,65,128,320,114,{kind:'note'});
       this.label(object,'铭牌与来路记录',80,140,290,26,17);
       this.label(object,def.code,80,180,290,42,27,colors.ink,'center');
     }
@@ -353,7 +465,7 @@ export class CreatorMain extends Component {
     this.button(b,'旋转',245,459,120,44,()=>object.angle+=15,'quiet');
     this.button(b,this.plate?'查看外观':'查看铭牌',382,459,180,44,()=>{this.plate=!this.plate;this.render();},'quiet');
     this.button(b,'＋',578,459,72,44,()=>this.zoom(0.1),'quiet');
-    this.button(b,'归位',666,459,120,44,()=>{this.objectZoom=1;this.render();},'quiet');
+    this.button(b,'归位',666,459,120,44,()=>{this.objectZoom=1;this.poses.delete(item.uid);this.object=null;this.render();},'quiet');
     if(active==='function')this.drawProbe(b,item);
     else if(active==='authenticity')this.drawComparison(b,item);
     else this.label(b,active==='condition'?checks.condition.hint:'检查已完成的项目可以免费复看。证据会影响估值，不会改变物品本身。',35,510,870,46,20,colors.pale);
@@ -362,7 +474,7 @@ export class CreatorMain extends Component {
       const btn=this.button(b,`${['⌕ 放大镜','ϟ 测试器','≡ 编号册'][i]}\n${done?'已验 · 免费复看':`${checks[c].minutes}分钟`}`,30+i*294,590,278,77,()=>this.startCheck(item,c),done?'quiet':'gold',!!s.inspection&&active!==c);
       btn.name=`Tool:${c}`;
     });
-    this.ui.panel(b,954,0,465,690,{fill:colors.paper,stroke:colors.gold,radius:7});
+    this.ui.paper(b,954,0,465,690,{kind:'note'});
     this.label(b,categories[def.category].name,978,20,416,30,19,'#807347');
     this.label(b,def.name,978,66,416,58,33);
     this.label(b,`参考估值 ${this.valueText(appraisal(item,s.market))}`,978,144,416,46,26,'#56683C');
@@ -374,14 +486,31 @@ export class CreatorMain extends Component {
     this.button(b,'收好物件 · 返回柜台',978,608,416,55,()=>{this.panel=null;this.render();},'green');
   }
   private startCheck(item:ItemInstance,check:Check):void {
+    if(this.busy)return;
     this.check=check;this.probe=0;this.compared=false;
-    if(item.revealed[check]){this.ui.toast(checks[check].name+'已核验，可以复看右侧记录');return;}
+    if(item.revealed[check]){
+      const b=this.inspectBody;if(!b)return;
+      void this.playMotion(async active=>{
+        await this.motion.scan(b,{x:225,y:92,width:490,height:348},{mode:check==='condition'?'magnify':check==='function'?'spectrum':'number',duration:0.9,label:'免费复看 · '+checks[check].name});
+        if(active()&&check==='function')await this.motion.waveform(b,{x:690,y:163,width:200,height:143},{healthy:item.function===1,duration:1.2,label:'负载记录'});
+      });
+      return;
+    }
     this.dispatch({type:'START_CHECK',uid:item.uid,check});
   }
   private drawProbe(b:Node,item:ItemInstance):void {
     this.label(b,'功能复测：接通两个测试触点，然后读取负载',35,510,870,28,19,colors.pale);
-    for(let i=0;i<2;i++)this.button(b,(this.probe&(1<<i))?'触点已接通':i===0?'接通供电端':'接通负载端',40+i*260,547,244,34,()=>{this.probe|=1<<i;this.render();},'quiet');
+    for(let i=0;i<2;i++)this.button(b,(this.probe&(1<<i))?'触点已接通':i===0?'接通供电端':'接通负载端',40+i*260,547,244,34,()=>this.connectProbe(i,item),'quiet');
     this.button(b,'读取测试结果',570,547,305,34,()=>this.dispatch({type:'CHECK_STEP'}),'gold',this.probe!==3);
+  }
+  private connectProbe(index:number,item:ItemInstance):void{
+    if(this.busy)return;
+    this.probe|=1<<index;this.render();
+    const b=this.inspectBody;if(!b)return;
+    void this.playMotion(async active=>{
+      await this.motion.connect(b,{x:162+index*260,y:548},{x:330+index*218,y:335},{duration:0.65,color:index===0?'#E5AA69':'#7DD2B6'});
+      if(active()&&this.probe===3)await this.motion.waveform(b,{x:690,y:163,width:200,height:143},{healthy:item.function===1,duration:1.2,label:'负载波形'});
+    });
   }
   private drawComparison(b:Node,item:ItemInstance):void {
     this.label(b,`物件铭牌 ${getItemDef(item.defId).code}  ·  请选择同型号档案`,35,508,870,30,19,colors.pale);
@@ -393,7 +522,7 @@ export class CreatorMain extends Component {
     this.label(b,'旧物档案  ·  收购、出售和核验会留下新的记录',16,0,1400,40,24,colors.pale);
     itemDefs.forEach((def,i)=>{
       const x=16+(i%4)*352,y=58+Math.floor(i/4)*205;
-      this.ui.panel(b,x,y,336,190,{fill:colors.paper,stroke:colors.gold,radius:7});
+      this.ui.paper(b,x,y,336,190,{kind:'note'});
       this.ui.item(b,def.id,x+7,y+10,115,112);
       this.label(b,def.name,x+137,y+16,185,36,23);
       this.label(b,`${def.id} · ${categories[def.category].name}`,x+137,y+62,185,30,16,'#7C704F');
@@ -403,7 +532,7 @@ export class CreatorMain extends Component {
   private drawLedger(b:Node):void {
     const s=this.state;
     this.label(b,`现金 ${s.cash}票   ·   售出 ${s.sold}/12件   ·   信誉 ${s.reputation}/100`,20,0,1400,50,29,colors.pale);
-    this.ui.panel(b,20,75,1370,580,{fill:colors.paper,stroke:colors.gold,radius:8});
+    this.ui.paper(b,20,75,1370,580,{kind:'receipt'});
     ['日期 / 时间','项目','现金变动','成本'].forEach((t,i)=>this.label(b,t,[40,320,1060,1240][i],91,[270,700,170,135][i],35,22));
     const kinds:Record<string,string>={purchase:'收购',sale:'售出',rent:'租金',supplies:'耗材',recycle:'回收',commission:'委托'};
     const rows=s.ledger.slice(-11).reverse();
@@ -456,7 +585,7 @@ export class CreatorMain extends Component {
     const s=this.state,r=s.report;if(!r)return;
     const m=this.ui.modal(`第${s.day}天 · 营业札记`,{width:1240,height:790,disableClose:true});this.modalRoot=m.overlay;
     const b=m.body;
-    this.ui.panel(b,50,20,1080,430,{fill:colors.paper,stroke:colors.gold,radius:8});
+    this.ui.paper(b,50,20,1080,430,{kind:'receipt'});
     const rows=[['营业收入',`＋${r.income}票`],['收购支出',`−${r.purchases}票`],['已付固定费用',`−${r.fees}票`],['已实现销售毛利',`${r.gross}票`],['期末现金',`${s.cash}票`]];
     rows.forEach(([k,v],i)=>{this.label(b,k,85,53+i*75,670,50,28);this.label(b,v,770,53+i*75,310,50,30,colors.ink,'right');});
     this.label(b,s.outcome?'七日之约走到了这一页。':'灯光暗下来，旧物的故事留在账本里。',50,480,1080,55,27,colors.pale,'center');
@@ -501,6 +630,7 @@ export class CreatorMain extends Component {
   }
   private toggle(key:keyof Prefs):void {
     this.prefs[key]=!this.prefs[key];
+    if(key==='reducedMotion')this.motion.configure({reducedMotion:this.prefs.reducedMotion});
     try{sys.localStorage.setItem(PREFS_KEY,JSON.stringify(this.prefs));}catch{}
     this.render();
     if(key==='sound'&&this.prefs.sound)this.sound('open');
@@ -529,7 +659,7 @@ export class CreatorMain extends Component {
     if(v&&typeof v==='object')return `${v.low??v.min??v.center??0}–${v.high??v.max??v.center??0}票`;
     return '待核验';
   }
-  private hit(node:Node,p:Vec2):boolean {return !!node.getComponent<UITransform>(UITransform)?.getBoundingBoxToWorld().contains(new Vec2(p.x-W/2,p.y-H/2));}
+  private hit(node:Node,p:Vec2):boolean {return !!node.getComponent<UITransform>(UITransform)?.hitTest(p);}
   private allNodes(root:Node):Node[] {return [root,...root.children.flatMap(n=>this.allNodes(n))];}
   private collectControls():{name:string;x:number;y:number;w:number;h:number}[] {
     const root=this.ui['root'] as Node|undefined;
@@ -543,6 +673,7 @@ export class CreatorMain extends Component {
     if(!node)return false;(node as unknown as {__action:()=>void}).__action();return true;
   }
   private onKey(e:EventKeyboard):void {
+    if(this.busy){if(e.keyCode===KeyCode.SPACE||e.keyCode===KeyCode.ESCAPE)this.skipMotion();return;}
     if(e.keyCode===KeyCode.TAB){
       const buttons=this.allNodes(this.modalRoot||this.shell).filter(n=>(n as unknown as {__enabled?:boolean}).__enabled&&n.activeInHierarchy);
       if(buttons.length){this.focusIndex=(this.focusIndex+1)%buttons.length;this.focused=buttons[this.focusIndex];this.ui.focusButton(this.focused);}
@@ -550,19 +681,21 @@ export class CreatorMain extends Component {
     }
     if((e.keyCode===KeyCode.ENTER||e.keyCode===KeyCode.SPACE)&&this.focused?.isValid){(this.focused as unknown as {__action:()=>void}).__action();return;}
     if(this.panel==='inspect'&&this.object){const moves:Record<number,[number,number]>={[KeyCode.ARROW_LEFT]:[-12,0],[KeyCode.ARROW_RIGHT]:[12,0],[KeyCode.ARROW_UP]:[0,12],[KeyCode.ARROW_DOWN]:[0,-12]};const delta=moves[e.keyCode];if(delta)this.object.setPosition(this.object.position.x+delta[0],this.object.position.y+delta[1]);}
-    if(e.keyCode===KeyCode.ESCAPE){if(this.state.phase==='report'||this.state.phase==='ending')return;this.panel=null;this.render();}
+    if(e.keyCode===KeyCode.ESCAPE){if(this.state.phase==='report'||this.state.phase==='ending')return;this.closePanel();}
     if(this.panel==='inspect'&&e.keyCode===KeyCode.KEY_R&&this.object)this.object.angle+=15;
     if(this.panel==='inspect'&&e.keyCode===KeyCode.KEY_F){this.plate=!this.plate;this.render();}
     if(!this.panel&&e.keyCode===KeyCode.KEY_I)this.open('inventory');
   }
   update(dt:number):void {
-    if(this.prefs.reducedMotion||this.panel||!this.ui)return;
-    this.sceneClock+=dt;
-    for(let i=0;i<this.ambience.length;i++) {
-      const n=this.ambience[i];if(!n.isValid)continue;
-      if(i===0)n.angle=Math.sin(this.sceneClock*1.5)*0.35;
-      else if(i>1)n.setPosition(n.position.x,n.position.y+Math.sin(this.sceneClock*0.8+i)*dt*4);
+    if(!this.ui)return;
+    this.motion?.update(dt);
+    if(this.cashTween){
+      const c=this.cashTween;c.elapsed+=dt;
+      if(!c.node.isValid){this.cashTween=null;return;}
+      const t=Math.min(1,c.elapsed/0.7),e=1-Math.pow(1-t,3);
+      c.node.getComponent<Label>(Label)!.string=`${Math.round(c.from+(c.to-c.from)*e)}票`;
+      if(t===1)this.cashTween=null;
     }
   }
-  onDestroy():void {this.disposed=true;input.off(Input.EventType.KEY_DOWN,this.onKey,this);}
+  onDestroy():void {this.disposed=true;this.motion?.dispose();input.off(Input.EventType.KEY_DOWN,this.onKey,this);}
 }
