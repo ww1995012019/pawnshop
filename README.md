@@ -1,6 +1,6 @@
 # 轨道旧货局 Cocos Creator 网页版
 
-使用 **Cocos Creator 3.8.8 与 TypeScript** 开发的空间站当铺经营游戏，按[太空当铺游戏设计与素材需求文档](page://page_f44de03a1914819194a52f23e05cf877)的 P0 页面、物品与首三天流程实现。当前界面版本为 `orbital-p0-v4`；游戏中的场景、货物、人物、工具和 UI 均由原生 Cocos 节点绘制，HTML 只承载画布和加载页。
+使用 **Cocos Creator 3.8.8 与 TypeScript** 开发的空间站当铺经营游戏，按[太空当铺游戏设计与素材需求文档](page://page_f44de03a1914819194a52f23e05cf877)的 P0 页面、物品与首三天流程实现。当前界面版本为 `orbital-p0-v5`；游戏中的场景、货物、人物、工具和 UI 均由原生 Cocos 节点绘制，HTML 只承载画布和加载页。
 
 ## 当前实现范围
 
@@ -31,7 +31,7 @@ npm run preview
 
 打开 `http://localhost:4174`。`dist/` 为静态网页产物，可部署到 HTTPS 静态服务器。`npm run build:pages` 另将产物复制到 `play/`，保留仓库既有 GitHub Pages 路径；不要手工修改生成的 `play/game.js`。
 
-`npm run test:orbital` 单独运行空间站规则测试，`npm test` 同时保留旧灰线模型回归检查。模型、旧版浏览器与当前视觉版本分别记录；`orbital-p0-v4` 的实际构建和画面验收结果见 [验证记录](docs/validation.md)。
+`npm run test:orbital` 单独运行空间站规则测试，`npm test` 同时保留旧灰线模型回归检查。模型、旧版浏览器与当前视觉版本分别记录；`orbital-p0-v5` 的实际构建和画面验收结果见 [验证记录](docs/validation.md)。
 
 无编辑器构建链使用官方 `@cocos/ccbuild` 编译真实 Cocos 引擎，源码固定提交 `411f98df047c25902f93440d4b22925c2fb65461`，不使用模拟 `cc` 或替代渲染器。首次准备需要 Git、Node.js 22 或更新版本及网络；之后复用 `.cache/cocos/`。相关 WebGL 内置材质说明见 [vendor/README.md](vendor/README.md)。
 

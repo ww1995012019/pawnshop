@@ -77,9 +77,25 @@ export class OrbitalUI extends GameUI {
 
   override label(parent:Node,text:string,x:number,y:number,width:number,height:number,options:LabelOptions={}):Node {
     const size=options.size??21;
-    const node=super.label(parent,text,x,y,width,height,{color:ORBITAL_PALETTE.text,size,bold:size>=27,lineHeight:Math.round(size*1.4),...options});
+    // A compact row must not shrink merely because paragraph leading exceeds its box.
+    // Leave explicit paragraph/wrapping choices and the caller's top/centre anchor intact.
+    const singleLine=options.wrap===false||(!text.includes('\n')&&height<size*1.8&&options.wrap!==true&&options.overflow!=='resize');
+    const node=super.label(parent,text,x,y,width,height,{
+      color:ORBITAL_PALETTE.text,size,bold:size>=27,
+      lineHeight:singleLine?size:Math.round(size*1.4),wrap:!singleLine,...options,
+    });
     if(!this.font)node.getComponent<Label>(Label)!.fontFamily='Orbital Sans SC, Noto Sans CJK SC, sans-serif';
     return node;
+  }
+
+  /** Align mixed font sizes to one alphabetic baseline in the pinned Creator 3.8.8 web engine. */
+  baselineLabel(parent:Node,text:string,x:number,baseline:number,width:number,options:LabelOptions={}):Node {
+    const size=options.size??21;
+    // ttf text-processing TOP origin: fontSize * (1 - BASELINE_RATIO / 2),
+    // where 3.8.8 web pins BASELINE_RATIO=.26 and getBaselineOffset()=0.
+    return this.label(parent,text,x,baseline-size*.87,width,Math.ceil(size*1.3),{
+      ...options,size,lineHeight:size,wrap:false,overflow:'clamp',verticalAlign:'top',
+    });
   }
 
   override panel(parent:Node,x:number,y:number,width:number,height:number,options:PanelOptions={}):Node {
@@ -128,7 +144,8 @@ export class OrbitalUI extends GameUI {
     const tone=options.tone??'green';
     const skin=tone!=='quiet'&&width>=65&&height>=30?this.orbitalSkin(visual,tone==='gold'?'amber':'graphite',0,0,width,height,tone==='gold'?.94:.50):null;
     const edge=this.container(visual,0,0,width,height,'control-edge').addComponent<Graphics>(Graphics);
-    const labelNode=this.label(visual,text,12,0,width-24,height,{size:options.size??19,bold:tone==='gold',align:'center',verticalAlign:'center',wrap:false});
+    const textSize=options.size??19,padding=Math.min(12,Math.round(width*.12));
+    const labelNode=this.label(visual,text,padding,0,Math.max(1,width-padding*2),height,{size:textSize,lineHeight:textSize,bold:tone==='gold',align:'center',verticalAlign:'center',wrap:false});
     const component=node.addComponent<Button>(Button);component.transition=Button.Transition.NONE;component.interactable=!options.disabled;
     const view:OrbitalButton={component,visual,ink,edge,skin,text:labelNode.getComponent<Label>(Label)!,width,height,tone,hovered:false,pressed:false,focused:options.focused??false,selected:options.selected??false,disabled:options.disabled??false};
     this.orbitalButtons.set(node,view);this.orbitalDrawButton(view);
