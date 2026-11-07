@@ -1,0 +1,28 @@
+{
+  "name": "greyline-pawnshop",
+  "version": "0.2.0",
+  "private": true,
+  "type": "3d",
+  "description": "灰线旧货铺 — Cocos Creator 3.8.8 浏览器版",
+  "scripts": {
+    "engine:prepare": "node scripts/prepare-engine.mjs",
+    "build:web": "node scripts/build-web.mjs",
+    "preview": "node scripts/serve.mjs",
+    "test": "node scripts/test-model.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.web.json"
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-export-default-from": "7.17.12",
+    "@babel/preset-env": "7.8.7",
+    "@cocos/babel-preset-cc": "2.2.0",
+    "@cocos/ccbuild": "2.3.23",
+    "esbuild": "0.25.5",
+    "sharp": "0.34.3",
+    "tslib": "2.8.1",
+    "typescript": "5.8.3"
+  },
+  "uuid": "b9683b55-5a42-5d0f-9622-8286e4dbda3d",
+  "creator": {
+    "version": "3.8.8"
+  }
+}
