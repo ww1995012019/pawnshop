@@ -3,6 +3,8 @@ import type {OrbitalHost} from './ui-types';
 import type {OrbitalItem,OrderDef,PageId,RecipeDef} from './types';
 import {getDef,getOrder,materials,recipes,orderDefs,orderEarliest} from './data';
 import {canPlace,estimate,findItem,itemValue} from './model';
+import {ordersForGroup,selectedOrderId} from './OrderPresentation';
+import type {OrderGroup} from './OrderPresentation';
 
 const C={text:'#D6D2C7',muted:'#9BA6A4',cyan:'#76BABB',orange:'#C38A4D',purple:'#AEA4B4',line:'#737C7350',panel:'#101B22B8',deep:'#0B141CD9',red:'#D18D77'};
 const statusText={available:'可接取',active:'进行中',done:'已交付',failed:'已过期'};
@@ -24,6 +26,8 @@ export class OrbitalPanels {
   private parent:Node|null=null;
   private clock=0;
   private orderId='ORD-001';
+  private orderGroup:OrderGroup='current';
+  private orderSelection:Record<OrderGroup,string>={current:'',history:'',upcoming:''};
   private stagedUid='';
   private scanner:Graphics|null=null;
   private scanUntil=0;
@@ -199,8 +203,8 @@ export class OrbitalPanels {
     });
     if(!all.length)this.text(p,'暂无可用物件',x+12,y+45,w-24,45,18,C.muted,'center');
     if(all.length>count){
-      this.button(p,'↑',x,y+h-2,w/2-4,31,()=>{this.inventoryOffset=Math.max(0,this.inventoryOffset-1);this.h.render();});
-      this.button(p,'↓',x+w/2+4,y+h-2,w/2-4,31,()=>{this.inventoryOffset=Math.min(all.length-count,this.inventoryOffset+1);this.h.render();});
+      this.button(p,'↑',x,y+h-2,w/2-4,44,()=>{this.inventoryOffset=Math.max(0,this.inventoryOffset-1);this.h.render();});
+      this.button(p,'↓',x+w/2+4,y+h-2,w/2-4,44,()=>{this.inventoryOffset=Math.min(all.length-count,this.inventoryOffset+1);this.h.render();});
     }
   }
   private repair(p:Node):void {
@@ -235,8 +239,9 @@ export class OrbitalPanels {
     if(recipe){
       Object.entries(recipe.materials).forEach(([id,q],i)=>{
         const material=materials.find(m=>m.id===id),color=item.repaired?C.text:(s.materials[id]||0)>=q?C.text:C.red;
-        this.baseline(p,material?.name||id,1190,410+i*32,238,18,color);
-        this.baseline(p,item.repaired?`已用 ×${q}`:`${s.materials[id]||0} / ${q}`,1438,410+i*32,112,18,color,'right');
+        this.baseline(p,material?.name||id,1190,410+i*32,210,18,color);
+        const have=s.materials[id]||0;
+        this.baseline(p,item.repaired?`已用 ×${q}`:have>=q?`${have} / ${q} 齐备`:`缺 ${q-have} 件`,1414,410+i*32,136,18,color,'right');
       });
       this.row(p,item.repaired?`工时已结算 ${recipe.ap} AP · 无额外工费`:`工时 ${recipe.ap} AP · 自修无额外工费`,1190,487,360,27,17,C.muted);
       const enough=Object.entries(recipe.materials).every(([id,q])=>(s.materials[id]||0)>=q);
@@ -262,7 +267,7 @@ export class OrbitalPanels {
     const craft=recipes.find(r=>r.kind==='craft');
     if(craft)this.button(p,'组装维护套组…',1190,659,360,47,()=>this.confirmCraft(craft),'quiet');
     this.paragraph(p,'物件归属、真伪与来源不会因维修自动改变',1190,718,360,40,15,C.muted);
-    this.materialShelf(p,30,701,1124);
+    this.materialShelf(p,30,701,1124,recipe,item.repaired);
   }
   private repairStep(item:OrbitalItem,stage:number):void {
     const before=this.h.state.repairProgress[item.uid]||0;
@@ -283,7 +288,7 @@ export class OrbitalPanels {
       end:({event,moved})=>{if(moved&&slot.getComponent<UITransform>(UITransform)?.hitTest(event.getLocation()))this.repairStep(item,1);else if(moved)this.h.ui.toast('接口没有对齐，请把替换件拖进右侧青色插槽。');},
     });
     this.repairHint(p,'02 / 将兼容零件拖入右侧接口');
-    this.button(p,'辅助装入',1010,480,117,37,()=>this.repairStep(item,1),'quiet');
+    this.button(p,'辅助装入',1010,480,117,44,()=>this.repairStep(item,1),'quiet');
   }
   private weldInteraction(p:Node,item:OrbitalItem):void {
     const layer=this.h.ui.container(p,400,325,690,180,'weld-track');
@@ -305,7 +310,7 @@ export class OrbitalPanels {
       cancel:()=>{if(wire.isValid)wire.clear();},
     });
     this.repairHint(p,'03 / 由供电端接至负载端，闭合回路');
-    this.button(p,'辅助闭合回路',936,480,190,37,()=>this.repairStep(item,2),'quiet');
+    this.button(p,'辅助闭合回路',936,480,190,44,()=>this.repairStep(item,2),'quiet');
   }
   private coil(g:Graphics,x:number,y:number,r:number):void {
     g.lineWidth=5;for(let i=0;i<5;i++){g.strokeColor=new Color(i%2?C.orange:'#F1C084');g.ellipse(x-r+i*5,-y,r*.44,r);g.stroke();}
@@ -334,21 +339,49 @@ export class OrbitalPanels {
       readout.color=new Color(Math.abs(offset)<5?C.cyan:C.orange);
     };
     paint();
-    this.button(p,'← 微调',900,469,104,36,()=>{offset=Math.max(-60,offset-10);paint();},'quiet');
-    this.button(p,'微调 →',1015,469,104,36,()=>{offset=Math.min(60,offset+10);paint();},'quiet');
-    this.button(p,'记录校准',900,516,219,36,()=>Math.abs(offset)<5?this.repairStep(item,2):this.h.ui.toast(optical?'三色轮廓尚未重合，继续逐格微调。':'配重仍偏离中心误差圈，继续调整位置。'),'gold');
+    this.button(p,'← 微调',900,465,104,44,()=>{offset=Math.max(-60,offset-10);paint();},'quiet');
+    this.button(p,'微调 →',1015,465,104,44,()=>{offset=Math.min(60,offset+10);paint();},'quiet');
+    this.button(p,'记录校准',900,519,219,44,()=>Math.abs(offset)<5?this.repairStep(item,2):this.h.ui.toast(optical?'三色轮廓尚未重合，继续逐格微调。':'配重仍偏离中心误差圈，继续调整位置。'),'gold');
     this.repairHint(p,optical?'03 / 逐格微调，让三色轮廓重合':'03 / 微调配重，将砝码置于中心误差圈');
   }
-  private materialShelf(p:Node,x:number,y:number,w:number):void {
+  private materialShelf(p:Node,x:number,y:number,w:number,recipe?:RecipeDef,completed=false):void {
     this.h.ui.rail(p,x,y,w,70,{fill:'#10191DC9',stroke:'#8B86704A',name:'repair-material-rail'});
-    materials.forEach((m,i)=>{
-      const width=w/6,xx=x+i*width;
-      if(i)this.h.ui.line(p,xx,y+9,xx,y+59,'#7D807145',1);
-      this.h.ui.materialIcon(p,m.id,xx+7,y+4,31,29);
-      this.baseline(p,m.name,xx+43,y+24,width-98,15,C.text);
-      this.baseline(p,`×${this.h.state.materials[m.id]||0}`,xx+width-53,y+24,43,14,C.text,'right');
-      this.button(p,`补货 ${m.price} Cr`,xx+9,y+36,width-18,28,()=>this.h.dispatch({type:'BUY_MATERIAL',id:m.id,qty:1}),'quiet');
+    if(recipe&&!completed){
+      this.row(p,'本件所需',x+18,y+22,96,26,16,C.muted);
+      Object.entries(recipe.materials).forEach(([id,qty],i)=>{
+        const m=materials.find(m=>m.id===id),xx=x+125+i*310,have=this.h.state.materials[id]||0,missing=Math.max(0,qty-have);
+        this.h.ui.materialIcon(p,id,xx,y+12,43,43);
+        this.row(p,m?.name||id,xx+55,y+10,236,25,18);
+        this.row(p,`库存 ${have} / 需要 ${qty} · ${missing?`缺 ${missing} 件`:'已齐备'}`,xx+55,y+37,236,23,15,missing?C.red:C.cyan);
+      });
+    }else{
+      this.row(p,completed?'✓ 本件维修完成 · 消耗已归档':'材料箱 / 维修与组装耗材',x+18,y+9,w-280,29,19,completed?C.cyan:C.text);
+      this.row(p,completed?'右侧工单保留材料与工时记录，可继续整理材料箱或组装套组。':'全部六种耗材统一管理，采购会即时扣款，不消耗 AP。',x+18,y+39,w-280,23,16,C.muted);
+    }
+    this.h.button(p,'材料箱 / 采购',x+w-230,y+12,212,46,()=>this.materialBox(),{tone:'quiet',name:'open-material-box',size:19});
+  }
+  private materialBox():void {
+    if(this.h.busy)return;
+    this.closeModal();
+    const m=this.h.ui.modal('材料箱与物资采购',{width:1100,height:700,onClose:()=>{this.modal=null;}});this.modal=m.overlay;
+    const p=m.body;
+    this.row(p,'全部耗材 / 购买后立即入库，不消耗行动点',15,2,700,30,18,C.muted);
+    this.row(p,`可用现金 ${this.h.state.cash.toLocaleString()} Cr`,725,2,300,30,18,C.orange,'right');
+    materials.forEach((material,i)=>{
+      const x=15+(i%2)*520,y=53+Math.floor(i/2)*143;
+      const card=this.h.ui.texturePanel(p,x,y,495,131,{skin:'strip',fill:'#152229ED',stroke:C.line,materialOpacity:.25,name:`material-stock-${material.id}`});
+      this.h.ui.materialIcon(card,material.id,12,16,61,66);
+      this.row(card,material.name,86,12,250,28,21,C.text);
+      this.row(card,`当前库存 ×${this.h.state.materials[material.id]||0}`,86,46,250,24,17,C.cyan);
+      this.paragraph(card,material.description,86,78,263,42,14,C.muted);
+      this.row(card,`${material.price} Cr / 件`,362,18,119,29,18,C.orange,'center');
+      this.h.button(card,this.h.state.cash<material.price?'资金不足':'购买 1 件',362,62,119,48,()=>{
+        this.closeModal();
+        this.h.dispatch({type:'BUY_MATERIAL',id:material.id,qty:1});
+        this.materialBox();
+      },{tone:'quiet',disabled:this.h.state.cash<material.price,name:`purchase-material-${material.id}`,size:18});
     });
+    this.h.button(p,'完成采购 · 返回工台',15,507,1010,50,()=>this.closeModal(),{tone:'gold',name:'close-material-box',size:19});
   }
   private confirmDismantle(item:OrbitalItem):void {
     this.confirmDialog('拆解并回收材料',`${getDef(item.defId).name} 将从库存移除。\n回收导电纤维与标准微线圈；不保留完整原物。\n此操作不可逆，顾客委修件与抵押品不能拆解。`,()=>{this.h.dispatch({type:'DISMANTLE',uid:item.uid});if(!findItem(this.h.state,item.uid))this.effect('repair',{x:530,y:300,width:370,height:270});});
@@ -522,6 +555,11 @@ export class OrbitalPanels {
     this.row(p,`${item.evidence.length} 项`,1216,388,62,29,17,item.sourceVerified?C.cyan:C.orange,'right');
     this.row(p,item.sourceVerified?'来源已登记':'来源未登记',1340,388,205,29,17,item.sourceVerified?C.cyan:C.orange,'right');
     this.row(p,!inStock?'尚未入库 · 返回柜台完成交易':`${item.sealed?'封签完好':'未封签'} · ${item.repaired?'已修复':item.working?'功能待复核':'功能故障'} · ${item.location==='isolation'?'隔离存放':item.location==='pawn'?'抵押保管':item.location==='display'?'销售架':'普通仓库'}`,1120,431,425,30,17,C.muted);
+    if(!inStock){
+      this.paragraph(p,'完成柜台交易后，这件实物才会进入库存。\n入库前可继续鉴定，不会扣款或占用仓格。',1120,477,425,68,18,C.muted);
+      this.button(p,'返回柜台完成交易',1120,570,425,52,()=>this.h.navigate('counter'),'gold');
+      this.button(p,'继续鉴定这件实物',1120,638,425,48,()=>this.h.navigate('inspect',item.uid),'quiet');
+    }else{
     const buyer=s.trade?.kind==='sell'&&!s.trade.locked;
     this.button(p,buyer?'推荐给当前顾客':item.location==='display'?'撤回普通仓库':'放上销售架',1120,506,205,44,()=>this.h.dispatch(buyer?{type:'SELECT_TRADE',uid:item.uid}:{type:'DISPLAY',uid:item.uid}),'gold',!inStock||item.owner!=='shop'||!!buyer&&(!item.sourceVerified||item.location==='isolation'||item.sealed||!!item.orderId));
     this.button(p,'旋转 90°',1340,506,205,44,()=>this.h.dispatch({type:'MOVE',uid:item.uid,x:item.x,y:item.y,rotated:!item.rotated}),'quiet',!inStock||item.location!=='warehouse');
@@ -535,34 +573,63 @@ export class OrbitalPanels {
       else this.confirmDialog('退回来源方',`退还 ${def.name} 并移出当前库存。\n已支付采购款不自动返还；本操作不会伪造来源证据。`,()=>this.h.dispatch({type:'RETURN_ITEM',uid:item.uid}));
     },'danger',!inStock);
     this.row(p,eligible?`应急回收 ${Math.floor(itemValue(item)*.55)} Cr · 55%估值 / 0 AP`:'登记需：扫描 + 2项独立证据 + 35 Cr / 1 AP',1120,471,425,24,14,eligible?C.orange:C.muted);
-    this.button(p,'隔离柜 4 × 3',1120,678,204,25,()=>{this.cabinet='isolation';this.h.render();},this.cabinet==='isolation'?'green':'quiet',false);
-    this.button(p,'抵押柜 4 × 4',1340,678,205,25,()=>{this.cabinet='pawn';this.h.render();},this.cabinet==='pawn'?'green':'quiet',false);
-    const isolated=s.inventory.filter(it=>it.location===this.cabinet);
-    for(let i=0;i<(this.cabinet==='pawn'?16:12);i++){
-      const xx=1120+(i%4)*105,yy=708+Math.floor(i/4)*17,it=isolated[i];
-      const cell=this.h.ui.panel(p,xx,yy,97,15,{stroke:it?.uid===this.h.selected?C.cyan:it?'#AEA4B464':'#7D82742D',fill:it?'#3A3945AB':'#10191D38',radius:1,lineWidth:.6,name:`${this.cabinet}-slot-${i}`});
-      if(it){this.h.ui.object(cell,it.defId,2,0,27,18,{repaired:it.repaired});this.row(cell,it.owner==='pawn'?'抵押':'隔离',33,0,60,15,10,C.text);this.h.ui.bindPointer(cell,{cursor:'pointer',disabled:()=>this.h.busy});cell.on(Node.EventType.TOUCH_END,()=>!this.h.busy&&this.h.select(it.uid));}
+    }
+    this.line(p,1120,699,425);
+    this.button(p,`隔离柜 · ${s.inventory.filter(it=>it.location==='isolation').length}/12`,1120,710,204,44,()=>this.openCabinet('isolation'),'quiet');
+    this.button(p,`抵押柜 · ${s.inventory.filter(it=>it.location==='pawn').length}/16`,1340,710,205,44,()=>this.openCabinet('pawn'),'quiet');
+  }
+  private openCabinet(cabinet:'isolation'|'pawn'):void {
+    this.closeModal();this.cabinet=cabinet;
+    const items=this.h.state.inventory.filter(it=>it.location===cabinet),capacity=cabinet==='pawn'?16:12,title=cabinet==='pawn'?'抵押保管柜':'隔离柜';
+    const m=this.h.ui.modal(`${title} · ${items.length}/${capacity}`,{width:1000,height:660,onClose:()=>{this.modal=null;}});this.modal=m.overlay;
+    this.paragraph(m.body,cabinet==='pawn'?'保管原物归顾客所有。选择实物查看合同与赎回条件。':'隔离物件保留归属与证据。选择实物继续核验来源。',10,0,920,49,18,C.muted);
+    for(let i=0;i<capacity;i++){
+      const x=10+(i%4)*233,y=68+Math.floor(i/4)*111,it=items[i];
+      if(!it){
+        this.box(m.body,x,y,219,99,C.line,'#101A2270',`${cabinet}-empty-${i}`);
+        this.row(m.body,'空保管位',x,y+32,219,35,16,C.muted,'center');continue;
+      }
+      const card=this.h.button(m.body,'',x,y,219,99,()=>{this.closeModal();this.h.select(it.uid);},{tone:'quiet',selected:it.uid===this.h.selected,name:`${cabinet}-item-${it.uid}`});
+      this.h.ui.object(card,it.defId,7,12,70,70,{repaired:it.repaired,damaged:!it.working});
+      this.row(card,getDef(it.defId).name,84,18,126,29,17,C.text);
+      this.row(card,it.owner==='pawn'?'抵押保管':it.sourceVerified?'来源已核验':'待核验来源',84,54,126,27,15,it.sourceVerified?C.cyan:C.orange);
     }
   }
   private orders(p:Node):void {
     const s=this.h.state;
-    if(!orderDefs.some(o=>o.id===this.orderId))this.orderId=orderDefs[0]?.id||'';
-    const order=getOrder(this.orderId),os=s.orders.find(o=>o.id===order.id),status=os?.status||'available';
+    const groups:OrderGroup[]=['current','history','upcoming'];
+    const grouped=Object.fromEntries(groups.map(group=>[group,ordersForGroup(orderDefs,s.orders,s.day,orderEarliest,group)])) as Record<OrderGroup,OrderDef[]>;
+    const list=grouped[this.orderGroup],selected=selectedOrderId(list,this.orderSelection[this.orderGroup]);
+    if(this.orderId!==selected)this.stagedUid='';
+    this.orderId=selected;this.orderSelection[this.orderGroup]=selected;
     this.title(p,'ORDERS / 今日公告与委修','订单与委托',40,850);
-    orderDefs.forEach((o,i)=>{
-      const x=40+(i%3)*289,y=211+Math.floor(i/3)*135,st=s.orders.find(v=>v.id===o.id)?.status||'available',locked=(orderEarliest[o.id]||1)>s.day,selected=o.id===this.orderId;
-      const card=this.h.button(p,'',x,y,274,122,()=>{this.orderId=o.id;this.stagedUid='';this.h.render();},{tone:'quiet',selected,name:`order-${o.id}`});
-      this.h.ui.texturePanel(card,0,0,274,122,{skin:'strip',fill:selected?'#1A2A30E6':'#101A22D6',lineWidth:0,materialOpacity:.55,name:'order-card-backing'}).setSiblingIndex(0);
-      this.h.ui.line(card,12,30,262,30,selected?'#76BABB88':'#B2AC872F',.7);
-      this.row(card,o.id.replace('ORD-','NO. '),12,7,100,18,10,selected?C.cyan:C.muted);
-      this.row(card,`D${String(o.dueDay).padStart(2,'0')} 截止`,155,7,107,18,10,C.muted,'right');
-      this.h.ui.object(card,o.itemId,9,37,74,74,{damaged:o.needsRepair});
-      this.paragraph(card,o.name,91,35,171,44,16,selected?C.text:C.muted);
-      this.baseline(card,`${o.reward} Cr`,91,103,86,17,selected?C.orange:C.text);
-      this.baseline(card,locked?`D${orderEarliest[o.id]} 开放`:statusText[st],179,103,83,12,st==='done'?C.cyan:locked?C.muted:selected?C.cyan:C.muted,'right');
+    const groupName={current:'当前委托',history:'历史记录',upcoming:'待开放'};
+    groups.forEach((group,i)=>this.h.button(p,`${groupName[group]} · ${grouped[group].length}`,40+i*289,211,274,44,()=>{
+      this.orderGroup=group;this.stagedUid='';this.h.render();
+    },{tone:'quiet',selected:this.orderGroup===group,size:18,name:`order-group-${group}`}));
+    this.row(p,this.orderGroup==='current'?'进行中优先 · 按截止时间排列':this.orderGroup==='history'?'已交付与过期凭证 · 原物归属记录保留':'按开放日查看后续委托',40,264,850,22,15,C.muted);
+    list.forEach((o,i)=>{
+      const x=40+(i%3)*289,y=294+Math.floor(i/3)*118,st=s.orders.find(v=>v.id===o.id)?.status||'available',locked=st==='available'&&(orderEarliest[o.id]||1)>s.day,chosen=o.id===this.orderId;
+      const card=this.h.button(p,'',x,y,274,108,()=>{this.orderId=o.id;this.orderSelection[this.orderGroup]=o.id;this.stagedUid='';this.h.render();},{tone:'quiet',selected:chosen,name:`order-${o.id}`});
+      this.h.ui.texturePanel(card,0,0,274,108,{skin:'strip',fill:chosen?'#1A2A30E6':'#101A22D6',lineWidth:0,materialOpacity:.55,name:'order-card-backing'}).setSiblingIndex(0);
+      this.h.ui.line(card,12,30,262,30,chosen?'#76BABB88':'#B2AC872F',.7);
+      this.row(card,o.id.replace('ORD-','NO. '),12,7,88,18,11,chosen?C.cyan:C.muted);
+      this.row(card,`第 ${o.dueDay} 天截止`,124,7,138,18,14,C.text,'right');
+      this.h.ui.object(card,o.itemId,9,35,68,66,{damaged:o.needsRepair});
+      this.paragraph(card,o.name,86,35,176,43,17,C.text);
+      this.row(card,`${o.reward} Cr`,86,81,89,24,17,chosen?C.orange:C.text);
+      this.h.ui.statusChip(card,locked?`D${orderEarliest[o.id]} 开放`:statusText[st],179,80,83,24,st==='failed'?C.red:st==='active'?C.orange:st==='done'?C.cyan:C.text);
     });
     this.h.ui.texturePanel(p,928,130,642,314,{skin:'glass',fill:'#10191DD6',stroke:C.line,materialOpacity:.43,name:'order-manifest'});
     this.h.ui.texturePanel(p,928,457,642,313,{skin:'socket',fill:'#10191D55',stroke:'#7D82743B',materialOpacity:.39,name:'order-handover-station'});
+    if(!this.orderId){
+      const empty=this.orderGroup==='current'?'当前委托已处理完':this.orderGroup==='history'?'暂无历史记录':'暂无待开放委托';
+      this.row(p,empty,948,189,602,42,29,C.text);
+      this.paragraph(p,this.orderGroup==='current'?'可以继续接待来客，或查看后续委托的开放时间。':this.orderGroup==='history'?'完成交付或过期的委托会归档在这里。':'后续委托开放后会出现在当前委托中。',948,254,602,110,20,C.muted);
+      this.text(p,empty,70,391,790,80,26,C.muted,'center');
+      this.button(p,'返回柜台接待',948,707,602,47,()=>this.h.navigate('counter'),'gold');return;
+    }
+    const order=getOrder(this.orderId),os=s.orders.find(o=>o.id===order.id),status=os?.status||'available';
     this.row(p,'DELIVERY MANIFEST / 订单详情',948,145,602,29,14,C.orange);
     this.row(p,order.name,948,189,602,42,29);
     this.baseline(p,`${order.id}  /  ${order.customerOwned?'顾客委修原物':'店铺自有货物'}  /  D${String(order.dueDay).padStart(2,'0')} 截止`,948,264,410,15,C.muted);
@@ -583,9 +650,11 @@ export class OrbitalPanels {
       return;
     }
     if(status==='done'||status==='failed'){
+      const original=s.inventory.find(it=>it.uid===os?.uid||it.orderId===order.id);
       this.h.ui.object(p,order.itemId,967,479,240,228,{damaged:order.needsRepair});
       this.text(p,status==='done'?'已交付':'订单已过期',1225,505,305,50,29,status==='done'?C.cyan:C.red);
-      this.text(p,status==='done'?'凭证已归档\n报酬、物件与关系已在交付时记录。':'物件仍在库存\n可到仓库继续处理。',1225,572,305,107,18,C.muted);return;
+      this.paragraph(p,status==='done'?'凭证已归档\n报酬、物件与关系已在交付时记录。':original?'原物仍在库存，可继续维修或按归属处理。':'本单原物已不在库存，历史记录保留。',1225,572,305,107,18,C.muted);
+      if(status==='failed'&&original)this.button(p,'到仓库处理原物',1225,707,305,47,()=>this.h.navigate('warehouse',original.uid),'gold');return;
     }
     const candidates=s.inventory.filter(it=>it.defId===order.itemId);
     const staged=s.inventory.find(it=>it.uid===this.stagedUid);
@@ -618,13 +687,20 @@ export class OrbitalPanels {
       }else this.h.ui.object(tray,staged.defId,76,0,198,82,{repaired:staged.repaired});
       const reasons=this.orderReasons(order,staged);
       this.paragraph(p,reasons.length?reasons.join(' · '):'✓ 型号、归属、证据和状态符合要求',948,669,602,43,15,reasons.length?C.orange:C.cyan);
-      if(paired&&!secondary)this.button(p,'到仓库准备藻苗罐',948,720,427,40,()=>this.h.navigate('warehouse'),'green');
-      else this.button(p,'确认交付并领取报酬',948,720,427,40,()=>{this.h.dispatch({type:'DELIVER_ORDER',id:order.id,uid:staged.uid});this.stagedUid='';if(this.h.state.orders.find(o=>o.id===order.id)?.status==='done')this.effect('stamp',{x:1300,y:450});},'gold',reasons.length>0);
-      this.button(p,'撤回',1390,720,160,40,()=>{this.stagedUid='';this.h.render();},'quiet');
+      if(paired&&!secondary)this.button(p,'到仓库准备藻苗罐',948,720,427,44,()=>this.h.navigate('warehouse'),'green');
+      else this.button(p,'确认交付并领取报酬',948,720,427,44,()=>{
+        const previousGroup=this.orderGroup;
+        this.orderGroup='history';this.orderSelection.history=order.id;
+        this.h.dispatch({type:'DELIVER_ORDER',id:order.id,uid:staged.uid});this.stagedUid='';
+        // The host renders the receipt before starting its stamp animation.
+        // A rejected commit returns to the actionable group without losing the order.
+        if(this.h.state.orders.find(o=>o.id===order.id)?.status!=='done'){this.orderGroup=previousGroup;this.h.render();}
+      },'gold',reasons.length>0);
+      this.button(p,'撤回',1390,720,160,44,()=>{this.stagedUid='';this.h.render();},'quiet');
     }else{
       this.row(p,paired?(secondary?'藻苗罐已备妥；将光合灯放入交付盘即可预览配套交付。':'藻苗罐需自有、正常、来源已核验，并有两项独立物证。'):'选中原物后会显示具体合格项与缺项。',948,677,602,31,paired?15:17,paired&&!secondary?C.orange:C.muted);
-      this.button(p,paired?'到仓库准备两件货物':'到仓库选择物件',948,720,292,40,()=>this.h.navigate('warehouse'),'green');
-      if(os?.uid)this.button(p,'处理委修原物',1257,720,293,40,()=>this.h.navigate('repair',os.uid!),'gold');
+      this.button(p,paired?'到仓库准备两件货物':'到仓库选择物件',948,720,292,44,()=>this.h.navigate('warehouse'),'green');
+      if(os?.uid)this.button(p,'处理委修原物',1257,720,293,44,()=>this.h.navigate('repair',os.uid!),'gold');
     }
   }
   /** Mirrors ORD-004's automatic secondary lookup without reserving or moving stock. */
@@ -652,35 +728,45 @@ export class OrbitalPanels {
     const s=this.h.state,r=s.report,ended=s.phase==='ending';
     this.title(p,'DAILY LEDGER / 每次提交均可追溯',ended?'经营阶段结束':`第 ${String(s.day).padStart(2,'0')} 日 · 营业结算`);
     this.h.ui.texturePanel(p,30,205,920,566,{skin:'glass',fill:'#10191DCF',stroke:'#8B86704A',materialOpacity:.33,name:'daily-navigation-ledger'});
-    const today=s.ledger.filter(x=>x.day===s.day),income=r?.income??today.filter(x=>x.amount>0).reduce((a,b)=>a+b.amount,0),expenses=r?.expenses??-today.filter(x=>x.amount<0).reduce((a,b)=>a+b.amount,0),maintenance=r?.maintenance??20,rent=r?.rent??(s.day%7===0?Math.round(450*Math.pow(1.1,Math.floor((s.day-1)/7))):0);
+    const today=s.ledger.filter(x=>x.day===s.day);
+    const income=today.filter(x=>x.amount>0).reduce((a,b)=>a+b.amount,0);
+    const expenses=-today.filter(x=>x.amount<0&&x.kind!=='maintenance'&&x.kind!=='rent').reduce((a,b)=>a+b.amount,0);
+    const postedMaintenance=-today.filter(x=>x.kind==='maintenance').reduce((a,b)=>a+b.amount,0),postedRent=-today.filter(x=>x.kind==='rent').reduce((a,b)=>a+b.amount,0);
+    const maintenance=r?.maintenance??20,rent=r?.rent??(s.day%7===0?Math.round(450*Math.pow(1.1,Math.floor((s.day-1)/7))):0);
     this.baseline(p,'现金流与固定费用',53,248,650,22);
     this.baseline(p,`LOG / D${String(s.day).padStart(2,'0')}`,735,248,187,12,C.muted,'right');
     this.row(p,'可用现金 / AVAILABLE CREDIT',53,270,560,22,12,C.muted);
     this.baseline(p,s.cash.toLocaleString(),53,347,655,46,C.text);
     this.baseline(p,'Cr',753,347,169,25,C.orange,'right');
     this.line(p,53,371,869,'#8B867043');
-    const values=[{name:'营业流入',value:income,color:C.cyan},{name:'采购与支出',value:expenses,color:C.orange},{name:'能源维护',value:maintenance,color:'#AC987C'},{name:'本日租金',value:rent,color:C.purple}];
-    const max=Math.max(80,...values.map(v=>v.value));
-    this.h.ui.line(p,65,559,908,559,'#8B86705C',1);
+    const values=[{name:'现金流入',value:income,color:C.cyan},{name:'采购及其他支出',value:-expenses,color:C.orange},{name:'能源维护',value:-postedMaintenance,color:'#AC987C'},{name:'本日租金',value:-postedRent,color:C.purple}];
+    const max=Math.max(1,...values.map(v=>Math.abs(v.value))),zero=484;
+    this.row(p,'流入 ↑  /  支出 ↓ · 已入账现金',559,382,363,25,14,C.muted,'right');
+    this.h.ui.line(p,84,zero,908,zero,'#B2B9AE80',1.5);
+    this.row(p,'0',53,zero-13,26,26,15,C.muted,'center');
     values.forEach((v,i)=>{
-      const x=92+i*207,h=Math.max(3,v.value/max*132);
-      this.h.ui.panel(p,x,552-h,117,h,{fill:`${v.color}90`,lineWidth:0,radius:1});
-      this.h.ui.line(p,x,552-h,x+117,552-h,v.color,2);
-      this.text(p,`${i===0?'+':'−'}${v.value}`,x-20,515-h,157,31,22,C.text,'center');
-      this.text(p,v.name,x-35,576,187,25,16,C.muted,'center');
+      const x=92+i*207,h=Math.abs(v.value)/max*72,top=v.value>0?zero-h:zero;
+      if(v.value!==0){
+        this.h.ui.panel(p,x,top,117,h,{fill:`${v.color}90`,lineWidth:0,radius:1,name:`cash-flow-bar-${i}`});
+        const edge=v.value>0?top:top+h;
+        this.h.ui.line(p,x,edge,x+117,edge,v.color,2);
+      }
+      const amount=v.value===0?'0':`${v.value>0?'+':'−'}${Math.abs(v.value)}`;
+      this.row(p,amount,x-20,v.value>0?top-34:zero+h+7,157,29,21,v.value<0?C.orange:C.text,'center');
+      this.row(p,v.name,x-35,599,187,25,16,C.muted,'center');
     });
     const net=today.reduce((n,e)=>n+e.amount,0);
     this.line(p,53,626,869,'#8B867043');
     this.baseline(p,'今日净现金变化',53,675,320,18,C.muted);
     this.baseline(p,`${net>=0?'+':''}${net} Cr`,391,675,531,33,net>=0?C.cyan:C.orange,'right');
-    this.row(p,s.phase==='open'?'打烊时统一结算维护与到期租金。':'费用与本日记录已保存。',53,718,869,27,16,C.muted);
+    this.row(p,s.phase==='open'?'图中仅列已入账现金，维护与到期租金在打烊时扣除。':'费用与本日记录已保存；收支图包含本日全部入账。',53,718,869,27,16,C.muted);
     this.h.ui.texturePanel(p,970,130,600,640,{skin:'glass',fill:'#10191DD4',stroke:C.line,materialOpacity:.42,name:'daily-captains-log'});
     this.row(p,'NEXT SHIFT / 下一日安排',991,147,558,33,15,C.orange);
     const forecast=s.day===1?'第2日：维修订单与原件归属':s.day===2?'第3日：预约安检与来源核验':s.day%7===6?'明日到期租金，请预留现金':'查看新订单，继续处理货源与维修';
     this.paragraph(p,forecast,991,196,558,58,23,C.text);
     const relief=s.ledger.some(e=>e.kind==='relief-window'&&e.day===s.day);
     this.text(p,`未完成订单 ${s.orders.filter(x=>x.status==='active').length}  ·  关注度 ${s.risk}/100`,991,262,relief?320:558,28,18,C.muted);
-    if(relief)this.button(p,'回仓储处理缺口',1320,258,230,35,()=>this.h.navigate('warehouse'),'gold');
+    if(relief)this.button(p,'回仓储处理缺口',1320,253,230,44,()=>this.h.navigate('warehouse'),'gold');
     this.line(p,991,304,558);
     this.row(p,'营业流水 / TRANSACTIONS',991,319,558,31,15,C.muted);
     today.slice(-4).reverse().forEach((entry,i)=>{
@@ -718,7 +804,12 @@ export class OrbitalPanels {
       this.h.ui.texturePanel(p,53,y,945,88,{skin:'strip',fill:'#10191DD4',stroke:'#8B86703A',materialOpacity:.37,name:`setting-${key}-strip`});
       this.baseline(p,String(i+1).padStart(2,'0'),71,y+45,36,12,C.muted);
       this.baseline(p,title,119,y+45,633,23);this.baseline(p,desc,119,y+69,633,16,C.muted);
-      this.button(p,this.h.prefs[key]?'开启':'关闭',799,y+23,177,48,()=>{this.h.prefs[key]=!this.h.prefs[key];this.h.savePrefs();this.h.render();},this.h.prefs[key]?'green':'quiet');
+      const enabled=this.h.prefs[key];
+      const toggle=this.h.button(p,'',799,y+23,177,48,()=>{this.h.prefs[key]=!this.h.prefs[key];this.h.savePrefs();},{tone:enabled?'green':'quiet',name:`preference-${key}`,size:19});
+      this.row(toggle,enabled?'已开启':'已关闭',12,0,90,48,18,enabled?C.cyan:C.muted);
+      const track=this.h.ui.container(toggle,108,11,58,26,`preference-track-${key}`).addComponent<Graphics>(Graphics);
+      track.fillColor=new Color(enabled?'#497F83':'#465259');track.roundRect(0,-26,58,26,13);track.fill();
+      track.fillColor=new Color('#E3DFD2');track.circle(enabled?44:14,-13,9);track.fill();
     });
     this.line(p,53,602,945,'#8B86706B');
     this.button(p,'导出经营档案',53,620,294,57,()=>this.h.exportSave(),'green');

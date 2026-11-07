@@ -1,4 +1,4 @@
-import {Button,EventMouse,EventTouch,game,Node} from 'cc';
+import {Button,EventMouse,EventTouch,game,Node,UITransform,Vec2} from 'cc';
 
 export interface PointerBindingOptions {
   cursor?:'pointer'|'grab'|'default'|'text';
@@ -15,17 +15,23 @@ export class PointerCursor {
   private readonly bindings=new Map<Node,PointerBinding>();
   private canvas:HTMLCanvasElement|null=null;
   private drag:PointerBinding|null=null;
+  private pointerPosition:Vec2|null=null;
   private order=0;
   private disposed=false;
-  private readonly resetFromWindow=()=>this.reset();
+  private readonly resetFromWindow=()=>{this.pointerPosition=null;this.reset();};
   private readonly finishFromWindow=()=>{this.drag=null;this.apply();};
-  private readonly visibilityChanged=()=>{if(document.hidden)this.reset();};
+  private readonly visibilityChanged=()=>{if(document.hidden)this.resetFromWindow();};
   private readonly canvasMoved=(event:PointerEvent)=>{if(this.drag&&event.buttons===0){this.drag=null;this.apply();}};
+  private readonly rootMouseMoved=(event:EventMouse)=>{this.pointerPosition=event.getLocation().clone();this.apply();};
 
   constructor(private readonly root:Node){
     this.connectCanvas();
+    // Capture the engine's own screen coordinates even over empty workspace or
+    // a modal's non-interactive area. DOM/CSS scale is not the input geometry.
+    root.on(Node.EventType.MOUSE_MOVE,this.rootMouseMoved,this,true);
     if(typeof window!=='undefined'){
       window.addEventListener('blur',this.resetFromWindow);
+      window.addEventListener('resize',this.resetFromWindow);
       window.addEventListener('pointerup',this.finishFromWindow);
       window.addEventListener('pointercancel',this.resetFromWindow);
       document.addEventListener('visibilitychange',this.visibilityChanged);
@@ -38,8 +44,9 @@ export class PointerCursor {
     if(this.disposed)return()=>{};
     const binding:PointerBinding={node,options,hovered:false,order:0,events:[]};
     const listen=(event:string,callback:(event?:EventTouch|EventMouse)=>void)=>{node.on(event,callback);binding.events.push([event,callback]);};
-    const enter=()=>{binding.hovered=true;binding.order=++this.order;this.apply();};
-    const leave=()=>{binding.hovered=false;this.apply();};
+    const locate=(event?:EventTouch|EventMouse)=>{if(event)this.pointerPosition=event.getLocation().clone();};
+    const enter=(event?:EventTouch|EventMouse)=>{locate(event);binding.hovered=true;binding.order=++this.order;this.apply();};
+    const leave=(event?:EventTouch|EventMouse)=>{locate(event);binding.hovered=false;this.apply();};
     const press=(event?:EventTouch|EventMouse)=>{
       // Native touch/mouse events bubble from hotspot buttons inside the object.
       // Those keep their button cursor instead of starting the parent's drag.
@@ -60,7 +67,7 @@ export class PointerCursor {
       this.apply();
     });
     listen(Node.EventType.NODE_DESTROYED,()=>this.unbind(node));
-    this.bindings.set(node,binding);this.connectCanvas();
+    this.bindings.set(node,binding);this.connectCanvas();this.apply();
     return()=>{if(this.bindings.get(node)===binding)this.unbind(node);};
   }
 
@@ -74,16 +81,21 @@ export class PointerCursor {
   }
 
   reset():void {
+    // A scene redraw cancels gestures, but the physical mouse did not move.
+    // Keep its native screen point so replacement controls can claim hover.
+    // Real leave, blur and cancellation use resetFromWindow to forget it.
     this.drag=null;for(const binding of this.bindings.values())binding.hovered=false;
     if(this.canvas)this.canvas.style.cursor='default';
   }
 
   dispose():void {
     if(this.disposed)return;this.reset();this.disposed=true;
+    this.root.off(Node.EventType.MOUSE_MOVE,this.rootMouseMoved,this,true);
     for(const node of [...this.bindings.keys()])this.unbind(node);
     this.disconnectCanvas();
     if(typeof window!=='undefined'){
       window.removeEventListener('blur',this.resetFromWindow);
+      window.removeEventListener('resize',this.resetFromWindow);
       window.removeEventListener('pointerup',this.finishFromWindow);
       window.removeEventListener('pointercancel',this.resetFromWindow);
       document.removeEventListener('visibilitychange',this.visibilityChanged);
@@ -120,6 +132,7 @@ export class PointerCursor {
     if(this.drag){this.canvas.style.cursor='grabbing';return;}
     let chosen:PointerBinding|undefined;
     for(const binding of this.bindings.values()){
+      if(this.pointerPosition)binding.hovered=this.eligible(binding)&&!!binding.node.getComponent<UITransform>(UITransform)?.hitTest(this.pointerPosition);
       const rank=this.hoverRank(binding),chosenRank=chosen?this.hoverRank(chosen):-1;
       if(binding.hovered&&this.eligible(binding)&&(!chosen||rank>chosenRank||(rank===chosenRank&&binding.order>chosen.order)))chosen=binding;
     }

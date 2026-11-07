@@ -173,6 +173,7 @@ export class OrbitalUI extends GameUI {
   }
   override setButtonEnabled(node:Node,enabled:boolean):void {
     const view=this.orbitalButtons.get(node);if(!view)return;
+    Object.assign(node,{__enabled:enabled});
     view.disabled=!enabled;view.component.interactable=enabled;view.pressed=false;
     if(!enabled){view.hovered=false;view.focused=false;if(this.orbitalFocus===node)this.orbitalFocus=null;}
     this.orbitalPress(view,false);this.orbitalDrawButton(view);
@@ -190,7 +191,7 @@ export class OrbitalUI extends GameUI {
     const width=options.width??1500,height=options.height??830;
     this.pointer.reset();
     if(this.orbitalToastRoot?.isValid){this.clear(this.orbitalToastRoot);this.orbitalToastRoot.active=false;}
-    const overlay=this.panel(this.root,0,0,1600,900,{name:'modal-overlay',fill:'#070D16E8',lineWidth:0,radius:0});
+    const overlay=this.panel(this.root,0,0,1600,900,{name:'modal-overlay',fill:'#070D1666',lineWidth:0,radius:0});
     overlay.addComponent<BlockInputEvents>(BlockInputEvents);
     const surface=this.texturePanel(overlay,(1600-width)/2,(900-height)/2,width,height,{name:'modal-surface',fill:'#0B141CEB',stroke:'#8A847350',lineWidth:1,radius:5,shadow:true,materialOpacity:.66});
     this.label(surface,'◆',29,24,18,25,{size:11,color:ORBITAL_PALETTE.orange,verticalAlign:'center'});
@@ -211,20 +212,24 @@ export class OrbitalUI extends GameUI {
     overlay.on(Node.EventType.ACTIVE_IN_HIERARCHY_CHANGED,()=>{
       if(this.orbitalToastRoot?.isValid)this.orbitalToastRoot.active=!this.orbitalHasModal();
     });
-    const close=()=>{if(closed)return;closed=true;this.animateOut(surface,()=>{
+    // The veil and dialog leave together. Fading only the surface left a
+    // near-black veil above a newly drawn scene and its departing customer.
+    const close=()=>{if(closed)return;closed=true;this.animateOut(overlay,()=>{
       if(overlay.isValid){overlay.removeFromParent();overlay.destroy();}
       release();
     });};
-    if(!options.disableClose)this.button(surface,'×',width-65,19,39,39,close,{tone:'quiet',size:30});
-    this.animateIn(surface);return{overlay,body,close};
+    if(!options.disableClose)this.button(surface,'×',width-70,17,44,44,close,{tone:'quiet',size:30});
+    this.animateIn(overlay);return{overlay,body,close};
   }
 
   override animateIn(node:Node,delay=0):void {
     const opacity=node.getComponent<UIOpacity>(UIOpacity)??node.addComponent<UIOpacity>(UIOpacity);
     Tween.stopAllByTarget(node);Tween.stopAllByTarget(opacity);
     if(this.reducedMotion){opacity.opacity=255;return;}
-    // The interactive geometry stays fixed while the panel powers up.
-    opacity.opacity=0;tween<UIOpacity>(opacity).delay(delay).to(.2,{opacity:255},{easing:'quadOut'}).start();
+    // Keep dialogs readable from their very first frame, including when the
+    // software renderer has not advanced TweenSystem's initial tick yet.
+    // The interactive geometry stays fixed during the subtle power-up.
+    opacity.opacity=224;tween<UIOpacity>(opacity).delay(delay).to(.2,{opacity:255},{easing:'quadOut'}).start();
   }
   override animateOut(node:Node,completed:()=>void,duration=.16):void {
     if(!node.isValid||this.reducedMotion){completed();return;}
