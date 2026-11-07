@@ -270,7 +270,10 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.ui.label(g,s.cash.toFixed(s.cash%1?2:0),600,28,122,36,{size:28,mono:true,color:'#FFCB8E',glow:'#E0893A88',verticalAlign:'center',wrap:false,overflow:'shrink'});
     // Round instrument keys on the right; captions appear on hover.
     const key=(icon:HudIcon,x:number,tip:string,fn:()=>void,name:string)=>{
-      const b=this.button(p,'',x,18,64,64,fn,{tone:'quiet',name});this.ui.attachIcon(b,icon,40);this.ui.tooltip(b,tip);return b;
+      const b=this.button(p,'',x,18,64,64,fn,{tone:'quiet',name});this.ui.attachIcon(b,icon,40);this.ui.tooltip(b,tip);
+      // Touch screens have no hover: print a short caption under each key instead.
+      if(this.ui.touch)this.ui.label(p,tip.split(' ')[0].replace(/：.*/,''),x-12,84,88,22,{size:15,color:'#E4DFD2',align:'center',verticalAlign:'center',wrap:false,outline:'#05080B',outlineWidth:2});
+      return b;
     };
     key('handbook',1222,'货物图鉴',()=>openGoodsHandbook(this),'button-货物图鉴');
     const station=key('alert',1310,`站务 · 关注度 ${s.risk}/100`,()=>this.stationDetails(),'button-站务');
@@ -525,8 +528,9 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.inspectionFx??=new InspectionFeedback(this.ui);this.inspectionFx.reducedMotion=this.prefs.reducedMotion;this.inspectionFx.bind(p,inspectionArt,this.inspectionShadow);
     this.zoomOut=this.button(p,'−',420,654,48,40,()=>this.changeZoom(-.1),{tone:'quiet'});
     this.zoomIn=this.button(p,'＋',476,654,48,40,()=>this.changeZoom(.1),{tone:'quiet'});
-    this.button(p,'旋转 R',540,654,120,40,()=>{this.pose.angle+=30;this.applyInspectionPose();},{tone:'quiet',size:16});
-    this.button(p,this.back?'翻回正面 F':'翻到背面 F',668,654,152,40,()=>{this.back=!this.back;this.render();},{tone:'quiet',size:16});
+    const key=(k:string)=>this.ui.touch?'':` ${k}`;
+    this.button(p,`旋转${key('R')}`,540,654,120,40,()=>{this.pose.angle+=30;this.applyInspectionPose();},{tone:'quiet',size:16,name:'button-旋转 R'});
+    this.button(p,`${this.back?'翻回正面':'翻到背面'}${key('F')}`,668,654,152,40,()=>{this.back=!this.back;this.render();},{tone:'quiet',size:16,name:this.back?'button-翻回正面 F':'button-翻到背面 F'});
     this.button(p,'实物归位',828,654,122,40,()=>{this.resetInspection(it.uid);this.render();},{tone:'quiet',size:16});
     this.scaleLabel=this.ui.label(p,'',966,654,98,40,{size:13,color:C.muted,align:'center',verticalAlign:'center',wrap:false}).getComponent<Label>(Label)!;this.updateZoomControls();
     this.toolInteraction(p,it,draft);

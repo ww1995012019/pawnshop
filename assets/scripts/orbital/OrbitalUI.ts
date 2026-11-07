@@ -60,6 +60,8 @@ export class OrbitalUI extends GameUI {
   private orbitalToastRoot:Node|null=null;
   private monoFont:Font|null=null;
   private tooltipNode:Node|null=null;
+  /** H5 touch layout: '' on desktop, 'phone' or 'tablet' when the primary pointer is coarse. */
+  readonly touch:''|'phone'|'tablet';
 
   constructor(root:Node,assets:UIAssets={}) {
     super(root,assets);
@@ -68,6 +70,8 @@ export class OrbitalUI extends GameUI {
     this.orbitalRemoteRoot=(assets.remoteRoot??'./resources').replace(/\/$/,'');
     this.orbitalStandalone=assets.standalone??!!host.__GREYLINE_WEB__;
     this.orbitalExt=host.__GREYLINE_ART_EXT__==='webp'?'webp':'png';
+    const touch=(globalThis as {__ORBITAL_TOUCH__?:string}).__ORBITAL_TOUCH__;
+    this.touch=touch==='phone'||touch==='tablet'?touch:'';
   }
 
   override async preload():Promise<void> {
@@ -101,7 +105,14 @@ export class OrbitalUI extends GameUI {
   override clear(parent:Node):void{this.pointer.clearSubtree(parent);super.clear(parent);}
 
   override label(parent:Node,text:string,x:number,y:number,width:number,height:number,options:OrbitalLabelOptions={}):Node {
-    const size=options.size??21;
+    let size=options.size??21;
+    // On phones the 1600×900 canvas shows at roughly 0.4×. Small text is enlarged; boxes keep
+    // their geometry and SHRINK labels fit back down where space is short. Clamped labels
+    // (dialogue, baselines) keep their size so no text is cut.
+    if(this.touch&&options.overflow!=='clamp'&&size<24){
+      const grown=Math.min(24,size*(this.touch==='phone'?1.32:1.14)),ratio=grown/size;
+      size=grown;options={...options,size,lineHeight:options.lineHeight?options.lineHeight*ratio:undefined};
+    }
     // A compact row must not shrink merely because paragraph leading exceeds its box.
     // Leave explicit paragraph/wrapping choices and the caller's top/centre anchor intact.
     const singleLine=options.wrap===false||(!text.includes('\n')&&height<size*1.8&&options.wrap!==true&&options.overflow!=='resize');

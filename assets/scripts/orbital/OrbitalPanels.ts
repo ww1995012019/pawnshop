@@ -578,7 +578,7 @@ export class OrbitalPanels {
         cancel:()=>{if(preview.isValid)preview.clear();},
       });
     });
-    this.row(p,'拖动实物入格 · R 旋转 · 红色斜纹表示重叠或越界',47,588,680,22,15,C.muted);
+    this.row(p,this.h.ui.touch?'拖动实物入格 · 右侧“旋转 90°”转向 · 红色表示重叠或越界':'拖动实物入格 · R 旋转 · 红色斜纹表示重叠或越界',47,588,680,22,15,C.muted);
     this.h.ui.rail(p,30,622,720,149,{fill:'#121A1CA8',stroke:'#8B86704A',name:'warehouse-sales-rack'});
     this.row(p,'销售陈列 / 8 × 3',47,629,680,25,16,C.orange);
     const sale=s.inventory.filter(it=>it.location==='display');
