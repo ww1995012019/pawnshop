@@ -1,0 +1,3 @@
+# Generated deployment output contains upstream shader/string formatting.
+# Review and whitespace-check the Creator source, not minified output.
+play/** linguist-generated=true -whitespace
