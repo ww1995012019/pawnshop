@@ -1,10 +1,12 @@
-import {Canvas,Color,EventKeyboard,EventTouch,game,Graphics,input,Input,KeyCode,Label,Node,UIOpacity,UITransform,Vec2,Vec3,view} from 'cc';
+import {Button,Canvas,Color,EventKeyboard,EventTouch,game,Graphics,input,Input,KeyCode,Label,Node,UIOpacity,UITransform,Vec2,Vec3,view} from 'cc';
 import type {OrbitalHost} from './ui-types';
 import type {OrbitalItem,OrderDef,PageId,RecipeDef} from './types';
 import {getDef,getOrder,materials,recipes,orderDefs,orderEarliest} from './data';
 import {canPlace,estimate,findItem,itemValue} from './model';
 import {ordersForGroup,selectedOrderId} from './OrderPresentation';
 import type {OrderGroup} from './OrderPresentation';
+import {WorkbenchFeedback,type WorkbenchStage} from './WorkbenchFeedback';
+import {getItemHitBounds} from './ItemHitBounds';
 
 const C={text:'#D6D2C7',muted:'#9BA6A4',cyan:'#76BABB',orange:'#C38A4D',purple:'#AEA4B4',line:'#737C7350',panel:'#101B22B8',deep:'#0B141CD9',red:'#D18D77'};
 const statusText={available:'可接取',active:'进行中',done:'已交付',failed:'已过期'};
@@ -36,9 +38,12 @@ export class OrbitalPanels {
   private cabinet:'isolation'|'pawn'='isolation';
   private dragCancel:(()=>void)|null=null;
   private dragCanvas:HTMLCanvasElement|null=null;
+  private readonly workbenchFeedback:WorkbenchFeedback;
+  private repairTransition:{uid:string;stage:number;before:number;kind:WorkbenchStage;material:string;carrier:Node|null;devices:Node[]}|null=null;
   private readonly cancelFromWindow=()=>this.cancelDrag();
   private readonly visibilityChanged=()=>{if(document.hidden)this.cancelDrag();};
   constructor(private readonly h:OrbitalHost){
+    this.workbenchFeedback=new WorkbenchFeedback(h.ui);
     input.on(Input.EventType.KEY_DOWN,this.key,this);
     if(typeof window!=='undefined'){
       window.addEventListener('pointercancel',this.cancelFromWindow,true);window.addEventListener('touchcancel',this.cancelFromWindow,true);
@@ -48,9 +53,10 @@ export class OrbitalPanels {
     this.dragCanvas=game.canvas;
     this.dragCanvas?.addEventListener('pointerleave',this.cancelFromWindow);this.dragCanvas?.addEventListener('mouseleave',this.cancelFromWindow);
   }
-  setPage(page:PageId):void{if(page!==this.page)this.cancelDrag();this.page=page;if(page!=='warehouse')this.scanner=null;}
+  setPage(page:PageId):void{if(page!==this.page){this.cancelDrag();this.workbenchFeedback.clear();this.discardRepairTransition();}this.page=page;if(page!=='warehouse')this.scanner=null;}
   draw(page:PageId,parent:Node):void {
     this.cancelDrag();
+    this.workbenchFeedback.clear();
     this.page=page;this.parent=parent;this.scanner=null;
     if(page==='repair')this.repair(parent);
     if(page==='warehouse')this.warehouse(parent);
@@ -60,6 +66,7 @@ export class OrbitalPanels {
   }
   update(dt:number):void {
     this.clock+=Math.min(.1,dt);
+    this.workbenchFeedback.update(dt,this.h.prefs.reducedMotion);
     if(this.scanner?.node.isValid){
       this.scanner.clear();
       if(!this.h.prefs.reducedMotion&&this.clock<this.scanUntil){
@@ -71,6 +78,7 @@ export class OrbitalPanels {
     }
   }
   dispose():void {
+    this.workbenchFeedback.clear();this.discardRepairTransition();
     this.cancelDrag();input.off(Input.EventType.KEY_DOWN,this.key,this);
     this.dragCanvas?.removeEventListener('pointerleave',this.cancelFromWindow);this.dragCanvas?.removeEventListener('mouseleave',this.cancelFromWindow);this.dragCanvas=null;
     if(typeof window!=='undefined'){
@@ -216,13 +224,19 @@ export class OrbitalPanels {
     this.h.ui.panel(p,306,205,848,482,{fill:'#0D171B24',lineWidth:0,name:'repair-workspace'});
     this.h.ui.texturePanel(p,1170,130,400,640,{skin:'glass',fill:'#10191DD4',stroke:C.line,materialOpacity:.46,name:'repair-job-sheet'});
     this.row(p,'REPAIR DOCKET / 原物修复',1190,146,360,31,15,C.orange);
-    if(!item){this.text(p,'从仓库选择物件，或到订单页接取委修单。',353,365,750,80,25,C.muted,'center');return;}
+    if(!item){this.discardRepairTransition();this.text(p,'从仓库选择物件，或到订单页接取委修单。',353,365,750,80,25,C.muted,'center');return;}
     const def=getDef(item.defId),recipe=recipes.find(r=>r.kind==='repair'&&(r.id===def.recipeId||r.itemId===item.defId));
     const progress=s.repairProgress[item.uid]||0;
     this.h.ui.texturePanel(p,326,218,480,67,{skin:'strip',fill:'#0C151CC2',lineWidth:0,materialOpacity:.24,name:'repair-object-label'});
     this.row(p,`${def.id} · ${def.name}`,341,222,450,31,23);
     this.row(p,this.ownership(item),341,257,450,23,14,item.owner==='shop'?C.muted:C.purple);
-    this.h.ui.object(p,item.defId,466,256,516,336,{back:progress>0,repaired:item.repaired,damaged:!item.working});
+    const visible=getItemHitBounds(item.defId,progress>0,336),ground=584;
+    const objectY=ground-(168+visible.y+visible.height),shadowX=724+visible.x+visible.width/2;
+    const contact=this.h.ui.container(p,shadowX,ground+1,1,1,'repair-contact-shadow').addComponent<Graphics>(Graphics);
+    const contactWidth=Math.min(153,visible.width*.46);
+    contact.fillColor=new Color('#030A0D35');contact.ellipse(0,-1,contactWidth,13);contact.fill();
+    contact.fillColor=new Color('#030A0D68');contact.ellipse(0,0,contactWidth*.76,7);contact.fill();
+    const object=this.h.ui.object(p,item.defId,466,objectY,516,336,{back:progress>0,repaired:item.repaired,damaged:!item.working});object.name='repair-original-object';
     this.h.ui.texturePanel(p,334,610,790,65,{skin:'strip',fill:'#0A141BD4',stroke:'#7D82742D',materialOpacity:.37,name:'repair-process-rail'});
     this.line(p,357,630,721,'#81887748');
     (recipe?.steps||['检查物件','选择兼容配方','复核条件']).forEach((step,i)=>{
@@ -245,19 +259,18 @@ export class OrbitalPanels {
       });
       this.row(p,item.repaired?`工时已结算 ${recipe.ap} AP · 无额外工费`:`工时 ${recipe.ap} AP · 自修无额外工费`,1190,487,360,27,17,C.muted);
       const enough=Object.entries(recipe.materials).every(([id,q])=>(s.materials[id]||0)>=q);
-      this.button(p,item.repaired?'✓ 复测通过 · 本件已修复':'确认维修并复测',1190,533,360,48,()=>{
-        this.h.dispatch({type:'REPAIR',uid:item.uid,recipeId:recipe.id});if(findItem(this.h.state,item.uid)?.repaired)this.effect('repair',{x:526,y:280,width:390,height:275});
-      },'gold',progress<3||item.repaired||!enough||s.ap<recipe.ap);
+      if(!item.repaired)this.button(p,'确认维修并复测',1190,533,360,48,()=>this.h.dispatch({type:'REPAIR',uid:item.uid,recipeId:recipe.id}),'gold',progress<3||!enough||s.ap<recipe.ap);
+      else{
+        const next=s.inventory.find(candidate=>candidate.uid!==item.uid&&candidate.owner!=='pawn'&&!candidate.repaired&&!candidate.working&&candidate.sourceVerified&&!candidate.sealed&&candidate.location!=='isolation');
+        if(next)this.h.button(p,`下一件 · ${getDef(next.defId).name}`,1190,533,360,48,()=>this.h.select(next.uid),{tone:'gold',name:'next-repair-item',size:19});
+        else this.button(p,'返回仓库',1190,533,360,48,()=>this.h.navigate('warehouse',item.uid),'gold');
+      }
       if(!item.repaired&&progress===0){
         this.h.ui.line(p,865,346,902,346,'#C38A4D80',1);
         this.button(p,'拆开检修盖',902,320,190,52,()=>this.repairStep(item,0),'gold');
         this.repairHint(p,'01 / 观察接缝，取下检修盖');
       }else if(!item.repaired&&progress===1)this.replacementInteraction(p,item,recipe);
       else if(!item.repaired&&progress===2)recipe.id==='REC-002'||recipe.id==='REC-005'?this.calibrationInteraction(p,item,recipe):this.weldInteraction(p,item);
-      else if(item.repaired){
-        this.repairHint(p,'修复标记已写回原物',C.cyan);
-        this.drawWave(p,936,330,180,118,true);
-      }
     }else{
       this.text(p,'当前没有匹配的维修配方。\n可以记录证据后作为原件保留，或拆解回收材料。',1190,390,360,120,19,C.muted);
       this.button(p,'前往鉴定台',1190,533,360,48,()=>this.h.navigate('inspect',item.uid),'green');
@@ -267,18 +280,57 @@ export class OrbitalPanels {
     const craft=recipes.find(r=>r.kind==='craft');
     if(craft)this.button(p,'组装维护套组…',1190,659,360,47,()=>this.confirmCraft(craft),'quiet');
     this.paragraph(p,'物件归属、真伪与来源不会因维修自动改变',1190,718,360,40,15,C.muted);
-    this.materialShelf(p,30,701,1124,recipe,item.repaired);
+    this.materialShelf(p,30,701,1124,item.repaired?undefined:recipe,false);
+    const transition=this.repairTransition;
+    if(transition?.uid===item.uid&&progress>transition.before){
+      this.repairTransition=null;
+      this.workbenchFeedback.play(transition.kind,p,object,item.defId,transition.material,this.h.prefs.reducedMotion,transition.devices);
+      if(transition.carrier?.isValid){transition.carrier.removeFromParent();transition.carrier.destroy();}
+    }else if(transition&&transition.uid!==item.uid){
+      this.discardRepairTransition();
+    }
   }
   private repairStep(item:OrbitalItem,stage:number):void {
+    if(this.h.busy)return;
     const before=this.h.state.repairProgress[item.uid]||0;
+    const def=getDef(item.defId),recipe=recipes.find(r=>r.kind==='repair'&&(r.id===def.recipeId||r.itemId===item.defId));
+    const kind:WorkbenchStage=stage===0?'cover':stage===1?'insert':recipe?.id==='REC-002'||recipe?.id==='REC-005'?'calibrate':'circuit';
+    this.discardRepairTransition();
+    const carry=this.carryRepairDevice(kind);
+    this.repairTransition={uid:item.uid,stage,before,kind,material:Object.keys(recipe?.materials||{}).find(id=>id!=='MAT-004')||'MAT-003',...carry};
     this.h.dispatch({type:'REPAIR_STEP',uid:item.uid,stage});
-    if((this.h.state.repairProgress[item.uid]||0)>before)this.effect(stage===2?'pulse':'repair',{x:525,y:280,width:390,height:280});
+    if((this.h.state.repairProgress[item.uid]||0)<=before)this.discardRepairTransition();
+  }
+  private discardRepairTransition():void {
+    const pending=this.repairTransition;this.repairTransition=null;if(!pending)return;
+    for(const node of pending.devices)if(node.isValid){node.removeFromParent();node.destroy();}
+    if(pending.carrier?.isValid){pending.carrier.removeFromParent();pending.carrier.destroy();}
+  }
+  private carryRepairDevice(kind:WorkbenchStage):{carrier:Node|null;devices:Node[]} {
+    const names:Partial<Record<WorkbenchStage,string>>={insert:'repair-part-slot',circuit:'weld-track',calibrate:'calibration-instrument'};
+    const name=names[kind],parent=this.parent;if(!name||!parent?.isValid)return{carrier:null,devices:[]};
+    const find=(n:Node):Node|undefined=>n.name===name?n:n.children.map(find).find(Boolean);
+    const device=find(parent);if(!device)return{carrier:null,devices:[]};
+    // Render removes the old page synchronously. Carry the real instrument,
+    // not a second drawing of its coordinates, across that scene rebuild.
+    this.h.ui.pointer.clearSubtree(device);
+    const freeze=(n:Node):void=>{
+      const button=n.getComponent<Button>(Button);if(button){button.interactable=false;button.enabled=false;}
+      const action=n as unknown as {__action?:()=>void;__enabled?:boolean};delete action.__action;action.__enabled=false;
+      for(const event of [Node.EventType.TOUCH_START,Node.EventType.TOUCH_MOVE,Node.EventType.TOUCH_END,Node.EventType.TOUCH_CANCEL,Node.EventType.MOUSE_DOWN,Node.EventType.MOUSE_UP,Node.EventType.MOUSE_MOVE,Node.EventType.MOUSE_ENTER,Node.EventType.MOUSE_LEAVE,Node.EventType.MOUSE_WHEEL])n.off(event);
+      for(const child of n.children)freeze(child);
+    };
+    freeze(device);
+    const carrier=this.h.ui.container(this.h.ui.root,0,0,1600,900,'workbench-transition-carry');
+    device.setParent(carrier,true);carrier.active=false;
+    return{carrier,devices:[device]};
   }
   private replacementInteraction(p:Node,item:OrbitalItem,recipe:RecipeDef):void {
     this.h.ui.texturePanel(p,355,306,144,206,{skin:'socket',fill:'#141C20B8',stroke:'#777F7150',materialOpacity:.80,name:'replacement-parts-tray'});this.row(p,'替换件托盘',365,318,124,28,15,C.muted,'center');
     const slot=this.h.ui.texturePanel(p,878,360,126,114,{skin:'socket',fill:'#0C181E88',stroke:C.cyan,materialOpacity:.77,name:'repair-part-slot'});
     this.row(slot,'兼容插槽',10,75,106,27,16,C.cyan,'center');
     const sg=this.h.ui.container(slot,0,0,126,114,'replacement-socket-outline').addComponent<Graphics>(Graphics);sg.lineWidth=2;sg.strokeColor=new Color(C.cyan);sg.roundRect(28,-59,70,43,6);sg.stroke();
+    this.h.ui.container(slot,63,37.5,1,1,'repair-slot-contact');
     const part=this.h.ui.texturePanel(p,370,380,112,106,{skin:'socket',fill:'#273036E8',stroke:'#C38A4D90',materialOpacity:.57,name:'replacement-coil'});
     const materialId=Object.keys(recipe.materials).find(id=>id!=='MAT-004')||'MAT-003';
     this.h.ui.materialIcon(part,materialId,19,10,74,62);
@@ -319,6 +371,7 @@ export class OrbitalPanels {
   private calibrationInteraction(p:Node,item:OrbitalItem,recipe:RecipeDef):void {
     const optical=recipe.id==='REC-002';
     const instrument=this.h.ui.texturePanel(p,900,305,280,183,{skin:'socket',fill:'#0C171CEB',stroke:'#738C8055',materialOpacity:.84,name:'calibration-instrument'});instrument.setScale(.8,.8,1);
+    this.h.ui.container(instrument,140,79,1,1,'calibration-contact');
     const g=this.h.ui.container(instrument,0,0,280,183,'calibration-readout').addComponent<Graphics>(Graphics);let offset=optical?30:40;
     const readout=this.row(instrument,optical?'三色标靶对齐':'配重置于误差圈',8,149,264,25,18,C.orange,'center').getComponent<Label>(Label)!;
     const paint=()=>{

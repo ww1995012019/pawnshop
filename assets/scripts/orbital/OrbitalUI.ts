@@ -1,7 +1,7 @@
 import {
   assetManager, BlockInputEvents, Button, Color, EventTouch, Font, Graphics,
   ImageAsset, Label, Mask, Node, Rect, resources, Size, Sprite, SpriteFrame, Texture2D,
-  Tween, tween, UIOpacity, UITransform, Vec2,
+  Tween, tween, UIOpacity, UITransform, Vec2, Vec3,
 } from 'cc';
 import {
   GameUI, type UIAssets, type UIColour, type ButtonTone, type ButtonOptions,
@@ -515,7 +515,10 @@ export class OrbitalUI extends GameUI {
   private orbitalPress(view:OrbitalButton,pressed:boolean):void {
     const opacity=view.visual.getComponent<UIOpacity>(UIOpacity)??view.visual.addComponent<UIOpacity>(UIOpacity);
     Tween.stopAllByTarget(opacity);
-    if(this.reducedMotion){opacity.opacity=255;return;}
+    Tween.stopAllByTarget(view.visual);
+    if(this.reducedMotion){opacity.opacity=255;view.visual.setPosition(0,0);return;}
+    // Only the painted keycap moves; the button's input rectangle stays pinned.
+    tween<Node>(view.visual).to(pressed?.04:.09,{position:new Vec3(0,pressed?-2:0,0)},{easing:'quadOut'}).start();
     tween<UIOpacity>(opacity).to(pressed?.055:.12,{opacity:pressed?232:255},{easing:'quadOut'}).start();
   }
   private orbitalSkin(parent:Node,kind:OrbitalSurface|'amber'|'graphite',x:number,y:number,width:number,height:number,opacity=1):Node|null {

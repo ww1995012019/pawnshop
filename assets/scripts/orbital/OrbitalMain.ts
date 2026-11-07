@@ -9,6 +9,8 @@ import type {OrbitalAction,OrbitalItem,OrbitalPrefs,OrbitalState,PageId,ToolId} 
 import type {OrbitalHost} from './ui-types';
 import {constrain,type InspectionRect} from './InspectionGeometry';
 import {getItemHitBounds} from './ItemHitBounds';
+import {InspectionFeedback} from './InspectionFeedback';
+import {GamePresentation} from './GamePresentation';
 
 const INSPECTION_AREA:InspectionRect={x:212,y:200,width:1008,height:440};
 const INSPECTION_LOCAL:InspectionRect={x:-202,y:-202,width:404,height:404};
@@ -22,7 +24,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
   ui!:OrbitalUI;
   state:OrbitalState=createOrbital();
   selected='';
-  prefs:OrbitalPrefs={sound:false,reducedMotion:false,largeText:false};
+  prefs:OrbitalPrefs={sound:true,reducedMotion:false,largeText:false};
   busy=false;
   private shell!:Node;
   private content!:Node;
@@ -48,6 +50,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
   private pose={...INSPECTION_HOME};
   private poseUid='';
   private inspectionShadow:Node|null=null;
+  private inspectionFx:InspectionFeedback|null=null;
   private objectDragging=false;
   private focus=-1;
   private focused:Node|null=null;
@@ -56,6 +59,8 @@ export class OrbitalMain extends Component implements OrbitalHost {
   private saveFailed=false;
   private audio!:AudioSource;
   private clips=new Map<string,AudioClip>();
+  private ambience:AudioSource|null=null;
+  private readonly presentation=new GamePresentation();
   private disposed=false;
   private counterForeground:SpriteFrame|null=null;
   private pointerCleanup:(()=>void)|null=null;
@@ -78,7 +83,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     input.on(Input.EventType.KEY_DOWN,this.onKey,this);void this.loadAudio();
     this.pointerCanvas=game.canvas;this.pointerCanvas?.addEventListener('pointerleave',this.cancelPointer);this.pointerCanvas?.addEventListener('mouseleave',this.cancelPointer);
     window.addEventListener('blur',this.cancelPointer);window.addEventListener('pointercancel',this.cancelPointer);window.addEventListener('resize',this.cancelPointer);
-    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v9',snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>this.dispatch(a),open:(p:PageId,uid?:string)=>this.navigate(p,uid),reset:(seed='ORBITAL-TUTORIAL')=>{this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
+    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v10',snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>this.dispatch(a),open:(p:PageId,uid?:string)=>this.navigate(p,uid),reset:(seed='ORBITAL-TUTORIAL')=>{this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
     (window as unknown as {__ORBITAL__:typeof debug;__GREYLINE__:typeof debug}).__ORBITAL__=debug;(window as unknown as {__GREYLINE__:typeof debug}).__GREYLINE__=debug;
     document.dispatchEvent(new CustomEvent('greyline-ready'));
     void this.play(()=>this.motion.sceneEntry());
@@ -100,6 +105,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
   dispatch(action:OrbitalAction):void{
     if(this.busy)return;
     const before=this.state,oldItem=before.trade?.item||(before.trade?.selectedUid?findItem(before,before.trade.selectedUid):null);
+    const counterOrigin=this.counterObject?.isValid?{x:this.counterObject.position.x+210,y:-this.counterObject.position.y+158,size:316}:undefined;
     this.state=reduceOrbital(before,action);this.save();
     if(action.type==='ARRIVE'&&this.state.trade){this.selected=this.state.trade.item?.uid||this.selected;this.offer=this.state.trade.price;this.chosenEvidence=undefined;this.page='counter';this.resetInspection(this.selected);}
     if(action.type==='SELECT_TRADE'){this.selected=action.uid;this.offer=this.state.trade?.price||0;this.chosenEvidence=undefined;this.page='trade';}
@@ -107,16 +113,18 @@ export class OrbitalMain extends Component implements OrbitalHost {
     if(before.trade&&!this.state.trade&&['DELIVER','REFUSE','PAWN'].includes(action.type))this.page='counter';
     if(action.type==='SETTLE'&&(this.state.phase==='report'||this.state.phase==='ending'))this.page='report';
     if(action.type==='NEXT'&&this.state.day!==before.day){this.page='counter';this.chosenEvidence=undefined;this.drafts.clear();}
-    this.sound(action.type==='DELIVER'||action.type==='DELIVER_ORDER'?'coin':action.type==='CHECK'?'check':'click');
+    this.sound(action.type==='DELIVER'||action.type==='DELIVER_ORDER'?'coin':action.type==='CHECK'?'check':action.type==='REFUSE'?'reject':action.type==='ARRIVE'?'open':action.type==='REPAIR_STEP'?'drop':'click');
     if(action.type==='REFUSE'&&before.trade)this.ui.setMood(before.trade.npcId,'reject');
     if(action.type==='DELIVER'&&before.trade)this.ui.setMood(before.trade.npcId,'happy');
     this.render();
     const after=this.state;
     if(action.type==='ARRIVE'&&after.trade&&!before.trade){
       const actor=this.actor,it=after.trade.item;this.setCounterVisible(false);
-      void this.play(async active=>{if(actor)await this.motion.enter(actor);if(active()&&it)await this.motion.handoff(it.defId,{x:675,y:450},{x:900,y:556},()=>{if(active())this.setCounterVisible(true);},316);if(active())this.setCounterVisible(true);});
+      void this.play(async active=>{if(actor)await this.motion.enter(actor);if(active()&&it)await this.motion.handoff(it.defId,{x:675,y:450},{x:900,y:556},()=>{if(active()){this.setCounterVisible(true);this.sound('drop');}},316);if(active())this.setCounterVisible(true);});
     }else if(action.type==='DELIVER'&&before.trade&&!after.trade&&after.completedTrades.includes(before.trade.id)){
-      void this.play(async active=>{await this.motion.deal(after.cash-before.cash,oldItem?.defId);if(active())await this.motion.exit(before.trade!.npcId);});
+      void this.play(async active=>{await this.motion.deal(after.cash-before.cash,oldItem?.defId,counterOrigin);if(active())await this.motion.exit(before.trade!.npcId);});
+    }else if(action.type==='OFFER'&&after.trade&&before.trade&&after.trade.rounds>before.trade.rounds&&this.actor){
+      const actor=this.actor;void this.motion.react(actor,after.trade.locked?'agree':after.trade.rounds>=2?'refuse':'counter');
     }else if(action.type==='REFUSE'&&before.trade&&!after.trade){void this.play(()=>this.motion.exit(before.trade!.npcId));}
     else if(action.type==='CHECK'&&after.ap<=before.ap&&findItem(after,action.uid)?.evidence.includes(action.tool)){
       const effect=['magnify','uv','spectrum','probe','scale','pulse'][tools.findIndex(t=>t.id===action.tool)];this.effect(effect,this.content,this.inspectionEffectRect());
@@ -134,7 +142,12 @@ export class OrbitalMain extends Component implements OrbitalHost {
       }else if(after.notice)this.ui.toast(after.notice);
     }else if(after.notice&&after.notice!==before.notice)this.ui.toast(after.notice);
   }
-  effect(kind:string,parent:Node,at?:{x:number;y:number;width?:number;height?:number}):void{if(this.busy)return;void this.play(()=>this.motion.effect(kind,parent,at));}
+  effect(kind:string,parent:Node,at?:{x:number;y:number;width?:number;height?:number}):void{
+    if(this.busy)return;
+    // Local instrument beats are interruptible and do not freeze navigation.
+    if(this.motion.snapshot().nodes.some(n=>n.kind===kind))return;
+    void this.motion.effect(kind,parent,at);
+  }
   private async play(run:(active:()=>boolean)=>Promise<void>):Promise<void>{
     const epoch=++this.epoch;this.busy=true;this.ui.pointer.refresh();this.motion.configure({reducedMotion:this.prefs.reducedMotion});
     this.skipNode?.destroy();this.skipNode=this.ui.container(this.ui.root,1210,780,350,22,'skip-animation');
@@ -159,6 +172,8 @@ export class OrbitalMain extends Component implements OrbitalHost {
     if(this.chrome?.isValid){this.chrome.removeFromParent();this.chrome.destroy();}this.chrome=null;this.dialogueNodes=[];
         this.cancelPointer();this.ui.clear(this.shell);this.objectDragging=false;this.object=null;this.inspectionShadow=null;this.scaleLabel=null;this.zoomIn=null;this.zoomOut=null;this.actor=null;this.counterObject=null;this.counterShadow=null;this.counterTags=[];this.focused=null;
     this.ui.reducedMotion=this.prefs.reducedMotion;
+    this.presentation.reducedMotion=this.prefs.reducedMotion;
+    if(!this.prefs.sound)this.ambience?.stop();
     const image=this.page==='inspect'||this.page==='repair'?'orbital-workbench':this.page==='warehouse'?'orbital-warehouse':'orbital-counter';
     this.ui.image(this.shell,image,0,0,W,H,{fit:'cover'});
     if(this.page!=='counter'&&this.page!=='trade')this.ui.panel(this.shell,0,106,W,692,{fill:'#07101940',lineWidth:0,radius:0});
@@ -171,15 +186,23 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.motion.bindAmbient({parent:this.content,actor:this.actor||undefined,area:{x:310,y:160,width:860,height:500}});
   }
   private header():void{
-    const s=this.state,p=this.ui.panel(this.content,32,24,1536,56,{fill:'#0A141CEB',stroke:'#A0B0AA35',radius:5,name:'instrument-header'});
-    const logo=this.ui.container(p,17,10,39,36,'shop-orbit-mark').addComponent<Graphics>(Graphics);logo.lineWidth=1.3;logo.strokeColor=new Color(C.orange);logo.ellipse(17,-18,17,8);logo.stroke();logo.strokeColor=new Color('#D8D1C0');logo.circle(17,-18,11);logo.stroke();logo.fillColor=new Color(C.orange);logo.circle(34,-17,3);logo.fill();
-    this.row(p,'轨道旧货局',72,5,270,46,25,C.text);
-    this.row(p,'回环九号 / 下层旧港',277,10,220,36,12,C.muted);
-    this.row(p,'营业日',585,4,90,17,10,C.muted);this.row(p,`${String(s.day).padStart(2,'0')} / 21`,585,22,140,29,22,C.text);
-    this.row(p,'行动',760,4,110,17,10,C.muted);this.row(p,`${s.ap} / 12 AP`,760,22,145,29,22,C.cyan);
-    this.row(p,'可用现金',950,4,150,17,10,C.muted);this.row(p,`${s.cash.toFixed(s.cash%1?2:0)} Cr`,950,22,200,29,22,C.text);
-    this.button(p,`站务 · ${s.risk}`,1194,8,155,40,()=>this.stationDetails(),{tone:'quiet',size:15});
-    this.button(p,'设置',1370,8,144,40,()=>this.navigate('settings'),{tone:'quiet',size:15});
+    const s=this.state;
+    const p=this.ui.rail(this.content,32,20,392,60,{fill:'#0A141CF2',stroke:'#9B947653',name:'shop-nameplate'});
+    const logo=this.ui.container(p,17,12,39,36,'shop-orbit-mark').addComponent<Graphics>(Graphics);logo.lineWidth=1.3;logo.strokeColor=new Color(C.orange);logo.ellipse(17,-18,17,8);logo.stroke();logo.strokeColor=new Color('#D8D1C0');logo.circle(17,-18,11);logo.stroke();logo.fillColor=new Color(C.orange);logo.circle(34,-17,3);logo.fill();
+    this.row(p,'轨道旧货局',72,3,250,32,23,C.text);
+    this.row(p,'回环九号 · 下层旧港',73,35,245,18,11,C.muted);
+    const speaker=this.button(p,'',336,8,44,44,()=>{this.prefs.sound=!this.prefs.sound;this.savePrefs();this.sound('check');},{tone:'quiet',name:'button-切换声音'});
+    const sound=this.ui.container(speaker.getChildByName('tech-button-surface')||speaker,0,0,44,44,'sound-setting-icon').addComponent<Graphics>(Graphics);sound.fillColor=new Color(this.prefs.sound?C.cyan:C.muted);sound.moveTo(9,-18);sound.lineTo(15,-18);sound.lineTo(23,-12);sound.lineTo(23,-32);sound.lineTo(15,-26);sound.lineTo(9,-26);sound.close();sound.fill();sound.strokeColor=new Color(this.prefs.sound?C.cyan:C.muted);sound.lineWidth=2;
+    if(this.prefs.sound){sound.arc(23,-22,9,-.7,.7,false);sound.stroke();}else{sound.moveTo(28,-17);sound.lineTo(35,-27);sound.moveTo(35,-17);sound.lineTo(28,-27);sound.stroke();}
+    const meters=this.ui.rail(this.content,552,20,616,60,{fill:'#0A141CF2',stroke:'#9B947653',name:'player-resource-hud'});
+    this.row(meters,'营业日',16,5,105,18,11,C.muted);this.row(meters,`${String(s.day).padStart(2,'0')} / 21`,16,26,112,28,22,C.text);
+    this.ui.line(meters,137,12,137,48,'#A0B0AA30',1);
+    this.row(meters,`行动点   ${s.ap} / 12`,157,6,190,23,16,C.cyan);
+    for(let i=0;i<12;i++)this.ui.panel(meters,158+i*14,36,10,12,{fill:i<s.ap?'#76BABB':'#31454A',lineWidth:0,radius:1,name:`ap-cell-${i}`});
+    this.ui.line(meters,357,12,357,48,'#A0B0AA30',1);
+    this.row(meters,'可用现金',378,5,220,18,11,C.muted);this.row(meters,`${s.cash.toFixed(s.cash%1?2:0)} Cr`,378,26,220,28,22,C.text);
+    this.button(this.content,`站务 · ${s.risk}`,1210,24,170,52,()=>this.stationDetails(),{tone:'quiet',size:16});
+    this.button(this.content,'设置',1396,24,172,52,()=>this.navigate('settings'),{tone:'quiet',size:16});
   }
   private stationDetails():void{
     const s=this.state,m=this.ui.modal('站务与经营记录',{width:680,height:440});
@@ -191,8 +214,18 @@ export class OrbitalMain extends Component implements OrbitalHost {
   }
   private footer():void{
     const nav:[PageId,string][]=[['counter','柜台'],['inspect','鉴定'],['repair','维修'],['warehouse','仓储'],['orders','订单'],['report','日结']];
-    const p=this.ui.panel(this.content,400,824,800,56,{fill:'#0A141CF5',stroke:'#A0B0AA40',radius:6,name:'navigation-dock'});
-    nav.forEach(([page,title],i)=>this.button(p,`${String(i+1).padStart(2,'0')} ${title}`,8+i*132,6,124,44,()=>this.navigate(page),{tone:'quiet',selected:this.page===page,disabled:page==='inspect'&&!this.currentItem(),size:17}));
+    const p=this.ui.rail(this.content,400,816,800,72,{fill:'#091319F5',stroke:'#9B947669',name:'navigation-dock'});
+    nav.forEach(([page,title],i)=>{
+      const control=this.button(p,'',8+i*132,8,124,56,()=>this.navigate(page),{tone:'quiet',selected:this.page===page,disabled:page==='inspect'&&!this.currentItem(),name:`button-${String(i+1).padStart(2,'0')} ${title}`});
+      const face=control.getChildByName('tech-button-surface')||control;
+      if(page==='counter')this.ui.object(face,'ITM-009',5,7,43,41);
+      else if(page==='inspect')this.ui.toolIcon(face,'TOL-001',5,7,43,41);
+      else if(page==='repair')this.ui.toolIcon(face,'TOL-004',5,7,43,41);
+      else if(page==='warehouse')this.ui.object(face,'ITM-048',5,7,43,41);
+      else this.ui.icon(face,page==='orders'?'notes':'watch',10,10,32,35);
+      this.row(face,title,51,18,64,29,17,this.page===page?C.text:C.muted);
+      this.row(face,String(i+1),101,3,15,14,10,this.page===page?C.orange:C.muted,'right');
+    });
     this.row(this.content,this.saveFailed?'存档空间不足':'● 已保存',40,839,260,26,12,this.saveFailed?C.orange:C.muted);
     this.row(this.content,this.page==='inspect'?'拖动 · 滚轮缩放 · R 旋转 · F 翻面':'Esc 返回 · 空格快进动画',1230,839,330,26,11,C.muted,'right');
   }
@@ -241,7 +274,10 @@ export class OrbitalMain extends Component implements OrbitalHost {
       const line=t?t.line:s.notice||'回环九号下层港，旧货局今日开门。';
       const dialogue=this.ui.dialogueFrame(p,48,650,560,134);
       this.row(dialogue,t?`${npc.name}  /  ${npc.title}`:'营业广播',22,14,516,28,20,C.orange);
-      this.ui.label(dialogue,line,22,52,516,66,{size:18,lineHeight:27,color:C.text,wrap:true,overflow:'clamp'});this.dialogueNodes.push(dialogue);
+      const speech=this.ui.label(dialogue,line,22,50,516,60,{size:18,lineHeight:27,color:C.text,wrap:true,overflow:'clamp'}).getComponent<Label>(Label)!;
+      const hint=this.ui.label(dialogue,'',333,111,205,17,{size:11,color:C.muted,align:'right',wrap:false}).getComponent<Label>(Label)!;
+      this.presentation.speak(speech,line,`${t?.id||`broadcast-${s.day}-${s.cursor}`}:${line}`,hint);
+      dialogue.on(Node.EventType.TOUCH_END,()=>this.presentation.reveal());this.ui.bindPointer(dialogue,{cursor:'pointer'});this.dialogueNodes.push(dialogue);
     }
   }
   private tradeActions():void{
@@ -349,7 +385,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.inspectionShadow=this.ui.container(viewport,0,0,1,1,'inspection-object-shadow');this.inspectionShadow.addComponent<Graphics>(Graphics);
     const obj=this.ui.container(viewport,this.pose.x-INSPECTION_AREA.x,this.pose.y-INSPECTION_AREA.y,404,404,'InspectionObject');
     obj.getComponent<UITransform>(UITransform)!.setAnchorPoint(.5,.5);this.object=obj;
-    this.ui.object(obj,it.defId,-202,-202,404,404,{back:this.back,damaged:it.condition<.75&&!it.repaired,repaired:it.repaired});
+    const inspectionArt=this.ui.object(obj,it.defId,-202,-202,404,404,{back:this.back,damaged:it.condition<.75&&!it.repaired,repaired:it.repaired});inspectionArt.name='inspection-item-art';
     const hit=getItemHitBounds(it.defId,this.back,404),transform=obj.getComponent<UITransform>(UITransform)!;
     transform.setContentSize(hit.width,hit.height);transform.setAnchorPoint(-hit.x/hit.width,1+hit.y/hit.height);
     this.ui.bindDraggable(obj,()=>!this.busy);
@@ -358,15 +394,17 @@ export class OrbitalMain extends Component implements OrbitalHost {
       if(this.busy)return;
       for(let n=e.target as Node|null;n&&n!==obj;n=n.parent)if((n as unknown as {__action?:()=>void}).__action)return;
       pointerStart=e.getUILocation().clone();poseStart={x:this.pose.x,y:this.pose.y};dragged=false;tracking=true;this.pointerCleanup=releaseObject;
+      this.objectDragging=true;this.inspectionFx?.grab(true);this.applyInspectionPose();
     });
     obj.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{
       if(this.busy||!tracking)return;const pointer=e.getUILocation();dragged=dragged||Vec2.distance(pointerStart,pointer)>6;if(!dragged)return;
       this.objectDragging=true;this.pose.x=poseStart.x+pointer.x-pointerStart.x;this.pose.y=poseStart.y-pointer.y+pointerStart.y;this.applyInspectionPose();
     });
-    const releaseObject=()=>{tracking=false;this.pointerCleanup=null;this.objectDragging=false;this.applyInspectionPose();};
+    const releaseObject=()=>{tracking=false;this.pointerCleanup=null;this.objectDragging=false;this.inspectionFx?.grab(false);this.applyInspectionPose();};
     obj.on(Node.EventType.TOUCH_END,releaseObject);obj.on(Node.EventType.TOUCH_CANCEL,releaseObject);
     obj.on(Node.EventType.MOUSE_WHEEL,(e:EventMouse)=>{const delta=e.getScrollY();if(!this.busy&&delta!==0)this.changeZoom(delta>0?.08:-.08);});
     this.applyInspectionPose();
+    this.inspectionFx??=new InspectionFeedback(this.ui);this.inspectionFx.reducedMotion=this.prefs.reducedMotion;this.inspectionFx.bind(p,inspectionArt,this.inspectionShadow);
     this.zoomOut=this.button(p,'−',420,654,48,40,()=>this.changeZoom(-.1),{tone:'quiet'});
     this.zoomIn=this.button(p,'＋',476,654,48,40,()=>this.changeZoom(.1),{tone:'quiet'});
     this.button(p,'旋转 R',540,654,120,40,()=>{this.pose.angle+=30;this.applyInspectionPose();},{tone:'quiet',size:16});
@@ -396,7 +434,9 @@ export class OrbitalMain extends Component implements OrbitalHost {
   }
 
   private draft():Draft{const key=this.selected+'/'+this.tool;let d=this.drafts.get(key);if(!d){d={marks:new Set(),uv:0,peaks:[.1,.1,.1],probe:0,tared:false,weights:new Set(),load:0};this.drafts.set(key,d);}return d;}
-  private resetInspection(uid=this.selected):void{this.poseUid=uid;this.pose={...INSPECTION_HOME};this.zoom=1;this.back=false;this.object=null;this.objectDragging=false;}
+  updateInspectionFeedback(dt:number):void{this.inspectionFx?.update(dt);}
+  disposeInspectionFeedback():void{this.inspectionFx?.clear();this.inspectionFx=null;}
+  private resetInspection(uid=this.selected):void{this.inspectionFx?.clear();this.poseUid=uid;this.pose={...INSPECTION_HOME};this.zoom=1;this.back=false;this.object=null;this.objectDragging=false;}
   private inspectionLocalBounds():InspectionRect{const it=this.currentItem();return it?getItemHitBounds(it.defId,this.back,404):INSPECTION_LOCAL;}
   private inspectionPlacement(){return constrain({...this.pose,zoom:this.zoom},this.inspectionLocalBounds(),INSPECTION_AREA,{minZoom:.45,maxZoom:1.35,padding:8,defaults:{...INSPECTION_HOME,zoom:1}});}
   private inspectionEffectRect(){return this.inspectionPlacement().aabb;}
@@ -412,16 +452,24 @@ export class OrbitalMain extends Component implements OrbitalHost {
     if(this.scaleLabel?.isValid)this.scaleLabel.string=`${this.zoom.toFixed(1)}×`;
   }
   private changeZoom(n:number):void{this.zoom=Math.max(.45,Math.min(1.35,this.zoom+n));this.applyInspectionPose();}
-  private finishTool(it:OrbitalItem):void{this.dispatch({type:'CHECK',uid:it.uid,tool:this.tool});}
+  private finishTool(it:OrbitalItem):void{
+    const tool=this.tool,point=this.object&&this.inspectionFx?this.inspectionFx.point(this.object):{x:this.pose.x,y:this.pose.y},had=it.evidence.includes(tool);
+    this.dispatch({type:'CHECK',uid:it.uid,tool});
+    if(!had&&findItem(this.state,it.uid)?.evidence.includes(tool))this.inspectionFx?.contact(point,C.cyan,{x:1295+tools.findIndex(t=>t.id===tool)*46,y:305});
+  }
   private toolInteraction(p:Node,it:OrbitalItem,d:Draft):void{
     const already=it.evidence.includes(this.tool),tool=getTool(this.tool);
-    const widget=this.ui.panel(p,212,706,1008,90,{fill:'#0A151CF5',lineWidth:0,radius:3,name:'instrument-readout'});
+    const widget=this.ui.texturePanel(p,212,706,1008,90,{skin:'strip',materialOpacity:.32,fill:'#0A151CF5',stroke:'#6D8F8B70',lineWidth:1,radius:3,name:'instrument-readout'});
+    this.ui.line(widget,0,12,0,78,this.tool==='TOL-002'?C.purple:this.tool==='TOL-006'?C.orange:C.cyan,3);
     this.text(widget,this.tool==='TOL-001'?'侧光观察 / 点击三处接缝疑点，逐一记录痕迹。':tool.instruction,18,3,972,27,15,C.muted);
-    if(already){this.baseline(widget,'✓ 证据已保存 · 可以免费复测',18,66,620,20,C.cyan);this.button(widget,'复测读数',795,38,194,42,()=>this.effect(['magnify','uv','spectrum','probe','scale','pulse'][tools.findIndex(t=>t.id===this.tool)],p,this.inspectionEffectRect()),{tone:'quiet'});return;}
+    if(already){
+      if(this.tool==='TOL-004')this.probeInteraction(widget,d,true);
+      this.baseline(widget,'✓ 证据已保存 · 可以免费复测',18,66,620,20,C.cyan);this.button(widget,'复测读数',795,38,194,42,()=>this.effect(['magnify','uv','spectrum','probe','scale','pulse'][tools.findIndex(t=>t.id===this.tool)],p,this.inspectionEffectRect()),{tone:'quiet'});return;
+    }
     if(this.tool==='TOL-001'){
       const spots=[[.28,.34],[.68,.47],[.5,.73]];
       spots.forEach(([x,y],i)=>{
-        const found=d.marks.has(i),n=this.button(this.object!,'',404*(x-.5)-22.5,404*(y-.5)-22.5,45,45,()=>{d.marks.add(i);if(d.marks.size===3)this.finishTool(it);else this.render();},{tone:'quiet',disabled:found,name:`evidence-spot-${i+1}`});
+        let n:Node;const found=d.marks.has(i);n=this.button(this.object!,'',404*(x-.5)-22.5,404*(y-.5)-22.5,45,45,()=>{const at=this.inspectionFx?.point(n);d.marks.add(i);if(d.marks.size===3)this.finishTool(it);else this.render();if(at)this.inspectionFx?.contact(at,C.orange);},{tone:'quiet',disabled:found,name:`evidence-spot-${i+1}`});
         n.children[0].active=false;const g=this.ui.container(n,0,0,45,45,'side-light-reticle').addComponent<Graphics>(Graphics);
         g.fillColor=new Color(found?'#11252BCC':'#10232BEF');g.circle(22.5,-22.5,18);g.fill();g.lineWidth=1.7;g.strokeColor=new Color(found?C.green:C.orange);
         for(const [x,y,dx,dy]of [[5,-5,1,-1],[40,-5,-1,-1],[5,-40,1,1],[40,-40,-1,1]]){g.moveTo(x+dx*8,y);g.lineTo(x,y);g.lineTo(x,y+dy*8);g.stroke();}
@@ -430,6 +478,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
       });
       this.baseline(widget,`点击实物上的三处侧光疑点  ${d.marks.size}/3`,18,66,960,20,C.cyan);
     }else if(this.tool==='TOL-002'){
+      this.inspectionFx?.uv(this.object!,()=>d.uv,()=>this.back);
       const track=this.ui.panel(widget,22,52,572,20,{fill:'#242038',stroke:C.purple,radius:4});
       const slider=this.ui.panel(track,d.uv*520,-10,51,40,{fill:'#9A81CC',stroke:'#E0C8FC',radius:3,name:'UVScanner'});this.row(slider,'UV',0,0,51,40,17,C.background,'center');
       let scanStart=0,scanValue=0,scanning=false;this.ui.bindDraggable(slider,()=>!this.busy&&this.back);
@@ -449,13 +498,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
       });
       this.button(widget,'固定谱线',795,38,194,42,()=>this.finishTool(it),{disabled:!targets.every((n,i)=>Math.abs(d.peaks[i]-n)<.07)});
     }else if(this.tool==='TOL-004'){
-      for(let i=0;i<2;i++){
-        const plug=this.ui.panel(widget,23+i*250,47,64,39,{fill:i===0?'#C17D48':'#2D7C80',stroke:i===0?C.orange:C.cyan,radius:5,name:`probe-plug-${i}`});this.row(plug,i===0?'+':'−',0,0,64,39,28,C.text,'center');
-        const port=this.ui.panel(this.object!,-135+i*220,40,55,55,{fill:'#102C37',stroke:i===0?C.orange:C.cyan,radius:12,name:`probe-port-${i}`});this.row(port,d.probe&(1<<i)?'✓':'○',0,0,55,55,29,C.cyan,'center');
-        this.drag(plug,()=>this.ui.toast(i===0?'将正极探针拖到实物的橙色端口。':'将负极探针拖到实物的青色端口。'),e=>{if(port.getComponent<UITransform>(UITransform)!.hitTest(e.getLocation())){d.probe|=1<<i;this.render();}});
-        this.baseline(widget,d.probe&(1<<i)?'已连接':i===0?'拖向正极':'拖向负极',98+i*250,74,140,19,C.muted);
-        if(d.probe&(1<<i)){this.ui.line(this.object!,-107.5+i*220,95,-107.5+i*220,132,i===0?C.orange:C.cyan,2);}
-      }
+      this.probeInteraction(widget,d);
       this.button(widget,'读取回路',795,38,194,42,()=>this.finishTool(it),{disabled:d.probe!==3});
     }else if(this.tool==='TOL-005'){
       const target=[30,60,70][getDef(it.defId).sprite%3],sum=[...d.weights].reduce((a,n)=>a+n,0);
@@ -476,13 +519,34 @@ export class OrbitalMain extends Component implements OrbitalHost {
       this.button(widget,'通电采样',795,38,194,42,()=>this.finishTool(it),{disabled:d.load<.65||d.load>.85,size:17});
     }
   }
-  private drag(node:Node,click:()=>void,drop:(event:EventTouch)=>void):void{
+  private probeInteraction(widget:Node,d:Draft,readOnly=false):void {
+    if(!this.object||!this.inspectionFx)return;
+    for(let i=0;i<2;i++){
+      const color=i===0?C.orange:C.cyan,connected=()=>readOnly||!!(d.probe&(1<<i));
+      const port=this.ui.panel(this.object,-135+i*220,40,55,55,{fill:'#0B1922D9',stroke:color,radius:12,name:`probe-port-${i}`});
+      this.row(port,connected()?'●':i===0?'+':'−',0,0,55,55,connected()?24:29,connected()?C.green:color,'center');
+      if(readOnly){
+        this.inspectionFx.cable(()=>this.inspectionFx!.point(widget,55+i*250,0),()=>this.inspectionFx!.point(port),()=>true,color);continue;
+      }
+      const plug=this.ui.panel(widget,23+i*250,47,64,39,{fill:i===0?'#71503A':'#234C53',stroke:color,radius:5,name:`probe-plug-${i}`});
+      this.ui.line(plug,7,7,57,7,'#D8D8C487',1);this.row(plug,i===0?'+':'−',0,0,64,39,28,C.text,'center');
+      const origin=this.inspectionFx.point(plug);
+      this.inspectionFx.cable(()=>origin,()=>this.inspectionFx!.point(connected()?port:plug),connected,color);
+      this.drag(plug,()=>this.ui.toast(i===0?'将正极探针拖到实物的橙色端口。':'将负极探针拖到实物的青色端口。'),e=>{
+        if(port.getComponent<UITransform>(UITransform)!.hitTest(e.getLocation())){
+          const at=this.inspectionFx!.point(port);d.probe|=1<<i;this.render();this.inspectionFx?.contact(at,color);
+        }
+      },()=>this.inspectionFx?.refresh());
+      this.baseline(widget,connected()?'已插接':i===0?'拖向正极':'拖向负极',98+i*250,74,140,19,connected()?C.cyan:C.muted);
+    }
+  }
+  private drag(node:Node,click:()=>void,drop:(event:EventTouch)=>void,onMove?:()=>void):void{
     let origin=new Vec3(),start=new Vec3(),moved=false,tracking=false,index=0;
     const local=(e:EventTouch)=>{const u=e.getUILocation();return node.parent!.getComponent<UITransform>(UITransform)!.convertToNodeSpaceAR(new Vec3(u.x-W/2,u.y-H/2,0));};
     this.ui.bindDraggable(node,()=>!this.busy);
-    const restore=()=>{if(node.isValid){node.setPosition(origin);node.setSiblingIndex(index);}tracking=false;this.pointerCleanup=null;};
+    const restore=()=>{if(node.isValid){node.setPosition(origin);node.setSiblingIndex(index);}tracking=false;this.pointerCleanup=null;onMove?.();};
     node.on(Node.EventType.TOUCH_START,(e:EventTouch)=>{if(this.busy)return;origin=node.position.clone();start=local(e);moved=false;tracking=true;index=node.getSiblingIndex();this.pointerCleanup=restore;node.setSiblingIndex(node.parent!.children.length-1);});
-    node.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(this.busy||!tracking)return;const p=local(e),dx=p.x-start.x,dy=p.y-start.y;moved=moved||Math.hypot(dx,dy)>6;if(moved)node.setPosition(origin.x+dx,origin.y+dy);});
+    node.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(this.busy||!tracking)return;const p=local(e),dx=p.x-start.x,dy=p.y-start.y;moved=moved||Math.hypot(dx,dy)>6;if(moved)node.setPosition(origin.x+dx,origin.y+dy);onMove?.();});
     const finish=(e:EventTouch)=>{if(!tracking)return;restore();if(!this.busy&&e.getEventCode()===Input.EventType.TOUCH_END){if(moved)drop(e);else click();}};
     node.on(Node.EventType.TOUCH_END,finish);node.on(Node.EventType.TOUCH_CANCEL,finish);
   }
@@ -522,8 +586,19 @@ export class OrbitalMain extends Component implements OrbitalHost {
       const d:Record<number,[number,number]>={[KeyCode.ARROW_LEFT]:[-12,0],[KeyCode.ARROW_RIGHT]:[12,0],[KeyCode.ARROW_UP]:[0,12],[KeyCode.ARROW_DOWN]:[0,-12]};const shift=d[e.keyCode];if(shift&&this.object){this.pose.x+=shift[0];this.pose.y-=shift[1];this.applyInspectionPose();}
     }
   }
-  private async loadAudio():Promise<void>{for(const key of ['click','coin','check','page','drop'])try{const clip=await new Promise<AudioClip>((resolve,reject)=>{if((window as unknown as {__GREYLINE_WEB__?:boolean}).__GREYLINE_WEB__)assetManager.loadRemote<AudioClip>(`./resources/audio/${key}.wav`,(e,v)=>e?reject(e):resolve(v));else resources.load<AudioClip>(`audio/${key}`,AudioClip,(e,v)=>e?reject(e):resolve(v));});this.clips.set(key,clip);}catch{}}
-  private sound(key:string):void{const clip=this.clips.get(key);if(this.prefs.sound&&clip)this.audio.playOneShot(clip,.35);}
-  update(dt:number):void{this.motion?.update(dt);this.panels?.update(dt);}
-  onDestroy():void{this.cancelPointer();this.pointerCanvas?.removeEventListener('pointerleave',this.cancelPointer);this.pointerCanvas?.removeEventListener('mouseleave',this.cancelPointer);window.removeEventListener('blur',this.cancelPointer);window.removeEventListener('pointercancel',this.cancelPointer);window.removeEventListener('resize',this.cancelPointer);this.disposed=true;this.motion?.dispose();this.panels?.dispose();input.off(Input.EventType.KEY_DOWN,this.onKey,this);}
+  private async loadAudio():Promise<void>{
+    await Promise.all(['click','coin','check','page','drop','open','reject','ambient_loop'].map(async key=>{try{
+      const clip=await new Promise<AudioClip>((resolve,reject)=>{if((window as unknown as {__GREYLINE_WEB__?:boolean}).__GREYLINE_WEB__)assetManager.loadRemote<AudioClip>(`./resources/audio/${key}.wav`,(e,v)=>e?reject(e):resolve(v));else resources.load<AudioClip>(`audio/${key}`,AudioClip,(e,v)=>e?reject(e):resolve(v));});
+      if(!this.disposed)this.clips.set(key,clip);
+    }catch{}}));
+  }
+  private sound(key:string):void{
+    if(!this.prefs.sound||this.disposed)return;
+    const clip=this.clips.get(key);if(clip)this.audio.playOneShot(clip,key==='drop'?.42:.3);
+    // Start the station bed from a real player gesture, respecting browser audio policy.
+    const ambient=this.clips.get('ambient_loop');
+    if(ambient){if(!this.ambience){this.ambience=this.node.addComponent<AudioSource>(AudioSource);this.ambience.clip=ambient;this.ambience.loop=true;this.ambience.volume=.075;}if(!this.ambience.playing)this.ambience.play();}
+  }
+  update(dt:number):void{this.motion?.update(dt);this.panels?.update(dt);this.presentation.update(dt);this.updateInspectionFeedback(dt);}
+  onDestroy():void{this.cancelPointer();this.pointerCanvas?.removeEventListener('pointerleave',this.cancelPointer);this.pointerCanvas?.removeEventListener('mouseleave',this.cancelPointer);window.removeEventListener('blur',this.cancelPointer);window.removeEventListener('pointercancel',this.cancelPointer);window.removeEventListener('resize',this.cancelPointer);this.disposed=true;this.ambience?.stop();this.presentation.dispose();this.disposeInspectionFeedback();this.motion?.dispose();this.panels?.dispose();input.off(Input.EventType.KEY_DOWN,this.onKey,this);}
 }

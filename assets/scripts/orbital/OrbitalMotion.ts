@@ -1,4 +1,4 @@
-import {Color,Graphics,Mask,Node,Rect,Size,Sprite,SpriteFrame,Tween,UIOpacity,UITransform,Vec2,Vec3} from 'cc';
+import {Color,Graphics,Mask,Node,Tween,UIOpacity,UITransform,Vec3} from 'cc';
 import type {OrbitalUI} from './OrbitalUI';
 
 export interface OrbitalPoint {x:number;y:number}
@@ -7,7 +7,6 @@ export interface OrbitalMotionRegions {contentArea?:OrbitalRect;inspectionArea?:
 interface Bounds extends OrbitalPoint {width:number;height:number}
 interface Task {kind:string;elapsed:number;duration:number;ended:boolean;alive:()=>boolean;frame:(p:number)=>void;complete:()=>void;resolve:()=>void}
 interface Tracked {node:Node;kind:string}
-interface Particle {node:Node;x:number;y:number;phase:number;speed:number}
 const C={cyan:'#76BABB',orange:'#C38A4D',purple:'#998CA8',white:'#D6D2C7',muted:'#9CABA9',dark:'#101B22'};
 const clamp=(n:number):number=>Math.max(0,Math.min(1,n));
 const smooth=(n:number):number=>n*n*(3-2*n);
@@ -27,8 +26,10 @@ export class OrbitalMotion {
   private ambientParent:Node|null=null;
   private actor:Node|null=null;
   private actorBase=new Vec3();
+  private actorScale=new Vec3(1,1,1);
   private actorAngle=0;
-  private particles:Particle[]=[];
+  private ambientInk:Graphics|null=null;
+  private ambientArea:Bounds={x:310,y:160,width:860,height:500};
   private ambientKey='';
   private contentArea:Bounds={x:24,y:108,width:1552,height:700};
   private inspectionArea:Bounds={x:244,y:216,width:992,height:366};
@@ -100,18 +101,14 @@ export class OrbitalMotion {
     if(this.ambientParent&&this.ambientParent!==binding.parent)this.finish();
     this.clearAmbient();if(!this.attached(binding.parent))return;
     this.ambientParent=binding.parent;this.ambientKey=key;this.actor=actor;
-    if(this.actor){this.actorBase=this.actor.position.clone();this.actorAngle=this.actor.angle;}
+    if(this.actor){this.actorBase=this.actor.position.clone();this.actorScale=this.actor.scale.clone();this.actorAngle=this.actor.angle;}
     if(!enabled||area.width<=0||area.height<=0)return;
     this.ambient=this.ui.container(binding.parent,area.x,area.y,area.width,area.height,'orbital-atmosphere');
     this.ambient.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
-    // Only a few dim motes in the shop; instruments and management pages stay still.
-    for(let i=0;i<4;i++){
-      const x=18+((i*197+117)%997)/997*Math.max(0,area.width-36);
-      const y=18+((i*131+159)%991)/991*Math.max(0,area.height-36);
-      const n=this.ui.container(this.ambient,x,y,3,3,'station-dust');const g=n.addComponent<Graphics>(Graphics);
-      g.fillColor=this.color('#C7C5AC44');g.circle(0,0,1);g.fill();
-      this.particles.push({node:n,x,y,phase:i*1.53,speed:.14+i*.02});
-    }
+    // Traffic stays behind the visitor and painted worktop, inside the existing
+    // window. The shop lights belong to their illustrated fixtures, not the UI.
+    this.ambient.setSiblingIndex(0);this.ambientArea=area;
+    this.ambientInk=this.ambient.addComponent<Graphics>(Graphics);
   }
 
   sceneEntry():Promise<void>{
@@ -137,12 +134,33 @@ export class OrbitalMotion {
     if(this.disposed||!this.attached(actor))return Promise.resolve();
     const dest=this.actor===actor?this.actorBase.clone():actor.position.clone(),scale=actor.scale.clone(),angle=this.actor===actor?this.actorAngle:actor.angle;
     this.moving.add(actor);this.track(actor,'npc-walk-in');
-    return this.run('npc-enter',.68,()=>this.attached(actor),p=>{
-      const e=ease(p);actor.setPosition(dest.x-105*(1-e),dest.y-4*(1-e)+Math.sin(p*Math.PI*6)*1.6*(1-p),dest.z);
-      actor.setScale(scale.x*(.96+.04*e),scale.y*(.96+.04*e),scale.z);actor.angle=angle+Math.sin(p*Math.PI*8)*1.4*(1-p);
-      this.opacity(actor).opacity=Math.round(255*Math.min(1,p*3.3));
+    return this.run('npc-enter',.48,()=>this.attached(actor),p=>{
+      const walk=clamp(p/.77),e=1-Math.pow(1-walk,2.6),settle=clamp((p-.77)/.23);
+      const step=Math.sin(walk*Math.PI*4)*.85*(1-walk);
+      actor.setPosition(dest.x-118*(1-e),dest.y-5*(1-e)+step-Math.sin(settle*Math.PI)*.75,dest.z);
+      actor.setScale(scale.x*(.972+.028*e),scale.y*(.972+.028*e),scale.z);
+      actor.angle=angle+Math.sin(walk*Math.PI*4)*.22*(1-walk);
+      this.opacity(actor).opacity=Math.round(255*(.68+.32*clamp(p/.22)));
+      const record=this.tracked.find(r=>r.node===actor);if(record)record.kind=p<.77?'npc-approach':'npc-stand-settle';
     },()=>{
-      if(actor.isValid){actor.setPosition(dest);actor.setScale(scale);actor.angle=angle;this.opacity(actor).opacity=255;if(this.actor===actor){this.actorBase=dest.clone();this.actorAngle=angle;}}
+      if(actor.isValid){actor.setPosition(dest);actor.setScale(scale);actor.angle=angle;this.opacity(actor).opacity=255;if(this.actor===actor){this.actorBase=dest.clone();this.actorScale=scale.clone();this.actorAngle=angle;}}
+      this.moving.delete(actor);this.untrack(actor);
+    });
+  }
+  /** Short body-language beat after the new facial pose has been rendered. */
+  react(actor:Node,outcome:'agree'|'counter'|'refuse'):Promise<void>{
+    if(this.disposed||!this.attached(actor))return Promise.resolve();
+    const origin=actor.position.clone(),scale=actor.scale.clone(),angle=actor.angle;
+    this.moving.add(actor);this.track(actor,`npc-react-${outcome}`);
+    return this.run(`npc-react-${outcome}`,outcome==='counter'?.44:.38,()=>this.attached(actor),p=>{
+      const beat=Math.sin(p*Math.PI),recover=1-p;
+      const x=outcome==='agree'?1.5*beat:outcome==='counter'?-4.5*beat:-7*beat;
+      const y=outcome==='agree'?-2.6*Math.sin(p*Math.PI*1.25)*recover:-.65*beat;
+      actor.setPosition(origin.x+x,origin.y+y,origin.z);
+      actor.setScale(scale.x*(1+(outcome==='agree'?.002:-.002)*beat),scale.y*(1-.0025*beat),scale.z);
+      actor.angle=angle+(outcome==='agree'?.1:outcome==='counter'?-.16:-.2)*beat;
+    },()=>{
+      if(actor.isValid){actor.setPosition(origin);actor.setScale(scale);actor.angle=angle;}
       this.moving.delete(actor);this.untrack(actor);
     });
   }
@@ -154,68 +172,55 @@ export class OrbitalMotion {
     const aperture=this.own(this.ui.container(this.layer,region.x,region.y,region.width,region.height,'customer-exit-aperture'));
     aperture.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
     const actor=this.ui.customer(aperture,npcId,445-region.x,138-region.y,460,440);this.track(actor,'npc-walk-out');
-    return this.run('npc-exit',.68,()=>this.attached(actor),p=>{
-      const e=smooth(p);actor.setPosition(445-region.x-180*e,-138+region.y-3*e+Math.sin(p*Math.PI*6)*1.6);actor.angle=Math.sin(p*Math.PI*6)*.45;
-      this.opacity(actor).opacity=Math.round(255*(1-Math.max(0,p-.35)/.65));
+    return this.run('npc-exit',.42,()=>this.attached(actor),p=>{
+      const turn=clamp(p/.16),walk=clamp((p-.14)/.86),e=smooth(walk);
+      actor.setPosition(445-region.x-150*e,-138+region.y-4*e+Math.sin(walk*Math.PI*4)*.7*(1-walk));
+      actor.setScale(1-.025*e,1-.025*e,1);actor.angle=-.2*Math.sin(turn*Math.PI)*(1-walk);
+      this.opacity(actor).opacity=Math.round(255*(1-clamp((p-.58)/.42)));
     },()=>this.drop(aperture));
   }
 
   handoff(itemId:string,from:OrbitalPoint,to:OrbitalPoint,onPlaced?:()=>void,targetSize=316):Promise<void>{
     if(this.disposed){onPlaced?.();return Promise.resolve();}
-    this.top();const size=targetSize,startScale=to.y>from.y&&from.y<500?.82:1,endScale=to.y<from.y?.82:1,side=to.x>=from.x?'right':'left',handWidth=216,handHeight=198;
+    this.top();const size=targetSize,arriving=from.y<500&&to.y>from.y,departing=to.y<500&&to.y<from.y;
+    const start={x:from.x,y:arriving?to.y-18:from.y},end={x:to.x,y:departing?from.y-18:to.y};
+    const startScale=arriving?.91:1,endScale=departing?.91:1,direction=end.x>=start.x?1:-1;
     const safe=this.intersect(this.contentArea,{x:310,y:108,width:930,height:700});
-    const handWindow=this.own(this.ui.container(this.layer,safe.x,safe.y,safe.width,safe.height,'handoff-safe-window'));
-    handWindow.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
-    const stage=this.ui.container(handWindow,-safe.x,-safe.y,1600,900,'handoff-screen-space');
-    const shadow=this.ui.container(stage,from.x,from.y+size*.475,180,20,'object-contact-shadow');const sg=shadow.addComponent<Graphics>(Graphics);
+    const window=this.own(this.ui.container(this.layer,safe.x,safe.y,safe.width,safe.height,'counter-transfer-window'));
+    window.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
+    const stage=this.ui.container(window,-safe.x,-safe.y,1600,900,'counter-transfer-screen-space');
+    const shadow=this.ui.container(stage,start.x,start.y+size*.475,180,20,'object-contact-shadow');const sg=shadow.addComponent<Graphics>(Graphics);
     sg.fillColor=this.color('#06101988');sg.ellipse(0,0,size*.525,12);sg.fill();
-    const hand=this.ui.container(stage,0,0,handWidth,handHeight,'orbital-handoff-glove');
-    const open=this.ui.hand(hand,side==='right'?'right_open':'left_open',0,0,handWidth,handHeight);
-    const grip=this.ui.hand(hand,side==='right'?'right_grip':'left_grip',0,0,handWidth,handHeight);
-    // Reuse the actual cloth at the atlas wrist cut. No painted rectangle or new art asset.
-    const sleeveFrame=this.sleeveFrame(grip,side);
-    const sleeveWidth=handWidth*.34;
-    const sleeve=sleeveFrame?this.sleeve(stage,sleeveFrame,sleeveWidth,'handoff-forearm','#B8B19A'):null;
-    const cuff=sleeveFrame?this.sleeve(stage,sleeveFrame,sleeveWidth,'handoff-cuff-join','#D4CBB3'):null;
-    // The overlap is behind the original cuff, so the atlas cut cannot open a gap.
-    if(sleeve)sleeve.setSiblingIndex(stage.children.indexOf(hand));
-    if(cuff)cuff.setSiblingIndex(stage.children.indexOf(hand));
-    const object=this.ui.item(stage,itemId,from.x-size/2,from.y-size/2,size,size);
-    this.track(object,'handoff-object');this.track(hand,`hand-${side}-open`);this.track(shadow,'contact-shadow');
-    if(sleeve)this.track(sleeve,'handoff-forearm');
-    const rest={x:side==='right'?Math.min(1160,Math.max(from.x,to.x)+90):Math.max(390,Math.min(from.x,to.x)-90),y:815};
-    return this.run('handoff',.94,()=>this.attached(object),p=>{
-      const t=clamp((p-.16)/.64),e=smooth(t),lift=Math.sin(t*Math.PI)*42;
-      const x=from.x+(to.x-from.x)*e,groundY=from.y+(to.y-from.y)*e,y=groundY-lift;
-      const perspective=startScale+(endScale-startScale)*e;object.setScale(perspective,perspective,1);object.setPosition(x-size*perspective/2,-y+size*perspective/2);object.angle=Math.sin(t*Math.PI)*2;
-      // Hand contact follows the lifted item; its shadow follows the same projected ground point.
-      shadow.setPosition(x,-groundY-size*.475);shadow.setScale(perspective*(1-lift/150),perspective*(1-lift/210),1);
-      this.opacity(shadow).opacity=Math.round(210-lift*1.7);
-      const contact={x:x+(side==='right'?size*perspective*.15:-size*perspective*.15),y:y+size*perspective*.17};const reach=smooth(clamp(p/.16)),retreat=smooth(clamp((p-.82)/.18));
-      let px=rest.x+(contact.x-rest.x)*reach,py=rest.y+(contact.y-rest.y)*reach;px+=(rest.x-px)*retreat;py+=(rest.y-py)*retreat;
-      hand.setPosition(px-handWidth*(side==='right'?.36:.64),-py+handHeight*.42);
-      if(sleeve&&cuff){
-        const wrist={x:hand.position.x+handWidth*(side==='right'?.806:.191),y:-hand.position.y+handHeight*.968};
-        cuff.setPosition(wrist.x,-wrist.y+13);cuff.angle=hand.angle;
-        cuff.getComponent<UITransform>(UITransform)!.setContentSize(sleeveWidth,40);
-        const join={x:wrist.x,y:wrist.y+14};
-        const endX=Math.min(safe.x+safe.width-44,Math.max(join.x+130,1125));
-        const dx=endX-join.x,dy=Math.max(50,safe.y+safe.height+64-join.y),length=Math.hypot(dx,dy),overlap=28;
-        sleeve.setPosition(join.x-dx/length*overlap,-join.y+dy/length*overlap);
-        sleeve.angle=Math.atan2(dx,dy)*180/Math.PI;
-        sleeve.getComponent<UITransform>(UITransform)!.setContentSize(sleeveWidth*1.02,length+overlap+40);
+    const object=this.ui.item(stage,itemId,start.x-size/2,start.y-size/2,size,size);
+    const contact=this.ui.container(stage,end.x,end.y+size*.475,130,12,'counter-contact-trace').addComponent<Graphics>(Graphics);
+    this.track(object,'handoff-prepare');this.track(shadow,'contact-shadow');this.track(contact.node,'counter-contact');
+    let placed=false;
+    return this.run('handoff',.72,()=>this.attached(object),p=>{
+      const sliding=clamp((p-.14)/.52),braking=clamp((p-.66)/.14),settling=clamp((p-.8)/.2),travel=smooth(sliding);
+      const overshoot=direction*8;
+      const x=p<.14?start.x-direction*5*smooth(p/.14):p<.66?start.x-direction*5+(end.x+overshoot-start.x+direction*5)*travel:p<.8?end.x+overshoot*(1-smooth(braking)):end.x+Math.sin(settling*Math.PI*4)*1.2*(1-settling);
+      const perspective=startScale+(endScale-startScale)*travel,foot=start.y+size*startScale*.475+(end.y+size*endScale*.475-start.y-size*startScale*.475)*travel;
+      const pressure=p>=.66&&p<.8?Math.sin(braking*Math.PI):0,settle=Math.sin(settling*Math.PI*3)*(1-settling);
+      // Rigid metal keeps its silhouette; contact is carried by position and shadow.
+      const sx=perspective,sy=perspective;
+      const y=foot-size*sy*.475+(p>=.8?settle*.65:0);
+      object.setScale(sx,sy,1);object.setPosition(x-size*sx/2,-y+size*sy/2);
+      object.angle=p<.66?-direction*Math.sin(sliding*Math.PI)*1.1:p<.8?direction*(1-braking)*.4:direction*settle*.15;
+      shadow.setPosition(x,-foot);shadow.setScale(perspective*(1+pressure*.08),perspective*(1-pressure*.15),1);
+      this.opacity(shadow).opacity=Math.round(188+pressure*42);
+      contact.clear();
+      if(p>=.66&&p<.94){
+        const alpha=Math.round(75*(1-clamp((p-.66)/.28)));contact.strokeColor=new Color(174,151,105,alpha);contact.lineWidth=1;
+        for(let i=0;i<3;i++){contact.moveTo(-18-i*17,-2+i*2);contact.lineTo(-8-i*17,-2+i*2);contact.stroke();}
       }
-      const gripping=p>=.14&&p<.82;open.active=!gripping;grip.active=gripping;
-      const record=this.tracked.find(r=>r.node===hand);if(record)record.kind=`hand-${side}-${gripping?'grip':'open'}`;
-      const alpha=Math.round(255*Math.min(1,p*9)*(1-Math.max(0,p-.91)/.09));
-      this.opacity(hand).opacity=alpha;if(sleeve)this.opacity(sleeve).opacity=alpha;if(cuff)this.opacity(cuff).opacity=alpha;
-    },()=>{try{onPlaced?.();}finally{this.drop(handWindow);sleeveFrame?.destroy();}});
+      const record=this.tracked.find(r=>r.node===object);if(record)record.kind=p<.14?'handoff-prepare':p<.66?'handoff-slide':p<.8?'handoff-brake':'handoff-contact-settle';
+    },()=>{try{if(!placed){placed=true;onPlaced?.();}}finally{this.drop(window);}});
   }
 
-  async deal(amount:number,itemId?:string):Promise<void>{
+  async deal(amount:number,itemId?:string,origin?:{x:number;y:number;size:number}):Promise<void>{
     if(this.disposed)return;
     // Credits stay on the counter terminal. The HUD already contains the committed balance.
-    this.top();const wallet={x:1065,y:656},counter={x:900,y:556};const from=amount>=0?counter:wallet,to=amount>=0?wallet:counter;
+    this.top();const wallet={x:1065,y:656},counter={x:origin?.x??900,y:origin?.y??556};const from=amount>=0?counter:wallet,to=amount>=0?wallet:counter;
     const tokens:Node[]=[];
     for(let i=0;i<3;i++){const n=this.own(this.token(from.x,from.y));tokens.push(n);this.track(n,'credit-token');}
     const value=this.own(this.ui.label(this.layer,`${amount>0?'+':''}${amount.toFixed(amount%1?2:0)} Cr`,925,687,230,34,{size:24,color:C.white,align:'center',bold:true}));this.track(value,'cash-value');
@@ -224,7 +229,7 @@ export class OrbitalMotion {
       value.setPosition(925,-687+ease(p)*10);this.opacity(value).opacity=Math.round(255*Math.min(1,p*6)*(1-Math.max(0,p-.72)/.28));
     },()=>{tokens.forEach(n=>this.drop(n));this.drop(value);});
     const jobs=[cash,this.receipt(amount)];
-    if(itemId)jobs.push(this.handoff(itemId,counter,amount>=0?{x:675,y:450}:{x:1120,y:635}));
+    if(itemId)jobs.push(this.handoff(itemId,counter,amount>=0?{x:675,y:450}:{x:1120,y:635},undefined,origin?.size??316));
     await Promise.all(jobs);
   }
 
@@ -242,7 +247,7 @@ export class OrbitalMotion {
     const node=this.ui.container(clip,0,0,width,height,`effect-${kind}`);const g=node.addComponent<Graphics>(Graphics);
     this.track(node,kind);
     // The business panel owns action/readout text. Effects add no competing floating captions.
-    const duration=kind==='stamp'?.42:['repair','assemble','upgrade'].includes(kind)?.88:kind==='day'?.72:.82;
+    const duration=kind==='stamp'?.32:kind==='assemble'?.68:kind==='repair'?.6:kind==='upgrade'?.62:kind==='day'?.48:kind==='scan'?.68:kind==='uv'?.6:.48;
     return this.run(kind,duration,()=>this.attached(parent)&&this.attached(node),p=>{
       g.clear();
       if(kind==='stamp'){this.drawStamp(g,width,height,p);}
@@ -318,17 +323,34 @@ export class OrbitalMotion {
     if(p>.72){for(let i=0;i<3;i++){g.strokeColor=this.color('#76BABB99');g.lineWidth=2;g.moveTo(w*.72,-h*(.25+i*.045));g.lineTo(w*.82,-h*(.25+i*.045));g.stroke();}}
   }
   private drawRepair(g:Graphics,w:number,h:number,p:number,assemble:boolean):void {
-    const cx=w*.5,cy=-h*.5,t=smooth(clamp(p/.68));
-    if(assemble){for(let i=0;i<4;i++){
-      const a=i*Math.PI/2+.4,x=cx+Math.cos(a)*w*.3*(1-t),y=cy+Math.sin(a)*h*.3*(1-t);
-      g.fillColor=this.color(i%2?'#7F96A7':'#365462');g.roundRect(x-22,y-15,44,30,4);g.fill();g.strokeColor=this.color(C.muted);g.lineWidth=2;g.roundRect(x-22,y-15,44,30,4);g.stroke();
-    }}
-    const x=w*(.28+.44*t),y=-h*(.5+.06*Math.sin(t*Math.PI*2));
-    g.strokeColor=this.color('#566F7E');g.lineWidth=9;g.moveTo(w*.17,-h*.9);g.lineTo(x,y);g.stroke();g.strokeColor=this.color(C.orange);g.lineWidth=3;g.moveTo(w*.17,-h*.9);g.lineTo(x,y);g.stroke();
-    g.fillColor=this.color('#F4D99C');g.circle(x,y,5+Math.sin(p*TAU*7)*2);g.fill();
-    for(let i=0;i<5;i++){const a=i*2.4+p*3,r=(5+(i%3)*5)*(1+.25*Math.sin(p*TAU*3+i));g.strokeColor=this.color(i%3===0?'#F6E0ADAA':'#C38A4D99');g.lineWidth=1;g.moveTo(x+Math.cos(a)*r*.35,y+Math.sin(a)*r*.35);g.lineTo(x+Math.cos(a)*r,y+Math.sin(a)*r);g.stroke();}
-    g.strokeColor=this.color(C.white);g.lineWidth=2;g.moveTo(w*.28,-h*.5);g.lineTo(x,y);g.stroke();
-    if(p>.72){g.strokeColor=this.color('#D6D2C770');g.lineWidth=1.5;g.arc(x,y,20+8*ease((p-.72)/.28),.15,Math.PI*1.5,false);g.stroke();}
+    const approach=ease(clamp(p/.2)),work=clamp((p-.2)/.5),withdraw=ease(clamp((p-.73)/.27));
+    const x=w*(.4+.17*work)+(1-approach)*w*.28+withdraw*w*.15,y=-h*(.47+.025*Math.sin(work*Math.PI))-(1-approach)*h*.22-withdraw*h*.2;
+    // A compact service probe touches the seam. The actual part art is already
+    // present; unrelated flying rectangles no longer pretend to be components.
+    if(p<.92){
+      g.strokeColor=this.color('#071018A8');g.lineWidth=13;g.moveTo(x+9,y-5);g.lineTo(x+61,y-62);g.stroke();
+      g.strokeColor=this.color('#49616A');g.lineWidth=11;g.moveTo(x+15,y-13);g.lineTo(x+58,y-58);g.stroke();
+      g.strokeColor=this.color('#9DA89F');g.lineWidth=4;g.moveTo(x,y);g.lineTo(x+21,y-22);g.stroke();
+      g.strokeColor=this.color(C.orange);g.lineWidth=3;g.moveTo(x+28,y-25);g.lineTo(x+47,y-45);g.stroke();
+      g.fillColor=this.color('#D0D0BA');g.circle(x+22,y-22,4);g.fill();
+    }
+    if(p>=.2&&p<.73){
+      const pulse=Math.sin(work*Math.PI*5),hot=Math.max(0,pulse);
+      g.fillColor=new Color(240,202,131,Math.round(90+100*hot));g.ellipse(x,y,3+hot*2,2+hot);g.fill();
+      for(let i=0;i<7;i++){
+        const age=(work*2.2+i*.127)%1,a=.2+i*.38,distance=6+age*30;
+        const sx=x+Math.cos(a)*distance,sy=y+Math.sin(a)*distance-age*age*16;
+        g.strokeColor=new Color(238,183+i%2*30,109,Math.round((1-age)*150));g.lineWidth=i%3===0?1.5:1;
+        g.moveTo(sx,sy);g.lineTo(sx-Math.cos(a)*4,sy-Math.sin(a)*4);g.stroke();
+      }
+      if(assemble){g.strokeColor=this.color('#76BABB80');g.lineWidth=2;g.moveTo(w*.4,-h*.47);g.lineTo(x,y);g.stroke();}
+    }
+    if(p>.62){
+      const cool=clamp((p-.62)/.38);
+      for(let i=0;i<3;i++){
+        g.fillColor=new Color(157,172,170,Math.round((1-cool)*20));g.ellipse(w*.56+i*4,-h*.48+cool*18+i*3,5+cool*6,3+cool*5);g.fill();
+      }
+    }
   }
   private drawUpgrade(g:Graphics,w:number,h:number,p:number):void {
     const e=ease(p),cx=w*.5,cy=-h*.5;g.fillColor=this.color('#101B2288');g.roundRect(0,-h,w,h,8);g.fill();
@@ -359,24 +381,6 @@ export class OrbitalMotion {
     return this.run('receipt-print',1.04,()=>this.attached(n),p=>{
       n.setPosition(395,-638-10*(1-ease(clamp(p/.3))));this.opacity(n).opacity=Math.round(235*Math.min(1,p*6)*(1-Math.max(0,p-.78)/.22));
     },()=>this.drop(n));
-  }
-  private sleeveFrame(hand:Node,side:'right'|'left'):SpriteFrame|null {
-    const find=(node:Node):SpriteFrame|null=>{
-      const frame=node.getComponent<Sprite>(Sprite)?.spriteFrame;if(frame)return frame;
-      for(const child of node.children){const found=find(child);if(found)return found;}return null;
-    };
-    const source=find(hand);if(!source)return null;
-    const r=source.rect,w=Math.max(1,Math.round(r.width*.34)),h=Math.max(1,Math.round(r.height*.067));
-    const x=Math.round(r.width*(side==='right'?.636:.021)),y=Math.round(r.height*.902);
-    const frame=new SpriteFrame();
-    frame.reset({texture:source.texture,rect:new Rect(r.x+x,r.y+y,Math.min(w,r.width-x),Math.min(h,r.height-y)),originalSize:new Size(w,h),offset:new Vec2(0,0)});
-    return frame;
-  }
-  private sleeve(parent:Node,frame:SpriteFrame,width:number,name:string,tint:string):Node {
-    const node=this.ui.container(parent,0,0,width,1,name);
-    node.getComponent<UITransform>(UITransform)!.setAnchorPoint(.5,1);
-    const sprite=node.addComponent<Sprite>(Sprite);sprite.sizeMode=Sprite.SizeMode.CUSTOM;sprite.spriteFrame=frame;sprite.color=this.color(tint);
-    return node;
   }
   private token(x:number,y:number):Node {
     const n=this.ui.container(this.layer,x,y,22,22,'credit-token');const g=n.addComponent<Graphics>(Graphics);
@@ -436,15 +440,31 @@ export class OrbitalMotion {
   }
   private stop(node:Node):void {Tween.stopAllByTarget(node);const o=node.getComponent<UIOpacity>(UIOpacity);if(o)Tween.stopAllByTarget(o);for(const c of node.children)this.stop(c);}
   private restoreActor():void {
-    if(this.actor?.isValid&&!this.moving.has(this.actor)){this.actor.setPosition(this.actorBase);this.actor.angle=this.actorAngle;}
+    if(this.actor?.isValid&&!this.moving.has(this.actor)){this.actor.setPosition(this.actorBase);this.actor.setScale(this.actorScale);this.actor.angle=this.actorAngle;}
   }
   private clearAmbient():void {
     this.restoreActor();if(this.ambient?.isValid)this.drop(this.ambient);
-    this.ambient=null;this.ambientParent=null;this.ambientKey='';this.actor=null;this.particles=[];
+    this.ambient=null;this.ambientParent=null;this.ambientKey='';this.actor=null;this.ambientInk=null;
   }
   private updateAmbient():void {
     if(this.ambientParent&&!this.attached(this.ambientParent)){this.clearAmbient();return;}
-    if(this.actor&&this.attached(this.actor)&&!this.moving.has(this.actor)){this.actor.setPosition(this.actorBase.x,this.actorBase.y+(this.reducedMotion?0:Math.sin(this.clock*1.7)*.65),this.actorBase.z);this.actor.angle=this.actorAngle+(this.reducedMotion?0:Math.sin(this.clock)*.12);}
-    for(const p of this.particles){if(!p.node.isValid)continue;p.node.active=!this.reducedMotion;if(!this.reducedMotion){p.node.setPosition(p.x+Math.sin(this.clock*p.speed+p.phase)*5,-p.y+Math.cos(this.clock*p.speed*.7+p.phase)*6);this.opacity(p.node).opacity=Math.round(65+Math.sin(this.clock*.4+p.phase)*20);}}
+    if(this.actor&&this.attached(this.actor)&&!this.moving.has(this.actor)){
+      const breath=this.reducedMotion?0:Math.sin(this.clock*1.55);
+      this.actor.setPosition(this.actorBase.x+(this.reducedMotion?0:Math.sin(this.clock*.53)*.22),this.actorBase.y+breath*.55,this.actorBase.z);
+      this.actor.setScale(this.actorScale.x,this.actorScale.y*(1+breath*.0012),this.actorScale.z);this.actor.angle=this.actorAngle;
+    }
+    const g=this.ambientInk;if(!g?.node.isValid)return;g.clear();if(this.reducedMotion)return;
+    const ox=this.ambientArea.x,oy=this.ambientArea.y;
+    // Navigation lamps traverse the painted orbital window, behind the resident.
+    for(let i=0;i<2;i++){
+      const t=((this.clock*(.035+i*.009)+i*.47)%1),x=466+t*520,y=214+i*78+Math.sin(t*Math.PI)*11;
+      const alpha=Math.round(Math.min(1,t*8,(1-t)*8)*115);
+      g.strokeColor=new Color(112,177,190,Math.round(alpha*.28));g.lineWidth=1;g.moveTo(x-ox-18,-y+oy);g.lineTo(x-ox-4,-y+oy);g.stroke();
+      g.fillColor=new Color(140,207,216,alpha);g.ellipse(x-ox,-y+oy,2.6,1.15);g.fill();
+      g.fillColor=new Color(211,139,83,Math.round(alpha*.8));g.circle(x-ox-8,-y+oy+2,.9);g.fill();
+    }
+    // The narrow glow is registered to the existing purple specimen tube.
+    const pulse=.5+.5*Math.sin(this.clock*1.8);
+    g.fillColor=new Color(153,119,199,Math.round(6+9*pulse));g.ellipse(1134-ox,-280+oy,9,43);g.fill();
   }
 }
