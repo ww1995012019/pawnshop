@@ -229,18 +229,18 @@ export class OrbitalPanels {
       this.row(p,step,xx,644,235,26,16,active?C.text:C.muted);
     });
     this.row(p,def.name,1190,190,360,40,28);
-    this.paragraph(p,item.repaired?'维修完成，编号与来源记录已保留。':item.evidence.length?def.defect:'故障尚未确诊。先在鉴定台观察结构并记录读数，再决定维修工序。',1190,241,360,85,19,C.muted);
+    this.paragraph(p,item.repaired?'✓ 维修与复测通过，功能已恢复。\n编号与来源记录已保留。':item.evidence.length?def.defect:'故障尚未确诊。先在鉴定台观察结构并记录读数，再决定维修工序。',1190,241,360,85,19,item.repaired?C.cyan:C.muted);
     this.line(p,1190,335,360);
-    this.row(p,'材料与工时 / 最后确认时扣除',1190,348,360,28,16,C.orange);
+    this.row(p,item.repaired?'本次已耗用 / 工时已结算':'材料与工时 / 最后确认时扣除',1190,348,360,28,16,item.repaired?C.cyan:C.orange);
     if(recipe){
       Object.entries(recipe.materials).forEach(([id,q],i)=>{
-        const material=materials.find(m=>m.id===id),color=(s.materials[id]||0)>=q?C.text:C.red;
+        const material=materials.find(m=>m.id===id),color=item.repaired?C.text:(s.materials[id]||0)>=q?C.text:C.red;
         this.baseline(p,material?.name||id,1190,410+i*32,238,18,color);
-        this.baseline(p,`${s.materials[id]||0} / ${q}`,1438,410+i*32,112,18,color,'right');
+        this.baseline(p,item.repaired?`已用 ×${q}`:`${s.materials[id]||0} / ${q}`,1438,410+i*32,112,18,color,'right');
       });
-      this.row(p,`工时 ${recipe.ap} AP · 自修无额外工费`,1190,487,360,27,17,C.muted);
+      this.row(p,item.repaired?`工时已结算 ${recipe.ap} AP · 无额外工费`:`工时 ${recipe.ap} AP · 自修无额外工费`,1190,487,360,27,17,C.muted);
       const enough=Object.entries(recipe.materials).every(([id,q])=>(s.materials[id]||0)>=q);
-      this.button(p,item.repaired?'本件已修复':'确认维修并复测',1190,533,360,48,()=>{
+      this.button(p,item.repaired?'✓ 复测通过 · 本件已修复':'确认维修并复测',1190,533,360,48,()=>{
         this.h.dispatch({type:'REPAIR',uid:item.uid,recipeId:recipe.id});if(findItem(this.h.state,item.uid)?.repaired)this.effect('repair',{x:526,y:280,width:390,height:275});
       },'gold',progress<3||item.repaired||!enough||s.ap<recipe.ap);
       if(!item.repaired&&progress===0){
@@ -363,7 +363,13 @@ export class OrbitalPanels {
     const m=this.h.ui.modal('组装舱门维护套组',{width:1170,height:690,onClose:()=>{this.modal=null;}});this.modal=m.overlay;
     const p=m.body;
     this.paragraph(p,'主料先对齐插槽，再闭合端子；最后确认时统一消耗原件、材料与2 AP。',15,1,1070,45,20,C.muted);
-    const slots=[this.box(p,401,94,178,153,C.cyan,'#17303DE0','craft-servo-slot'),this.box(p,670,94,178,153,C.cyan,'#17303DE0','craft-bearing-slot')];
+    const slots=[this.box(p,401,94,178,153,C.line,'#0D1820F5','craft-servo-slot'),this.box(p,670,94,178,153,C.line,'#0D1820F5','craft-bearing-slot')];
+    const slotGuides=slots.map((slot,index)=>{
+      const ghost=this.h.ui.object(slot,index===0?servo.defId:bearing.defId,21,10,137,104,{opacity:.22});
+      ghost.name=`craft-slot-ghost-${index}`;
+      const rim=this.h.ui.container(slot,0,0,178,153,`craft-slot-guide-${index}`).addComponent<Graphics>(Graphics);
+      return{ghost,rim};
+    });
     this.row(p,'01 / 伺服器槽',401,64,178,24,14,C.muted,'center');this.row(p,'02 / 注销轴承槽',670,64,178,24,14,C.muted,'center');
     this.row(p,'主料托盘',15,64,347,24,14,C.muted);
     this.h.ui.line(p,579,160,670,160,C.line,2);
@@ -389,6 +395,13 @@ export class OrbitalPanels {
       this.h.ui.setButtonEnabled(confirm,step===3&&affordable);
       this.h.ui.setButtonEnabled(auxiliary,step===2);
       startLabel.color=new Color(step===2?C.orange:step===3?C.cyan:C.muted);endLabel.color=new Color(step>=2?C.cyan:C.muted);
+      slotGuides.forEach(({ghost,rim},index)=>{
+        const completed=step>index,active=step===index;
+        ghost.active=active;rim.clear();
+        if(!active&&!completed){rim.fillColor=new Color('#02060955');rim.rect(5,-148,168,143);rim.fill();}
+        rim.lineWidth=active?2:1;rim.strokeColor=new Color(active?'#D9A365CC':completed?'#76BABB70':'#51616A38');
+        rim.roundRect(7,-146,164,139,3);rim.stroke();
+      });
       partNodes.forEach((part,index)=>{
         const completed=step>index,active=step===index;
         if(completed)part.setPosition(401+index*269,-94);
@@ -402,7 +415,7 @@ export class OrbitalPanels {
     const stageParts=[servo,bearing];
     stageParts.forEach((it,index)=>{
       const completed=(this.h.state.repairProgress[servo.uid]||0)>index;
-      const part=this.box(p,completed?401+index*269:15+index*181,94,178,153,C.orange,'#152D3CF0',`craft-input-${index}`);
+      const part=this.box(p,completed?401+index*269:15+index*181,94,178,153,C.line,'#1C2931F5',`craft-input-${index}`);
       this.h.ui.object(part,it.defId,21,10,137,104,{repaired:it.repaired});partNodes.push(part);partLabels.push(this.row(part,index===0?'伺服器':'磁悬轴承',8,116,162,27,16,C.text,'center').getComponent<Label>(Label)!);
       this.dragGesture(part,{
         bounds:{left:15,top:90,right:1069,bottom:340},enabled:()=>(this.h.state.repairProgress[servo.uid]||0)===index,
@@ -554,16 +567,18 @@ export class OrbitalPanels {
     this.row(p,order.name,948,189,602,42,29);
     this.baseline(p,`${order.id}  /  ${order.customerOwned?'顾客委修原物':'店铺自有货物'}  /  D${String(order.dueDay).padStart(2,'0')} 截止`,948,264,410,15,C.muted);
     this.baseline(p,`${order.reward} Cr`,1365,264,185,25,C.orange,'right');
-    this.paragraph(p,order.description.replace(/；\s*/g,'；\n'),948,284,602,92,18,'#BCC1B7');
+    const paired=order.id==='ORD-004';
+    const description=paired?'光合灯放入交付盘，合格藻苗罐从库存自动配套交付。\n藻苗罐须店铺自有、功能正常、来源已核验，并有两项独立物证。':order.description.replace(/；\s*/g,'；\n');
+    this.paragraph(p,description,948,284,602,92,18,'#BCC1B7');
     this.line(p,948,389,602);
-    this.row(p,`要求：${getDef(order.itemId).name}`,948,403,310,30,17);
-    this.row(p,`品相≥${Math.round(order.minCondition*100)}%${order.needsRepair?' · 已修复':''}`,1274,403,276,30,17,C.text,'right');
+    this.row(p,paired?'要求：光合灯 + 藻苗罐':`要求：${getDef(order.itemId).name}`,948,403,310,30,17);
+    this.row(p,`${paired?'光合灯':''}品相≥${Math.round(order.minCondition*100)}%${order.needsRepair?' · 已修复':''}`,1274,403,276,30,17,C.text,'right');
     const earliest=orderEarliest[order.id]||1,available=status==='available'&&s.day>=earliest;
     if(status==='available'){
       this.row(p,'原物交接 / ITEM PREVIEW',948,466,400,22,11,C.muted);
       this.h.ui.object(p,order.itemId,1028,484,345,184,{damaged:order.needsRepair});
-      this.row(p,order.customerOwned?'原件随委托移交':'需匹配合规库存',1365,527,175,52,17,C.text,'center');
-      this.row(p,'接取后保留归属、材料要求与到期日；交付前可预览。',948,666,602,24,15,C.muted);
+      this.row(p,paired?'藻苗罐自动配套':order.customerOwned?'原件随委托移交':'需匹配合规库存',1365,527,175,52,17,C.text,'center');
+      this.row(p,paired?'藻苗罐交付条件：自有 · 功能正常 · 来源已核验 · 两项独立物证':'接取后保留归属、材料要求与到期日；交付前可预览。',948,666,602,24,15,C.muted);
       this.button(p,available?'接取订单':`第${earliest}天开放`,948,707,602,47,()=>this.h.dispatch({type:'TAKE_ORDER',id:order.id}),'gold',!available);
       return;
     }
@@ -574,7 +589,8 @@ export class OrbitalPanels {
     }
     const candidates=s.inventory.filter(it=>it.defId===order.itemId);
     const staged=s.inventory.find(it=>it.uid===this.stagedUid);
-    this.row(p,'原件与合格库存 / 点击或拖入交付盘',948,452,602,30,15,C.muted);
+    const secondary=paired?this.orderAlgae():undefined;
+    this.row(p,paired?'光合灯点击或拖入交付盘 · 藻苗罐由库存自动配套':'原件与合格库存 / 点击或拖入交付盘',948,452,602,30,15,C.muted);
     const tray=this.h.ui.texturePanel(p,1080,553,350,111,{skin:'socket',fill:'#182326D2',stroke:'#C38A4D8F',materialOpacity:.90,name:'order-delivery-tray'});
     this.row(tray,'交付盘 / 确认前可撤回',10,82,330,24,14,C.orange,'center');
     const dropGlow=this.h.ui.container(tray,3,3,344,105,'order-drop-guide').addComponent<Graphics>(Graphics);
@@ -592,16 +608,28 @@ export class OrbitalPanels {
     });
     if(!candidates.length)this.text(p,'仓库暂无相同型号，先取得原物或接收委修件。',948,494,602,45,18,C.muted);
     if(staged){
-      this.h.ui.object(tray,staged.defId,76,0,198,82,{repaired:staged.repaired});
+      if(paired){
+        this.h.ui.object(tray,staged.defId,15,0,145,63,{repaired:staged.repaired});
+        this.row(tray,'光合灯 · 主交付',10,62,160,20,13,C.text,'center');
+        if(secondary){
+          this.h.ui.object(tray,secondary.defId,190,0,145,63,{repaired:secondary.repaired,name:`order-companion-${secondary.uid}`});
+          this.row(tray,'藻苗罐 · 自动配套',180,62,160,20,13,C.cyan,'center');
+        }else this.paragraph(tray,'藻苗罐待准备\n从库存自动配套',183,17,153,45,14,C.orange);
+      }else this.h.ui.object(tray,staged.defId,76,0,198,82,{repaired:staged.repaired});
       const reasons=this.orderReasons(order,staged);
       this.paragraph(p,reasons.length?reasons.join(' · '):'✓ 型号、归属、证据和状态符合要求',948,669,602,43,15,reasons.length?C.orange:C.cyan);
-      this.button(p,'确认交付并领取报酬',948,720,427,40,()=>{this.h.dispatch({type:'DELIVER_ORDER',id:order.id,uid:staged.uid});this.stagedUid='';if(this.h.state.orders.find(o=>o.id===order.id)?.status==='done')this.effect('stamp',{x:1300,y:450});},'gold',reasons.length>0);
+      if(paired&&!secondary)this.button(p,'到仓库准备藻苗罐',948,720,427,40,()=>this.h.navigate('warehouse'),'green');
+      else this.button(p,'确认交付并领取报酬',948,720,427,40,()=>{this.h.dispatch({type:'DELIVER_ORDER',id:order.id,uid:staged.uid});this.stagedUid='';if(this.h.state.orders.find(o=>o.id===order.id)?.status==='done')this.effect('stamp',{x:1300,y:450});},'gold',reasons.length>0);
       this.button(p,'撤回',1390,720,160,40,()=>{this.stagedUid='';this.h.render();},'quiet');
     }else{
-      this.row(p,'选中原物后会显示具体合格项与缺项。',948,677,602,31,17,C.muted);
-      this.button(p,'到仓库选择物件',948,720,292,40,()=>this.h.navigate('warehouse'),'green');
+      this.row(p,paired?(secondary?'藻苗罐已备妥；将光合灯放入交付盘即可预览配套交付。':'藻苗罐需自有、正常、来源已核验，并有两项独立物证。'):'选中原物后会显示具体合格项与缺项。',948,677,602,31,paired?15:17,paired&&!secondary?C.orange:C.muted);
+      this.button(p,paired?'到仓库准备两件货物':'到仓库选择物件',948,720,292,40,()=>this.h.navigate('warehouse'),'green');
       if(os?.uid)this.button(p,'处理委修原物',1257,720,293,40,()=>this.h.navigate('repair',os.uid!),'gold');
     }
+  }
+  /** Mirrors ORD-004's automatic secondary lookup without reserving or moving stock. */
+  private orderAlgae():OrbitalItem|undefined {
+    return this.h.state.inventory.find(it=>it.defId==='ITM-041'&&it.owner==='shop'&&it.working&&it.sourceVerified&&new Set(it.evidence).size>=2);
   }
   private orderReasons(order:OrderDef,item:OrbitalItem):string[] {
     const reasons:string[]=[];
@@ -614,7 +642,10 @@ export class OrbitalPanels {
     if(order.customerOwned&&(item.owner!=='customer'||item.orderId!==order.id))reasons.push('必须交还本单委修原物');
     if(!order.customerOwned&&(item.owner!=='shop'||!item.sourceVerified))reasons.push('需自有且来源已登记的货物');
     if(item.evidence.length<2)reasons.push('需两项独立物证');
-    if(order.id==='ORD-004'&&!this.h.state.inventory.some(it=>it.defId==='ITM-041'&&it.owner==='shop'&&it.working&&it.sourceVerified&&it.evidence.length>=2))reasons.push('缺已核验的健康藻苗罐');
+    if(order.id==='ORD-004'){
+      if(!item.working)reasons.push('光合灯功能须正常');
+      if(!this.orderAlgae())reasons.push('藻苗罐待准备：店铺自有、功能正常、来源已核验、两项独立物证');
+    }
     return reasons;
   }
   private report(p:Node):void {
