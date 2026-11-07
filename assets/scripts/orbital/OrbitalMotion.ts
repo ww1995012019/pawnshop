@@ -160,15 +160,15 @@ export class OrbitalMotion {
     },()=>this.drop(aperture));
   }
 
-  handoff(itemId:string,from:OrbitalPoint,to:OrbitalPoint,onPlaced?:()=>void):Promise<void>{
+  handoff(itemId:string,from:OrbitalPoint,to:OrbitalPoint,onPlaced?:()=>void,targetSize=316):Promise<void>{
     if(this.disposed){onPlaced?.();return Promise.resolve();}
-    this.top();const size=170,side=to.x>=from.x?'right':'left',handWidth=216,handHeight=198;
+    this.top();const size=targetSize,startScale=to.y>from.y&&from.y<500?.82:1,endScale=to.y<from.y?.82:1,side=to.x>=from.x?'right':'left',handWidth=216,handHeight=198;
     const safe=this.intersect(this.contentArea,{x:310,y:108,width:930,height:700});
     const handWindow=this.own(this.ui.container(this.layer,safe.x,safe.y,safe.width,safe.height,'handoff-safe-window'));
     handWindow.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
     const stage=this.ui.container(handWindow,-safe.x,-safe.y,1600,900,'handoff-screen-space');
-    const shadow=this.ui.container(stage,from.x,from.y+size*.39,180,20,'object-contact-shadow');const sg=shadow.addComponent<Graphics>(Graphics);
-    sg.fillColor=this.color('#06101988');sg.ellipse(0,0,58,8);sg.fill();
+    const shadow=this.ui.container(stage,from.x,from.y+size*.475,180,20,'object-contact-shadow');const sg=shadow.addComponent<Graphics>(Graphics);
+    sg.fillColor=this.color('#06101988');sg.ellipse(0,0,size*.525,12);sg.fill();
     const hand=this.ui.container(stage,0,0,handWidth,handHeight,'orbital-handoff-glove');
     const open=this.ui.hand(hand,side==='right'?'right_open':'left_open',0,0,handWidth,handHeight);
     const grip=this.ui.hand(hand,side==='right'?'right_grip':'left_grip',0,0,handWidth,handHeight);
@@ -187,11 +187,11 @@ export class OrbitalMotion {
     return this.run('handoff',.94,()=>this.attached(object),p=>{
       const t=clamp((p-.16)/.64),e=smooth(t),lift=Math.sin(t*Math.PI)*42;
       const x=from.x+(to.x-from.x)*e,groundY=from.y+(to.y-from.y)*e,y=groundY-lift;
-      object.setPosition(x-size/2,-y+size/2);object.angle=Math.sin(t*Math.PI)*2;
+      const perspective=startScale+(endScale-startScale)*e;object.setScale(perspective,perspective,1);object.setPosition(x-size*perspective/2,-y+size*perspective/2);object.angle=Math.sin(t*Math.PI)*2;
       // Hand contact follows the lifted item; its shadow follows the same projected ground point.
-      shadow.setPosition(x,-groundY-size*.39);shadow.setScale(1-lift/150,1-lift/210,1);
+      shadow.setPosition(x,-groundY-size*.475);shadow.setScale(perspective*(1-lift/150),perspective*(1-lift/210),1);
       this.opacity(shadow).opacity=Math.round(210-lift*1.7);
-      const contact={x:x+(side==='right'?size*.15:-size*.15),y:y+size*.17};const reach=smooth(clamp(p/.16)),retreat=smooth(clamp((p-.82)/.18));
+      const contact={x:x+(side==='right'?size*perspective*.15:-size*perspective*.15),y:y+size*perspective*.17};const reach=smooth(clamp(p/.16)),retreat=smooth(clamp((p-.82)/.18));
       let px=rest.x+(contact.x-rest.x)*reach,py=rest.y+(contact.y-rest.y)*reach;px+=(rest.x-px)*retreat;py+=(rest.y-py)*retreat;
       hand.setPosition(px-handWidth*(side==='right'?.36:.64),-py+handHeight*.42);
       if(sleeve&&cuff){
@@ -215,13 +215,13 @@ export class OrbitalMotion {
   async deal(amount:number,itemId?:string):Promise<void>{
     if(this.disposed)return;
     // Credits stay on the counter terminal. The HUD already contains the committed balance.
-    this.top();const wallet={x:1065,y:656},counter={x:879,y:583};const from=amount>=0?counter:wallet,to=amount>=0?wallet:counter;
+    this.top();const wallet={x:1065,y:656},counter={x:900,y:556};const from=amount>=0?counter:wallet,to=amount>=0?wallet:counter;
     const tokens:Node[]=[];
     for(let i=0;i<3;i++){const n=this.own(this.token(from.x,from.y));tokens.push(n);this.track(n,'credit-token');}
-    const value=this.own(this.ui.label(this.layer,`${amount>0?'+':''}${amount.toFixed(amount%1?2:0)} Cr`,980,687,230,34,{size:24,color:C.white,align:'center',bold:true}));this.track(value,'cash-value');
+    const value=this.own(this.ui.label(this.layer,`${amount>0?'+':''}${amount.toFixed(amount%1?2:0)} Cr`,925,687,230,34,{size:24,color:C.white,align:'center',bold:true}));this.track(value,'cash-value');
     const cash=this.run('credit-transfer',.94,()=>this.attached(value),p=>{
       tokens.forEach((n,i)=>{const t=clamp((p-i*.045)/.76),e=smooth(t);n.setPosition(from.x+(to.x-from.x)*e+Math.sin(t*Math.PI)*(i-1)*10,-from.y-(to.y-from.y)*e+Math.sin(t*Math.PI)*22);n.angle=t*30;this.opacity(n).opacity=Math.round(220*(1-Math.max(0,t-.8)/.2));});
-      value.setPosition(980,-687+ease(p)*10);this.opacity(value).opacity=Math.round(255*Math.min(1,p*6)*(1-Math.max(0,p-.72)/.28));
+      value.setPosition(925,-687+ease(p)*10);this.opacity(value).opacity=Math.round(255*Math.min(1,p*6)*(1-Math.max(0,p-.72)/.28));
     },()=>{tokens.forEach(n=>this.drop(n));this.drop(value);});
     const jobs=[cash,this.receipt(amount)];
     if(itemId)jobs.push(this.handoff(itemId,counter,amount>=0?{x:675,y:450}:{x:1120,y:635}));

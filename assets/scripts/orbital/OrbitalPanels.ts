@@ -1,4 +1,4 @@
-import {Color,EventKeyboard,EventTouch,Graphics,input,Input,KeyCode,Label,Node,UIOpacity,UITransform,Vec3} from 'cc';
+import {Canvas,Color,EventKeyboard,EventTouch,game,Graphics,input,Input,KeyCode,Label,Node,UIOpacity,UITransform,Vec2,Vec3,view} from 'cc';
 import type {OrbitalHost} from './ui-types';
 import type {OrbitalItem,OrderDef,PageId,RecipeDef} from './types';
 import {getDef,getOrder,materials,recipes,orderDefs,orderEarliest} from './data';
@@ -6,6 +6,17 @@ import {canPlace,estimate,findItem,itemValue} from './model';
 
 const C={text:'#D6D2C7',muted:'#9BA6A4',cyan:'#76BABB',orange:'#C38A4D',purple:'#AEA4B4',line:'#737C7350',panel:'#101B22B8',deep:'#0B141CD9',red:'#D18D77'};
 const statusText={available:'可接取',active:'进行中',done:'已交付',failed:'已过期'};
+interface DragFrame {event:EventTouch;raw:Vec3;point:Vec3;origin:Vec3;moved:boolean;distance:number}
+interface DragOptions {
+  bounds?:{left:number;top:number;right:number;bottom:number};
+  movable?:boolean;
+  enabled?:()=>boolean;
+  accept?:(event:EventTouch)=>boolean;
+  start?:(frame:DragFrame)=>void;
+  move?:(frame:DragFrame)=>void;
+  end:(frame:DragFrame)=>void;
+  cancel?:()=>void;
+}
 
 /** Workspaces share a persistent host; they never commit money outside the reducer. */
 export class OrbitalPanels {
@@ -19,9 +30,23 @@ export class OrbitalPanels {
   private inventoryOffset=0;
   private modal:Node|null=null;
   private cabinet:'isolation'|'pawn'='isolation';
-  constructor(private readonly h:OrbitalHost){input.on(Input.EventType.KEY_DOWN,this.key,this);}
-  setPage(page:PageId):void{this.page=page;if(page!=='warehouse')this.scanner=null;}
+  private dragCancel:(()=>void)|null=null;
+  private dragCanvas:HTMLCanvasElement|null=null;
+  private readonly cancelFromWindow=()=>this.cancelDrag();
+  private readonly visibilityChanged=()=>{if(document.hidden)this.cancelDrag();};
+  constructor(private readonly h:OrbitalHost){
+    input.on(Input.EventType.KEY_DOWN,this.key,this);
+    if(typeof window!=='undefined'){
+      window.addEventListener('pointercancel',this.cancelFromWindow,true);window.addEventListener('touchcancel',this.cancelFromWindow,true);
+      window.addEventListener('blur',this.cancelFromWindow);window.addEventListener('resize',this.cancelFromWindow);
+      document.addEventListener('visibilitychange',this.visibilityChanged);
+    }
+    this.dragCanvas=game.canvas;
+    this.dragCanvas?.addEventListener('pointerleave',this.cancelFromWindow);this.dragCanvas?.addEventListener('mouseleave',this.cancelFromWindow);
+  }
+  setPage(page:PageId):void{if(page!==this.page)this.cancelDrag();this.page=page;if(page!=='warehouse')this.scanner=null;}
   draw(page:PageId,parent:Node):void {
+    this.cancelDrag();
     this.page=page;this.parent=parent;this.scanner=null;
     if(page==='repair')this.repair(parent);
     if(page==='warehouse')this.warehouse(parent);
@@ -41,14 +66,23 @@ export class OrbitalPanels {
       }
     }
   }
-  dispose():void {input.off(Input.EventType.KEY_DOWN,this.key,this);}
+  dispose():void {
+    this.cancelDrag();input.off(Input.EventType.KEY_DOWN,this.key,this);
+    this.dragCanvas?.removeEventListener('pointerleave',this.cancelFromWindow);this.dragCanvas?.removeEventListener('mouseleave',this.cancelFromWindow);this.dragCanvas=null;
+    if(typeof window!=='undefined'){
+      window.removeEventListener('pointercancel',this.cancelFromWindow,true);window.removeEventListener('touchcancel',this.cancelFromWindow,true);
+      window.removeEventListener('blur',this.cancelFromWindow);window.removeEventListener('resize',this.cancelFromWindow);
+      document.removeEventListener('visibilitychange',this.visibilityChanged);
+    }
+  }
   closeModal():boolean {
+    this.cancelDrag();
     const overlay=this.modal;this.modal=null;
     if(!overlay?.isValid)return false;
     overlay.removeFromParent();if(overlay.isValid)overlay.destroy();return true;
   }
   private key(e:EventKeyboard):void {
-    if(this.h.busy||this.modal?.isValid)return;
+    if(this.h.busy||this.modal?.isValid||this.dragCancel)return;
     if(this.page==='warehouse'&&e.keyCode===KeyCode.KEY_R){
       const item=this.item();if(item?.location==='warehouse')this.h.dispatch({type:'MOVE',uid:item.uid,x:item.x,y:item.y,rotated:!item.rotated});
     }
@@ -75,12 +109,69 @@ export class OrbitalPanels {
   private ownership(item:OrbitalItem):string {return item.owner==='customer'?'顾客委修 · 归属锁定':item.owner==='pawn'?'抵押保管 · 禁止出售':'店铺自有';}
   private dims(item:OrbitalItem):[number,number] {const s=getDef(item.defId).size;return item.rotated?[s[1],s[0]]:[s[0],s[1]];}
   private effect(kind:string,at:{x:number;y:number;width?:number;height?:number}):void {if(this.parent?.isValid)this.h.effect(kind,this.parent,at);}
-  private dragWithin(node:Node,dx:number,dy:number,bounds:{left:number;top:number;right:number;bottom:number}):void {
+  private dragWithin(node:Node,raw:Vec3,bounds:{left:number;top:number;right:number;bottom:number}):void {
     const size=node.getComponent<UITransform>(UITransform)!.contentSize;
     const width=size.width*Math.abs(node.scale.x),height=size.height*Math.abs(node.scale.y);
-    const x=Math.max(bounds.left,Math.min(bounds.right-width,node.position.x+dx));
-    const y=Math.max(bounds.top,Math.min(bounds.bottom-height,-node.position.y-dy));
-    node.setPosition(x,-y,node.position.z);
+    const x=Math.max(bounds.left,Math.min(bounds.right-width,raw.x));
+    const y=Math.max(bounds.top,Math.min(bounds.bottom-height,-raw.y));
+    node.setPosition(x,-y,raw.z);
+  }
+  private cancelDrag():void {const cancel=this.dragCancel;this.dragCancel=null;cancel?.();}
+  private dragAvailable(node:Node):boolean {
+    if(this.h.busy||!node.isValid||!node.activeInHierarchy)return false;
+    const within=(parent:Node)=>{for(let current:Node|null=node;current;current=current.parent)if(current===parent)return true;return false;};
+    if(!within(this.h.ui.root))return false;
+    const modal=[...this.h.ui.root.children].reverse().find(child=>child.name==='modal-overlay'&&child.isValid&&child.activeInHierarchy);
+    return !modal||within(modal);
+  }
+  private pointerLocal(parent:Node,event:EventTouch):Vec3 {
+    const point=event.getLocation();let canvas:Canvas|null=null;
+    for(let node:Node|null=this.h.ui.root;node&&!canvas;node=node.parent)canvas=node.getComponent<Canvas>(Canvas);
+    const root=this.h.ui.root.getComponent<UITransform>(UITransform)!;
+    const ui=event.getUILocation();
+    const world=canvas?.cameraComponent?.screenToWorld(new Vec3(point.x,point.y,0))||root.convertToWorldSpaceAR(new Vec3(ui.x,ui.y-root.height,0));
+    return parent.getComponent<UITransform>(UITransform)!.convertToNodeSpaceAR(world);
+  }
+  /** Keep the original grab point, even while the visible card is clamped. */
+  private dragGesture(node:Node,options:DragOptions):void {
+    let tracking=false,touchId:number|null=null,parent:Node|null=null,origin=new Vec3(),press=new Vec3(),screen=new Vec2(),distance=0,siblings:Node[]=[];
+    const restore=()=>{
+      if(node.isValid&&node.parent===parent){node.setPosition(origin);if(options.movable!==false)this.dragOpacity(node,false);}
+      // Restore the complete pre-drag order, including a raised warehouse preview.
+      if(parent?.isValid)siblings.forEach((sibling,index)=>{if(sibling.isValid&&sibling.parent===parent)sibling.setSiblingIndex(index);});
+    };
+    const cancel=()=>{if(!tracking)return;tracking=false;restore();options.cancel?.();};
+    const frame=(event:EventTouch):DragFrame=>{
+      const point=this.pointerLocal(parent!,event),location=event.getLocation();
+      distance=Math.max(distance,Math.hypot(location.x-screen.x,location.y-screen.y)/Math.max(1,view.getDevicePixelRatio()));
+      return{event,point,origin:origin.clone(),raw:new Vec3(origin.x+point.x-press.x,origin.y+point.y-press.y,origin.z),moved:distance>=6,distance};
+    };
+    const finish=(event:EventTouch,cancelled:boolean)=>{
+      if(!tracking||event.getID()!==touchId)return;
+      // Creator 3.8.8 rewrites event.type to TOUCH_CANCEL when release misses
+      // the clamped card. Its original event code still distinguishes a real
+      // release from OS/browser cancellation; only the former may commit.
+      const released=!cancelled||event.getEventCode()===Input.EventType.TOUCH_END;
+      const inside=!!this.h.ui.root.getComponent<UITransform>(UITransform)?.hitTest(event.getLocation());
+      const final=frame(event);tracking=false;if(this.dragCancel===cancel)this.dragCancel=null;restore();
+      if(released&&inside&&this.dragAvailable(node)&&node.parent===parent)options.end(final);else options.cancel?.();
+    };
+    if(options.movable!==false)this.h.ui.bindDraggable(node,()=>this.dragAvailable(node)&&options.enabled?.()!==false);
+    node.on(Node.EventType.TOUCH_START,(event:EventTouch)=>{
+      if(!this.dragAvailable(node)||!node.parent||options.enabled?.()===false||options.accept?.(event)===false)return;
+      this.cancelDrag();parent=node.parent;origin=node.position.clone();press=this.pointerLocal(parent,event);screen=event.getLocation().clone();distance=0;touchId=event.getID();siblings=parent.children.slice();tracking=true;this.dragCancel=cancel;
+      options.start?.(frame(event));
+      if(options.movable!==false){this.dragOpacity(node,true);node.setSiblingIndex(parent.children.length-1);}
+    });
+    node.on(Node.EventType.TOUCH_MOVE,(event:EventTouch)=>{
+      if(!tracking||event.getID()!==touchId)return;if(!this.dragAvailable(node)){this.cancelDrag();return;}
+      const current=frame(event);
+      if(current.moved&&options.movable!==false){if(options.bounds)this.dragWithin(node,current.raw,options.bounds);else node.setPosition(current.raw);}
+      options.move?.(current);
+    });
+    node.on(Node.EventType.TOUCH_END,(event:EventTouch)=>finish(event,false));
+    node.on(Node.EventType.TOUCH_CANCEL,(event:EventTouch)=>finish(event,true));
+    node.on(Node.EventType.NODE_DESTROYED,()=>{if(tracking&&this.dragCancel===cancel)this.cancelDrag();});
   }
   private dragOpacity(node:Node,dragging:boolean):void {
     const opacity=node.getComponent<UIOpacity>(UIOpacity)||node.addComponent<UIOpacity>(UIOpacity);opacity.opacity=dragging?205:255;
@@ -138,7 +229,7 @@ export class OrbitalPanels {
       this.row(p,step,xx,644,235,26,16,active?C.text:C.muted);
     });
     this.row(p,def.name,1190,190,360,40,28);
-    this.paragraph(p,item.repaired?'维修已完成，保留本件的编号与来源记录。':item.evidence.length?def.defect:'故障尚未确诊。先在鉴定台观察结构并记录读数，再决定维修工序。',1190,241,360,85,19,C.muted);
+    this.paragraph(p,item.repaired?'维修完成，编号与来源记录已保留。':item.evidence.length?def.defect:'故障尚未确诊。先在鉴定台观察结构并记录读数，再决定维修工序。',1190,241,360,85,19,C.muted);
     this.line(p,1190,335,360);
     this.row(p,'材料与工时 / 最后确认时扣除',1190,348,360,28,16,C.orange);
     if(recipe){
@@ -187,12 +278,10 @@ export class OrbitalPanels {
     const materialId=Object.keys(recipe.materials).find(id=>id!=='MAT-004')||'MAT-003';
     this.h.ui.materialIcon(part,materialId,19,10,74,62);
     this.row(part,'拖入插槽',5,77,102,25,15,C.orange,'center');
-    let start=part.position.clone(),moving=false,sibling=part.getSiblingIndex();
-    const restore=()=>{part.setPosition(start);part.setSiblingIndex(sibling);this.dragOpacity(part,false);};
-    part.on(Node.EventType.TOUCH_START,()=>{if(this.h.busy)return;start=part.position.clone();sibling=part.getSiblingIndex();moving=true;this.dragOpacity(part,true);part.setSiblingIndex(p.children.length-1);});
-    part.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(!moving||this.h.busy)return;const d=e.getUIDelta();this.dragWithin(part,d.x,d.y,{left:350,top:300,right:1128,bottom:555});});
-    part.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{if(!moving)return;moving=false;restore();if(slot.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation()))this.repairStep(item,1);else this.h.ui.toast('接口没有对齐，请把替换件拖进右侧青色插槽。');});
-    part.on(Node.EventType.TOUCH_CANCEL,()=>{if(!moving)return;moving=false;restore();});
+    this.dragGesture(part,{
+      bounds:{left:350,top:300,right:1128,bottom:555},
+      end:({event,moved})=>{if(moved&&slot.getComponent<UITransform>(UITransform)?.hitTest(event.getLocation()))this.repairStep(item,1);else if(moved)this.h.ui.toast('接口没有对齐，请把替换件拖进右侧青色插槽。');},
+    });
     this.repairHint(p,'02 / 将兼容零件拖入右侧接口');
     this.button(p,'辅助装入',1010,480,117,37,()=>this.repairStep(item,1),'quiet');
   }
@@ -202,18 +291,19 @@ export class OrbitalPanels {
     ink.strokeColor=new Color('#DB8A5260');ink.lineWidth=4;ink.moveTo(90,-117);ink.bezierCurveTo(235,-160,330,-15,535,-57);ink.stroke();
     const a=this.box(layer,53,86,76,64,C.orange,'#152D3DF0','weld-start');
     const b=this.box(layer,502,24,76,64,C.cyan,'#152D3DF0','weld-end');
+    this.h.ui.bindDraggable(a,()=>this.dragAvailable(layer));
     this.text(a,'供电',0,16,76,32,17,C.orange,'center');this.text(b,'负载',0,16,76,32,17,C.cyan,'center');
     const wire=this.h.ui.container(layer,0,0,690,180,'active-wire').addComponent<Graphics>(Graphics);
-    let began=false,travel=0;
-    layer.on(Node.EventType.TOUCH_START,(e:EventTouch)=>{began=!!a.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation());travel=0;});
-    layer.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{
-      if(!began||this.h.busy)return;const d=e.getUIDelta();travel+=Math.abs(d.x)+Math.abs(d.y);
-      wire.clear();wire.strokeColor=new Color(C.orange);wire.lineWidth=5;
-      const progress=Math.min(1,travel/450);wire.moveTo(90,-117);wire.lineTo(90+445*progress,-117+60*progress);wire.stroke();
-      wire.fillColor=new Color('#FFE3A8');wire.circle(90+445*progress,-117+60*progress,6);wire.fill();
+    this.dragGesture(layer,{
+      movable:false,accept:event=>!!a.getComponent<UITransform>(UITransform)?.hitTest(event.getLocation()),
+      move:({event})=>{
+        const point=this.pointerLocal(layer,event),x=Math.max(0,Math.min(690,point.x)),y=Math.max(-180,Math.min(0,point.y));
+        wire.clear();wire.strokeColor=new Color(C.orange);wire.lineWidth=5;wire.moveTo(90,-117);wire.lineTo(x,y);wire.stroke();
+        wire.fillColor=new Color('#FFE3A8');wire.circle(x,y,6);wire.fill();
+      },
+      end:({event,moved})=>{wire.clear();if(moved&&b.getComponent<UITransform>(UITransform)?.hitTest(event.getLocation()))this.repairStep(item,2);else this.h.ui.toast('回路尚未闭合，从橙色供电端拖到青色负载端。');},
+      cancel:()=>{if(wire.isValid)wire.clear();},
     });
-    layer.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{if(!began)return;began=false;wire.clear();if(travel>170&&b.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation()))this.repairStep(item,2);else this.h.ui.toast('回路尚未闭合，从橙色供电端拖到青色负载端。');});
-    layer.on(Node.EventType.TOUCH_CANCEL,()=>{began=false;wire.clear();});
     this.repairHint(p,'03 / 由供电端接至负载端，闭合回路');
     this.button(p,'辅助闭合回路',936,480,190,37,()=>this.repairStep(item,2),'quiet');
   }
@@ -280,7 +370,7 @@ export class OrbitalPanels {
     const labels=['拖入伺服器','拖入注销轴承','连接端子 / 验证限位'];
     const progressLabel=this.row(p,'',15,365,1060,43,23,C.cyan,'center');
     const readyLabel=this.row(p,'',15,415,1060,53,19,C.muted,'center');
-    const close=()=>{const overlay=m.overlay;this.modal=null;if(!overlay.isValid)return;overlay.removeFromParent();if(overlay.isValid)overlay.destroy();};
+    const close=()=>{this.cancelDrag();const overlay=m.overlay;this.modal=null;if(!overlay.isValid)return;overlay.removeFromParent();if(overlay.isValid)overlay.destroy();};
     const confirm=this.button(p,'确认组装并消耗主料',590,502,478,54,()=>{
       if((this.h.state.repairProgress[servo.uid]||0)!==3){this.h.ui.toast('先将两件主料放入插槽并连通端子。');return;}
       close();this.h.dispatch({type:'CRAFT',recipeId:recipe.id});if(!findItem(this.h.state,servo.uid))this.effect('repair',{x:530,y:300,width:380,height:280});
@@ -289,7 +379,6 @@ export class OrbitalPanels {
     const wire=this.h.ui.container(p,385,244,480,98,'craft-terminal-wire').addComponent<Graphics>(Graphics);
     const start=this.box(p,425,267,104,54,C.orange,'#122B3C','craft-positive');const startLabel=this.row(start,'供电端',0,0,104,54,17,C.orange,'center').getComponent<Label>(Label)!;
     const end=this.box(p,728,267,104,54,C.cyan,'#122B3C','craft-limit');const endLabel=this.row(end,'限位端',0,0,104,54,17,C.cyan,'center').getComponent<Label>(Label)!;
-    let dragging=false,travel=0;
     const partNodes:Node[]=[],partLabels:Label[]=[];
     const terminal=this.h.ui.container(p,400,254,460,84,'craft-terminal-track');
     const refresh=()=>{
@@ -315,74 +404,74 @@ export class OrbitalPanels {
       const completed=(this.h.state.repairProgress[servo.uid]||0)>index;
       const part=this.box(p,completed?401+index*269:15+index*181,94,178,153,C.orange,'#152D3CF0',`craft-input-${index}`);
       this.h.ui.object(part,it.defId,21,10,137,104,{repaired:it.repaired});partNodes.push(part);partLabels.push(this.row(part,index===0?'伺服器':'磁悬轴承',8,116,162,27,16,C.text,'center').getComponent<Label>(Label)!);
-      let origin=part.position.clone(),moving=false,sibling=part.getSiblingIndex();
-      const restore=()=>{part.setPosition(origin);part.setSiblingIndex(sibling);this.dragOpacity(part,false);};
-      part.on(Node.EventType.TOUCH_START,()=>{if(this.h.busy||(this.h.state.repairProgress[servo.uid]||0)!==index)return;origin=part.position.clone();sibling=part.getSiblingIndex();moving=true;this.dragOpacity(part,true);part.setSiblingIndex(p.children.length-1);});
-      part.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(!moving||this.h.busy)return;const d=e.getUIDelta();this.dragWithin(part,d.x,d.y,{left:15,top:90,right:1069,bottom:340});});
-      part.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{
-        if(!moving)return;moving=false;restore();
-        if(slots[index].getComponent<UITransform>(UITransform)?.hitTest(e.getLocation())){part.setPosition(401+index*269,-94);advance(index);}
-        else this.h.ui.toast('把主料放入同轮廓插槽，匹配后再连接端子。');
+      this.dragGesture(part,{
+        bounds:{left:15,top:90,right:1069,bottom:340},enabled:()=>(this.h.state.repairProgress[servo.uid]||0)===index,
+        end:({event,moved})=>{
+          if(moved&&slots[index].getComponent<UITransform>(UITransform)?.hitTest(event.getLocation())){part.setPosition(401+index*269,-94);advance(index);}
+          else if(moved)this.h.ui.toast('把主料放入同轮廓插槽，匹配后再连接端子。');
+          refresh();
+        },cancel:()=>{if(p.isValid)refresh();},
       });
-      part.on(Node.EventType.TOUCH_CANCEL,()=>{if(!moving)return;moving=false;restore();});
     });
-    terminal.on(Node.EventType.TOUCH_START,(e:EventTouch)=>{dragging=!this.h.busy&&(this.h.state.repairProgress[servo.uid]||0)===2&&!!start.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation());travel=0;});
-    terminal.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{
-      if(!dragging||this.h.busy)return;const d=e.getUIDelta();travel+=Math.abs(d.x)+Math.abs(d.y);const t=Math.min(1,travel/300);
-      wire.clear();wire.strokeColor=new Color(C.orange);wire.lineWidth=4;wire.moveTo(92,-51);wire.lineTo(92+303*t,-51);wire.stroke();
+    this.h.ui.bindDraggable(start,()=>this.dragAvailable(terminal)&&(this.h.state.repairProgress[servo.uid]||0)===2);
+    this.dragGesture(terminal,{
+      movable:false,accept:event=>(this.h.state.repairProgress[servo.uid]||0)===2&&!!start.getComponent<UITransform>(UITransform)?.hitTest(event.getLocation()),
+      move:({event})=>{
+        const point=this.pointerLocal(wire.node,event),x=Math.max(0,Math.min(480,point.x)),y=Math.max(-98,Math.min(0,point.y));
+        wire.clear();wire.strokeColor=new Color(C.orange);wire.lineWidth=4;wire.moveTo(92,-51);wire.lineTo(x,y);wire.stroke();
+      },
+      end:({event,moved})=>{if(moved&&end.getComponent<UITransform>(UITransform)?.hitTest(event.getLocation()))advance(2);else{refresh();this.h.ui.toast('从供电端连接到限位端，完成双向回路。');}},
+      cancel:()=>{if(p.isValid)refresh();},
     });
-    terminal.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{if(!dragging)return;dragging=false;if(travel>130&&end.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation()))advance(2);else{refresh();this.h.ui.toast('从供电端连接到限位端，完成双向回路。');}});
-    terminal.on(Node.EventType.TOUCH_CANCEL,()=>{dragging=false;refresh();});
     const auxiliary=this.button(p,'辅助连接端子',851,268,218,51,()=>{if((this.h.state.repairProgress[servo.uid]||0)===2)advance(2);else this.h.ui.toast('先将两件主料拖入插槽。');},'quiet');
     refresh();
   }
 
   private warehouse(p:Node):void {
     const s=this.h.state,item=this.item();
+    const inStock=!!item&&s.inventory.some(stored=>stored.uid===item.uid);
     this.title(p,'WAREHOUSE / SCN-003','仓储与安检',40,1010);
     this.h.ui.panel(p,30,205,720,404,{fill:'#091315A3',stroke:'#7D82743B',radius:3,lineWidth:.8,name:'warehouse-rack'});
     this.baseline(p,`后仓 / 10 × 6`,47,228,400,18,C.text);
     this.baseline(p,`${s.inventory.filter(i=>i.location==='warehouse').length} 件在库`,540,228,187,14,C.muted,'right');
     const gx=47,gy=249,cw=68,ch=55;
-    this.h.ui.panel(p,gx,gy,cw*10,ch*6,{fill:'#111B21D6',lineWidth:0,radius:0,name:'warehouse-grid-bed'});
+    const grid=this.h.ui.panel(p,gx,gy,cw*10,ch*6,{fill:'#111B21D6',lineWidth:0,radius:0,name:'warehouse-grid-bed'});
     const gridInk=this.h.ui.container(p,gx,gy,cw*10,ch*6,'warehouse-grid-lines').addComponent<Graphics>(Graphics);
     gridInk.fillColor=new Color(112,137,144,122);
     for(let x=0;x<=10;x++){gridInk.rect(Math.min(cw*10-1,x*cw),-ch*6,1,ch*6);gridInk.fill();}
     for(let y=0;y<=6;y++){gridInk.rect(0,-Math.min(ch*6,y*ch+1),cw*10,1);gridInk.fill();}
     [0,4,9].forEach(x=>this.text(p,String(x+1).padStart(2,'0'),gx+x*cw,235,50,14,9,'#B0B1A960','center'));
     [0,2,5].forEach(y=>this.text(p,String.fromCharCode(65+y),32,gy+y*ch+17,12,15,9,'#B0B1A960','center'));
-    const cells:{node:Node;x:number;y:number}[]=[];
     for(let y=0;y<6;y++)for(let x=0;x<10;x++){
-      const cell=this.h.ui.container(p,gx+x*cw,gy+y*ch,cw-4,ch-4,`warehouse-cell-${x}-${y}`);
-      cells.push({node:cell,x,y});
+      this.h.ui.container(p,gx+x*cw,gy+y*ch,cw-4,ch-4,`warehouse-cell-${x}-${y}`);
     }
     const preview=this.h.ui.container(p,gx,gy,cw*10,ch*6,'warehouse-preview').addComponent<Graphics>(Graphics);
     s.inventory.filter(it=>it.location==='warehouse').forEach(it=>{
       const [iw,ih]=this.dims(it),xx=gx+it.x*cw,yy=gy+it.y*ch;
-      const node=this.box(p,xx,yy,iw*cw-4,ih*ch-4,it.uid===this.h.selected?C.cyan:'#8D968559',it.uid===this.h.selected?'#203438C9':'#141F22A6',`warehouse-item-${it.uid}`);
+      const node=this.box(p,xx,yy,iw*cw-4,ih*ch-4,it.uid===this.h.selected?C.orange:'#8D968559',it.uid===this.h.selected?'#203438C9':'#141F22A6',`warehouse-item-${it.uid}`);
       this.h.ui.object(node,it.defId,4,3,iw*cw-12,ih*ch-13,{repaired:it.repaired,damaged:!it.working});
       this.row(node,it.sourceVerified?'✓':it.owner==='customer'?'委':'?',3,3,20,18,12,it.sourceVerified?C.cyan:C.orange,'center');
-      let start=new Vec3(),distance=0,drag=false,sibling=node.getSiblingIndex(),previewSibling=preview.node.getSiblingIndex();
-      const target=(e:EventTouch)=>cells.find(c=>!!c.node.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation()));
+      const target=(raw:Vec3)=>({x:Math.round((raw.x-gx)/cw),y:Math.round((-raw.y-gy)/ch)});
+      const inGrid=(event:EventTouch)=>!!grid.getComponent<UITransform>(UITransform)?.hitTest(event.getLocation());
       const drawPreview=(x:number,y:number,outside=false)=>{
-        preview.clear();const valid=!outside&&canPlace(s,it.uid,x,y,it.rotated),px=x*cw,py=y*ch,pw=Math.min(iw*cw-3,cw*10-px-1),ph=Math.min(ih*ch-3,ch*6-py-1);
+        preview.clear();const valid=!outside&&canPlace(s,it.uid,x,y,it.rotated),px=Math.max(0,x*cw),py=Math.max(0,y*ch),pw=Math.min(cw*10-1,(x+iw)*cw-3)-px,ph=Math.min(ch*6-1,(y+ih)*ch-3)-py;
+        if(pw<=0||ph<=0)return;
         preview.fillColor=valid?new Color(118,186,187,85):new Color(209,141,119,105);preview.rect(px,-py-ph,pw,ph);preview.fill();
         preview.fillColor=valid?new Color(118,186,187,240):new Color(209,141,119,240);
         for(const [rx,ry,rw,rh]of [[px,-py-2,pw,2],[px,-py-ph,pw,2],[px,-py-ph,2,ph],[px+pw-2,-py-ph,2,ph]]){preview.rect(rx,ry,rw,rh);preview.fill();}
         if(!valid){preview.strokeColor=new Color(209,141,119,220);preview.lineWidth=2;for(let k=-ph;k<pw;k+=14){const from=Math.max(0,-k),to=Math.min(ph,pw-k);if(to<=from)continue;preview.moveTo(px+k+from,-py-from);preview.lineTo(px+k+to,-py-to);preview.stroke();}}
       };
-      const restore=()=>{node.setPosition(start);this.dragOpacity(node,false);preview.clear();preview.node.setSiblingIndex(previewSibling);node.setSiblingIndex(sibling);};
-      node.on(Node.EventType.TOUCH_START,()=>{if(this.h.busy)return;drag=true;distance=0;start=node.position.clone();sibling=node.getSiblingIndex();previewSibling=preview.node.getSiblingIndex();this.h.selected=it.uid;this.dragOpacity(node,true);preview.node.setSiblingIndex(p.children.length-1);node.setSiblingIndex(p.children.length-1);drawPreview(it.x,it.y);});
-      node.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{
-        if(!drag||this.h.busy)return;const d=e.getUIDelta();distance+=Math.abs(d.x)+Math.abs(d.y);this.dragWithin(node,d.x,d.y,{left:gx,top:gy,right:gx+cw*10,bottom:gy+ch*6});
-        const cell=target(e);if(cell)drawPreview(cell.x,cell.y);else drawPreview(Math.min(9,Math.max(0,Math.floor((node.position.x-gx)/cw))),Math.min(5,Math.max(0,Math.floor((-node.position.y-gy)/ch))),true);
+      this.dragGesture(node,{
+        bounds:{left:gx,top:gy,right:gx+cw*10,bottom:gy+ch*6},
+        start:()=>{this.h.selected=it.uid;preview.node.setSiblingIndex(p.children.length-1);drawPreview(it.x,it.y);},
+        move:({event,raw,moved})=>{if(!moved)return;const cell=target(raw);drawPreview(cell.x,cell.y,!inGrid(event));},
+        end:({event,raw,moved})=>{
+          preview.clear();
+          if(moved){if(inGrid(event)){const cell=target(raw);this.h.dispatch({type:'MOVE',uid:it.uid,x:cell.x,y:cell.y,rotated:it.rotated});}}
+          else this.h.select(it.uid);
+        },
+        cancel:()=>{if(preview.isValid)preview.clear();},
       });
-      node.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{
-        if(!drag)return;drag=false;restore();
-        const cell=target(e);if(distance>8&&cell){this.h.dispatch({type:'MOVE',uid:it.uid,x:cell.x,y:cell.y,rotated:it.rotated});}
-        else this.h.select(it.uid);
-      });
-      node.on(Node.EventType.TOUCH_CANCEL,()=>{if(!drag)return;drag=false;restore();});
     });
     this.row(p,'拖动实物入格 · R 旋转 · 红色斜纹表示重叠或越界',47,588,680,22,15,C.muted);
     this.h.ui.rail(p,30,622,720,149,{fill:'#121A1CA8',stroke:'#8B86704A',name:'warehouse-sales-rack'});
@@ -391,17 +480,17 @@ export class OrbitalPanels {
     for(let i=0;i<24;i++){
       const xx=46+(i%8)*86,yy=660+Math.floor(i/8)*35,it=sale[i];
       const cell=this.h.ui.panel(p,xx,yy,81,31,{stroke:it?.uid===this.h.selected?C.cyan:it?'#9E9C805A':'#8F97842B',fill:it?'#223036AD':'#0C151C38',radius:2,lineWidth:.7,name:`display-slot-${i}`});
-      if(it){this.h.ui.object(cell,it.defId,2,1,34,28,{repaired:it.repaired});this.row(cell,`${it.listPrice}`,37,0,40,31,13,C.text,'right');cell.on(Node.EventType.TOUCH_END,()=>!this.h.busy&&this.h.select(it.uid));}
+      if(it){this.h.ui.object(cell,it.defId,2,1,34,28,{repaired:it.repaired});this.row(cell,`${it.listPrice}`,37,0,40,31,13,C.text,'right');this.h.ui.bindPointer(cell,{cursor:'pointer',disabled:()=>this.h.busy});cell.on(Node.EventType.TOUCH_END,()=>!this.h.busy&&this.h.select(it.uid));}
     }
     this.h.ui.texturePanel(p,766,205,318,566,{skin:'glass',fill:'#0C171BBB',stroke:'#7D82743D',materialOpacity:.29,name:'warehouse-security-station'});
     this.row(p,'CARGO SCANNER / 03',785,216,279,22,12,C.muted);
-    this.row(p,'入库扫描仪',785,239,279,29,22,C.text);
+    this.row(p,item&&!inStock?'柜台来件 · 尚未入库':'入库扫描仪',785,239,279,29,item&&!inStock?19:22,C.text);
     const scanner=this.h.ui.texturePanel(p,785,278,279,283,{skin:'socket',fill:'#1420248A',stroke:'#84938468',materialOpacity:.88,name:'warehouse-scanner'});
     if(item)this.h.ui.object(scanner,item.defId,28,38,225,211,{repaired:item.repaired,damaged:!item.working});
     for(let y=20;y<280;y+=30){this.h.ui.line(scanner,8,y,20,y,'#77C3C577',2);this.h.ui.line(scanner,258,y,270,y,'#77C3C577',2);}
     this.scanner=this.h.ui.container(scanner,0,0,279,292,'scanner-light').addComponent<Graphics>(Graphics);
-    this.button(p,'扫描当前物件',785,577,279,45,()=>{if(!item)return;this.h.dispatch({type:'SCAN',uid:item.uid});this.scanUntil=this.clock+1.5;this.effect('scan',{x:800,y:285,width:245,height:250});},'green',!item);
-    const scanStatus=item&&s.scanned.includes(item.uid)?'扫描完成 · 可比对来源证据':'未扫描 · 放入货物后启动';
+    this.button(p,'扫描当前物件',785,577,279,45,()=>{if(!item||!inStock)return;this.h.dispatch({type:'SCAN',uid:item.uid});this.scanUntil=this.clock+1.5;this.effect('scan',{x:800,y:285,width:245,height:250});},'green',!item||!inStock);
+    const scanStatus=item&&!inStock?'柜台来件 · 入库后可扫描':item&&s.scanned.includes(item.uid)?'扫描完成 · 可比对来源证据':'未扫描 · 放入货物后启动';
     this.row(p,scanStatus,785,635,279,28,17,C.muted,'center');
     const warn=s.inspection==='pending'?'饶静已到站 · 请处理待核货物':s.inspection==='cleared'?'本次检查已完成 · 回执归档':'预告：第3天进行预约核验';
     this.line(p,785,674,279,'#8B86704A');
@@ -411,7 +500,7 @@ export class OrbitalPanels {
     if(!item){this.text(p,'点选仓格中的实物',1120,245,425,60,23,C.muted,'center');return;}
     const def=getDef(item.defId),a=estimate(item);
     this.row(p,def.name,1120,196,425,39,29);
-    this.row(p,this.ownership(item),1120,242,286,28,16,C.muted);
+    this.row(p,inStock?this.ownership(item):'柜台来件 · 尚未成交',1120,242,286,28,16,C.muted);
     this.row(p,`${def.size[0]}×${def.size[1]} 格`,1418,242,127,28,16,C.muted,'right');
     this.row(p,`估值 ${a.low}–${a.high} Cr`,1120,284,425,33,24,C.orange);
     this.paragraph(p,'来源',1120,329,50,52,18,C.muted);
@@ -419,19 +508,19 @@ export class OrbitalPanels {
     this.row(p,'独立物证',1120,388,90,29,17,item.sourceVerified?C.cyan:C.orange);
     this.row(p,`${item.evidence.length} 项`,1216,388,62,29,17,item.sourceVerified?C.cyan:C.orange,'right');
     this.row(p,item.sourceVerified?'来源已登记':'来源未登记',1340,388,205,29,17,item.sourceVerified?C.cyan:C.orange,'right');
-    this.row(p,`${item.sealed?'封签完好':'未封签'} · ${item.repaired?'已修复':item.working?'功能待复核':'功能故障'} · ${item.location==='isolation'?'隔离存放':item.location==='pawn'?'抵押保管':item.location==='display'?'销售架':'普通仓库'}`,1120,431,425,30,17,C.muted);
+    this.row(p,!inStock?'尚未入库 · 返回柜台完成交易':`${item.sealed?'封签完好':'未封签'} · ${item.repaired?'已修复':item.working?'功能待复核':'功能故障'} · ${item.location==='isolation'?'隔离存放':item.location==='pawn'?'抵押保管':item.location==='display'?'销售架':'普通仓库'}`,1120,431,425,30,17,C.muted);
     const buyer=s.trade?.kind==='sell'&&!s.trade.locked;
-    this.button(p,buyer?'推荐给当前顾客':item.location==='display'?'撤回普通仓库':'放上销售架',1120,506,205,44,()=>this.h.dispatch(buyer?{type:'SELECT_TRADE',uid:item.uid}:{type:'DISPLAY',uid:item.uid}),'gold',item.owner!=='shop'||!!buyer&&(!item.sourceVerified||item.location==='isolation'||item.sealed||!!item.orderId));
-    this.button(p,'旋转 90°',1340,506,205,44,()=>this.h.dispatch({type:'MOVE',uid:item.uid,x:item.x,y:item.y,rotated:!item.rotated}),'quiet',item.location!=='warehouse');
-    this.button(p,'登记并封签',1120,565,205,44,()=>{this.h.dispatch({type:'REGISTER',uid:item.uid});if(findItem(this.h.state,item.uid)?.sourceVerified)this.effect('stamp',{x:1300,y:405});},'green',item.sourceVerified);
-    this.button(p,item.location==='isolation'?'移出隔离柜':'隔离待核验',1340,565,205,44,()=>this.h.dispatch({type:'ISOLATE',uid:item.uid}),'quiet');
+    this.button(p,buyer?'推荐给当前顾客':item.location==='display'?'撤回普通仓库':'放上销售架',1120,506,205,44,()=>this.h.dispatch(buyer?{type:'SELECT_TRADE',uid:item.uid}:{type:'DISPLAY',uid:item.uid}),'gold',!inStock||item.owner!=='shop'||!!buyer&&(!item.sourceVerified||item.location==='isolation'||item.sealed||!!item.orderId));
+    this.button(p,'旋转 90°',1340,506,205,44,()=>this.h.dispatch({type:'MOVE',uid:item.uid,x:item.x,y:item.y,rotated:!item.rotated}),'quiet',!inStock||item.location!=='warehouse');
+    this.button(p,'登记并封签',1120,565,205,44,()=>{this.h.dispatch({type:'REGISTER',uid:item.uid});if(findItem(this.h.state,item.uid)?.sourceVerified)this.effect('stamp',{x:1300,y:405});},'green',!inStock||item.sourceVerified);
+    this.button(p,item.location==='isolation'?'移出隔离柜':'隔离待核验',1340,565,205,44,()=>this.h.dispatch({type:'ISOLATE',uid:item.uid}),'quiet',!inStock);
     this.button(p,'到鉴定台补证',1120,624,205,44,()=>this.h.navigate('inspect',item.uid),'green');
     const relief=s.ledger.some(e=>e.kind==='relief-window'&&e.day===s.day),eligible=relief&&item.owner==='shop'&&!item.orderId&&!item.sealed&&item.sourceVerified&&item.evidence.length>=2&&item.location!=='isolation';
     this.button(p,eligible?'应急清仓…':item.owner==='pawn'?'赎回原物':'退回来源方…',1340,624,205,44,()=>{
       if(eligible)this.confirmDialog('应急清仓',`${def.name} 按估值55%回收，获得 ${Math.floor(itemValue(item)*.55)} Cr，不消耗 AP。\n确认后原物移交，款项与出库同时保存。`,()=>this.h.dispatch({type:'EMERGENCY_SALE',uid:item.uid}));
       else if(item.owner==='pawn')this.h.dispatch({type:'REDEEM',uid:item.uid});
       else this.confirmDialog('退回来源方',`退还 ${def.name} 并移出当前库存。\n已支付采购款不自动返还；本操作不会伪造来源证据。`,()=>this.h.dispatch({type:'RETURN_ITEM',uid:item.uid}));
-    },'danger');
+    },'danger',!inStock);
     this.row(p,eligible?`应急回收 ${Math.floor(itemValue(item)*.55)} Cr · 55%估值 / 0 AP`:'登记需：扫描 + 2项独立证据 + 35 Cr / 1 AP',1120,471,425,24,14,eligible?C.orange:C.muted);
     this.button(p,'隔离柜 4 × 3',1120,678,204,25,()=>{this.cabinet='isolation';this.h.render();},this.cabinet==='isolation'?'green':'quiet',false);
     this.button(p,'抵押柜 4 × 4',1340,678,205,25,()=>{this.cabinet='pawn';this.h.render();},this.cabinet==='pawn'?'green':'quiet',false);
@@ -439,7 +528,7 @@ export class OrbitalPanels {
     for(let i=0;i<(this.cabinet==='pawn'?16:12);i++){
       const xx=1120+(i%4)*105,yy=708+Math.floor(i/4)*17,it=isolated[i];
       const cell=this.h.ui.panel(p,xx,yy,97,15,{stroke:it?.uid===this.h.selected?C.cyan:it?'#AEA4B464':'#7D82742D',fill:it?'#3A3945AB':'#10191D38',radius:1,lineWidth:.6,name:`${this.cabinet}-slot-${i}`});
-      if(it){this.h.ui.object(cell,it.defId,2,0,27,18,{repaired:it.repaired});this.row(cell,it.owner==='pawn'?'抵押':'隔离',33,0,60,15,10,C.text);cell.on(Node.EventType.TOUCH_END,()=>!this.h.busy&&this.h.select(it.uid));}
+      if(it){this.h.ui.object(cell,it.defId,2,0,27,18,{repaired:it.repaired});this.row(cell,it.owner==='pawn'?'抵押':'隔离',33,0,60,15,10,C.text);this.h.ui.bindPointer(cell,{cursor:'pointer',disabled:()=>this.h.busy});cell.on(Node.EventType.TOUCH_END,()=>!this.h.busy&&this.h.select(it.uid));}
     }
   }
   private orders(p:Node):void {
@@ -465,7 +554,7 @@ export class OrbitalPanels {
     this.row(p,order.name,948,189,602,42,29);
     this.baseline(p,`${order.id}  /  ${order.customerOwned?'顾客委修原物':'店铺自有货物'}  /  D${String(order.dueDay).padStart(2,'0')} 截止`,948,264,410,15,C.muted);
     this.baseline(p,`${order.reward} Cr`,1365,264,185,25,C.orange,'right');
-    this.paragraph(p,order.description,948,284,602,92,18,'#BCC1B7');
+    this.paragraph(p,order.description.replace(/；\s*/g,'；\n'),948,284,602,92,18,'#BCC1B7');
     this.line(p,948,389,602);
     this.row(p,`要求：${getDef(order.itemId).name}`,948,403,310,30,17);
     this.row(p,`品相≥${Math.round(order.minCondition*100)}%${order.needsRepair?' · 已修复':''}`,1274,403,276,30,17,C.text,'right');
@@ -493,13 +582,13 @@ export class OrbitalPanels {
       const x=948+i*119,y=492;
       const card=this.h.ui.texturePanel(p,x,y,109,54,{skin:'socket',fill:'#1C292DD1',stroke:it.uid===this.stagedUid?C.cyan:C.line,materialOpacity:.60,name:`order-candidate-${it.uid}`});
       this.h.ui.object(card,it.defId,3,2,65,49,{repaired:it.repaired,damaged:!it.working});this.row(card,it.uid===this.stagedUid?'盘':it.repaired?'修':'原',74,0,27,54,15,it.uid===this.stagedUid||it.repaired?C.cyan:C.muted,'center');
-      let start=new Vec3(),travel=0,moving=false,sibling=card.getSiblingIndex();
       const guide=(hovered:boolean)=>{dropGlow.clear();dropGlow.strokeColor=new Color(hovered?C.cyan:C.orange);dropGlow.lineWidth=2;dropGlow.rect(0,-105,344,105);dropGlow.stroke();};
-      const restore=()=>{card.setPosition(start);card.setSiblingIndex(sibling);this.dragOpacity(card,false);dropGlow.clear();};
-      card.on(Node.EventType.TOUCH_START,()=>{if(this.h.busy)return;start=card.position.clone();sibling=card.getSiblingIndex();travel=0;moving=true;this.dragOpacity(card,true);card.setSiblingIndex(p.children.length-1);guide(false);});
-      card.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(!moving||this.h.busy)return;const d=e.getUIDelta();travel+=Math.abs(d.x)+Math.abs(d.y);this.dragWithin(card,d.x,d.y,{left:948,top:492,right:1550,bottom:664});guide(!!tray.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation()));});
-      card.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{if(!moving)return;moving=false;restore();if(travel<8||tray.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation())){this.stagedUid=it.uid;this.h.render();}else this.h.ui.toast('把原物拖入橙色交付盘，或点选原物预览。');});
-      card.on(Node.EventType.TOUCH_CANCEL,()=>{if(!moving)return;moving=false;restore();});
+      this.dragGesture(card,{
+        bounds:{left:948,top:492,right:1550,bottom:664},start:()=>guide(false),
+        move:({event})=>guide(!!tray.getComponent<UITransform>(UITransform)?.hitTest(event.getLocation())),
+        end:({event,moved})=>{dropGlow.clear();if(!moved||tray.getComponent<UITransform>(UITransform)?.hitTest(event.getLocation())){this.stagedUid=it.uid;this.h.render();}else this.h.ui.toast('把原物拖入橙色交付盘，或点选原物预览。');},
+        cancel:()=>{if(dropGlow.isValid)dropGlow.clear();},
+      });
     });
     if(!candidates.length)this.text(p,'仓库暂无相同型号，先取得原物或接收委修件。',948,494,602,45,18,C.muted);
     if(staged){

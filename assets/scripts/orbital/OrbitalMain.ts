@@ -1,4 +1,4 @@
-import {Component,Node,Canvas,Camera,UITransform,Layers,Color,Vec2,Vec3,Rect,Size,SpriteFrame,Graphics,Mask,Label,EditBox,UIOpacity,EventTouch,EventMouse,input,Input,EventKeyboard,KeyCode,view,ResolutionPolicy,sys,AudioSource,AudioClip,assetManager,resources} from 'cc';
+import {Component,Node,Canvas,Camera,UITransform,Layers,Color,Vec2,Vec3,Rect,Size,SpriteFrame,Graphics,Mask,Label,EditBox,UIOpacity,EventTouch,EventMouse,game,input,Input,EventKeyboard,KeyCode,view,ResolutionPolicy,sys,AudioSource,AudioClip,assetManager,resources} from 'cc';
 import type {ButtonOptions} from '../ui/GameUI';
 import {OrbitalUI,ORBITAL_PALETTE as C} from './OrbitalUI';
 import {OrbitalMotion} from './OrbitalMotion';
@@ -8,10 +8,11 @@ import {createOrbital,reduceOrbital,findItem,estimate,serializeOrbital,parseOrbi
 import type {OrbitalAction,OrbitalItem,OrbitalPrefs,OrbitalState,PageId,ToolId} from './types';
 import type {OrbitalHost} from './ui-types';
 import {constrain,type InspectionRect} from './InspectionGeometry';
+import {getItemHitBounds} from './ItemHitBounds';
 
-const INSPECTION_AREA:InspectionRect={x:244,y:216,width:992,height:366};
+const INSPECTION_AREA:InspectionRect={x:212,y:200,width:1008,height:440};
 const INSPECTION_LOCAL:InspectionRect={x:-202,y:-202,width:404,height:404};
-const INSPECTION_HOME={x:740,y:399,angle:0};
+const INSPECTION_HOME={x:716,y:420,angle:0};
 const W=1600,H=900,SAVE='orbital-save-v3',PREFS='orbital-prefs-v3';
 const TITLES:Record<PageId,string>={counter:'营业主柜台',inspect:'实物鉴定工作台',repair:'维修与拆解台',warehouse:'仓库与安检',trade:'议价与成交',orders:'订单与委托',report:'日结与租金',settings:'暂停与设置'};
 type Draft={marks:Set<number>;uv:number;peaks:number[];probe:number;tared:boolean;weights:Set<number>;load:number};
@@ -37,7 +38,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
   private counterShadow:Node|null=null;
   private counterTags:Node[]=[];
   private back=false;
-  private zoom=.8;
+  private zoom=1;
   private scaleLabel:Label|null=null;
   private zoomIn:Node|null=null;
   private zoomOut:Node|null=null;
@@ -57,6 +58,9 @@ export class OrbitalMain extends Component implements OrbitalHost {
   private clips=new Map<string,AudioClip>();
   private disposed=false;
   private counterForeground:SpriteFrame|null=null;
+  private pointerCleanup:(()=>void)|null=null;
+  private pointerCanvas:HTMLCanvasElement|null=null;
+  private readonly cancelPointer=()=>{const cleanup=this.pointerCleanup;this.pointerCleanup=null;cleanup?.();this.ui?.resetPointer();};
 
   start():void{void this.boot().catch(error=>{console.error('Orbital game initialization failed',error);const el=document.getElementById('load-status');if(el)el.textContent='空间站载入失败，请刷新重试。';});}
   private async boot():Promise<void>{
@@ -72,7 +76,9 @@ export class OrbitalMain extends Component implements OrbitalHost {
     await this.ui.preload();if(this.disposed)return;
     this.motion=new OrbitalMotion(this.ui,root);this.motion.setRegions({contentArea:{x:24,y:108,width:1552,height:700},inspectionArea:INSPECTION_AREA});this.panels=new OrbitalPanels(this);this.render();
     input.on(Input.EventType.KEY_DOWN,this.onKey,this);void this.loadAudio();
-    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v6',snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>this.dispatch(a),open:(p:PageId,uid?:string)=>this.navigate(p,uid),reset:(seed='ORBITAL-TUTORIAL')=>{this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
+    this.pointerCanvas=game.canvas;this.pointerCanvas?.addEventListener('pointerleave',this.cancelPointer);this.pointerCanvas?.addEventListener('mouseleave',this.cancelPointer);
+    window.addEventListener('blur',this.cancelPointer);window.addEventListener('pointercancel',this.cancelPointer);window.addEventListener('resize',this.cancelPointer);
+    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v7',snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>this.dispatch(a),open:(p:PageId,uid?:string)=>this.navigate(p,uid),reset:(seed='ORBITAL-TUTORIAL')=>{this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
     (window as unknown as {__ORBITAL__:typeof debug;__GREYLINE__:typeof debug}).__ORBITAL__=debug;(window as unknown as {__GREYLINE__:typeof debug}).__GREYLINE__=debug;
     document.dispatchEvent(new CustomEvent('greyline-ready'));
     void this.play(()=>this.motion.sceneEntry());
@@ -108,7 +114,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     const after=this.state;
     if(action.type==='ARRIVE'&&after.trade&&!before.trade){
       const actor=this.actor,it=after.trade.item;this.setCounterVisible(false);
-      void this.play(async active=>{if(actor)await this.motion.enter(actor);if(active()&&it)await this.motion.handoff(it.defId,{x:675,y:450},{x:879,y:583},()=>{if(active())this.setCounterVisible(true);});if(active())this.setCounterVisible(true);});
+      void this.play(async active=>{if(actor)await this.motion.enter(actor);if(active()&&it)await this.motion.handoff(it.defId,{x:675,y:450},{x:900,y:556},()=>{if(active())this.setCounterVisible(true);},316);if(active())this.setCounterVisible(true);});
     }else if(action.type==='DELIVER'&&before.trade&&!after.trade&&after.completedTrades.includes(before.trade.id)){
       void this.play(async active=>{await this.motion.deal(after.cash-before.cash,oldItem?.defId);if(active())await this.motion.exit(before.trade!.npcId);});
     }else if(action.type==='REFUSE'&&before.trade&&!after.trade){void this.play(()=>this.motion.exit(before.trade!.npcId));}
@@ -130,19 +136,19 @@ export class OrbitalMain extends Component implements OrbitalHost {
   }
   effect(kind:string,parent:Node,at?:{x:number;y:number;width?:number;height?:number}):void{if(this.busy)return;void this.play(()=>this.motion.effect(kind,parent,at));}
   private async play(run:(active:()=>boolean)=>Promise<void>):Promise<void>{
-    const epoch=++this.epoch;this.busy=true;this.motion.configure({reducedMotion:this.prefs.reducedMotion});
+    const epoch=++this.epoch;this.busy=true;this.ui.pointer.refresh();this.motion.configure({reducedMotion:this.prefs.reducedMotion});
     this.skipNode?.destroy();this.skipNode=this.ui.container(this.ui.root,1210,780,350,22,'skip-animation');
     this.row(this.skipNode,'空格快进 · 结果不会重复结算',0,0,350,22,11,C.muted,'right');this.skipNode.on(Node.EventType.TOUCH_END,()=>this.skip());
-    try{await run(()=>epoch===this.epoch);}finally{if(epoch===this.epoch){this.busy=false;this.skipNode?.removeFromParent();this.skipNode?.destroy();this.skipNode=null;this.setCounterVisible(true);}}
+    try{await run(()=>epoch===this.epoch);}finally{if(epoch===this.epoch){this.busy=false;this.ui.pointer.refresh();this.skipNode?.removeFromParent();this.skipNode?.destroy();this.skipNode=null;this.setCounterVisible(true);}}
   }
-  private skip():void{this.epoch++;this.motion?.finish();this.busy=false;this.skipNode?.removeFromParent();this.skipNode?.destroy();this.skipNode=null;this.setCounterVisible(true);}
+  private skip():void{this.epoch++;this.motion?.finish();this.busy=false;this.ui.pointer.refresh();this.skipNode?.removeFromParent();this.skipNode?.destroy();this.skipNode=null;this.setCounterVisible(true);}
   private setCounterVisible(visible:boolean):void{for(const n of [this.counterObject,this.counterShadow,...this.counterTags])this.opacity(n,visible?255:0);}
   private opacity(node:Node|null,value:number):void{if(node?.isValid)(node.getComponent<UIOpacity>(UIOpacity)||node.addComponent<UIOpacity>(UIOpacity)).opacity=value;}
   button(parent:Node,text:string,x:number,y:number,w:number,h:number,fn:()=>void,options:ButtonOptions={}):Node{
     let n:Node;
     const invoke=()=>{if(this.busy||options.disabled||(n as unknown as {__enabled?:boolean}).__enabled===false)return;this.sound('click');fn();};
     n=this.ui.button(parent,text,x,y,w,h,invoke,{...options,size:(options.size||20)*(this.prefs.largeText?1.08:1)});
-    Object.assign(n,{__action:invoke,__enabled:!options.disabled});return n;
+    Object.assign(n,{__action:invoke,__enabled:!options.disabled});this.ui.bindPointer(n,{cursor:'pointer',disabled:()=>this.busy||!!options.disabled||(n as unknown as {__enabled?:boolean}).__enabled===false});return n;
   }
   private text(p:Node,t:string,x:number,y:number,w:number,h:number,size=21,color:string=C.text,align:'left'|'center'|'right'='left'):Node{return this.ui.label(p,t,x,y,w,h,{size:size*(this.prefs.largeText?1.08:1),color,align});}
   private baseline(p:Node,t:string,x:number,y:number,w:number,size=21,color:string=C.text,align:'left'|'center'|'right'='left'):Node{return this.ui.baselineLabel(p,t,x,y,w,{size:size*(this.prefs.largeText?1.08:1),color,align});}
@@ -151,7 +157,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     if(!this.ui||!this.motion)return;
     if(this.busy)this.skip();
     if(this.chrome?.isValid){this.chrome.removeFromParent();this.chrome.destroy();}this.chrome=null;this.dialogueNodes=[];
-        this.ui.clear(this.shell);this.objectDragging=false;this.object=null;this.inspectionShadow=null;this.scaleLabel=null;this.zoomIn=null;this.zoomOut=null;this.actor=null;this.counterObject=null;this.counterShadow=null;this.counterTags=[];this.focused=null;
+        this.cancelPointer();this.ui.clear(this.shell);this.objectDragging=false;this.object=null;this.inspectionShadow=null;this.scaleLabel=null;this.zoomIn=null;this.zoomOut=null;this.actor=null;this.counterObject=null;this.counterShadow=null;this.counterTags=[];this.focused=null;
     this.ui.reducedMotion=this.prefs.reducedMotion;
     const image=this.page==='inspect'||this.page==='repair'?'orbital-workbench':this.page==='warehouse'?'orbital-warehouse':'orbital-counter';
     this.ui.image(this.shell,image,0,0,W,H,{fit:'cover'});
@@ -165,27 +171,30 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.motion.bindAmbient({parent:this.content,actor:this.actor||undefined,area:{x:310,y:160,width:860,height:500}});
   }
   private header():void{
-    const s=this.state;
-    const p=this.ui.texturePanel(this.content,28,18,1544,77,{skin:'strip',materialOpacity:.43,fill:'#0A141C8C',lineWidth:0,name:'instrument-header'});
-    const logo=this.ui.container(p,19,20,39,36,'shop-orbit-mark').addComponent<Graphics>(Graphics);logo.lineWidth=1.5;logo.strokeColor=new Color(C.orange);logo.ellipse(17,-18,17,8);logo.stroke();logo.strokeColor=new Color('#D8D1C0');logo.circle(17,-18,11);logo.stroke();logo.fillColor=new Color(C.orange);logo.circle(34,-17,3);logo.fill();
-    this.baseline(p,'轨道旧货局',72,35,264,27,C.text);
-    this.baseline(p,'ORBITAL GOODS  /  SHOP 09',72,61,264,10,C.muted);
-    this.hud('营业日',String(s.day).padStart(2,'0')+' / 21',383,C.text);
-    this.hud('行动',`${s.ap} / 12 AP`,555,C.cyan);
-    this.hud('可用现金',`${s.cash.toFixed(s.cash%1?2:0)} Cr`,761,C.text);
-    this.hud('租金',`${7-((s.day-1)%7)}日 · ${Math.round(450*Math.pow(1.1,Math.floor((s.day-1)/7)))} Cr`,981,C.muted);
-    this.hud('站务关注',`${s.risk} / 100`,1217,s.risk>=30?C.orange:C.muted);
-    this.button(this.content,'设置',1466,33,88,42,()=>this.navigate('settings'),{tone:'quiet',size:16});
+    const s=this.state,p=this.ui.panel(this.content,32,24,1536,56,{fill:'#0A141CEB',stroke:'#A0B0AA35',radius:5,name:'instrument-header'});
+    const logo=this.ui.container(p,17,10,39,36,'shop-orbit-mark').addComponent<Graphics>(Graphics);logo.lineWidth=1.3;logo.strokeColor=new Color(C.orange);logo.ellipse(17,-18,17,8);logo.stroke();logo.strokeColor=new Color('#D8D1C0');logo.circle(17,-18,11);logo.stroke();logo.fillColor=new Color(C.orange);logo.circle(34,-17,3);logo.fill();
+    this.row(p,'轨道旧货局',72,5,270,46,25,C.text);
+    this.row(p,'回环九号 / 下层旧港',277,10,220,36,12,C.muted);
+    this.row(p,'营业日',585,4,90,17,10,C.muted);this.row(p,`${String(s.day).padStart(2,'0')} / 21`,585,22,140,29,22,C.text);
+    this.row(p,'行动',760,4,110,17,10,C.muted);this.row(p,`${s.ap} / 12 AP`,760,22,145,29,22,C.cyan);
+    this.row(p,'可用现金',950,4,150,17,10,C.muted);this.row(p,`${s.cash.toFixed(s.cash%1?2:0)} Cr`,950,22,200,29,22,C.text);
+    this.button(p,`站务 · ${s.risk}`,1194,8,155,40,()=>this.stationDetails(),{tone:'quiet',size:15});
+    this.button(p,'设置',1370,8,144,40,()=>this.navigate('settings'),{tone:'quiet',size:15});
   }
-  private hud(title:string,value:string,x:number,color:string):void{this.baseline(this.content,title,x,40,202,12,C.muted);this.baseline(this.content,value,x,76,202,23,color);}
+  private stationDetails():void{
+    const s=this.state,m=this.ui.modal('站务与经营记录',{width:680,height:440});
+    this.text(m.body,`下一次租金：${7-((s.day-1)%7)} 天后
+应付租金：${Math.round(450*Math.pow(1.1,Math.floor((s.day-1)/7)))} Cr
+站务关注：${s.risk} / 100
+现有货物：${s.inventory.length} 件 · 在办委托：${s.orders.filter(o=>o.status==='active').length} 张`,26,12,560,175,23,C.text);
+    this.button(m.body,'查看经营日结',26,205,560,48,()=>{m.close();this.navigate('report');},{tone:'quiet',size:18});
+  }
   private footer():void{
-    const s=this.state;this.ui.rail(this.content,24,808,1552,74,{fill:'#101A21A8',lineWidth:0});
     const nav:[PageId,string][]=[['counter','柜台'],['inspect','鉴定'],['repair','维修'],['warehouse','仓储'],['orders','订单'],['report','日结']];
-    nav.forEach(([p,t],i)=>this.button(this.content,`${String(i+1).padStart(2,'0')} ${t}`,46+i*129,824,119,43,()=>this.navigate(p),{tone:'quiet',selected:this.page===p,disabled:p==='inspect'&&!this.currentItem(),size:18}));
-    const active=s.orders.filter(o=>o.status==='active').length;
-    this.baseline(this.content,`货物 ${String(s.inventory.length).padStart(2,'0')}   /   在办 ${String(active).padStart(2,'0')}`,918,852,310,15,C.muted);
-    this.baseline(this.content,this.saveFailed?'存档空间不足':'● 经营档案已保存',1261,840,267,14,this.saveFailed?C.orange:C.muted,'right');
-    this.baseline(this.content,'R 旋转  ·  F 翻面  ·  Esc 返回',1199,864,329,11,C.muted,'right');
+    const p=this.ui.panel(this.content,400,824,800,56,{fill:'#0A141CF5',stroke:'#A0B0AA40',radius:6,name:'navigation-dock'});
+    nav.forEach(([page,title],i)=>this.button(p,`${String(i+1).padStart(2,'0')} ${title}`,8+i*132,6,124,44,()=>this.navigate(page),{tone:'quiet',selected:this.page===page,disabled:page==='inspect'&&!this.currentItem(),size:17}));
+    this.row(this.content,this.saveFailed?'存档空间不足':'● 已保存',40,839,260,26,12,this.saveFailed?C.orange:C.muted);
+    this.row(this.content,this.page==='inspect'?'拖动 · 滚轮缩放 · R 旋转 · F 翻面':'Esc 返回 · 空格快进动画',1230,839,330,26,11,C.muted,'right');
   }
   private currentItem():OrbitalItem|undefined{return findItem(this.state,this.selected)||this.state.trade?.item||this.state.inventory[0];}
   private counter():void{
@@ -199,49 +208,49 @@ export class OrbitalMain extends Component implements OrbitalHost {
       if(source){const r=source.rect,y=r.height*565/H;this.counterForeground=new SpriteFrame();this.counterForeground.reset({texture:source.texture,rect:new Rect(r.x,r.y+y,r.width,r.height-y),originalSize:new Size(r.width,r.height-y),offset:new Vec2(0,0)});}
     }
     this.ui.frame(p,this.counterForeground||undefined,0,565,W,335,{fit:'stretch',name:'painted-counter-foreground'});
-    if(t){const name=this.ui.texturePanel(p,397,474,210,67,{skin:'strip',materialOpacity:.38,fill:'#0A161C70',lineWidth:0});this.baseline(name,npc.name,18,29,174,24,C.text);this.baseline(name,npc.title,18,53,174,12,C.muted);}
     if(it){
-      const trading=this.page==='trade',ix=trading?932:755,iy=trading?390:468;
-      const sh=this.ui.container(p,ix-2,iy+204,252,24,'counter-shadow');this.counterShadow=sh;const g=sh.addComponent<Graphics>(Graphics);g.fillColor=new Color('#030A0DAA');g.ellipse(126,-10,112,11);g.fill();
-      this.counterObject=this.ui.object(p,it.defId,ix,iy,248,230,{damaged:it.condition<.75&&!it.repaired,repaired:it.repaired});
-      this.counterObject.on(Node.EventType.TOUCH_END,()=>this.navigate('inspect',it.uid));
-      this.counterTags.push(this.text(p,getDef(it.defId).name,trading?906:729,trading?625:694,300,29,18,C.text,'center'));
-      if(!trading)this.counterTags.push(this.text(p,'点击实物 · 拿到鉴定台',729,723,300,20,12,C.muted,'center'));
+      const trading=this.page==='trade',ix=690,iy=trading?358:398;
+      const sh=this.ui.container(p,ix+30,iy+298,360,25,'counter-shadow');this.counterShadow=sh;const g=sh.addComponent<Graphics>(Graphics);g.fillColor=new Color('#030A0D99');g.ellipse(180,-10,166,12);g.fill();
+      this.counterObject=this.ui.object(p,it.defId,ix,iy,420,316,{damaged:it.condition<.75&&!it.repaired,repaired:it.repaired});
+      this.counterObject.on(Node.EventType.TOUCH_END,()=>this.navigate('inspect',it.uid));this.ui.bindPointer(this.counterObject,{cursor:'pointer',disabled:()=>this.busy});
+      const tag=this.ui.panel(p,752,trading?674:730,296,34,{fill:'#0B171EDF',lineWidth:0,radius:3});this.row(tag,getDef(it.defId).name,10,0,276,34,17,C.text,'center');this.counterTags.push(tag);
     }else if(t?.kind==='sell'){
-      this.ui.texturePanel(p,758,587,360,105,{skin:'strip',materialOpacity:.42,fill:'#0A161C66',lineWidth:0});
-      this.text(p,'为这位客人挑一件旧物',778,605,320,28,21,C.text,'center');
-      this.button(p,'打开仓库挑选',808,647,260,40,()=>this.navigate('warehouse'),{tone:'gold',size:17});
+      this.button(p,'打开仓库 · 为客人挑选旧物',704,620,408,52,()=>this.navigate('warehouse'),{tone:'gold',size:19});
     }
     this.counterLeft();
+    const panel=this.ui.texturePanel(p,1172,464,360,300,{materialOpacity:.15,fill:'#0A141BF5',stroke:'#AE9B7748',lineWidth:1,radius:7,name:'counter-terminal'});
     if(t){
-      const panel=this.ui.texturePanel(p,1250,193,310,488,{materialOpacity:.66,fill:'#0A141B9C',lineWidth:0});
-      this.text(panel,t.kind==='sell'?'出售 / 采购商来访':t.kind==='pawn'?'保管 / 抵押申请':'收购 / 来客报价',22,22,266,25,15,C.muted);
-      this.baseline(panel,`${t.price}`,22,112,206,47,C.text);this.baseline(panel,'Cr',234,112,52,21,C.orange);
-      if(it){const a=estimate(it);this.baseline(panel,`参考估值  ${a.exact?a.low:`${a.low} – ${a.high}`} Cr`,22,163,266,18,C.muted);this.baseline(panel,`${it.evidence.length} 项物证  /  ${t.rounds} 次还价`,22,195,266,14,C.muted);}
-      this.ui.line(panel,22,221,288,221,'#D2CAB335');
+      this.row(panel,t.kind==='sell'?'采购商来访':t.kind==='pawn'?'抵押保管申请':'来客报价',24,18,312,23,14,C.muted);
+      this.baseline(panel,`${t.price}`,24,100,228,48,C.text);this.baseline(panel,'Cr',278,100,56,20,C.orange);
+      if(it){const a=estimate(it);this.row(panel,`估值 ${a.exact?a.low:`${a.low}–${a.high}`} Cr  ·  ${it.evidence.length} 项物证`,24,116,312,25,14,C.muted);}
       if(t.locked){
-        this.row(panel,'价款已议定，等待交割。',22,247,266,34,19,C.text);
-        this.button(panel,'确认钱货交割',22,302,266,57,()=>this.dispatch({type:'DELIVER',tradeId:t.id}),{tone:'gold'});
-        this.row(panel,'交割后才会结算现金与行动。',22,389,266,37,15,C.muted);
+        this.button(panel,'确认钱货交割',24,160,312,52,()=>this.dispatch({type:'DELIVER',tradeId:t.id}),{tone:'gold',size:20});
+        this.row(panel,'价格已锁定 · 交割后结算',24,234,312,28,14,C.muted,'center');
       }else{
-        this.button(panel,'拿起实物 · 鉴定',22,247,266,53,()=>it&&this.navigate('inspect',it.uid),{tone:this.page==='trade'?'quiet':'gold',disabled:!it,size:19});
-        this.button(panel,this.page==='trade'?'接受当前报价':'商量报价',22,312,266,53,()=>this.page==='trade'?this.dispatch({type:'ACCEPT'}):this.navigate('trade'),{tone:'quiet',disabled:!it,size:19});
-        this.button(panel,'礼貌拒绝',22,390,125,39,()=>this.dispatch({type:'REFUSE'}),{tone:'quiet',size:16});
-        this.button(panel,'抵押合同',161,390,127,39,()=>this.pawnContract(),{tone:'quiet',disabled:t.kind==='sell'||!it,size:16});
-        this.row(panel,'先看实物，再做决定。',22,451,266,19,12,C.muted);
+        this.button(panel,'拿起实物 · 鉴定',24,160,312,52,()=>it&&this.navigate('inspect',it.uid),{tone:this.page==='trade'?'quiet':'gold',disabled:!it,size:20});
+        this.button(panel,this.page==='trade'?'接受当前报价':'商量报价',24,230,198,42,()=>this.page==='trade'?this.dispatch({type:'ACCEPT'}):this.navigate('trade'),{tone:'quiet',disabled:!it,size:17});
+        this.button(panel,'更多',234,230,102,42,()=>this.tradeActions(),{tone:'quiet',size:16});
       }
     }else{
-      const terminal=this.ui.texturePanel(p,1250,405,310,288,{materialOpacity:.60,fill:'#0A141B8C',lineWidth:0});
-      this.row(terminal,'营业中',22,23,266,31,26,C.text);this.row(terminal,`下一位  /  ${npc.name}`,22,70,266,28,16,C.muted);
-      this.button(terminal,'接待下一位来客',22,124,266,57,()=>this.dispatch({type:'ARRIVE'}),{tone:'gold',disabled:s.phase!=='open'||s.ap<1,size:20});
-      this.button(terminal,'整理后仓',22,203,266,41,()=>this.navigate('warehouse'),{tone:'quiet',size:16});
+      this.row(panel,'今日营业中',24,21,312,36,25,C.text);this.row(panel,`下一位 / ${npc.name}`,24,78,312,27,17,C.muted);
+      this.button(panel,'接待下一位来客',24,150,312,54,()=>this.dispatch({type:'ARRIVE'}),{tone:'gold',disabled:s.phase!=='open'||s.ap<1,size:20});
+      this.button(panel,'整理后仓',24,230,312,42,()=>this.navigate('warehouse'),{tone:'quiet',size:16});
     }
     if(this.page==='trade'&&t)this.negotiation();
     else{
       const line=t?t.line:s.notice||'回环九号下层港，旧货局今日开门。';
-      this.dialogueNodes.push(this.ui.dialogueFrame(p,342,752,866,43),this.ui.label(p,`${t?npc.name:'营业广播'}  /  ${line}`,360,752,828,43,{size:16,lineHeight:20,color:C.text,verticalAlign:'center',wrap:true,overflow:'clamp'}));
+      const dialogue=this.ui.dialogueFrame(p,48,650,560,134);
+      this.row(dialogue,t?`${npc.name}  /  ${npc.title}`:'营业广播',22,14,516,28,20,C.orange);
+      this.ui.label(dialogue,line,22,52,516,66,{size:18,lineHeight:27,color:C.text,wrap:true,overflow:'clamp'});this.dialogueNodes.push(dialogue);
     }
   }
+  private tradeActions():void{
+    const t=this.state.trade;if(!t)return;const m=this.ui.modal('交易处理',{width:620,height:390});
+    this.button(m.body,'礼貌拒绝',20,24,520,54,()=>{m.close();this.dispatch({type:'REFUSE'});},{tone:'quiet',size:20});
+    this.button(m.body,'抵押合同',20,102,520,54,()=>{m.close();this.pawnContract();},{tone:'quiet',disabled:t.kind==='sell'||!t.item,size:20});
+    this.row(m.body,`已还价 ${t.rounds} 次 · 最多可还价 3 次`,20,183,520,30,15,C.muted,'center');
+  }
+
   private shopFixtures():void{
     const p=this.content,s=this.state,goods=s.inventory.filter(i=>i.location==='display');
     if(s.upgrades.shelf){
@@ -252,7 +261,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     goods.slice(0,9).forEach((it,i)=>{
       const x=978+(i%3)*75,y=210+Math.floor(i/3)*112;
       const n=this.ui.object(p,it.defId,x,y,72,78,{repaired:it.repaired});n.name=`scene-display-${it.uid}`;
-      n.on(Node.EventType.TOUCH_END,()=>this.navigate('inspect',it.uid));
+      n.on(Node.EventType.TOUCH_END,()=>this.navigate('inspect',it.uid));this.ui.bindPointer(n,{cursor:'pointer',disabled:()=>this.busy});
       this.ui.tinyTag(p,`${it.listPrice} Cr`,x,y+79,72,22,C.orange);
     });
     if(s.upgrades.lamp){
@@ -271,30 +280,24 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.button(p,'重新开店',550,405,390,61,()=>this.navigate('settings'),{tone:'gold'});
   }
   private counterLeft():void{
-    const s=this.state,left=this.ui.texturePanel(this.content,36,166,230,290,{skin:'strip',materialOpacity:.52,fill:'#0B171F9C',lineWidth:0});
-    this.text(left,'今日委托',20,18,190,27,19,C.text);this.text(left,'STATION BULLETIN',20,49,190,16,9,C.muted);
-    const os=s.orders.filter(o=>o.status==='active').slice(0,2);
-    if(!os.length){this.text(left,'订单夹里还没有委托。',20,86,190,30,15,C.muted);this.button(left,'打开订单夹',20,132,190,39,()=>this.navigate('orders'),{tone:'quiet',size:16});}
-    os.forEach((o,i)=>{const d=orderDefs.find(x=>x.id===o.id);if(!d)return;this.ui.item(left,d.itemId,16,78+i*69,49,51);this.text(left,d.name,76,78+i*69,136,27,15);this.text(left,`${d.reward} Cr · 第${d.dueDay}天`,76,108+i*69,136,21,12,C.orange);});
-    this.ui.line(left,20,221,210,221,'#D2CAB32B');
-    this.text(left,s.inspection==='cleared'?'本批仓储核查已通过':s.day>=3?'站务核查预约中':s.day===2?'委修件需修复后归还':'鉴定包仅首次扣 1 AP',20,239,190,31,13,s.inspection==='cleared'?C.green:C.muted);
-    this.text(this.content,'回环九号  /  下层旧港',56,478,210,24,13,'#CEC2A4');
-    this.text(this.content,'每件旧物，都有尚未结束的航程。',56,509,210,45,13,C.muted);
+    const active=this.state.orders.filter(o=>o.status==='active').length;
+    this.button(this.content,`订单夹 · ${active}`,48,116,180,42,()=>this.navigate('orders'),{tone:'quiet',size:17});
   }
   private negotiation():void{
     const t=this.state.trade!;const it=t.item||(t.selectedUid?findItem(this.state,t.selectedUid):undefined);if(!it)return;
-    const p=this.ui.texturePanel(this.content,342,663,866,132,{skin:'strip',materialOpacity:.75,fill:'#0A151DBD',lineWidth:0});
+    const p=this.ui.texturePanel(this.content,288,654,852,140,{skin:'strip',materialOpacity:.75,fill:'#0A151DBD',lineWidth:0});
     if(t.locked){this.baseline(p,'已议定报价',22,38,200,15,C.muted);this.baseline(p,`${t.price} Cr`,22,96,250,34,C.text);this.row(p,'价格已锁定，等待右侧钱货交割。',278,36,550,52,19,C.text);return;}
     const quote=this.ui.panel(p,20,15,235,53,{fill:'#243039',stroke:'#DB8A5288',radius:5,name:'quote-evidence-target'});
     const editNode=this.ui.container(quote,8,0,173,53,'native-price-input');
     const priceSize=34*(this.prefs.largeText?1.08:1),priceBaseline=53/2+.37*priceSize;
     const priceLabel=this.ui.label(editNode,String(this.offer),0,0,173,53,{size:priceSize,lineHeight:priceSize,color:C.orange,align:'center',verticalAlign:'center',wrap:false}).getComponent<Label>(Label)!;
+    this.ui.bindPointer(editNode,{cursor:'text',disabled:()=>this.busy});
     const edit=editNode.addComponent<EditBox>(EditBox);edit.textLabel=priceLabel;edit.string=String(this.offer);edit.inputMode=EditBox.InputMode.NUMERIC;edit.maxLength=7;
     // EditBox.textLabel resets the native label to TOP; restore the intended single-line alignment afterwards.
     priceLabel.verticalAlign=Label.VerticalAlign.CENTER;priceLabel.lineHeight=priceSize;priceLabel.enableWrapText=false;
     const changed=()=>{const n=Number(edit.string);this.offer=Number.isSafeInteger(n)&&n>0?n:0;};
     editNode.on(EditBox.EventType.TEXT_CHANGED,changed);editNode.on(EditBox.EventType.EDITING_DID_ENDED,changed);
-    quote.on(Node.EventType.MOUSE_WHEEL,(e:EventMouse)=>{if(this.busy)return;this.offer=Math.max(1,this.offer+(e.getScrollY()>0?10:-10));edit.string=String(this.offer);});
+    quote.on(Node.EventType.MOUSE_WHEEL,(e:EventMouse)=>{const delta=e.getScrollY();if(this.busy||delta===0)return;this.offer=Math.max(1,this.offer+(delta>0?10:-10));edit.string=String(this.offer);});
     this.baseline(quote,'Cr',182,priceBaseline,45,20,C.orange);
     this.button(p,'−10',20,80,107,36,()=>{this.offer=Math.max(1,this.offer-10);this.render();},{tone:'quiet'});
     this.button(p,'＋10',147,80,107,36,()=>{this.offer+=10;this.render();},{tone:'quiet'});
@@ -318,56 +321,69 @@ export class OrbitalMain extends Component implements OrbitalHost {
     const p=this.content,it=this.currentItem();if(!it){this.text(p,'先从柜台或仓库选择一件实物。',400,350,800,80,32,C.text,'center');return;}this.selected=it.uid;
     if(this.poseUid!==it.uid)this.resetInspection(it.uid);
     const def=getDef(it.defId),draft=this.draft();
-    const left=this.ui.texturePanel(p,24,139,192,635,{skin:'strip',materialOpacity:.55,fill:'#0A151B96',lineWidth:0});
-    this.text(left,'仪器架',17,17,158,27,19,C.text);this.text(left,'INSPECTION TOOLS',17,49,158,15,9,C.muted);
+    const left=this.ui.container(p,32,152,148,616,'inspection-tools');
+    this.row(left,'鉴定仪器',0,-30,148,25,13,C.muted);
     tools.forEach((t,i)=>{
-      const button=this.button(left,'',12,78+i*80,168,68,()=>{this.tool=t.id;this.render();},{selected:this.tool===t.id,tone:'quiet',name:`tool-target-${t.id}`});
-      this.ui.toolIcon(button,t.id,7,7,55,55);this.text(button,t.short,69,13,92,29,16,this.tool===t.id?C.text:C.muted);this.text(button,it.evidence.includes(t.id)?'已存证':'0'+(i+1),69,43,92,18,11,it.evidence.includes(t.id)?C.green:C.muted);
+      const button=this.button(left,'',0,i*94,148,80,()=>{this.tool=t.id;this.render();},{selected:this.tool===t.id,tone:'quiet',name:`tool-target-${t.id}`});
+      this.ui.toolIcon(button,t.id,8,10,58,58);this.row(button,t.short,77,15,65,28,17,this.tool===t.id?C.text:C.muted);this.row(button,it.evidence.includes(t.id)?'已存证':'待取证',77,44,65,22,11,it.evidence.includes(t.id)?C.green:C.muted);
     });
-    this.text(left,it.inspectedPaid?'本件后续取证免费':'首次鉴定 1 AP',17,591,158,25,13,C.muted);
-    this.text(p,def.name,263,139,754,41,30,C.text);this.text(p,`${def.id}   /   ${this.back?'背面结构':'正面观察'}`,263,186,643,24,13,C.muted);
-    this.text(p,'拖动实物到仪器 · 滚轮缩放',932,162,288,25,13,C.muted,'right');
+    this.ui.panel(p,212,102,420,84,{fill:'#0A141BA6',lineWidth:0,radius:4,name:'inspection-title-shade'});
+    this.text(p,def.name,220,109,790,42,31,C.text);this.row(p,`${def.id}  /  ${this.back?'背面结构':'正面观察'}`,222,154,620,24,13,C.muted);
     const viewport=this.ui.container(p,INSPECTION_AREA.x,INSPECTION_AREA.y,INSPECTION_AREA.width,INSPECTION_AREA.height,'inspection-viewport');
     viewport.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
     this.inspectionShadow=this.ui.container(viewport,0,0,1,1,'inspection-object-shadow');this.inspectionShadow.addComponent<Graphics>(Graphics);
     const obj=this.ui.container(viewport,this.pose.x-INSPECTION_AREA.x,this.pose.y-INSPECTION_AREA.y,404,404,'InspectionObject');
     obj.getComponent<UITransform>(UITransform)!.setAnchorPoint(.5,.5);this.object=obj;
     this.ui.object(obj,it.defId,-202,-202,404,404,{back:this.back,damaged:it.condition<.75&&!it.repaired,repaired:it.repaired});
-    let pointerStart=new Vec2(),dragged=false;
-    obj.on(Node.EventType.TOUCH_START,(e:EventTouch)=>{if(this.busy)return;pointerStart=e.getUILocation();dragged=false;this.objectDragging=true;this.applyInspectionPose();});
-    obj.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(this.busy)return;const d=e.getUIDelta();dragged=dragged||Vec2.distance(pointerStart,e.getUILocation())>6;this.pose.x+=d.x;this.pose.y-=d.y;this.applyInspectionPose();});
-    const releaseObject=(e:EventTouch)=>{
-      if(this.busy)return;this.objectDragging=false;
-      // The item stays on the mat while the pointer can still select an instrument outside it.
-      const target=dragged?this.all(left).find(n=>n.name.startsWith('tool-target-')&&n.getComponent<UITransform>(UITransform)?.hitTest(e.getLocation())):undefined;
-      if(target){this.tool=target.name.slice(12) as ToolId;this.render();}else this.applyInspectionPose();
-    };
-    obj.on(Node.EventType.TOUCH_END,releaseObject);obj.on(Node.EventType.TOUCH_CANCEL,releaseObject);
-    obj.on(Node.EventType.MOUSE_WHEEL,(e:EventMouse)=>{if(!this.busy)this.changeZoom(e.getScrollY()>0?.08:-.08);});
-    this.applyInspectionPose();
-    this.ui.rail(p,319,595,868,54,{fill:'#0B151B80',lineWidth:0});
-    this.zoomOut=this.button(p,'−',335,604,60,36,()=>this.changeZoom(-.1),{tone:'quiet'});
-    this.zoomIn=this.button(p,'＋',405,604,60,36,()=>this.changeZoom(.1),{tone:'quiet'});
-    this.button(p,'旋转 R',482,604,146,36,()=>{this.pose.angle+=30;this.applyInspectionPose();},{tone:'quiet',size:16});
-    this.button(p,this.back?'翻回正面 F':'翻到背面 F',642,604,192,36,()=>{this.back=!this.back;this.render();},{tone:'quiet',size:16});
-    this.button(p,'实物归位',851,604,142,36,()=>{this.resetInspection(it.uid);this.render();},{tone:'quiet',size:16});
-    this.scaleLabel=this.ui.label(p,'',1010,604,159,36,{size:12,color:C.muted,align:'right',verticalAlign:'center',wrap:false}).getComponent<Label>(Label)!;this.updateZoomControls();
-    this.toolInteraction(p,it,draft);
-    const side=this.ui.texturePanel(p,1270,139,292,635,{skin:'strip',materialOpacity:.68,fill:'#0B171EB0',lineWidth:0});
-    this.text(side,'物证册',21,17,250,28,20,C.text);this.text(side,'APPRAISAL / FIELD NOTES',21,49,250,15,9,C.muted);
-    const a=estimate(it);this.text(side,`${a.exact?a.low:`${a.low} – ${a.high}`} Cr`,21,87,250,48,31,C.text);
-    this.text(side,`参考估值  /  ${it.evidence.length} 项独立物证`,21,142,250,23,13,C.muted);this.ui.line(side,21,181,271,181,'#D2CAB335');
-    it.evidence.slice(0,6).forEach((tool,i)=>{
-      this.text(side,`0${i+1}  ${getTool(tool).name}`,21,197+i*55,250,23,14,C.text);
-      this.ui.label(side,def.clues[tool]||'读数已记录，仍需交叉检验。',21,222+i*55,250,28,{size:12,lineHeight:14,color:C.muted,overflow:'clamp'});
-      if(i<5)this.ui.line(side,21,250+i*55,271,250+i*55,'#D2CAB316');
+    const hit=getItemHitBounds(it.defId,this.back,404),transform=obj.getComponent<UITransform>(UITransform)!;
+    transform.setContentSize(hit.width,hit.height);transform.setAnchorPoint(-hit.x/hit.width,1+hit.y/hit.height);
+    this.ui.bindDraggable(obj,()=>!this.busy);
+    let pointerStart=new Vec2(),poseStart={x:0,y:0},dragged=false,tracking=false;
+    obj.on(Node.EventType.TOUCH_START,(e:EventTouch)=>{
+      if(this.busy)return;
+      for(let n=e.target as Node|null;n&&n!==obj;n=n.parent)if((n as unknown as {__action?:()=>void}).__action)return;
+      pointerStart=e.getUILocation().clone();poseStart={x:this.pose.x,y:this.pose.y};dragged=false;tracking=true;this.pointerCleanup=releaseObject;
     });
-    if(!it.evidence.length){this.text(side,'先找出它的痕迹。',21,211,250,36,23,C.text);this.text(side,'外观、材料、功能与来源，\n各自留下一条线索。\n取得读数后，记录会留在这里。',21,266,250,107,16,C.muted);}
-    this.button(side,'保存证据 · 返回柜台',21,564,250,49,()=>this.navigate('counter'),{tone:'gold',size:18});
+    obj.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{
+      if(this.busy||!tracking)return;const pointer=e.getUILocation();dragged=dragged||Vec2.distance(pointerStart,pointer)>6;if(!dragged)return;
+      this.objectDragging=true;this.pose.x=poseStart.x+pointer.x-pointerStart.x;this.pose.y=poseStart.y-pointer.y+pointerStart.y;this.applyInspectionPose();
+    });
+    const releaseObject=()=>{tracking=false;this.pointerCleanup=null;this.objectDragging=false;this.applyInspectionPose();};
+    obj.on(Node.EventType.TOUCH_END,releaseObject);obj.on(Node.EventType.TOUCH_CANCEL,releaseObject);
+    obj.on(Node.EventType.MOUSE_WHEEL,(e:EventMouse)=>{const delta=e.getScrollY();if(!this.busy&&delta!==0)this.changeZoom(delta>0?.08:-.08);});
+    this.applyInspectionPose();
+    this.zoomOut=this.button(p,'−',420,654,48,40,()=>this.changeZoom(-.1),{tone:'quiet'});
+    this.zoomIn=this.button(p,'＋',476,654,48,40,()=>this.changeZoom(.1),{tone:'quiet'});
+    this.button(p,'旋转 R',540,654,120,40,()=>{this.pose.angle+=30;this.applyInspectionPose();},{tone:'quiet',size:16});
+    this.button(p,this.back?'翻回正面 F':'翻到背面 F',668,654,152,40,()=>{this.back=!this.back;this.render();},{tone:'quiet',size:16});
+    this.button(p,'实物归位',828,654,122,40,()=>{this.resetInspection(it.uid);this.render();},{tone:'quiet',size:16});
+    this.scaleLabel=this.ui.label(p,'',966,654,98,40,{size:13,color:C.muted,align:'center',verticalAlign:'center',wrap:false}).getComponent<Label>(Label)!;this.updateZoomControls();
+    this.toolInteraction(p,it,draft);
+    const side=this.ui.texturePanel(p,1252,116,316,672,{materialOpacity:.12,fill:'#0B171EF5',stroke:'#AE9B7748',lineWidth:1,radius:6,name:'evidence-book'});
+    this.row(side,'物证册',24,20,268,32,23,C.text);this.row(side,'APPRAISAL / FIELD NOTES',24,57,268,18,9,C.muted);
+    const a=estimate(it);this.row(side,`${a.exact?a.low:`${a.low} – ${a.high}`} Cr`,24,92,268,47,34,C.text);
+    this.row(side,`参考估值 · ${it.evidence.length} / 6 项物证`,24,147,268,23,13,C.muted);
+    tools.forEach((t,i)=>this.ui.panel(side,24+i*46,187,38,4,{fill:it.evidence.includes(t.id)?C.cyan:'#405253',lineWidth:0,radius:2}));
+    it.evidence.slice(-3).forEach((tool,i)=>{
+      this.ui.toolIcon(side,tool,24,220+i*99,35,35);this.row(side,getTool(tool).name,71,220+i*99,221,25,16,C.text);
+      this.ui.label(side,def.clues[tool]||'读数已记录，仍需交叉检验。',24,253+i*99,268,46,{size:14,lineHeight:21,color:C.muted,overflow:'clamp'});
+      if(i<2)this.ui.line(side,24,308+i*99,292,308+i*99,'#D2CAB323');
+    });
+    if(!it.evidence.length){this.ui.toolIcon(side,this.tool,88,241,140,140);this.row(side,'从一处痕迹开始',24,403,268,32,21,C.text,'center');this.ui.label(side,`选择左侧仪器，按照桌边提示操作。
+外观、材料与功能，都会留下证据。`,24,454,268,67,{size:15,lineHeight:24,color:C.muted,align:'center',overflow:'clamp'});}
+    if(it.evidence.length>3)this.button(side,'查看全部物证',24,537,268,36,()=>this.allEvidence(it),{tone:'quiet',size:14});
+    else this.row(side,it.inspectedPaid?'本件后续取证免费':'首次鉴定消耗 1 AP',24,540,268,27,13,C.muted,'center');
+    this.button(side,'保存证据 · 返回柜台',24,594,268,52,()=>this.navigate('counter'),{tone:'gold',size:18});
   }
+  private allEvidence(it:OrbitalItem):void{
+    const m=this.ui.modal('完整物证记录',{width:940,height:720}),def=getDef(it.defId);
+    it.evidence.forEach((tool,i)=>{this.row(m.body,getTool(tool).name,18,5+i*85,840,27,20,C.cyan);this.ui.label(m.body,def.clues[tool]||'读数已记录，仍需交叉检验。',18,36+i*85,840,47,{size:17,lineHeight:24,color:C.text,overflow:'clamp'});});
+  }
+
   private draft():Draft{const key=this.selected+'/'+this.tool;let d=this.drafts.get(key);if(!d){d={marks:new Set(),uv:0,peaks:[.1,.1,.1],probe:0,tared:false,weights:new Set(),load:0};this.drafts.set(key,d);}return d;}
-  private resetInspection(uid=this.selected):void{this.poseUid=uid;this.pose={...INSPECTION_HOME};this.zoom=.8;this.back=false;this.object=null;this.objectDragging=false;}
-  private inspectionPlacement(){return constrain({...this.pose,zoom:this.zoom},INSPECTION_LOCAL,INSPECTION_AREA,{minZoom:.45,maxZoom:1.35,padding:8,defaults:{...INSPECTION_HOME,zoom:1}});}
+  private resetInspection(uid=this.selected):void{this.poseUid=uid;this.pose={...INSPECTION_HOME};this.zoom=1;this.back=false;this.object=null;this.objectDragging=false;}
+  private inspectionLocalBounds():InspectionRect{const it=this.currentItem();return it?getItemHitBounds(it.defId,this.back,404):INSPECTION_LOCAL;}
+  private inspectionPlacement(){return constrain({...this.pose,zoom:this.zoom},this.inspectionLocalBounds(),INSPECTION_AREA,{minZoom:.45,maxZoom:1.35,padding:8,defaults:{...INSPECTION_HOME,zoom:1}});}
   private inspectionEffectRect(){return this.inspectionPlacement().aabb;}
   private applyInspectionPose():void{
     const fit=this.inspectionPlacement();this.pose={x:fit.pose.x,y:fit.pose.y,angle:fit.pose.angle};this.zoom=fit.pose.zoom;
@@ -376,31 +392,36 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.updateZoomControls();
   }
   private updateZoomControls():void{
-    const max=constrain({...this.pose,zoom:1.35},INSPECTION_LOCAL,INSPECTION_AREA,{minZoom:.45,maxZoom:1.35,padding:8}).pose.zoom;
+    const max=constrain({...this.pose,zoom:1.35},this.inspectionLocalBounds(),INSPECTION_AREA,{minZoom:.45,maxZoom:1.35,padding:8}).pose.zoom;
     for(const [node,enabled]of [[this.zoomIn,this.zoom<max-.005],[this.zoomOut,this.zoom>.455]] as const)if(node?.isValid){this.ui.setButtonEnabled(node,enabled);Object.assign(node,{__enabled:enabled});}
-    if(this.scaleLabel?.isValid)this.scaleLabel.string=`${Math.round(this.zoom*100)}%${this.zoom>=max-.005?' · 显示上限':''}`;
+    if(this.scaleLabel?.isValid)this.scaleLabel.string=`${this.zoom.toFixed(1)}×`;
   }
   private changeZoom(n:number):void{this.zoom=Math.max(.45,Math.min(1.35,this.zoom+n));this.applyInspectionPose();}
   private finishTool(it:OrbitalItem):void{this.dispatch({type:'CHECK',uid:it.uid,tool:this.tool});}
   private toolInteraction(p:Node,it:OrbitalItem,d:Draft):void{
     const already=it.evidence.includes(this.tool),tool=getTool(this.tool);
-    const widget=this.ui.panel(p,329,656,838,100,{fill:'#0A151CE0',lineWidth:0,radius:3,name:'instrument-readout'});
-    this.text(widget,this.tool==='TOL-001'?'侧光观察 / 点击三处接缝疑点，逐一记录痕迹。':tool.instruction,18,9,802,29,17,C.muted);
-    if(already){this.baseline(widget,'✓ 证据已保存 · 可以免费复测',18,75,505,22,C.cyan);this.button(widget,'复测读数',625,46,194,42,()=>this.effect(['magnify','uv','spectrum','probe','scale','pulse'][tools.findIndex(t=>t.id===this.tool)],p,this.inspectionEffectRect()),{tone:'quiet'});return;}
+    const widget=this.ui.panel(p,212,706,1008,90,{fill:'#0A151CF5',lineWidth:0,radius:3,name:'instrument-readout'});
+    this.text(widget,this.tool==='TOL-001'?'侧光观察 / 点击三处接缝疑点，逐一记录痕迹。':tool.instruction,18,3,972,27,15,C.muted);
+    if(already){this.baseline(widget,'✓ 证据已保存 · 可以免费复测',18,66,620,20,C.cyan);this.button(widget,'复测读数',795,38,194,42,()=>this.effect(['magnify','uv','spectrum','probe','scale','pulse'][tools.findIndex(t=>t.id===this.tool)],p,this.inspectionEffectRect()),{tone:'quiet'});return;}
     if(this.tool==='TOL-001'){
       const spots=[[.28,.34],[.68,.47],[.5,.73]];
       spots.forEach(([x,y],i)=>{
-        const found=d.marks.has(i),n=this.button(this.object!,'',524*(x-.5)-22.5,404*(y-.5)-22.5,45,45,()=>{d.marks.add(i);if(d.marks.size===3)this.finishTool(it);else this.render();},{tone:'quiet',disabled:found,name:`evidence-spot-${i+1}`});
-        n.children[0].active=false;const g=this.ui.container(n,0,0,45,45,'side-light-reticle').addComponent<Graphics>(Graphics);g.fillColor=new Color('#0A161B6B');g.circle(22.5,-22.5,18);g.fill();g.lineWidth=1.2;g.strokeColor=new Color(found?C.green:'#E7D4A7');g.circle(22.5,-22.5,18);g.stroke();
-        if(found)this.row(n,'✓',0,0,45,45,23,C.green,'center');else{g.moveTo(22.5,-13);g.lineTo(22.5,-32);g.moveTo(13,-22.5);g.lineTo(32,-22.5);g.stroke();}
+        const found=d.marks.has(i),n=this.button(this.object!,'',404*(x-.5)-22.5,404*(y-.5)-22.5,45,45,()=>{d.marks.add(i);if(d.marks.size===3)this.finishTool(it);else this.render();},{tone:'quiet',disabled:found,name:`evidence-spot-${i+1}`});
+        n.children[0].active=false;const g=this.ui.container(n,0,0,45,45,'side-light-reticle').addComponent<Graphics>(Graphics);
+        g.fillColor=new Color(found?'#11252BCC':'#10232BEF');g.circle(22.5,-22.5,18);g.fill();g.lineWidth=1.7;g.strokeColor=new Color(found?C.green:C.orange);
+        for(const [x,y,dx,dy]of [[5,-5,1,-1],[40,-5,-1,-1],[5,-40,1,1],[40,-40,-1,1]]){g.moveTo(x+dx*8,y);g.lineTo(x,y);g.lineTo(x,y+dy*8);g.stroke();}
+        this.row(n,found?'✓':String(i+1),0,0,45,45,found?22:17,found?C.green:C.orange,'center');
+
       });
-      this.baseline(widget,`点击实物上的三处侧光疑点  ${d.marks.size}/3`,18,75,790,22,C.cyan);
+      this.baseline(widget,`点击实物上的三处侧光疑点  ${d.marks.size}/3`,18,66,960,20,C.cyan);
     }else if(this.tool==='TOL-002'){
       const track=this.ui.panel(widget,22,52,572,20,{fill:'#242038',stroke:C.purple,radius:4});
       const slider=this.ui.panel(track,d.uv*520,-10,51,40,{fill:'#9A81CC',stroke:'#E0C8FC',radius:3,name:'UVScanner'});this.row(slider,'UV',0,0,51,40,17,C.background,'center');
-      slider.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(this.busy||!this.back)return;d.uv=Math.max(0,Math.min(1,d.uv+e.getUIDelta().x/520));slider.setPosition(d.uv*520,10);});
-      slider.on(Node.EventType.TOUCH_END,()=>{if(!this.back){this.ui.toast('先翻到背面，再扫描旧编号。');return;}if(d.uv>.85)this.finishTool(it);else this.render();});
-      this.button(widget,this.back?'扫描旧编号':'先翻至背面',625,45,194,43,()=>{if(!this.back){this.back=true;this.render();}else{d.uv=Math.min(1,d.uv+.34);if(d.uv>.85)this.finishTool(it);else this.render();}},{tone:'green'});
+      let scanStart=0,scanValue=0,scanning=false;this.ui.bindDraggable(slider,()=>!this.busy&&this.back);
+      slider.on(Node.EventType.TOUCH_START,(e:EventTouch)=>{scanStart=e.getUILocation().x;scanValue=d.uv;scanning=true;this.pointerCleanup=()=>{scanning=false;};});
+      slider.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(this.busy||!this.back||!scanning)return;d.uv=Math.max(0,Math.min(1,scanValue+(e.getUILocation().x-scanStart)/520));slider.setPosition(d.uv*520,10);});
+      const finishScan=(e:EventTouch)=>{if(!scanning)return;scanning=false;this.pointerCleanup=null;if(e.getEventCode()!==Input.EventType.TOUCH_END)return;if(!this.back){this.ui.toast('先翻到背面，再扫描旧编号。');return;}if(d.uv>.85)this.finishTool(it);else this.render();};slider.on(Node.EventType.TOUCH_END,finishScan);slider.on(Node.EventType.TOUCH_CANCEL,finishScan);
+      this.button(widget,this.back?'扫描旧编号':'先翻至背面',795,38,194,43,()=>{if(!this.back){this.back=true;this.render();}else{d.uv=Math.min(1,d.uv+.34);if(d.uv>.85)this.finishTool(it);else this.render();}},{tone:'green'});
       if(this.back)this.text(this.object!,'旧编号  09 / 覆盖层',-155,58,310,32,19,C.purple,'center');
     }else if(this.tool==='TOL-003'){
       const targets=[.25,.55,.75];
@@ -411,38 +432,44 @@ export class OrbitalMain extends Component implements OrbitalHost {
         this.button(widget,'＋',base+153,45,40,39,()=>{d.peaks[i]=Math.min(1,d.peaks[i]+.1);this.render();},{tone:'quiet',name:`spectrum-${i}-plus`});
         const g=this.ui.container(this.object!,-195+i*130,-130,120,250,'spectrum-peak').addComponent<Graphics>(Graphics);g.strokeColor=new Color([C.cyan,C.orange,C.purple][i]);g.lineWidth=3;g.moveTo(0,-210);g.lineTo(32,-210);g.lineTo(65,-210+target*180);g.lineTo(98,-210);g.lineTo(130,-210);g.stroke();g.strokeColor=new Color('#FFFFFF66');g.moveTo(0,-210);g.lineTo(32,-210);g.lineTo(65,-210+d.peaks[i]*180);g.lineTo(98,-210);g.lineTo(130,-210);g.stroke();
       });
-      this.button(widget,'固定谱线',643,45,175,42,()=>this.finishTool(it),{disabled:!targets.every((n,i)=>Math.abs(d.peaks[i]-n)<.07)});
+      this.button(widget,'固定谱线',795,38,194,42,()=>this.finishTool(it),{disabled:!targets.every((n,i)=>Math.abs(d.peaks[i]-n)<.07)});
     }else if(this.tool==='TOL-004'){
       for(let i=0;i<2;i++){
         const plug=this.ui.panel(widget,23+i*250,47,64,39,{fill:i===0?'#C17D48':'#2D7C80',stroke:i===0?C.orange:C.cyan,radius:5,name:`probe-plug-${i}`});this.row(plug,i===0?'+':'−',0,0,64,39,28,C.text,'center');
         const port=this.ui.panel(this.object!,-135+i*220,40,55,55,{fill:'#102C37',stroke:i===0?C.orange:C.cyan,radius:12,name:`probe-port-${i}`});this.row(port,d.probe&(1<<i)?'✓':'○',0,0,55,55,29,C.cyan,'center');
-        this.drag(plug,()=>{d.probe|=1<<i;this.render();},e=>{if(port.getComponent<UITransform>(UITransform)!.hitTest(e.getLocation())){d.probe|=1<<i;this.render();}});
+        this.drag(plug,()=>this.ui.toast(i===0?'将正极探针拖到实物的橙色端口。':'将负极探针拖到实物的青色端口。'),e=>{if(port.getComponent<UITransform>(UITransform)!.hitTest(e.getLocation())){d.probe|=1<<i;this.render();}});
         this.baseline(widget,d.probe&(1<<i)?'已连接':i===0?'拖向正极':'拖向负极',98+i*250,74,140,19,C.muted);
         if(d.probe&(1<<i)){this.ui.line(this.object!,-107.5+i*220,95,-107.5+i*220,132,i===0?C.orange:C.cyan,2);}
       }
-      this.button(widget,'读取回路',624,46,195,41,()=>this.finishTool(it),{disabled:d.probe!==3});
+      this.button(widget,'读取回路',795,38,194,42,()=>this.finishTool(it),{disabled:d.probe!==3});
     }else if(this.tool==='TOL-005'){
       const target=[30,60,70][getDef(it.defId).sprite%3],sum=[...d.weights].reduce((a,n)=>a+n,0);
       this.baseline(widget,d.tared?`参考质量 ${target}g / 砝码 ${sum}g`:'先将空秤校零，再把砝码放上秤盘',18,74,392,20,C.cyan);
-      if(!d.tared)this.button(widget,'空秤校零',623,45,196,42,()=>{d.tared=true;this.render();});
+      if(!d.tared)this.button(widget,'空秤校零',795,38,194,42,()=>{d.tared=true;this.render();});
       else{
         [10,20,50].forEach((n,i)=>this.button(widget,`${d.weights.has(n)?'✓ ':''}${n}g`,419+i*85,46,77,40,()=>{if(d.weights.has(n))d.weights.delete(n);else d.weights.add(n);this.render();},{tone:d.weights.has(n)?'green':'quiet'}));
-        this.button(widget,'平衡采证',683,46,136,40,()=>this.finishTool(it),{disabled:sum!==target});
+        this.button(widget,'平衡采证',795,38,194,42,()=>this.finishTool(it),{disabled:sum!==target});
       }
       const scale=this.ui.container(p,554,479,400,79,'balance-instrument');const g=scale.addComponent<Graphics>(Graphics);g.lineWidth=4;g.strokeColor=new Color(C.cyan);g.moveTo(200,0);g.lineTo(200,-73);g.moveTo(110,-73);g.lineTo(290,-73);g.stroke();const tilt=Math.max(-18,Math.min(18,(sum-target)*.4));g.moveTo(30,-20+tilt);g.lineTo(370,-20-tilt);g.stroke();g.strokeColor=new Color(C.orange);g.roundRect(25,-43+tilt,90,21,4);g.stroke();g.roundRect(285,-43-tilt,90,21,4);g.stroke();
     }else{
       this.baseline(widget,`负载 ${Math.round(d.load*100)}% / 安全采样区 65–85%`,18,74,400,20,C.cyan);
       const track=this.ui.panel(widget,427,60,200,6,{fill:'#284B56',lineWidth:0});const knob=this.ui.panel(track,d.load*180,-14,22,33,{fill:C.orange,lineWidth:0,radius:3,name:'pulse-load'});
-      knob.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(this.busy)return;d.load=Math.max(0,Math.min(1,d.load+e.getUIDelta().x/180));knob.setPosition(d.load*180,14);});knob.on(Node.EventType.TOUCH_END,()=>this.render());
+      let loadStart=0,loadValue=0,loading=false;this.ui.bindDraggable(knob,()=>!this.busy);
+      knob.on(Node.EventType.TOUCH_START,(e:EventTouch)=>{loadStart=e.getUILocation().x;loadValue=d.load;loading=true;this.pointerCleanup=()=>{loading=false;};});
+      knob.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(this.busy||!loading)return;d.load=Math.max(0,Math.min(1,loadValue+(e.getUILocation().x-loadStart)/180));knob.setPosition(d.load*180,14);});const finishLoad=(e:EventTouch)=>{if(!loading)return;loading=false;this.pointerCleanup=null;if(e.getEventCode()===Input.EventType.TOUCH_END)this.render();};knob.on(Node.EventType.TOUCH_END,finishLoad);knob.on(Node.EventType.TOUCH_CANCEL,finishLoad);
       this.button(widget,'增载',643,46,70,40,()=>{d.load=Math.min(1,d.load+.15);this.render();},{tone:'quiet',size:18});
-      this.button(widget,'通电采样',722,46,97,40,()=>this.finishTool(it),{disabled:d.load<.65||d.load>.85,size:17});
+      this.button(widget,'通电采样',795,38,194,42,()=>this.finishTool(it),{disabled:d.load<.65||d.load>.85,size:17});
     }
   }
   private drag(node:Node,click:()=>void,drop:(event:EventTouch)=>void):void{
-    let origin=new Vec3(),moved=0;
-    node.on(Node.EventType.TOUCH_START,()=>{if(this.busy)return;origin=node.position.clone();moved=0;node.setSiblingIndex(node.parent!.children.length-1);});
-    node.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(this.busy)return;const d=e.getUIDelta();moved+=Math.abs(d.x)+Math.abs(d.y);node.setPosition(node.position.x+d.x,node.position.y+d.y);});
-    node.on(Node.EventType.TOUCH_END,(e:EventTouch)=>{if(this.busy)return;node.setPosition(origin);if(moved>8)drop(e);else click();});node.on(Node.EventType.TOUCH_CANCEL,()=>node.setPosition(origin));
+    let origin=new Vec3(),start=new Vec3(),moved=false,tracking=false,index=0;
+    const local=(e:EventTouch)=>{const u=e.getUILocation();return node.parent!.getComponent<UITransform>(UITransform)!.convertToNodeSpaceAR(new Vec3(u.x-W/2,u.y-H/2,0));};
+    this.ui.bindDraggable(node,()=>!this.busy);
+    const restore=()=>{if(node.isValid){node.setPosition(origin);node.setSiblingIndex(index);}tracking=false;this.pointerCleanup=null;};
+    node.on(Node.EventType.TOUCH_START,(e:EventTouch)=>{if(this.busy)return;origin=node.position.clone();start=local(e);moved=false;tracking=true;index=node.getSiblingIndex();this.pointerCleanup=restore;node.setSiblingIndex(node.parent!.children.length-1);});
+    node.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{if(this.busy||!tracking)return;const p=local(e),dx=p.x-start.x,dy=p.y-start.y;moved=moved||Math.hypot(dx,dy)>6;if(moved)node.setPosition(origin.x+dx,origin.y+dy);});
+    const finish=(e:EventTouch)=>{if(!tracking)return;restore();if(!this.busy&&e.getEventCode()===Input.EventType.TOUCH_END){if(moved)drop(e);else click();}};
+    node.on(Node.EventType.TOUCH_END,finish);node.on(Node.EventType.TOUCH_CANCEL,finish);
   }
   private confirmClosing():void{
     const m=this.ui.modal('结束今天的营业',{width:900,height:520});
@@ -483,5 +510,5 @@ export class OrbitalMain extends Component implements OrbitalHost {
   private async loadAudio():Promise<void>{for(const key of ['click','coin','check','page','drop'])try{const clip=await new Promise<AudioClip>((resolve,reject)=>{if((window as unknown as {__GREYLINE_WEB__?:boolean}).__GREYLINE_WEB__)assetManager.loadRemote<AudioClip>(`./resources/audio/${key}.wav`,(e,v)=>e?reject(e):resolve(v));else resources.load<AudioClip>(`audio/${key}`,AudioClip,(e,v)=>e?reject(e):resolve(v));});this.clips.set(key,clip);}catch{}}
   private sound(key:string):void{const clip=this.clips.get(key);if(this.prefs.sound&&clip)this.audio.playOneShot(clip,.35);}
   update(dt:number):void{this.motion?.update(dt);this.panels?.update(dt);}
-  onDestroy():void{this.disposed=true;this.motion?.dispose();this.panels?.dispose();input.off(Input.EventType.KEY_DOWN,this.onKey,this);}
+  onDestroy():void{this.cancelPointer();this.pointerCanvas?.removeEventListener('pointerleave',this.cancelPointer);this.pointerCanvas?.removeEventListener('mouseleave',this.cancelPointer);window.removeEventListener('blur',this.cancelPointer);window.removeEventListener('pointercancel',this.cancelPointer);window.removeEventListener('resize',this.cancelPointer);this.disposed=true;this.motion?.dispose();this.panels?.dispose();input.off(Input.EventType.KEY_DOWN,this.onKey,this);}
 }

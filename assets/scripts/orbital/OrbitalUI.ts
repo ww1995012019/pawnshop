@@ -9,6 +9,7 @@ import {
   type ModalOptions, type ModalHandle, type PaperOptions, type UIIcon,
 } from '../ui/GameUI';
 import type { ToolId } from './types';
+import {PointerCursor,type PointerBindingOptions} from './PointerCursor';
 
 export const ORBITAL_PALETTE = {
   background: '#0B1118', deep: '#0D151C', panel: '#101B24F5', raised: '#243039',
@@ -35,6 +36,7 @@ export interface OrbitalSurfaceOptions extends PanelOptions {skin?:OrbitalSurfac
 
 /** Smoked glass and worn instrument controls, rendered entirely with native Creator UI. */
 export class OrbitalUI extends GameUI {
+  readonly pointer:PointerCursor;
   private readonly orbitalRemoteRoot:string;
   private readonly orbitalStandalone:boolean;
   private readonly orbitalExt:'png'|'webp';
@@ -48,6 +50,7 @@ export class OrbitalUI extends GameUI {
 
   constructor(root:Node,assets:UIAssets={}) {
     super(root,assets);
+    this.pointer=new PointerCursor(root);
     const host=globalThis as typeof globalThis & {__GREYLINE_WEB__?:boolean;__GREYLINE_ART_EXT__?:string};
     this.orbitalRemoteRoot=(assets.remoteRoot??'./resources').replace(/\/$/,'');
     this.orbitalStandalone=assets.standalone??!!host.__GREYLINE_WEB__;
@@ -73,6 +76,13 @@ export class OrbitalUI extends GameUI {
     });
   }
   override async preloadAll():Promise<void>{await this.preload();}
+
+  bindPointer(node:Node,options:PointerBindingOptions={}):()=>void{return this.pointer.bind(node,options);}
+  bindDraggable(node:Node,enabled:()=>boolean=()=>true):()=>void {
+    return this.pointer.bind(node,{cursor:'grab',draggable:true,disabled:()=>!enabled()});
+  }
+  resetPointer():void{this.pointer.reset();}
+  override clear(parent:Node):void{this.pointer.clearSubtree(parent);super.clear(parent);}
 
   override label(parent:Node,text:string,x:number,y:number,width:number,height:number,options:LabelOptions={}):Node {
     const size=options.size??21;
@@ -152,6 +162,7 @@ export class OrbitalUI extends GameUI {
     const component=node.addComponent<Button>(Button);component.transition=Button.Transition.NONE;component.interactable=!options.disabled;
     const view:OrbitalButton={component,visual,ink,edge,skin,text:labelNode.getComponent<Label>(Label)!,width,height,tone,hovered:false,pressed:false,focused:options.focused??false,selected:options.selected??false,disabled:options.disabled??false};
     this.orbitalButtons.set(node,view);this.orbitalDrawButton(view);
+    this.pointer.bind(node,{cursor:'pointer',disabled:()=>view.disabled});
     node.on(Node.EventType.MOUSE_ENTER,()=>{if(view.disabled)return;view.hovered=true;this.orbitalDrawButton(view);});
     node.on(Node.EventType.MOUSE_LEAVE,()=>{view.hovered=false;this.orbitalDrawButton(view);});
     node.on(Node.EventType.TOUCH_START,()=>{if(view.disabled)return;view.pressed=true;this.orbitalPress(view,true);this.orbitalDrawButton(view);});
@@ -165,6 +176,7 @@ export class OrbitalUI extends GameUI {
     view.disabled=!enabled;view.component.interactable=enabled;view.pressed=false;
     if(!enabled){view.hovered=false;view.focused=false;if(this.orbitalFocus===node)this.orbitalFocus=null;}
     this.orbitalPress(view,false);this.orbitalDrawButton(view);
+    this.pointer.refresh();
   }
   override setButtonSelected(node:Node,selected:boolean):void {const v=this.orbitalButtons.get(node);if(v){v.selected=selected;this.orbitalDrawButton(v);}}
   override focusButton(node:Node|null):void {
@@ -176,6 +188,7 @@ export class OrbitalUI extends GameUI {
 
   override modal(title:string,options:ModalOptions={}):ModalHandle {
     const width=options.width??1500,height=options.height??830;
+    this.pointer.reset();
     if(this.orbitalToastRoot?.isValid){this.clear(this.orbitalToastRoot);this.orbitalToastRoot.active=false;}
     const overlay=this.panel(this.root,0,0,1600,900,{name:'modal-overlay',fill:'#070D16E8',lineWidth:0,radius:0});
     overlay.addComponent<BlockInputEvents>(BlockInputEvents);
@@ -329,12 +342,8 @@ export class OrbitalUI extends GameUI {
     const source=index>=0?this.orbitalCrop(key,index,6,4,.035):undefined;
     const node=this.frame(parent,source,x,y,width,height,{name:`item-${itemId}`,fit:'contain',...options});
     const short=Math.min(width,height);
-    if(options.damaged){
-      const layer=this.container(node,0,0,width,height,'physical-damage');const g=layer.addComponent<Graphics>(Graphics);
-      g.lineWidth=Math.max(1.5,short*.008);g.strokeColor=color('#0A1424');
-      const cx=width*.49,cy=-height*.47;g.moveTo(cx-short*.13,cy+short*.12);g.lineTo(cx-short*.04,cy+short*.035);g.lineTo(cx-short*.065,cy-short*.035);g.lineTo(cx+short*.03,cy-short*.11);g.stroke();
-      g.strokeColor=color('#C0D1CE88');g.lineWidth=Math.max(1,short*.003);g.moveTo(cx-short*.12,cy+short*.11);g.lineTo(cx-short*.035,cy+short*.03);g.stroke();
-    }
+    // The illustrated fronts/backs already carry material wear. A universal crack across
+    // the image would also cut through light projections, plants and empty space.
     if(options.repaired){
       const picture=node.getChildByName('sprite'),bounds=picture?.getComponent<UITransform>(UITransform);
       const drawW=bounds?.width??width,drawH=bounds?.height??height,detail=Math.min(drawW,drawH);
@@ -457,16 +466,16 @@ export class OrbitalUI extends GameUI {
 
   private orbitalDrawButton(view:OrbitalButton):void {
     const tones:Record<ButtonTone,{accent:string;fill:string;hover:string}>={
-      green:{accent:'#A4D5CE',fill:'#18313870',hover:'#26454DAD'},
+      green:{accent:'#B4D8D1',fill:'#20353CF5',hover:'#2D4B53'},
       gold:{accent:'#F4D9B1',fill:'#674027F2',hover:'#8D542EF2'},
-      quiet:{accent:'#C6C9BF',fill:'#111A2040',hover:'#2C383CA8'},
-      danger:{accent:'#D5A395',fill:'#392D2D80',hover:'#4B3434C0'},
+      quiet:{accent:'#D3D8D1',fill:'#1B2932F2',hover:'#2D404A'},
+      danger:{accent:'#D5A395',fill:'#392D2DF2',hover:'#4B3434'},
     };
     const tone=tones[view.tone],g=view.ink,rim=view.edge,w=view.width,h=view.height;
     g.clear();rim.clear();
     const main=view.tone==='gold';
     if(main){g.fillColor=color('#030609B0');polygon(g,0,-3,w,h,5);g.fill();}
-    g.fillColor=color(view.disabled?'#10181C70':view.pressed?'#142027D9':view.hovered||view.selected?tone.hover:tone.fill);
+    g.fillColor=color(view.disabled?'#152027E8':view.pressed?'#101C24':view.hovered||view.selected?tone.hover:tone.fill);
     polygon(g,0,0,w,h,4);g.fill();
     if(view.skin){
       const amount=view.disabled?.22:main?(view.pressed?.72:1):view.selected?.70:view.hovered?.59:view.tone==='quiet'?.33:.47;
@@ -481,8 +490,10 @@ export class OrbitalUI extends GameUI {
       rim.moveTo(10,-5);rim.lineTo(w-10,-5);rim.stroke();
       rim.strokeColor=color('#0A0A0D9C');rim.moveTo(7,-h+3);rim.lineTo(w-7,-h+3);rim.stroke();
     }else{
-      rim.strokeColor=color(view.disabled?'#78827D18':view.hovered?'#D7D3BD55':'#9DAA9B24');
-      rim.moveTo(8,-h+2);rim.lineTo(w-8,-h+2);rim.stroke();
+      rim.strokeColor=color(view.disabled?'#69777C48':view.selected?'#B39A73A8':view.hovered?'#A6B9B4B8':'#72838A85');
+      polygon(rim,.6,-.6,w-1.2,h-1.2,3);rim.stroke();
+      rim.strokeColor=color(view.disabled?'#02070A50':'#02070A9A');
+      rim.moveTo(3,-h+2);rim.lineTo(w-3,-h+2);rim.stroke();
     }
     if(view.selected&&!view.disabled){
       rim.fillColor=color('#CF9C67');rim.rect(10,-h+2,w-20,2);rim.fill();
