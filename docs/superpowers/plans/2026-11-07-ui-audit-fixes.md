@@ -71,9 +71,11 @@
 - [x] Run new fresh native-pointer captures of changed screens, including material procurement and paired delivery.
 - [x] Inspect current screenshots and transition frames; check large text and one smaller viewport.
 - [x] Obtain fresh code and visual review; fix material findings before completion.
-- [ ] Bump the UI/build version, update validation notes, commit and deliver the same artifact through the existing private Site without changing access.
+- [x] Bump the UI/build version, update validation notes, commit and deliver the same artifact through the existing private Site without changing access.
 
 ## Execution record
 
 - Baseline: no local source changes; existing feature branch retained to avoid unnecessary workspace churn.
 - The user explicitly said “修复啊”; the audit supplies the concrete design and authorizes execution without another proposal/approval loop.
+
+- Release: application commit `3faebff586caa7ec977dc78e005612cd41474025`; Site source `c375dc4d9b4ffbf52864ad9073820f8f5987e850`; private deployment `appgdep_6aef358c77788191a9f9572cab593c07` succeeded. Audience retained.
