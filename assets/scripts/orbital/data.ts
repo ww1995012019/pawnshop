@@ -76,7 +76,7 @@ export const itemDefs: ItemDef[] = [
       "TOL-005": "质量校零：已记录该项读数，仍需结合相关物证。",
       "TOL-006": "模拟负载：已记录该项读数，仍需结合相关物证。"
     },
-    "recipeId": "REC-002"
+    "recipeId": "REC-013"
   },
   {
     "id": "ITM-009",
@@ -154,7 +154,7 @@ export const itemDefs: ItemDef[] = [
       "TOL-004": "接口回路：已记录该项读数，仍需结合相关物证。",
       "TOL-005": "质量校零：已记录该项读数，仍需结合相关物证。"
     },
-    "recipeId": "REC-003"
+    "recipeId": "REC-014"
   },
   {
     "id": "ITM-017",
@@ -306,8 +306,7 @@ export const itemDefs: ItemDef[] = [
       "TOL-002": "紫外显影：已记录该项读数，仍需结合相关物证。",
       "TOL-003": "材料谱线：已记录该项读数，仍需结合相关物证。",
       "TOL-006": "模拟负载：已记录该项读数，仍需结合相关物证。"
-    },
-    "recipeId": "REC-006"
+    }
   },
   {
     "id": "ITM-033",
@@ -608,9 +607,25 @@ export const itemDefs: ItemDef[] = [
       "TOL-004": "接口回路：已记录该项读数，仍需结合相关物证。",
       "TOL-005": "质量校零：已记录该项读数，仍需结合相关物证。"
     },
-    "recipeId": "REC-003"
+    "recipeId": "REC-015"
   }
 ];
+
+const expansionArt=(index:number)=>({front:'orbital-expansion-front',back:'orbital-expansion-back',index,columns:4,rows:3});
+itemDefs.push(
+  {id:'ITM-061',name:'应急呼吸面罩',category:'义体与医疗',value:135,sprite:24,size:[2,1],tools:['TOL-001','TOL-006'],description:'橙白半面罩，双侧透明气阀。侧照阀圈，再接夹具比较密封响应。',defect:'陶瓷阀座开裂，增载时气阀回弹过慢。',clues:{'TOL-001':'阀座背面可见陶瓷细裂与压痕。','TOL-006':'气阀在增载后回弹迟缓，密封响应低于基准。'},recipeId:'REC-007',art:expansionArt(0)},
+  {id:'ITM-062',name:'手摇短波电台',category:'精密电子',value:165,sprite:25,size:[2,2],tools:['TOL-004','TOL-006'],description:'橄榄绿收音机，折叠天线与黄铜摇柄。探针测整流，再测试手摇供电衰减。',defect:'整流线圈断续，摇柄转动后电压快速跌落。',clues:{'TOL-004':'整流回路间歇断开，端子有旧焊点。','TOL-006':'摇柄启动后指针跌落，无法维持接收。'},recipeId:'REC-008',art:expansionArt(1)},
+  {id:'ITM-063',name:'星图胶片阅读器',category:'精密电子',value:230,sprite:26,size:[2,2],tools:['TOL-002','TOL-003'],description:'青铜双卷盘阅读器，中央放大光窗。紫外检查胶片批号，光谱对齐星图色层。',defect:'蓝色透片老化，左右星图产生双影。',clues:{'TOL-002':'胶片批号与底片边缘暗纹可交叉比对。','TOL-003':'蓝色透片透射谱偏移，星图边缘出现双影。'},recipeId:'REC-009',art:expansionArt(2)},
+  {id:'ITM-064',name:'低温样本罐',category:'义体与医疗',value:260,sprite:27,size:[1,2],tools:['TOL-001','TOL-006'],description:'银色真空罐，蓝色测温窗与扣锁。检查口沿密封，再测试保温曲线。',defect:'冷却凝胶干涸，保温负载下温度持续上扬。',clues:{'TOL-001':'补给口可见干涸凝胶，外壳无承压裂纹。','TOL-006':'保温曲线斜升，接口散热异常。'},recipeId:'REC-010',art:expansionArt(3)},
+  {id:'ITM-065',name:'多足爬管机器人',category:'机械与航行',value:360,sprite:28,size:[2,2],tools:['TOL-001','TOL-006'],description:'六足橙色检修机器人，柔性环形底盘。检查足端磨痕，再观察跨障步态。',defect:'左后足驱动线圈失步，转弯时拖行。',clues:{'TOL-001':'左后足磨痕单侧偏深，关节可自由转动。','TOL-006':'跨障节奏在第六步失步，驱动线圈响应迟滞。'},recipeId:'REC-011',art:expansionArt(4)},
+  {id:'ITM-066',name:'便携气象桅杆',category:'机械与航行',value:210,sprite:29,size:[1,3],tools:['TOL-003','TOL-004'],description:'折叠银色桅杆，三杯风轮与琥珀传感头。测探头回路，再比对污染谱峰。',defect:'传感头沾有矿尘，风速输出跳变。',clues:{'TOL-003':'探头表面有矿尘特征峰，需与原厂主材区分。','TOL-004':'风轮转动与输出脉冲可逐次对照。'},art:expansionArt(5)},
+  {id:'ITM-067',name:'机械打字终端',category:'民生与消费',value:175,sprite:30,size:[3,2],tools:['TOL-001','TOL-006'],description:'墨绿键盘机，外露字轮与窄纸卷。侧照字组完整度，再逐行检查卡键。',defect:'回车棘爪磨损，连续按键后字车卡住。',clues:{'TOL-001':'字轮字符组齐全，回车棘爪有磨痕。','TOL-006':'连续输入可确认字车是否顺畅回位。'},art:expansionArt(6)},
+  {id:'ITM-068',name:'透明流量计',category:'民生与消费',value:125,sprite:31,size:[1,2],tools:['TOL-001','TOL-005'],description:'透明立管与红色浮子，黄铜双向接口。侧照承压管，再校零核对浮子配重。',defect:'浮子配重遭替换，流量读数比实际偏高。',clues:{'TOL-001':'承压立管的接缝和裂痕须单独记录。','TOL-005':'浮子质量必须与型号公差比对，不能只看刻度。'},art:expansionArt(7)},
+  {id:'ITM-069',name:'站务票证压印机',category:'记忆与文物',value:190,sprite:32,size:[2,2],tools:['TOL-002','TOL-006'],description:'铸铁手压票机，铜质章头和红木手柄。紫外核章纹，再用测试夹观察压印回位。',defect:'章头为后制复制件，压杆弹簧存在偏移。',clues:{'TOL-002':'底层章纹必须与原始站务档案对照。','TOL-006':'压杆回位与压印偏移可分别记录。'},art:expansionArt(8)},
+  {id:'ITM-070',name:'储能飞轮',category:'机械与航行',value:410,sprite:33,size:[2,2],tools:['TOL-001','TOL-006'],description:'蓝灰防护笼中的铜色飞轮，侧面测速窗。检查轮缘，再测停转衰减。',defect:'轮缘有偏磨，停转曲线过陡且伴随摆动。',clues:{'TOL-001':'轮缘配重与轴端磨痕可用于判断失衡。','TOL-006':'逐级增载可记录转速回落与摆动幅度。'},art:expansionArt(9)},
+  {id:'ITM-071',name:'微型等离子焊炬',category:'机械与航行',value:290,sprite:34,size:[2,1],tools:['TOL-004','TOL-006'],description:'红铜握柄与陶瓷喷嘴，蓝色能量窗。先测回路，再在夹具内检查稳定脉冲。',defect:'导电触点氧化，陶瓷喷嘴局部烧蚀。',clues:{'TOL-004':'启动回路接触电阻偏高。','TOL-006':'测试夹记录到脉冲断续，与喷嘴烧蚀相符。'},recipeId:'REC-012',art:expansionArt(10)},
+  {id:'ITM-072',name:'全息记忆晶匣',category:'记忆与文物',value:560,sprite:35,size:[2,1],tools:['TOL-002','TOL-003'],description:'紫金棱形存储匣，透明晶柱与三色封环。紫外查看写入暗纹，再比对晶格谱线。',defect:'封环暗纹被覆盖，晶格谱线可能来自复制介质。',clues:{'TOL-002':'写入暗纹与封环序号须同时比对。','TOL-003':'晶格谱线可区分原始介质与复制介质。'},art:expansionArt(11)}
+);
 
 export const tools: ToolDef[] = [
   {
@@ -845,6 +860,18 @@ export const recipes: RecipeDef[] = [
   }
 ];
 
+recipes.push(
+  {id:'REC-007',name:'面罩气阀重封',itemId:'ITM-061',materials:{'MAT-002':1,'MAT-005':1},steps:['取出裂损的陶瓷阀座','贴合陶瓷补片并给阀座降温','闭合气阀并做密封负载复测'],ap:1,kind:'repair'},
+  {id:'REC-008',name:'短波电台整流修复',itemId:'ITM-062',materials:{'MAT-003':1,'MAT-001':1},steps:['拆开整流仓并断开旧接点','换入线圈并接回导电纤维','转动摇柄复测稳定供电'],ap:1,kind:'repair'},
+  {id:'REC-009',name:'星图阅读器光路校正',itemId:'ITM-063',materials:{'MAT-006':2,'MAT-004':1},steps:['退出胶片并打开光窗','换入双层光学透片','重合左右星图并封存校准记录'],ap:1,kind:'repair'},
+  {id:'REC-010',name:'低温罐密封翻修',itemId:'ITM-064',materials:{'MAT-005':2,'MAT-004':1},steps:['打开补给口并排出干涸凝胶','填入冷却凝胶并闭合扣锁','复测保温曲线并封签'],ap:1,kind:'repair'},
+  {id:'REC-011',name:'爬管机器人足端换驱',itemId:'ITM-065',materials:{'MAT-003':1,'MAT-001':2},steps:['展开底盘并定位失步足','换入线圈连接足端纤维','完成六步跨障负载复测'],ap:1,kind:'repair'},
+  {id:'REC-012',name:'焊炬触点与喷嘴翻修',itemId:'ITM-071',materials:{'MAT-001':1,'MAT-002':2},steps:['移除氧化触点与烧蚀护口','连接导电纤维并装陶瓷护片','在夹具内复测连续脉冲'],ap:1,kind:'repair'},
+  {id:'REC-013',name:'光合灯灯叶校光',itemId:'ITM-003',materials:{'MAT-006':1,'MAT-001':1},steps:['展开三片灯叶并定位偏蓝光斑','换入老化灯叶的透片并接回导电纤维','移动照度标靶复测三叶光斑均匀度'],ap:1,kind:'repair'},
+  {id:'REC-014',name:'巡检蜂旋翼驱动校准',itemId:'ITM-011',materials:{'MAT-003':1,'MAT-001':2},steps:['展开四条机臂并定位延迟旋翼','更换延迟旋翼的驱动线圈并重接导电纤维','在夹具内增载复测四旋翼转速与悬浮重心'],ap:1,kind:'repair'},
+  {id:'REC-015',name:'能源匣均衡回路重建',itemId:'ITM-057',materials:{'MAT-003':2,'MAT-001':1,'MAT-004':1},steps:['断开供电并打开均衡回路护盖','更换双均衡线圈并连接导电纤维','逐级增载确认电压稳定后封存复测记录'],ap:1,kind:'repair'}
+);
+
 export const orderDefs: OrderDef[] = [
   {
     "id": "ORD-001",
@@ -992,6 +1019,21 @@ export const orderDefs: OrderDef[] = [
   }
 ];
 
+orderDefs.push(
+  {id:'ORD-013',name:'救援队的面罩气阀',itemId:'ITM-061',reward:75,dueDay:6,minCondition:.7,needsRepair:true,faction:'station',customerOwned:true,description:'检视开裂阀座，按气阀重封配方修复，再用夹具记录密封复测。交还救援队原件。'},
+  {id:'ORD-014',name:'远航前的短波呼叫',itemId:'ITM-062',reward:82,dueDay:7,minCondition:.7,needsRepair:true,faction:'salvage',customerOwned:true,description:'探针定位整流断路，换线圈接回纤维，手摇负载稳定后交回原电台。'},
+  {id:'ORD-015',name:'把两张星图重合',itemId:'ITM-063',reward:88,dueDay:9,minCondition:.7,needsRepair:true,faction:'merchant',customerOwned:true,description:'记录胶片批号和透片谱偏，换透片重合左右星图，封存记录后交还原阅读器。'},
+  {id:'ORD-016',name:'样本罐别再升温',itemId:'ITM-064',reward:90,dueDay:10,minCondition:.7,needsRepair:true,faction:'station',customerOwned:true,description:'检查凝胶干涸并记录保温曲线；换入凝胶闭合扣锁，交还复测通过的原罐。'},
+  {id:'ORD-017',name:'第六只足也要跟上',itemId:'ITM-065',reward:105,dueDay:12,minCondition:.7,needsRepair:true,faction:'salvage',customerOwned:true,description:'记录偏磨足和六步失步，换入驱动线圈，再完成跨障复测后交回机器人。'},
+  {id:'ORD-018',name:'气象桅杆的尘埃报告',itemId:'ITM-066',reward:58,dueDay:13,minCondition:.45,needsRepair:false,faction:'station',customerOwned:true,description:'对原桅杆做探针与光谱检查，区分矿尘污染和回路问题，提交两条物证并归还原件。'},
+  {id:'ORD-019',name:'档案员逐字验收',itemId:'ITM-067',reward:62,dueDay:15,minCondition:.45,needsRepair:false,faction:'merchant',customerOwned:true,description:'检查字轮完整度，夹具记录连续输入和字车回位；如实报告卡键情况，交还原机。'},
+  {id:'ORD-020',name:'浮子的重量不能猜',itemId:'ITM-068',reward:54,dueDay:16,minCondition:.45,needsRepair:false,faction:'station',customerOwned:true,description:'侧照承压立管并校零称量浮子，交付质量与裂纹两条证据，原流量计随报告归还。'},
+  {id:'ORD-021',name:'站务印章的两层纹',itemId:'ITM-069',reward:68,dueDay:18,minCondition:.45,needsRepair:false,faction:'merchant',customerOwned:true,description:'紫外核对章头暗纹，夹具观察压印回位。区分复制章与机械磨损，交回原机。'},
+  {id:'ORD-022',name:'备用动力的飞轮',itemId:'ITM-070',reward:455,dueDay:20,minCondition:.7,needsRepair:false,faction:'salvage',description:'备一台品相至少七成、负载正常且来源已核的储能飞轮。侧照与负载两项记录随货交付。'},
+  {id:'ORD-023',name:'焊炬的稳定脉冲',itemId:'ITM-071',reward:95,dueDay:20,minCondition:.7,needsRepair:true,faction:'salvage',customerOwned:true,description:'探针定位氧化触点，换纤维和陶瓷护片，再在夹具内复测连续脉冲，交还原焊炬。'},
+  {id:'ORD-024',name:'记忆晶匣鉴真档案',itemId:'ITM-072',reward:96,dueDay:21,minCondition:.45,needsRepair:false,faction:'merchant',customerOwned:true,description:'紫外对照封环暗纹，光谱记录晶格材质；提交原始介质或复制介质的证据说明并归还原匣。'}
+);
+
 export const orderEarliest: Record<string,number> = {
   "ORD-001": 1,
   "ORD-002": 1,
@@ -1004,7 +1046,10 @@ export const orderEarliest: Record<string,number> = {
   "ORD-009": 3,
   "ORD-010": 3,
   "ORD-011": 3,
-  "ORD-012": 3
+  "ORD-012": 3,
+  "ORD-013": 4,"ORD-014": 4,"ORD-015": 6,"ORD-016": 7,
+  "ORD-017": 9,"ORD-018": 10,"ORD-019": 12,"ORD-020": 13,
+  "ORD-021": 15,"ORD-022": 12,"ORD-023": 17,"ORD-024": 18
 };
 
 export const bundleDef: ItemDef = {id:'BND-001',name:'舱门维护套组',category:'组装成品',value:390,sprite:10,size:[3,2],tools:['TOL-004','TOL-006'],description:'伺服器与轴承装在同一维护框内，双向限位已验证。',defect:'封签与接线记录完整。',clues:{'TOL-004':'双向回路闭合','TOL-006':'负载与限位通过'}};

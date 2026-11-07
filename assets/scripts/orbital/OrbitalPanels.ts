@@ -2,11 +2,12 @@ import {Button,Canvas,Color,EventKeyboard,EventTouch,game,Graphics,input,Input,K
 import type {OrbitalHost} from './ui-types';
 import type {OrbitalItem,OrderDef,PageId,RecipeDef} from './types';
 import {getDef,getOrder,materials,recipes,orderDefs,orderEarliest} from './data';
-import {canPlace,estimate,findItem,itemValue} from './model';
+import {canPlace,estimate,findItem,itemValue,orderItemValid} from './model';
 import {ordersForGroup,selectedOrderId} from './OrderPresentation';
 import type {OrderGroup} from './OrderPresentation';
 import {WorkbenchFeedback,type WorkbenchStage} from './WorkbenchFeedback';
 import {getItemHitBounds} from './ItemHitBounds';
+import {getItemFaultLabel} from './ItemReadings';
 
 const C={text:'#D6D2C7',muted:'#9BA6A4',cyan:'#76BABB',orange:'#C38A4D',purple:'#AEA4B4',line:'#737C7350',panel:'#101B22B8',deep:'#0B141CD9',red:'#D18D77'};
 const statusText={available:'可接取',active:'进行中',done:'已交付',failed:'已过期'};
@@ -247,7 +248,7 @@ export class OrbitalPanels {
       this.row(p,step,xx,644,235,26,16,active?C.text:C.muted);
     });
     this.row(p,def.name,1190,190,360,40,28);
-    this.paragraph(p,item.repaired?'✓ 维修与复测通过，功能已恢复。\n编号与来源记录已保留。':item.evidence.length?def.defect:'故障尚未确诊。先在鉴定台观察结构并记录读数，再决定维修工序。',1190,241,360,85,19,item.repaired?C.cyan:C.muted);
+    this.paragraph(p,item.evidence.length?getItemFaultLabel(item):'故障尚未确诊。先在鉴定台观察结构并记录读数，再决定维修工序。',1190,241,360,85,19,item.repaired?C.cyan:C.muted);
     this.line(p,1190,335,360);
     this.row(p,item.repaired?'本次已耗用 / 工时已结算':'材料与工时 / 最后确认时扣除',1190,348,360,28,16,item.repaired?C.cyan:C.orange);
     if(recipe){
@@ -758,22 +759,28 @@ export class OrbitalPanels {
   }
   /** Mirrors ORD-004's automatic secondary lookup without reserving or moving stock. */
   private orderAlgae():OrbitalItem|undefined {
-    return this.h.state.inventory.find(it=>it.defId==='ITM-041'&&it.owner==='shop'&&it.working&&it.sourceVerified&&new Set(it.evidence).size>=2);
+    return this.h.state.inventory.find(it=>orderItemValid(this.h.state,'ORD-004',it,'ITM-041')===null);
   }
   private orderReasons(order:OrderDef,item:OrbitalItem):string[] {
     const reasons:string[]=[];
+    const returningSource=order.id==='ORD-011';
     if(item.defId!==order.itemId)reasons.push('型号不一致');
+    if(this.h.state.trade?.selectedUid===item.uid)reasons.push('当前报价已占用原物');
+    if(!returningSource&&item.location==='isolation')reasons.push('原物仍在隔离保管');
+    if(!returningSource&&item.sealed)reasons.push('原物仍处于封存状态');
     if(item.owner==='customer'&&item.orderId!==order.id)reasons.push('属于其他委修单');
     if(item.owner==='pawn')reasons.push('抵押保管品不可交付');
+    if(!order.customerOwned&&item.orderId)reasons.push('已被其他订单占用');
     if(item.condition<order.minCondition)reasons.push('品相不足');
     if(order.needsRepair&&!item.repaired)reasons.push('尚未完成维修');
     if(order.needsRepair&&!item.working)reasons.push('功能未恢复');
-    if(order.customerOwned&&(item.owner!=='customer'||item.orderId!==order.id))reasons.push('必须交还本单委修原物');
-    if(!order.customerOwned&&(item.owner!=='shop'||!item.sourceVerified))reasons.push('需自有且来源已登记的货物');
+    if(order.customerOwned&&(item.owner!=='customer'||item.orderId!==order.id||this.h.state.orders.find(o=>o.id===order.id)?.uid!==item.uid))reasons.push('必须交还本单委修原物');
+    if(!order.customerOwned&&(item.owner!=='shop'||!returningSource&&!item.sourceVerified))reasons.push('需自有且来源已登记的货物');
+    if(!order.customerOwned&&!returningSource&&!item.working)reasons.push('购买订单要求功能正常');
     if(item.evidence.length<2)reasons.push('需两项独立物证');
     if(order.id==='ORD-004'){
       if(!item.working)reasons.push('光合灯功能须正常');
-      if(!this.orderAlgae())reasons.push('藻苗罐待准备：店铺自有、功能正常、来源已核验、两项独立物证');
+      if(!this.orderAlgae())reasons.push('藻苗罐待准备：自有、正常、来源已核验、两项物证，且未隔离、封存或占用');
     }
     return reasons;
   }

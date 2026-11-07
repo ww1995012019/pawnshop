@@ -6,7 +6,7 @@ function inspect(s,uid,toolList){for(const tool of toolList||g.getDef(g.findItem
 function repair(s,uid){const it=g.findItem(s,uid),r=g.getRecipe(g.getDef(it.defId).recipeId);for(let stage=0;stage<3;stage++)s=action(s,'REPAIR_STEP',{uid,stage});return action(s,'REPAIR',{uid,recipeId:r.id});}
 function trade(s){s=action(s,'ARRIVE');if(s.trade.kind==='sell'){const it=s.inventory.find(it=>it.owner==='shop'&&it.sourceVerified&&it.location!=='isolation'&&!it.orderId);if(!it)return action(s,'REFUSE');s=action(s,'SELECT_TRADE',{uid:it.uid});}s=action(s,'ACCEPT');return action(s,'DELIVER',{tradeId:s.trade.id});}
 let s=g.createOrbital('TEST');check(s.schema===3&&s.cash===1200&&s.ap===12&&s.day===1,'Design economy starts with 1200Cr and 12AP');
-check(g.itemDefs.length===24&&g.tools.length===6&&g.materials.length===6&&g.npcs.length===5&&g.orderDefs.length===12,'P0 content counts');
+check(g.itemDefs.length===36&&g.tools.length===6&&g.materials.length===6&&g.npcs.length===5&&g.orderDefs.length===24,'Expanded market content counts');
 check(g.itemDefs.every(d=>d.id.startsWith('ITM-')&&d.tools.length>=2),'P0 items have independent tool evidence');
 check(g.serializeOrbital(s)===g.serializeOrbital(g.createOrbital('TEST')),'Deterministic initial data');
 check(g.parseOrbital(g.serializeOrbital(s))!==null,'Fresh save roundtrips');

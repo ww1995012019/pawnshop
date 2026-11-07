@@ -10,6 +10,7 @@ import {
 } from '../ui/GameUI';
 import type { ToolId } from './types';
 import {PointerCursor,type PointerBindingOptions} from './PointerCursor';
+import {getItemArt} from './ItemArt';
 
 export const ORBITAL_PALETTE = {
   background: '#0B1118', deep: '#0D151C', panel: '#101B24F5', raised: '#243039',
@@ -21,10 +22,10 @@ const MOOD_ART:Record<Exclude<NpcMood,'neutral'>,string>={
   focused:'orbital-characters-focused',question:'orbital-characters-question',
   happy:'orbital-characters-happy',reject:'orbital-characters-reject',tired:'orbital-characters-tired',
 };
-const P0_ITEMS = [1,2,3,9,10,11,17,18,19,25,26,27,33,34,35,41,42,43,48,49,50,55,56,57];
 const ORBITAL_ART = [
   'orbital-counter','orbital-workbench','orbital-warehouse',
   'orbital-items-front','orbital-items-back','orbital-characters','hands','orbital-ui-surfaces','orbital-tools',
+  'orbital-expansion-front','orbital-expansion-back',
 ];
 interface OrbitalButton {
   component:Button; visual:Node; ink:Graphics; edge:Graphics; skin:Node|null; text:Label; width:number;height:number;
@@ -342,9 +343,8 @@ export class OrbitalUI extends GameUI {
   }
   object(parent:Node,itemId:string,x:number,y:number,width:number,height:number,options:ObjectOptions={}):Node {
     if(itemId==='BND-001')return this.maintenanceBundle(parent,x,y,width,height,options);
-    const index=P0_ITEMS.indexOf(Number(itemId.replace(/^ITM-/i,'')));
-    const key=options.back||options.opened?'orbital-items-back':'orbital-items-front';
-    const source=index>=0?this.orbitalCrop(key,index,6,4,.035):undefined;
+    const art=getItemArt(itemId,!!(options.back||options.opened));
+    const source=art?this.orbitalCrop(art.key,art.index,art.columns,art.rows,art.inset):undefined;
     const node=this.frame(parent,source,x,y,width,height,{name:`item-${itemId}`,fit:'contain',...options});
     const short=Math.min(width,height);
     // The illustrated fronts/backs already carry material wear. A universal crack across
@@ -542,7 +542,7 @@ export class OrbitalUI extends GameUI {
   }
   private orbitalCrop(key:string,index:number,columns:number,rows:number,inset:number,heightFraction=1):SpriteFrame|undefined {
     const source=this.frames.get(key);if(!source)return undefined;
-    const cacheKey=`${key}:${index}:${inset}:${heightFraction}`;const existing=this.orbitalCrops.get(cacheKey);if(existing)return existing;
+    const cacheKey=`${key}:${index}:${columns}:${rows}:${inset}:${heightFraction}`;const existing=this.orbitalCrops.get(cacheKey);if(existing)return existing;
     const w=source.rect.width/columns,h=source.rect.height/rows;
     const rect={x:source.rect.x+(index%columns)*w+w*inset,y:source.rect.y+Math.floor(index/columns)*h+h*inset,w:w*(1-inset*2),h:h*(heightFraction-inset*2)};
     const frame=makeFrame(source.texture,rect);this.orbitalCrops.set(cacheKey,frame);return frame;

@@ -4,6 +4,9 @@
  * Bounds include one source-pixel sampling fringe, clipped to each rendered sub-frame.
  * These are conservative rectangular alpha bounds, not per-pixel silhouette tests.
  * Regenerate when either atlas, cell ordering, or OrbitalUI crop/contain geometry changes.
+ * Expansion: 1448x1086 / 4x3 square cells.
+ * orbital-expansion-front.png sha256 5b56ca8ae092f4abfdbca3523bc14d7810b5b67403402905d47f873224f8a1ce
+ * orbital-expansion-back.png sha256 f4393fa537f4dc75fd8660bca156f140173a279a5e4e5e3d76b520e410bd264e
  * orbital-items-front.png: 1536x1024, sha256 2966a7978f9cb86cc87a83d231644ac7554f22e555a9a89ca846177241ba7580
  * orbital-items-back.png: 1536x1024, sha256 ab00826d69c6a123e05a2f67ab4d0bf38091da8044dc0cdec45b802200f69e6b
  */
@@ -36,6 +39,19 @@ const ITEM_ALPHA_BOUNDS:Readonly<Record<string,{front:NormalizedHitRect;back:Nor
   'ITM-055':{front:[0, 0.025369623, 0.978830646, 0.949260754],back:[0, 0, 0.983030914, 0.974630377]},
   'ITM-056':{front:[0.079973118, 0, 0.823252689, 0.974630377],back:[0.021169354, 0, 0.978830646, 0.983030914]},
   'ITM-057':{front:[0.021169354, 0.016969086, 0.953461023, 0.940860216],back:[0, 0, 0.99983199, 0.974630377]},
+  // Expansion RGBA 4x3 cells, .035 inset, alpha >= 1 and one source-pixel fringe.
+  'ITM-061':{front:[0,0.003950573,1,0.996049427],back:[0,0,1,1]},
+  'ITM-062':{front:[0,0,1,1],back:[0,0,1,1]},
+  'ITM-063':{front:[0,0.015831997,1,0.984168003],back:[0.000980217,0.006920929,0.999019783,0.993079071]},
+  'ITM-064':{front:[0,0,0.921790531,1],back:[0,0,0.981197647,1]},
+  'ITM-065':{front:[0,0,1,0.990108715],back:[0.009891285,0,0.990108715,1]},
+  'ITM-066':{front:[0,0,1,1],back:[0,0,1,1]},
+  'ITM-067':{front:[0,0,1,1],back:[0,0,1,1]},
+  'ITM-068':{front:[0,0,1,1],back:[0.009891285,0,0.965365651,1]},
+  'ITM-069':{front:[0.006920929,0,0.993079071,0.999019783],back:[0,0,1,0.990108715]},
+  'ITM-070':{front:[0,0,1,0.987138359],back:[0,0,1,0.993079071]},
+  'ITM-071':{front:[0,0,1,0.993079071],back:[0,0,1,0.993079071]},
+  'ITM-072':{front:[0,0,1,0.999019783],back:[0,0,0.996049427,0.993079071]},
   // BND-001: 1000x700 assembly fitted inside a square, including handle, opened latch and strokes.
   'BND-001':{front:[.05,.21,.90,.59],back:[.05,.21,.90,.59]},
 };

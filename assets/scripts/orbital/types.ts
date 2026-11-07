@@ -6,6 +6,7 @@ export interface ItemDef {
   id:string; name:string; category:string; value:number; sprite:number;
   size:[number,number]; tools:ToolId[]; description:string; defect:string;
   clues:Partial<Record<ToolId,string>>; recipeId?:string;
+  art?:{front:string;back:string;index:number;columns:number;rows:number};
 }
 export interface ToolDef {id:ToolId;name:string;short:string;instruction:string;unit:string;sprite:number}
 export interface MaterialDef {id:string;name:string;price:number;description:string}
@@ -16,7 +17,7 @@ export interface OrbitalItem {
   uid:string;defId:string;owner:'shop'|'customer'|'pawn';condition:number;working:boolean;
   authentic:boolean;sourceVerified:boolean;source:string;evidence:ToolId[];inspectedPaid:boolean;
   repaired:boolean;location:Location;x:number;y:number;rotated:boolean;listPrice:number;cost:number;
-  sealed:boolean;orderId?:string;pawnDay?:number;pawnPrincipal?:number;
+  sealed:boolean;orderId?:string;pawnDay?:number;pawnPrincipal?:number;lotId?:string;
 }
 export interface OrbitalTrade {id:string;npcId:string;kind:'buy'|'sell'|'pawn';item:OrbitalItem|null;selectedUid?:string;price:number;rounds:number;locked:boolean;evidenceUsed:ToolId[];line:string}
 export interface LedgerEntry {id:string;day:number;kind:string;label:string;amount:number;cost:number;transactionId?:string}

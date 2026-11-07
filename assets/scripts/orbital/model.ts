@@ -1,5 +1,8 @@
 import { itemDefs, tools, materials, npcs, recipes, orderDefs, orderEarliest, getDef, getNpc, getRecipe, getOrder } from './data';
 import type { OrbitalState, OrbitalItem, OrbitalAction, OrbitalTrade, ToolId, OrderDef, Faction } from './types';
+import {customerNeed, saleEligibility, relevantEvidence, tradeTerms, offerBounds, priceAgreed, counterPrice} from './Negotiation';
+import {dailyVisitLimit,marketStock,marketNpcId,stockItemOptions} from './Market';
+import {getItemClue} from './ItemReadings';
 export * from './types';
 export { itemDefs, tools, materials, npcs, recipes, orderDefs, orderEarliest, getDef, getNpc, getRecipe, getOrder } from './data';
 export const ORBITAL_SAVE_KEY='orbital-save-v3';
@@ -50,11 +53,6 @@ export function estimate(it:OrbitalItem):{low:number;high:number;exact:boolean} 
 }
 export function availableOrders(s:OrbitalState):OrderDef[] {return orderDefs.filter(d=>(orderEarliest[d.id]||1)<=s.day&&d.dueDay>=s.day&&s.orders.find(o=>o.id===d.id)?.status==='available');}
 function finishTrade(s:OrbitalState,text:string):OrbitalState {s.trade=null;s.cursor++;s.tutorial=Math.max(s.tutorial,1);return notice(s,text);}
-function marketItemId(day:number,cursor:number):string {
- const opening=[['ITM-011','ITM-001'],['ITM-009','ITM-010'],['ITM-049','ITM-050']];
- if(day<=3)return opening[day-1][Math.floor(cursor/2)];
- return itemDefs[((day-4)*2+Math.floor(cursor/2))%itemDefs.length].id;
-}
 function inspectionReady(s:OrbitalState):boolean {return s.inventory.filter(it=>it.owner==='shop'&&!it.sourceVerified).every(it=>it.location==='isolation');}
 export function createOrbital(seed='ORBITAL-P0'):OrbitalState {
  const s:OrbitalState={schema:3,seed,day:1,ap:12,cash:1200,phase:'open',risk:12,relations:{station:30,salvage:35,merchant:20},inventory:[],trade:null,cursor:0,ledger:[],completedTrades:[],orders:orderDefs.map(d=>({id:d.id,status:'available'})),materials:baseMaterials(),repairProgress:{},scanned:[],inspection:'announced',upgrades:{lamp:false,shelf:false},report:null,notice:'回环九号旧港重新点灯。先接待栗叔，翻面检查巡检蜂，再安排维修和订单。',nextId:1,tutorial:0};
@@ -64,14 +62,19 @@ export function createOrbital(seed='ORBITAL-P0'):OrbitalState {
  return s;
 }
 function validatedTradeItem(s:OrbitalState,t:OrbitalTrade):OrbitalItem|undefined {return t.kind==='sell'?s.inventory.find(it=>it.uid===t.selectedUid):t.item||undefined;}
-function orderItemValid(s:OrbitalState,id:string,it:OrbitalItem):string|null {
+export function orderItemValid(s:OrbitalState,id:string,it:OrbitalItem,requiredItemId?:string):string|null {
  const def=getOrder(id),order=s.orders.find(o=>o.id===id);
+ const primary=requiredItemId===undefined||requiredItemId===def.itemId;
  if(!order||order.status!=='active')return'请先接取这张订单。';
- if(it.defId!==def.itemId)return'交付物品型号不符，原物保留在库存。';
+ if(it.defId!==(requiredItemId||def.itemId))return'交付物品型号不符，原物保留在库存。';
+ if(tradeReserved(s,it))return'当前报价已占用该物件，先取消交易再交单。';
+ if(def.id!=='ORD-011'&&(it.location==='isolation'||it.sealed))return'隔离或封存的物件不能交付，先核对并解除保管状态。';
  if(def.customerOwned&&(it.owner!=='customer'||it.orderId!==id||order.uid!==it.uid))return'委修单必须交还顾客原物，不能拿自有货替换。';
  if(!def.customerOwned&&!owns(it))return'这件物品不属于店铺，不能代替自有货交单。';
- if(it.condition<def.minCondition)return'品相尚未达到订单要求。';
- if(def.needsRepair&&(!it.repaired||!it.working))return'维修与复测尚未完成。';
+ if(!def.customerOwned&&it.orderId)return'这件物品已由其他订单占用，不能重复交付。';
+ // A companion shares custody and evidence rules, not the main item's quality/repair target.
+ if(primary&&it.condition<def.minCondition)return'品相尚未达到订单要求。';
+ if(primary&&def.needsRepair&&(!it.repaired||!it.working))return'维修与复测尚未完成。';
  if(evidenceCount(it)<2)return'请至少记录两条独立物证后再交付。';
  if(!def.customerOwned&&def.id!=='ORD-011'&&!it.sourceVerified)return'来源尚未核验，不能履约。';
  if(!def.customerOwned&&def.id!=='ORD-011'&&!it.working)return'购买订单要求功能正常的货物，鉴定服务可如实报告故障。';
@@ -86,7 +89,7 @@ export function reduceOrbital(previous:OrbitalState,action:OrbitalAction):Orbita
   s.inspection=s.day>=3?'pending':'announced';
   for(const o of s.orders)if((o.status==='available'||o.status==='active')&&getOrder(o.id).dueDay<s.day)o.status='failed';
   // Unredeemed collateral is retained and locked through the three-day term and one grace day.
-  for(const it of s.inventory)if(it.owner==='pawn'&&it.pawnDay!==undefined&&s.day>it.pawnDay+4){it.owner='shop';it.sealed=false;it.sourceVerified=true;const pos=emptyCell(s,it);if(pos){it.location='warehouse';it.x=pos.x;it.y=pos.y;}it.pawnPrincipal=undefined;it.pawnDay=undefined;}
+  for(const it of s.inventory)if(it.owner==='pawn'&&it.pawnDay!==undefined&&s.day>it.pawnDay+4){it.owner='shop';it.sealed=false;const pos=emptyCell(s,it);if(pos){it.location='warehouse';it.x=pos.x;it.y=pos.y;}it.pawnPrincipal=undefined;it.pawnDay=undefined;}
   return notice(s,s.day===2?'第2天：阿篁与澄九带来委修预约。到订单页接单，再到维修台换件复测。':s.day===3?'第3天：饶静预约核验。先扫描来源不明货物，再登记或隔离，日结可选择首个升级。':`第${s.day}天开门。核对订单与到期抵押，租金和维护费在日结显示。`);
  }
  if(action.type==='UPGRADE') {
@@ -112,20 +115,21 @@ export function reduceOrbital(previous:OrbitalState,action:OrbitalAction):Orbita
  }
  if(action.type==='ARRIVE') {
   if(s.trade)return notice(s,'先完成当前交易，或请客人收好物品。');
-  if(s.cursor>=4)return notice(s,'今日四位预约已处理。可以维修、履约或提前打烊。');
-  const sell=s.cursor%2===1,npcId=s.cursor===0?'CHR-004':s.cursor===1?'CHR-002':s.cursor===2?'CHR-005':'CHR-003';
-  const t:OrbitalTrade={id:nextId(s,'trade'),npcId,kind:sell?'sell':'buy',item:null,price:0,rounds:0,locked:false,evidenceUsed:[],line:sell?'想找一件合规、能用的旧设备，先从你的货架挑一件吧。':getNpc(npcId).line};
+  if(s.cursor>=dailyVisitLimit(s))return notice(s,'今日六位预约已处理。可以维修、履约或提前打烊。');
+  const sell=s.cursor%2===1,npcId=marketNpcId(s);
+  const t:OrbitalTrade={id:nextId(s,'trade'),npcId,kind:sell?'sell':'buy',item:null,price:0,rounds:0,locked:false,evidenceUsed:[],line:sell?`这次采购：${customerNeed(npcId)}。先从货架挑一件吧。`:getNpc(npcId).line};
   if(!sell){
-   const id=marketItemId(s.day,s.cursor),def=getDef(id),unverified=s.day>=3&&s.cursor===0;
-   t.item=newItem(s,id,{condition:s.cursor===0?.65:.8,working:s.cursor!==0,authentic:!(s.day===2&&s.cursor===2),sourceVerified:!unverified,source:unverified?'封签批次与旧港注销清单待比对':'供货人登记回执 / 旧港回收批次'});
-   t.price=Math.round(def.value*(t.item.working?.7:.42));t.line=s.day===1&&s.cursor===0?'这台折叠巡检蜂从旧航道带回。机臂展开后有点迟，你先看看。':unverified?'这张定位片的持续脉冲和封签不一致，先别放上销售架。':getNpc(npcId).line;
+   const stock=marketStock(s);
+   t.item=newItem(s,stock.defId,stockItemOptions(stock));
+   t.price=Math.max(stock.price,tradeTerms(s,t,t.item).floor);t.line=s.day===1&&s.cursor===0?'这台折叠巡检蜂从旧航道带回。机臂展开后有点迟，你先看看。':s.day===3&&s.cursor===0?'这张定位片的持续脉冲和封签不一致，先别放上销售架。':`${getNpc(npcId).line} 来路：${stock.source}。`;
   }
   s.trade=t;return notice(s,sell?'顾客在柜台等候，请从仓储选择自有货物推荐。':'客人把货物放到柜台，先拿到鉴定台观察。');
  }
  if(action.type==='SELECT_TRADE') {
   const t=s.trade,it=s.inventory.find(i=>i.uid===action.uid);if(!t||t.kind!=='sell'||t.locked||!it)return previous;
-  if(!owns(it)||it.location==='isolation'||!it.sourceVerified||it.orderId)return notice(s,'受托、隔离、来源未明或订单预留的货物不能出售。');
-  t.selectedUid=it.uid;t.price=Math.max(1,Math.round(itemValue(it)*.95));t.line=`${getDef(it.defId).name}看起来合用，请说明检测结果和报价。`;return s;
+  const invalid=saleEligibility(it,t.npcId);if(invalid)return notice(s,invalid);
+  if(t.selectedUid===it.uid)return s;
+  t.selectedUid=it.uid;t.evidenceUsed=[];t.price=tradeTerms(s,t,it).opening;t.line=`${getDef(it.defId).name}可以考虑。我先出${t.price}Cr，检测结果好的话还可以谈。`;return s;
  }
  if(action.type==='CHECK') {
   const it=findItem(s,action.uid);if(!it||!toolIds.includes(action.tool))return previous;
@@ -133,28 +137,41 @@ export function reduceOrbital(previous:OrbitalState,action:OrbitalAction):Orbita
   if(!it.inspectedPaid){const cost=s.upgrades.lamp?0:1;if(!hasAP(s,cost))return notice(s,'今日行动点不足，明日可继续，物证不会丢失。');spend(s,cost);it.inspectedPaid=true;}
   it.evidence.push(action.tool);s.tutorial=Math.max(s.tutorial,1);
   const extra=evidenceCount(it)>=2?'已有两条独立物证，可交叉判断估值。':'仍需另一工具的独立物证，不能只凭外观定真伪。';
-  return notice(s,`${getDef(it.defId).clues[action.tool]||'工具读数已记录。'} ${extra}`);
+  return notice(s,`${getItemClue(it,action.tool)} ${extra}`);
  }
  if(action.type==='OFFER') {
   const t=s.trade;if(!t||t.locked||!validatedTradeItem(s,t))return previous;
-  if(!validPrice(action.price))return notice(s,'报价必须是有效的正整数。');
+  if(!hasAP(s,1))return notice(s,'交割需要保留1AP，请先送客，明日再安排交易。');
+  const it=validatedTradeItem(s,t)!;
+  if(t.kind==='sell'){const invalid=saleEligibility(it,t.npcId);if(invalid)return notice(s,invalid);}
+  const bounds=offerBounds(s,t,it);
+  if(bounds.max<1)return notice(s,'现金不足1Cr，暂时无法提出收购报价，可以先送客整理库存。');
+  if(!validPrice(action.price)||action.price<bounds.min||action.price>bounds.max)return notice(s,`本件报价范围为1–${bounds.max}Cr${t.kind==='buy'?'（受现金余额限制）':''}，无效报价不计轮次。`);
   if(t.rounds>=3)return notice(s,'三次有效还价已用完，可以接受当前报价或送客。');
-  const it=validatedTradeItem(s,t)!;if(action.evidence&&!it.evidence.includes(action.evidence))return notice(s,'这条证据尚未取得，不能用于报价。');
+  if(action.evidence&&(!it.evidence.includes(action.evidence)||!getDef(it.defId).tools.includes(action.evidence)))return notice(s,'请选这件实物已取得的相关物证，其他读数不能支撑议价。');
+  t.evidenceUsed=relevantEvidence(it,t.evidenceUsed);
   if(action.evidence&&!t.evidenceUsed.includes(action.evidence))t.evidenceUsed.push(action.evidence);
-  const value=itemValue(it),evidenceBonus=Math.min(.12,t.evidenceUsed.length*.06);
-  const acceptable=t.kind==='sell'?action.price<=value*(1.06+evidenceBonus):action.price>=value*(.68-evidenceBonus);
+  const terms=tradeTerms(s,t,it),acceptable=priceAgreed(s,t,it,action.price);
   t.rounds++;if(acceptable){t.price=action.price;t.locked=true;t.line='物证说得通。价格确认，我们按这个数交割。';}
-  else{t.price=Math.round((t.price+action.price)/2);t.line=`这个数还有差距，我可以让到${t.price}Cr。`;}
+  else{
+   const insulting=t.kind==='sell'?action.price>terms.ceiling*1.5:action.price<terms.floor*.55;
+   if(t.rounds>=3||(insulting&&t.rounds>=2))return finishTrade(s,insulting?'连续悬殊报价耗尽了耐心，客人收起票据离开。钱货未发生变化。':'三轮议价仍未达成一致，客人离开了。下一位预约仍可接待。');
+   t.price=counterPrice(s,t,it);t.line=insulting?`这个数太离谱了。我的报价是${t.price}Cr，再这样我就走。`:`我只能让到${t.price}Cr。还剩${3-t.rounds}轮，请认真考虑。`;
+  }
   return notice(s,acceptable?'证据与报价已确认，交割前不会扣款。':'客人递回反报价。还价不消耗额外AP。');
  }
  if(action.type==='ACCEPT') {
   const t=s.trade;if(!t||t.locked)return previous;const it=validatedTradeItem(s,t);if(!it)return notice(s,'请先选定要交易的实物。');
+  if(!hasAP(s,1))return notice(s,'交割需要保留1AP；可取消本次交易后打烊。');
+  if(t.kind==='sell'){const invalid=saleEligibility(it,t.npcId);if(invalid)return notice(s,invalid);}
+  if(!priceAgreed(s,t,it))return notice(s,'票据报价超出顾客的交易范围，请重新议价或送客。');
   if(t.kind==='buy'&&s.cash<t.price)return notice(s,`现金不足，还差${t.price-s.cash}Cr。`);
   t.locked=true;t.line='就按票据上的价格。确认交割后钱货同时入账。';return s;
  }
  if(action.type==='DELIVER') {
   const t=s.trade;if(!t||t.id!==action.tradeId||!t.locked||s.completedTrades.includes(action.tradeId))return previous;
   const it=validatedTradeItem(s,t);if(!it)return notice(s,'货物已变化，请重新核对。');
+  if(!priceAgreed(s,t,it))return notice(s,'价格已超出约定范围，钱货均未变动，请取消后重新议价。');
   if(!hasAP(s,1))return notice(s,'交割需要1AP，当前余额不足。');
   if(t.kind==='buy'){
    if(s.cash<t.price)return notice(s,'现金不足，钱货均未变动。');
@@ -162,7 +179,7 @@ export function reduceOrbital(previous:OrbitalState,action:OrbitalAction):Orbita
    it.owner='shop';it.cost=t.price;it.x=pos.x;it.y=pos.y;it.location='warehouse';s.inventory.push(it);
    ledger(s,t.id,'purchase',`收购 ${getDef(it.defId).name}`,-t.price,t.price);if(!it.sourceVerified)s.risk=clamp(s.risk+12);
   } else {
-   if(!owns(it)||it.location==='isolation'||!it.sourceVerified||it.orderId)return notice(s,'货物归属或封存状态变化，不能交割。');
+   const invalid=saleEligibility(it,t.npcId);if(invalid)return notice(s,invalid);
    ledger(s,t.id,'sale',`售出 ${getDef(it.defId).name}`,t.price,it.cost);s.inventory=s.inventory.filter(i=>i.uid!==it.uid);s.relations[getNpc(t.npcId).faction]=clamp(s.relations[getNpc(t.npcId).faction]+2);
   }
   spend(s,1);s.completedTrades.push(t.id);return finishTrade(s,'钱货已交割，回执和物件归属同步保存。');
@@ -275,11 +292,10 @@ export function reduceOrbital(previous:OrbitalState,action:OrbitalAction):Orbita
  }
  if(action.type==='DELIVER_ORDER') {
   const o=s.orders.find(o=>o.id===action.id),it=s.inventory.find(i=>i.uid===action.uid);if(!o||!it||o.status!=='active')return previous;
-  if(tradeReserved(s,it))return notice(s,'当前报价已占用该物件，先取消交易再交单。');
   const bad=orderItemValid(s,action.id,it);if(bad)return notice(s,bad);const def=getOrder(action.id);
   if(!hasAP(s,1))return notice(s,'订单交付需要1AP，当前不足。');
   let extra:OrbitalItem|undefined;
-  if(def.id==='ORD-004'){extra=s.inventory.find(i=>i.defId==='ITM-041'&&owns(i)&&i.working&&i.sourceVerified&&evidenceCount(i)>=2);if(!extra)return notice(s,'还缺已核验的藻苗罐，两个轮廓必须同时满足后才会交货。');}
+  if(def.id==='ORD-004'){extra=s.inventory.find(i=>orderItemValid(s,action.id,i,'ITM-041')===null);if(!extra)return notice(s,'还缺可交付的藻苗罐，请核对归属、封存、报价占用和物证后再交货。');}
   const id=`order-${o.id}`;if(s.ledger.some(e=>e.id===id))return previous;
   ledger(s,id,def.customerOwned?'service':'order',`${def.name} · 交付`,def.reward,it.cost+(extra?.cost||0));s.inventory=s.inventory.filter(i=>i.uid!==it.uid&&i.uid!==extra?.uid);o.status='done';spend(s,1);s.relations[def.faction]=clamp(s.relations[def.faction]+4);
   if(def.id==='ORD-010')s.risk=clamp(s.risk-2);if(def.id==='ORD-011')s.risk=clamp(s.risk-6);return notice(s,`订单盖章：${def.name}，${def.reward}Cr已到账，原物已交还。`);
@@ -318,6 +334,7 @@ function validItem(value:unknown):value is OrbitalItem {
  for(const k of ['working','authentic','sourceVerified','inspectedPaid','repaired','rotated','sealed'])if(typeof v[k]!=='boolean')return false;
  if(!text(v.source,2000)||!Array.isArray(v.evidence)||v.evidence.length>6||new Set(v.evidence).size!==v.evidence.length||v.evidence.some(t=>!toolIds.includes(t as ToolId)))return false;
  if(v.orderId!==undefined&&!orderDefs.some(o=>o.id===v.orderId))return false;
+ if(v.lotId!==undefined&&(!text(v.lotId,60)||!/^MKT-[A-F0-9]{8}-(?:[1-9]|1\d|2[01])-[024]$/.test(v.lotId)))return false;
  if(v.owner==='pawn'&&(!integer(v.pawnDay,1,21)||!finite(v.pawnPrincipal,0,1e8)||v.location!=='pawn'))return false;
  if(v.owner==='customer'&&(!text(v.orderId)||!orderDefs.some(o=>o.id===v.orderId)))return false;
  if(v.location==='warehouse'){const it=v as unknown as OrbitalItem,[w,h]=dimensions(it);if(it.x+w>10||it.y+h>6)return false;}
@@ -335,25 +352,44 @@ export function parseOrbital(raw:unknown):OrbitalState|null {
   for(const it of inv)if(it.location==='warehouse'){
    const [w,h]=dimensions(it);if(inv.some(o=>{if(o.uid===it.uid||o.location!=='warehouse')return false;const [ow,oh]=dimensions(o);return it.x<o.x+ow&&it.x+w>o.x&&it.y<o.y+oh&&it.y+h>o.y;}))return null;
   }
-  if(!integer(v.cursor,0,4)||!integer(v.nextId,1,1000000)||!integer(v.tutorial,0,100))return null;
+  if(!integer(v.cursor,0,dailyVisitLimit())||!integer(v.nextId,1,1000000)||!integer(v.tutorial,0,100))return null;
   const allocated=inv.map(i=>Number(i.uid.split('-').pop()));if(v.trade&&isRecord(v.trade)){if(text(v.trade.id))allocated.push(Number(v.trade.id.split('-').pop()));if(validItem(v.trade.item))allocated.push(Number(v.trade.item.uid.split('-').pop()));}if(allocated.some(n=>!Number.isFinite(n)||n>=Number(v.nextId)))return null;
   if(!Array.isArray(v.completedTrades)||v.completedTrades.length>5000||v.completedTrades.some(x=>!text(x,100))||new Set(v.completedTrades).size!==v.completedTrades.length)return null;
   if(!Array.isArray(v.ledger)||v.ledger.length>5000||new Set(v.ledger.map(e=>isRecord(e)?e.id:'')).size!==v.ledger.length)return null;
   if(v.ledger.some(e=>!isRecord(e)||!text(e.id,100)||!integer(e.day,1,21)||!text(e.kind,100)||!text(e.label,2000)||!finite(e.amount,-1e8,1e8)||!finite(e.cost,0,1e8)))return null;
   if(!isRecord(v.materials)||materials.some(m=>!integer((v.materials as Record<string,unknown>)[m.id],0,99999)))return null;
-  if(!Array.isArray(v.orders)||v.orders.length!==12||new Set(v.orders.map(o=>isRecord(o)?o.id:'')).size!==12||v.orders.some(o=>!isRecord(o)||!orderDefs.some(d=>d.id===o.id)||!['available','active','done','failed'].includes(String(o.status))))return null;
+  if(!Array.isArray(v.orders)||![12,orderDefs.length].includes(v.orders.length)||new Set(v.orders.map(o=>isRecord(o)?o.id:'')).size!==v.orders.length||v.orders.some(o=>!isRecord(o)||!orderDefs.some(d=>d.id===o.id)||!['available','active','done','failed'].includes(String(o.status))))return null;
+  const savedOrders=v.orders as unknown as OrbitalState['orders'];
+  if(orderDefs.slice(0,12).some(d=>!savedOrders.some(o=>o.id===d.id)))return null;
+  const migratedOrders=orderDefs.map(d=>savedOrders.find(o=>o.id===d.id)||{id:d.id,status:d.dueDay<Number(v.day)?'failed' as const:'available' as const});
   if(!isRecord(v.repairProgress)||Object.entries(v.repairProgress).some(([key,n])=>!/^item-\d+$/.test(key)||!integer(n,0,3)))return null;
   if(!Array.isArray(v.scanned)||v.scanned.length>128||v.scanned.some(x=>!text(x,100))||!['announced','pending','cleared'].includes(String(v.inspection)))return null;
   if(!isRecord(v.upgrades)||typeof v.upgrades.lamp!=='boolean'||typeof v.upgrades.shelf!=='boolean'||!text(v.notice,5000))return null;
   if(v.trade!==null){
-   const t=v.trade;if(!isRecord(t)||!text(t.id,100)||!npcs.some(n=>n.id===t.npcId)||!['buy','sell','pawn'].includes(String(t.kind))||!finite(t.price,0,1e8)||!integer(t.rounds,0,3)||typeof t.locked!=='boolean'||!text(t.line,4000))return null;
+   const t=v.trade;if(!isRecord(t)||!text(t.id,100)||!npcs.some(n=>n.id===t.npcId)||!['buy','sell'].includes(String(t.kind))||!finite(t.price,0,1e8)||!integer(t.rounds,0,3)||typeof t.locked!=='boolean'||!text(t.line,4000))return null;
    if(t.item!==null&&!validItem(t.item))return null;
+   if(t.kind==='buy'&&(!t.item||(t.item as OrbitalItem).owner!=='shop'||(t.item as OrbitalItem).orderId))return null;
+   if(t.kind==='sell'&&t.item!==null)return null;
    if(!Array.isArray(t.evidenceUsed)||t.evidenceUsed.some(e=>!toolIds.includes(e as ToolId)))return null;
    if(t.selectedUid!==undefined&&!inv.some(i=>i.uid===t.selectedUid))return null;
    if(t.item&&inv.some(i=>i.uid===(t.item as OrbitalItem).uid))return null;
   }
   if(v.report!==null){const r=v.report;if(!isRecord(r)||!integer(r.day,1,21)||!finite(r.income,0,1e9)||!finite(r.expenses,0,1e9)||!finite(r.maintenance,0,1e9)||!finite(r.rent,0,1e9)||!finite(r.cash,0,1e9)||typeof r.upgraded!=='boolean')return null;}
   if(v.phase==='report'&&v.report===null)return null;
-  return clone(v as unknown as OrbitalState);
+  const restored=clone({...v,orders:migratedOrders} as unknown as OrbitalState),t=restored.trade;
+  if(t){
+   const it=validatedTradeItem(restored,t);
+   if(t.kind==='sell'&&it&&saleEligibility(it,t.npcId)){
+    t.selectedUid=undefined;t.evidenceUsed=[];t.locked=false;t.price=0;
+    restored.notice='旧报价中的货物不符合顾客需求，请重新选货或取消交易。库存和资金已保留。';
+   }else if(it){
+    t.evidenceUsed=relevantEvidence(it,t.evidenceUsed);
+    if(!priceAgreed(restored,t,it)){
+     const terms=tradeTerms(restored,t,it);t.price=t.kind==='sell'?terms.opening:Math.max(terms.floor,Math.min(terms.marketCap,Math.round(getDef(it.defId).value*(it.working?.7:.42))));
+     t.locked=false;t.line='票据已按本件货物重新核价，请确认或送客。';restored.notice='已修正旧存档中尚未成交的异常报价，原有资金与货物保留。';
+    }
+   }else{t.locked=false;t.price=0;t.evidenceUsed=[];}
+  }
+  return restored;
  }catch{return null;}
 }

@@ -38,6 +38,6 @@ const source=(await readFile(join(root,'web/entry.ts'),'utf8')).replace('__ART_E
 await build({stdin:{contents:source,resolveDir:join(root,'web'),sourcefile:'entry.ts',loader:'ts'},bundle:true,format:'esm',platform:'browser',target:'es2020',alias:{cc:engine},outfile:join(dist,'game.js'),minify:true,sourcemap:'external',tsconfig:join(root,'tsconfig.web.json'),legalComments:'linked',define:{'process.env.NODE_ENV':'"production"'}});
 const codeHash=createHash('sha256').update(await readFile(join(dist,'game.js'))).digest('hex').slice(0,12);
 await writeFile(join(dist,'index.html'),(await readFile(join(root,'web/index.html'),'utf8')).replace('src="./game.js"',`src="./game.js?v=${codeHash}"`));
-await writeFile(join(dist,'version.json'),JSON.stringify({ui:'orbital-p0-v10',engine:'Cocos Creator 3.8.8',sourceEngine:'411f98df047c25902f93440d4b22925c2fb65461',art:artExt,features:['台后半身人物与实体仪器UI','空间站三场景','24件P0货物与正反面','六种不同鉴定操作','维修拆解组装','占格仓库与安检','订单交付与升级','12AP与Cr经济','21日经营']},null,2));
+await writeFile(join(dist,'version.json'),JSON.stringify({ui:'orbital-p0-v11',engine:'Cocos Creator 3.8.8',sourceEngine:'411f98df047c25902f93440d4b22925c2fb65461',art:artExt,features:['台后半身人物与实体仪器UI','空间站三场景','36类货物与72张正反面图格','六种不同鉴定操作','维修拆解组装','占格仓库与安检','订单交付与升级','顾客底价预算与三轮议价','种子货源每日六客','24张错峰订单','12AP与Cr经济','21日经营']},null,2));
 await writeFile(join(dist,'.nojekyll'),'');
 console.log('Creator Web build ready: dist/');
