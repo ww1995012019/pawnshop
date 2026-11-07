@@ -1,7 +1,8 @@
 import {Button,Canvas,Color,EventKeyboard,EventTouch,game,Graphics,input,Input,KeyCode,Label,Node,UIOpacity,UITransform,Vec2,Vec3,view} from 'cc';
 import type {OrbitalHost} from './ui-types';
 import type {OrbitalItem,OrderDef,PageId,RecipeDef} from './types';
-import {getDef,getOrder,materials,recipes,orderDefs,orderEarliest} from './data';
+import {getDef,getOrder,getRecipe,materials,recipes,orderDefs,orderEarliest} from './data';
+import {PAPER_INK as INK,type HudIcon} from './OrbitalUI';
 import {canPlace,estimate,findItem,itemValue,orderItemValid} from './model';
 import {ordersForGroup,selectedOrderId} from './OrderPresentation';
 import type {OrderGroup} from './OrderPresentation';
@@ -196,8 +197,12 @@ export class OrbitalPanels {
   private button(p:Node,t:string,x:number,y:number,w:number,h:number,fn:()=>void,tone:'gold'|'green'|'danger'|'quiet'='quiet',disabled=false):Node {
     return this.h.button(p,t,x,y,w,h,fn,{tone,disabled,size:19});
   }
-  private title(p:Node,kicker:string,title:string,x=40,w=1000):void {
-    this.row(p,kicker,x,130,w,22,12,C.muted);this.row(p,title,x,157,w,40,29);
+  /** Page name plate: page icon and title on a riveted strip; no web-style headings. */
+  private title(p:Node,_kicker:string,title:string,x=30,_w=1000):void {
+    const icons:Partial<Record<PageId,HudIcon>>={repair:'repair',warehouse:'warehouse',orders:'orders',report:'report',settings:'settings'};
+    const w=Math.max(220,title.length*30+96),plate=this.h.ui.texturePanel(p,x,114,w,72,{skin:'strip',name:'page-title-plate'});
+    this.h.ui.hudIcon(plate,icons[this.page]??'counter',16,12,48,48);
+    this.h.ui.label(plate,title,72,0,w-88,72,{size:28,bold:true,color:'#F6EBD4',verticalAlign:'center',wrap:false,outline:'#05080B',outlineWidth:2});
   }
   private inventoryList(p:Node,x:number,y:number,w:number,h:number,repairOnly=false):void {
     const all=this.h.state.inventory.filter(it=>!repairOnly||it.location!=='pawn');
@@ -224,12 +229,12 @@ export class OrbitalPanels {
     this.inventoryList(p,43,260,236,385,true);
     this.h.ui.panel(p,306,205,848,482,{fill:'#0D171B24',lineWidth:0,name:'repair-workspace'});
     this.h.ui.texturePanel(p,1170,130,400,640,{skin:'glass',fill:'#10191DD4',stroke:C.line,materialOpacity:.46,name:'repair-job-sheet'});
-    this.row(p,'REPAIR DOCKET / 原物修复',1190,146,360,31,15,C.orange);
+    this.row(p,'维修工单',1190,146,360,31,15,C.orange);
     if(!item){this.discardRepairTransition();this.text(p,'从仓库选择物件，或到订单页接取委修单。',353,365,750,80,25,C.muted,'center');return;}
     const def=getDef(item.defId),recipe=recipes.find(r=>r.kind==='repair'&&(r.id===def.recipeId||r.itemId===item.defId));
     const progress=s.repairProgress[item.uid]||0;
     this.h.ui.texturePanel(p,326,218,480,67,{skin:'strip',fill:'#0C151CC2',lineWidth:0,materialOpacity:.24,name:'repair-object-label'});
-    this.row(p,`${def.id} · ${def.name}`,341,222,450,31,23);
+    this.row(p,def.name,341,222,450,31,23);
     this.row(p,this.ownership(item),341,257,450,23,14,item.owner==='shop'?C.muted:C.purple);
     const visible=getItemHitBounds(item.defId,progress>0,336),ground=584;
     const objectY=ground-(168+visible.y+visible.height),shadowX=724+visible.x+visible.width/2;
@@ -583,7 +588,7 @@ export class OrbitalPanels {
       if(it){this.h.ui.object(cell,it.defId,2,1,34,28,{repaired:it.repaired});this.row(cell,`${it.listPrice}`,37,0,40,31,13,C.text,'right');this.h.ui.bindPointer(cell,{cursor:'pointer',disabled:()=>this.h.busy});cell.on(Node.EventType.TOUCH_END,()=>!this.h.busy&&this.h.select(it.uid));}
     }
     this.h.ui.texturePanel(p,766,205,318,566,{skin:'glass',fill:'#0C171BBB',stroke:'#7D82743D',materialOpacity:.29,name:'warehouse-security-station'});
-    this.row(p,'CARGO SCANNER / 03',785,216,279,22,12,C.muted);
+    this.row(p,'货物扫描仪',785,216,279,22,12,C.muted);
     this.row(p,item&&!inStock?'柜台来件 · 尚未入库':'入库扫描仪',785,239,279,29,item&&!inStock?19:22,C.text);
     const scanner=this.h.ui.texturePanel(p,785,278,279,283,{skin:'socket',fill:'#1420248A',stroke:'#84938468',materialOpacity:.88,name:'warehouse-scanner'});
     if(item)this.h.ui.object(scanner,item.defId,28,38,225,211,{repaired:item.repaired,damaged:!item.working});
@@ -596,7 +601,7 @@ export class OrbitalPanels {
     this.line(p,785,674,279,'#8B86704A');
     this.paragraph(p,warn,785,692,279,54,16,s.inspection==='pending'?C.orange:C.muted);
     this.h.ui.texturePanel(p,1100,130,470,640,{skin:'glass',fill:'#10191DD4',stroke:C.line,materialOpacity:.39,name:'warehouse-cargo-file'});
-    this.row(p,'CARGO FILE / 来源与处置',1120,146,425,33,15,C.orange);
+    this.row(p,'货物档案 · 来源与处置',1120,146,425,33,15,C.orange);
     if(!item){this.text(p,'点选仓格中的实物',1120,245,425,60,23,C.muted,'center');return;}
     const def=getDef(item.defId),a=estimate(item);
     this.row(p,def.name,1120,196,425,39,29);
@@ -665,38 +670,46 @@ export class OrbitalPanels {
     list.forEach((o,i)=>{
       const x=40+(i%3)*289,y=294+Math.floor(i/3)*118,st=s.orders.find(v=>v.id===o.id)?.status||'available',locked=st==='available'&&(orderEarliest[o.id]||1)>s.day,chosen=o.id===this.orderId;
       const card=this.h.button(p,'',x,y,274,108,()=>{this.orderId=o.id;this.orderSelection[this.orderGroup]=o.id;this.stagedUid='';this.h.render();},{tone:'quiet',selected:chosen,name:`order-${o.id}`});
-      this.h.ui.texturePanel(card,0,0,274,108,{skin:'strip',fill:chosen?'#1A2A30E6':'#101A22D6',lineWidth:0,materialOpacity:.55,name:'order-card-backing'}).setSiblingIndex(0);
-      this.h.ui.line(card,12,30,262,30,chosen?'#76BABB88':'#B2AC872F',.7);
-      this.row(card,o.id.replace('ORD-','NO. '),12,7,88,18,11,chosen?C.cyan:C.muted);
-      this.row(card,`第 ${o.dueDay} 天截止`,124,7,138,18,14,C.text,'right');
-      this.h.ui.object(card,o.itemId,9,35,68,66,{damaged:o.needsRepair});
-      this.paragraph(card,o.name,86,35,176,43,17,C.text);
-      this.row(card,`${o.reward} Cr`,86,81,89,24,17,chosen?C.orange:C.text);
-      this.h.ui.statusChip(card,locked?`D${orderEarliest[o.id]} 开放`:statusText[st],179,80,83,24,st==='failed'?C.red:st==='active'?C.orange:st==='done'?C.cyan:C.text);
+      // Each commission is a torn work slip; the chosen one is pinned flat.
+      const slip=this.h.ui.paperSlip(card.getChildByName('tech-button-surface')||card,4,2,266,102,{name:'order-card-paper',angle:chosen?0:((i%3)-1)*1.1});
+      this.h.ui.line(slip,12,30,254,30,INK.rule,1);
+      this.row(slip,`第 ${o.dueDay} 天截止`,12,6,150,20,14,INK.muted);
+      this.h.ui.object(slip,o.itemId,8,34,64,58,{damaged:o.needsRepair});
+      this.h.ui.label(slip,o.name,80,34,176,42,{size:17,lineHeight:21,bold:true,color:INK.text,wrap:true,overflow:'clamp'});
+      this.row(slip,`${o.reward} Cr`,80,72,90,22,17,INK.rust);
+      const stamp=locked?`D${orderEarliest[o.id]} 开放`:statusText[st],tint=st==='failed'?'#A8331F':st==='active'?INK.rust:st==='done'?INK.teal:INK.muted;
+      const mark=this.h.ui.container(slip,170,70,84,24,'order-status-stamp');mark.angle=-4;
+      const sg=mark.addComponent<Graphics>(Graphics);sg.strokeColor=new Color(tint);sg.lineWidth=2;sg.roundRect(0,-24,84,24,4);sg.stroke();
+      this.h.ui.label(mark,stamp,0,0,84,24,{size:13,bold:true,color:tint,align:'center',verticalAlign:'center',wrap:false});
+      if(chosen){const pin=slip.addComponent<Graphics>(Graphics);pin.fillColor=new Color('#00000055');pin.circle(135,-6,7);pin.fill();pin.fillColor=new Color('#C8452A');pin.circle(133,-4,7);pin.fill();pin.fillColor=new Color('#FFB59C');pin.circle(131,-2,2.4);pin.fill();}
     });
-    this.h.ui.texturePanel(p,928,130,642,314,{skin:'glass',fill:'#10191DD6',stroke:C.line,materialOpacity:.43,name:'order-manifest'});
+    this.h.ui.texturePanel(p,926,124,646,326,{skin:'socket',name:'order-clipboard'});
+    this.h.ui.paperSlip(p,942,138,614,300,{name:'order-manifest',torn:true});
+    const clip=this.h.ui.container(p,1189,118,120,34,'clipboard-clip').addComponent<Graphics>(Graphics);
+    clip.fillColor=new Color('#00000080');clip.roundRect(3,-37,120,34,8);clip.fill();clip.fillColor=new Color('#9AA4A2');clip.roundRect(0,-34,120,34,8);clip.fill();
+    clip.fillColor=new Color('#5E6868');clip.roundRect(14,-24,92,10,4);clip.fill();clip.fillColor=new Color('#E6ECE8');clip.rect(8,-6,104,2);clip.fill();
     this.h.ui.texturePanel(p,928,457,642,313,{skin:'socket',fill:'#10191D55',stroke:'#7D82743B',materialOpacity:.39,name:'order-handover-station'});
     if(!this.orderId){
       const empty=this.orderGroup==='current'?'当前委托已处理完':this.orderGroup==='history'?'暂无历史记录':'暂无待开放委托';
-      this.row(p,empty,948,189,602,42,29,C.text);
-      this.paragraph(p,this.orderGroup==='current'?'可以继续接待来客，或查看后续委托的开放时间。':this.orderGroup==='history'?'完成交付或过期的委托会归档在这里。':'后续委托开放后会出现在当前委托中。',948,254,602,110,20,C.muted);
+      this.row(p,empty,962,189,574,42,29,INK.text);
+      this.paragraph(p,this.orderGroup==='current'?'可以继续接待来客，或查看后续委托的开放时间。':this.orderGroup==='history'?'完成交付或过期的委托会归档在这里。':'后续委托开放后会出现在当前委托中。',962,254,574,110,20,INK.muted);
       this.text(p,empty,70,391,790,80,26,C.muted,'center');
       this.button(p,'返回柜台接待',948,707,602,47,()=>this.h.navigate('counter'),'gold');return;
     }
     const order=getOrder(this.orderId),os=s.orders.find(o=>o.id===order.id),status=os?.status||'available';
-    this.row(p,'DELIVERY MANIFEST / 订单详情',948,145,602,29,14,C.orange);
-    this.row(p,order.name,948,189,602,42,29);
-    this.baseline(p,`${order.id}  /  ${order.customerOwned?'顾客委修原物':'店铺自有货物'}  /  D${String(order.dueDay).padStart(2,'0')} 截止`,948,264,410,15,C.muted);
-    this.baseline(p,`${order.reward} Cr`,1365,264,185,25,C.orange,'right');
+    this.row(p,'委托单',962,160,300,24,15,INK.rust);
+    this.h.ui.label(p,order.name,962,186,574,44,{size:29,bold:true,color:INK.text,verticalAlign:'center',wrap:false});
+    this.baseline(p,`${order.customerOwned?'顾客委修原物':'店铺自有货物'}  ·  第 ${order.dueDay} 天截止`,962,262,400,16,INK.muted);
+    this.baseline(p,`${order.reward} Cr`,1360,264,176,26,INK.rust,'right');
     const paired=order.id==='ORD-004';
-    const description=paired?'光合灯放入交付盘，合格藻苗罐从库存自动配套交付。\n藻苗罐须店铺自有、功能正常、来源已核验，并有两项独立物证。':order.description.replace(/；\s*/g,'；\n');
-    this.paragraph(p,description,948,284,602,92,18,'#BCC1B7');
-    this.line(p,948,389,602);
-    this.row(p,paired?'要求：光合灯 + 藻苗罐':`要求：${getDef(order.itemId).name}`,948,403,310,30,17);
-    this.row(p,`${paired?'光合灯':''}品相≥${Math.round(order.minCondition*100)}%${order.needsRepair?' · 已修复':''}`,1274,403,276,30,17,C.text,'right');
+    const description=paired?'光合灯放入交付盘，合格藻苗罐从库存自动配套交付。\n藻苗罐须店铺自有、功能正常、来源已核验，并有两项独立物证。':order.description.replace(/REC-\d{3}/g,id=>{try{return `「${getRecipe(id).name}」`;}catch{return '对应工序';}}).replace(/；\s*/g,'；\n');
+    this.paragraph(p,description,962,282,574,96,17,'#4A4034');
+    this.line(p,962,387,574,INK.rule);
+    this.row(p,paired?'要求：光合灯 + 藻苗罐':`要求：${getDef(order.itemId).name}`,962,397,300,30,17,INK.text);
+    this.row(p,`${paired?'光合灯':''}品相≥${Math.round(order.minCondition*100)}%${order.needsRepair?' · 已修复':''}`,1262,397,274,30,17,INK.text,'right');
     const earliest=orderEarliest[order.id]||1,available=status==='available'&&s.day>=earliest;
     if(status==='available'){
-      this.row(p,'原物交接 / ITEM PREVIEW',948,466,400,22,11,C.muted);
+      this.row(p,'原物交接',948,466,400,22,11,C.muted);
       this.h.ui.object(p,order.itemId,1028,484,345,184,{damaged:order.needsRepair});
       this.row(p,paired?'藻苗罐自动配套':order.customerOwned?'原件随委托移交':'需匹配合规库存',1365,527,175,52,17,C.text,'center');
       this.row(p,paired?'藻苗罐交付条件：自有 · 功能正常 · 来源已核验 · 两项独立物证':'接取后保留归属、材料要求与到期日；交付前可预览。',948,666,602,24,15,C.muted);
@@ -787,23 +800,24 @@ export class OrbitalPanels {
   private report(p:Node):void {
     const s=this.h.state,r=s.report,ended=s.phase==='ending';
     this.title(p,'DAILY LEDGER / 每次提交均可追溯',ended?'经营阶段结束':`第 ${String(s.day).padStart(2,'0')} 日 · 营业结算`);
-    this.h.ui.texturePanel(p,30,205,920,566,{skin:'glass',fill:'#10191DCF',stroke:'#8B86704A',materialOpacity:.33,name:'daily-navigation-ledger'});
+    // The day's ledger is printed on a thermal receipt.
+    this.h.ui.paperSlip(p,30,200,920,580,{name:'daily-navigation-ledger',torn:true});
     const today=s.ledger.filter(x=>x.day===s.day);
     const income=today.filter(x=>x.amount>0).reduce((a,b)=>a+b.amount,0);
     const expenses=-today.filter(x=>x.amount<0&&x.kind!=='maintenance'&&x.kind!=='rent').reduce((a,b)=>a+b.amount,0);
     const postedMaintenance=-today.filter(x=>x.kind==='maintenance').reduce((a,b)=>a+b.amount,0),postedRent=-today.filter(x=>x.kind==='rent').reduce((a,b)=>a+b.amount,0);
     const maintenance=r?.maintenance??20,rent=r?.rent??(s.day%7===0?Math.round(450*Math.pow(1.1,Math.floor((s.day-1)/7))):0);
-    this.baseline(p,'现金流与固定费用',53,248,650,22);
-    this.baseline(p,`LOG / D${String(s.day).padStart(2,'0')}`,735,248,187,12,C.muted,'right');
-    this.row(p,'可用现金 / AVAILABLE CREDIT',53,270,560,22,12,C.muted);
-    this.baseline(p,s.cash.toLocaleString(),53,347,655,46,C.text);
-    this.baseline(p,'Cr',753,347,169,25,C.orange,'right');
-    this.line(p,53,371,869,'#8B867043');
-    const values=[{name:'现金流入',value:income,color:C.cyan},{name:'采购及其他支出',value:-expenses,color:C.orange},{name:'能源维护',value:-postedMaintenance,color:'#AC987C'},{name:'本日租金',value:-postedRent,color:C.purple}];
+    this.baseline(p,'营业小票 · 现金流与固定费用',53,248,650,22,INK.text);
+    this.baseline(p,`第 ${String(s.day).padStart(2,'0')} 日`,735,248,187,12,INK.muted,'right');
+    this.row(p,'可用现金',53,270,560,22,12,INK.muted);
+    this.baseline(p,s.cash.toLocaleString(),53,347,655,46,INK.text);
+    this.baseline(p,'Cr',753,347,169,25,INK.rust,'right');
+    this.line(p,53,371,869,INK.rule);
+    const values=[{name:'现金流入',value:income,color:INK.teal},{name:'采购及其他支出',value:-expenses,color:INK.rust},{name:'能源维护',value:-postedMaintenance,color:'#8C6A3C'},{name:'本日租金',value:-postedRent,color:'#6B4E8A'}];
     const max=Math.max(1,...values.map(v=>Math.abs(v.value))),zero=484;
-    this.row(p,'流入 ↑  /  支出 ↓ · 已入账现金',559,382,363,25,14,C.muted,'right');
-    this.h.ui.line(p,84,zero,908,zero,'#B2B9AE80',1.5);
-    this.row(p,'0',53,zero-13,26,26,15,C.muted,'center');
+    this.row(p,'流入 ↑  /  支出 ↓ · 已入账现金',559,382,363,25,14,INK.muted,'right');
+    this.h.ui.line(p,84,zero,908,zero,'#6F635280',1.5);
+    this.row(p,'0',53,zero-13,26,26,15,INK.muted,'center');
     values.forEach((v,i)=>{
       const x=92+i*207,h=Math.abs(v.value)/max*72,top=v.value>0?zero-h:zero;
       if(v.value!==0){
@@ -812,23 +826,23 @@ export class OrbitalPanels {
         this.h.ui.line(p,x,edge,x+117,edge,v.color,2);
       }
       const amount=v.value===0?'0':`${v.value>0?'+':'−'}${Math.abs(v.value)}`;
-      this.row(p,amount,x-20,v.value>0?top-34:zero+h+7,157,29,21,v.value<0?C.orange:C.text,'center');
-      this.row(p,v.name,x-35,599,187,25,16,C.muted,'center');
+      this.row(p,amount,x-20,v.value>0?top-34:zero+h+7,157,29,21,v.value<0?INK.rust:INK.text,'center');
+      this.row(p,v.name,x-35,599,187,25,16,INK.muted,'center');
     });
     const net=today.reduce((n,e)=>n+e.amount,0);
-    this.line(p,53,626,869,'#8B867043');
-    this.baseline(p,'今日净现金变化',53,675,320,18,C.muted);
-    this.baseline(p,`${net>=0?'+':''}${net} Cr`,391,675,531,33,net>=0?C.cyan:C.orange,'right');
-    this.row(p,s.phase==='open'?'图中仅列已入账现金，维护与到期租金在打烊时扣除。':'费用与本日记录已保存；收支图包含本日全部入账。',53,718,869,27,16,C.muted);
+    this.line(p,53,626,869,INK.rule);
+    this.baseline(p,'今日净现金变化',53,675,320,18,INK.muted);
+    this.baseline(p,`${net>=0?'+':''}${net} Cr`,391,675,531,33,net>=0?INK.teal:INK.rust,'right');
+    this.row(p,s.phase==='open'?'图中仅列已入账现金，维护与到期租金在打烊时扣除。':'费用与本日记录已保存；收支图包含本日全部入账。',53,718,869,27,16,INK.muted);
     this.h.ui.texturePanel(p,970,130,600,640,{skin:'glass',fill:'#10191DD4',stroke:C.line,materialOpacity:.42,name:'daily-captains-log'});
-    this.row(p,'NEXT SHIFT / 下一日安排',991,147,558,33,15,C.orange);
+    this.row(p,'明日安排',991,147,558,33,15,C.orange);
     const forecast=s.day===1?'第2日：维修订单与原件归属':s.day===2?'第3日：预约安检与来源核验':s.day%7===6?'明日到期租金，请预留现金':'查看新订单，继续处理货源与维修';
     this.paragraph(p,forecast,991,196,558,58,23,C.text);
     const relief=s.ledger.some(e=>e.kind==='relief-window'&&e.day===s.day);
     this.text(p,`未完成订单 ${s.orders.filter(x=>x.status==='active').length}  ·  关注度 ${s.risk}/100`,991,262,relief?320:558,28,18,C.muted);
     if(relief)this.button(p,'回仓储处理缺口',1320,253,230,44,()=>this.h.navigate('warehouse'),'gold');
     this.line(p,991,304,558);
-    this.row(p,'营业流水 / TRANSACTIONS',991,319,558,31,15,C.muted);
+    this.row(p,'营业流水',991,319,558,31,15,C.muted);
     today.slice(-4).reverse().forEach((entry,i)=>{
       this.baseline(p,entry.label,991,385+i*39,384,16,C.muted);
       this.baseline(p,`${entry.amount>=0?'+':''}${entry.amount}`,1380,385+i*39,169,18,entry.amount>=0?C.cyan:C.orange,'right');
@@ -857,7 +871,7 @@ export class OrbitalPanels {
   private settings(p:Node):void {
     this.title(p,'SYSTEM / 操作与档案','暂停与设置');
     this.h.ui.panel(p,53,205,945,34,{fill:'#0B151DEE',lineWidth:0,radius:3,name:'settings-preferences-caption'});
-    this.row(p,'操作偏好 / CONSOLE PREFERENCES',53,211,930,23,12,C.muted);
+    this.row(p,'操作偏好',53,211,930,23,12,C.muted);
     const settings:[keyof typeof this.h.prefs,string,string][]=[['sound','游戏声音','操作、扫描与成交提示音'],['reducedMotion','减少动态','省略位移与装饰动态，保留状态和必要反馈'],['largeText','放大文字','增大主要说明与按钮文字']];
     settings.forEach(([key,title,desc],i)=>{
       const y=249+i*111;
@@ -878,7 +892,7 @@ export class OrbitalPanels {
     this.h.ui.texturePanel(p,53,700,945,71,{skin:'strip',fill:'#10191DCB',lineWidth:0,materialOpacity:.25,name:'settings-console-note'});
     this.paragraph(p,'浏览、工具瞄准与查看证据不消耗行动点。所有扣款在最后确认时提交。',72,716,907,39,16,C.muted);
     this.h.ui.texturePanel(p,1040,130,530,640,{skin:'glass',fill:'#10191DD4',stroke:C.line,materialOpacity:.36,name:'settings-field-manual'});
-    this.row(p,'FIELD MANUAL / 操作指引',1063,147,484,37,16,C.orange);
+    this.row(p,'操作指引',1063,147,484,37,16,C.orange);
     const guide=[['拿取与搬运','鼠标拖动实物；红色格位表示位置冲突。'],['鉴定与证据','使用不同仪器记录独立物证，同件鉴定包只扣一次 AP。'],['维修与拆解','拆盖、插接、闭合回路后统一确认材料与工时。'],['订单与归属','交付盘先预览；顾客原件与抵押保管物不可当自有货出售。'],['扫描与隔离','来源不明时补证或隔离，登记不等于伪造所有权。']];
     guide.forEach(([title,description],i)=>{
       this.baseline(p,String(i+1).padStart(2,'0'),1063,234+i*103,32,11,C.muted);

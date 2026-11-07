@@ -1,6 +1,6 @@
-import {Component,Node,Canvas,Camera,UITransform,Layers,Color,Vec2,Vec3,Rect,Size,SpriteFrame,Graphics,Mask,Label,EditBox,UIOpacity,EventTouch,EventMouse,game,input,Input,EventKeyboard,KeyCode,view,ResolutionPolicy,sys,AudioSource,AudioClip,assetManager,resources} from 'cc';
+import {Component,Node,BlockInputEvents,Canvas,Camera,UITransform,Layers,Color,Vec2,Vec3,Rect,Size,SpriteFrame,Graphics,Mask,Label,EditBox,UIOpacity,EventTouch,EventMouse,game,input,Input,EventKeyboard,KeyCode,view,ResolutionPolicy,sys,AudioSource,AudioClip,assetManager,resources} from 'cc';
 import type {ButtonOptions} from '../ui/GameUI';
-import {OrbitalUI,ORBITAL_PALETTE as C} from './OrbitalUI';
+import {OrbitalUI,ORBITAL_PALETTE as C,PAPER_INK as INK,type HudIcon} from './OrbitalUI';
 import {OrbitalMotion} from './OrbitalMotion';
 import {OrbitalPanels} from './OrbitalPanels';
 import {itemDefs,tools,orderDefs,npcs,getDef,getNpc,getTool} from './data';
@@ -69,6 +69,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
   private counterForeground:SpriteFrame|null=null;
   private pointerCleanup:(()=>void)|null=null;
   private pointerCanvas:HTMLCanvasElement|null=null;
+  private titleScreen:Node|null=null;
   private readonly cancelPointer=()=>{const cleanup=this.pointerCleanup;this.pointerCleanup=null;cleanup?.();this.ui?.resetPointer();};
 
   start():void{void this.boot().catch(error=>{console.error('Orbital game initialization failed',error);const el=document.getElementById('load-status');if(el)el.textContent='空间站载入失败，请刷新重试。';});}
@@ -87,10 +88,52 @@ export class OrbitalMain extends Component implements OrbitalHost {
     input.on(Input.EventType.KEY_DOWN,this.onKey,this);void this.loadAudio();
     this.pointerCanvas=game.canvas;this.pointerCanvas?.addEventListener('pointerleave',this.cancelPointer);this.pointerCanvas?.addEventListener('mouseleave',this.cancelPointer);
     window.addEventListener('blur',this.cancelPointer);window.addEventListener('pointercancel',this.cancelPointer);window.addEventListener('resize',this.cancelPointer);
-    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v11',snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>this.dispatch(a),open:(p:PageId,uid?:string)=>this.navigate(p,uid),reset:(seed='ORBITAL-TUTORIAL')=>{this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
+    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v12',start:()=>this.startFromTitle(false),title:()=>!!this.titleScreen?.isValid,snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>{this.dismissTitle();this.dispatch(a);},open:(p:PageId,uid?:string)=>{this.dismissTitle();this.navigate(p,uid);},reset:(seed='ORBITAL-TUTORIAL')=>{this.dismissTitle();this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
     (window as unknown as {__ORBITAL__:typeof debug;__GREYLINE__:typeof debug}).__ORBITAL__=debug;(window as unknown as {__GREYLINE__:typeof debug}).__GREYLINE__=debug;
     document.dispatchEvent(new CustomEvent('greyline-ready'));
-    void this.play(()=>this.motion.sceneEntry());
+    this.showTitle();
+  }
+  /** Title screen over the live counter scene: continue, new shop or settings. */
+  private showTitle():void{
+    const s=this.state,progress=s.day>1||s.ledger.length>0||s.completedTrades.length>0||!!s.trade;
+    const o=this.ui.container(this.ui.root,0,0,W,H,'title-screen');this.titleScreen=o;
+    if(this.chrome?.isValid)this.chrome.active=false;if(this.content?.isValid)this.content.active=false;
+    o.addComponent<BlockInputEvents>(BlockInputEvents);
+    const veil=this.ui.container(o,0,0,W,H,'title-veil').addComponent<Graphics>(Graphics);
+    for(let i=0;i<40;i++){veil.fillColor=new Color(2,5,9,Math.round(240-i*4.6));veil.rect(i*40,-H,40,H);veil.fill();}
+    veil.fillColor=new Color(0,0,0,150);veil.rect(0,-H,W,120);veil.fill();veil.rect(0,-120,W,120);veil.fill();
+    const mark=this.ui.container(o,118,150,120,120,'title-emblem').addComponent<Graphics>(Graphics);
+    mark.fillColor=new Color('#120B06');mark.circle(60,-60,58);mark.fill();mark.fillColor=new Color('#2A1A0E');mark.circle(60,-60,50);mark.fill();
+    mark.lineWidth=5;mark.strokeColor=new Color('#E8A86A');mark.ellipse(60,-60,54,20);mark.stroke();
+    mark.lineWidth=4;mark.strokeColor=new Color('#F2E6CC');mark.circle(60,-60,28);mark.stroke();
+    mark.fillColor=new Color('#FFC98F');mark.circle(110,-52,9);mark.fill();
+    this.ui.label(o,'轨道旧货局',112,282,820,110,{size:92,bold:true,color:'#F8EDD6',verticalAlign:'center',wrap:false,outline:'#1A0E05',outlineWidth:4,glow:'#E0893A70'});
+    this.ui.label(o,'回环九号 · 下层旧港的空间站当铺',118,392,800,36,{size:26,color:'#C9C2B2',verticalAlign:'center',wrap:false});
+    this.ui.label(o,'每件旧物，都有下一程。',118,434,800,32,{size:20,color:C.orange,verticalAlign:'center',wrap:false});
+    const start=this.button(o,progress?`继续营业 · 第 ${s.day} 天`:'开门营业',118,500,400,68,()=>this.startFromTitle(true),{tone:'gold',size:24,name:'title-start'});
+    this.button(o,'新开一家店',118,584,400,58,()=>{
+      if(!progress){this.startFromTitle(true);return;}
+      const m=this.ui.modal('新开一家店',{width:760,height:420});
+      this.text(m.body,'当前进度会被新店覆盖。\n需要保留的话，先在设置里导出经营档案。',24,20,640,110,22,C.text);
+      this.button(m.body,'返回',24,190,310,58,()=>m.close(),{tone:'quiet'});
+      this.button(m.body,'确认新开',356,190,310,58,()=>{m.close();this.resetGame();this.startFromTitle(true);},{tone:'danger'});
+    },{tone:'quiet',size:20,name:'title-new'});
+    this.button(o,'设置',118,656,400,58,()=>{this.dismissTitle();this.navigate('settings');},{tone:'quiet',size:20,name:'title-settings'});
+    this.ui.label(o,'Enter 开始',W-260,H-58,220,28,{size:15,color:C.muted,align:'right',verticalAlign:'center',wrap:false});
+    this.ui.label(o,'orbital-p0-v12 · Cocos Creator 3.8.8',40,H-58,500,28,{size:13,color:'#6F7A78',verticalAlign:'center',wrap:false});
+    this.focused=start;this.ui.focusButton(start);
+    this.ui.animateIn(o);
+  }
+  private dismissTitle():void{
+    const o=this.titleScreen;this.titleScreen=null;
+    if(!o?.isValid)return;
+    this.ui.clear(o);o.removeFromParent();o.destroy();
+    this.focus=-1;this.focused=null;this.render();
+  }
+  private startFromTitle(animate:boolean):void{
+    if(!this.titleScreen?.isValid)return;
+    this.dismissTitle();this.sound('open');
+    if(animate)void this.play(()=>this.motion.sceneEntry());
   }
   private save():void{try{sys.localStorage.setItem(SAVE,serializeOrbital(this.state));this.saveFailed=false;}catch{this.saveFailed=true;}}
   savePrefs():void{try{sys.localStorage.setItem(PREFS,JSON.stringify(this.prefs));}catch{}this.motion.configure({reducedMotion:this.prefs.reducedMotion});this.render();}
@@ -155,8 +198,8 @@ export class OrbitalMain extends Component implements OrbitalHost {
   }
   private async play(run:(active:()=>boolean)=>Promise<void>):Promise<void>{
     const epoch=++this.epoch;this.busy=true;this.ui.pointer.refresh();this.motion.configure({reducedMotion:this.prefs.reducedMotion});
-    this.skipNode?.destroy();this.skipNode=this.ui.container(this.ui.root,1210,780,350,22,'skip-animation');
-    this.row(this.skipNode,'空格快进 · 结果不会重复结算',0,0,350,22,11,C.muted,'right');this.skipNode.on(Node.EventType.TOUCH_END,()=>this.skip());
+    this.skipNode?.destroy();this.skipNode=this.ui.container(this.ui.root,1250,770,320,26,'skip-animation');
+    this.row(this.skipNode,'空格 · 跳过动画',0,0,320,26,14,C.text,'right');this.skipNode.on(Node.EventType.TOUCH_END,()=>this.skip());
     try{await run(()=>epoch===this.epoch);}finally{if(epoch===this.epoch){this.busy=false;this.ui.pointer.refresh();this.skipNode?.removeFromParent();this.skipNode?.destroy();this.skipNode=null;this.setCounterVisible(true);}}
   }
   private skip():void{this.epoch++;this.motion?.finish();this.busy=false;this.ui.pointer.refresh();this.skipNode?.removeFromParent();this.skipNode?.destroy();this.skipNode=null;this.setCounterVisible(true);}
@@ -188,27 +231,52 @@ export class OrbitalMain extends Component implements OrbitalHost {
     else if(this.page==='inspect')this.inspection();
     else this.panels.draw(this.page,this.content);
     const pageContent=this.content;this.chrome=this.ui.container(this.ui.root,0,0,W,H,'persistent-chrome');this.content=this.chrome;this.header();this.footer();for(const n of [...this.dialogueNodes,...this.counterTags])if(n.isValid)n.setParent(this.chrome);this.content=pageContent;
+    // The title shows only the painted shop; page UI and HUD return when play starts.
+    if(this.titleScreen?.isValid){this.titleScreen.setSiblingIndex(this.ui.root.children.length-1);this.chrome.active=false;pageContent.active=false;}
     this.motion.bindAmbient({parent:this.content,actor:this.actor||undefined,area:{x:310,y:160,width:860,height:500}});
   }
   private header():void{
-    const s=this.state;
-    const p=this.ui.rail(this.content,32,20,392,60,{fill:'#0A141CF2',stroke:'#9B947653',name:'shop-nameplate'});
-    const logo=this.ui.container(p,17,12,39,36,'shop-orbit-mark').addComponent<Graphics>(Graphics);logo.lineWidth=1.3;logo.strokeColor=new Color(C.orange);logo.ellipse(17,-18,17,8);logo.stroke();logo.strokeColor=new Color('#D8D1C0');logo.circle(17,-18,11);logo.stroke();logo.fillColor=new Color(C.orange);logo.circle(34,-17,3);logo.fill();
-    this.row(p,'轨道旧货局',72,3,250,32,23,C.text);
-    this.row(p,'回环九号 · 下层旧港',73,35,245,18,11,C.muted);
-    const speaker=this.button(p,'',336,8,44,44,()=>{this.prefs.sound=!this.prefs.sound;this.savePrefs();this.sound('check');},{tone:'quiet',name:'button-切换声音'});
-    const sound=this.ui.container(speaker.getChildByName('tech-button-surface')||speaker,0,0,44,44,'sound-setting-icon').addComponent<Graphics>(Graphics);sound.fillColor=new Color(this.prefs.sound?C.cyan:C.muted);sound.moveTo(9,-18);sound.lineTo(15,-18);sound.lineTo(23,-12);sound.lineTo(23,-32);sound.lineTo(15,-26);sound.lineTo(9,-26);sound.close();sound.fill();sound.strokeColor=new Color(this.prefs.sound?C.cyan:C.muted);sound.lineWidth=2;
-    if(this.prefs.sound){sound.arc(23,-22,9,-.7,.7,false);sound.stroke();}else{sound.moveTo(28,-17);sound.lineTo(35,-27);sound.moveTo(35,-17);sound.lineTo(28,-27);sound.stroke();}
-    this.button(this.content,'货物图鉴',440,24,96,52,()=>openGoodsHandbook(this),{tone:'quiet',size:16});
-    const meters=this.ui.rail(this.content,552,20,616,60,{fill:'#0A141CF2',stroke:'#9B947653',name:'player-resource-hud'});
-    this.row(meters,'营业日',16,5,105,18,11,C.muted);this.row(meters,`${String(s.day).padStart(2,'0')} / 21`,16,26,112,28,22,C.text);
-    this.ui.line(meters,137,12,137,48,'#A0B0AA30',1);
-    this.row(meters,`行动点   ${s.ap} / 12`,157,6,190,23,16,C.cyan);
-    for(let i=0;i<12;i++)this.ui.panel(meters,158+i*14,36,10,12,{fill:i<s.ap?'#76BABB':'#31454A',lineWidth:0,radius:1,name:`ap-cell-${i}`});
-    this.ui.line(meters,357,12,357,48,'#A0B0AA30',1);
-    this.row(meters,'可用现金',378,5,220,18,11,C.muted);this.row(meters,`${s.cash.toFixed(s.cash%1?2:0)} Cr`,378,26,220,28,22,C.text);
-    this.button(this.content,`站务 · ${s.risk}`,1210,24,170,52,()=>this.stationDetails(),{tone:'quiet',size:16});
-    this.button(this.content,'设置',1396,24,172,52,()=>this.navigate('settings'),{tone:'quiet',size:16});
+    const s=this.state,p=this.content;
+    const plate=this.ui.texturePanel(p,20,12,330,76,{skin:'rail',name:'shop-nameplate'});
+    const logo=this.ui.container(plate,18,14,48,48,'shop-orbit-mark').addComponent<Graphics>(Graphics);
+    logo.fillColor=new Color('#120B06');logo.circle(24,-24,24);logo.fill();
+    logo.fillColor=new Color('#2A1A0E');logo.circle(24,-24,20);logo.fill();
+    logo.lineWidth=2.6;logo.strokeColor=new Color('#E8A86A');logo.ellipse(24,-24,21,8);logo.stroke();
+    logo.lineWidth=2;logo.strokeColor=new Color('#F2E6CC');logo.circle(24,-24,11);logo.stroke();
+    logo.fillColor=new Color('#FFC98F');logo.circle(44,-21,4);logo.fill();
+    this.ui.label(plate,'轨道旧货局',78,8,240,38,{size:27,bold:true,color:'#F6EBD4',verticalAlign:'center',wrap:false,outline:'#05080B',outlineWidth:2});
+    this.row(plate,'回环九号 · 下层旧港',80,42,236,16,12,'#B9B2A2');
+    // Resource gauges: icon, small caption and a mono read-out, like a cockpit strip.
+    const g=this.ui.texturePanel(p,436,12,736,76,{skin:'rail',name:'player-resource-hud'});
+    const caption=(t:string,x:number)=>this.ui.label(g,t,x,14,110,16,{size:12,color:C.muted,verticalAlign:'center',wrap:false});
+    const sep=(x:number)=>{this.ui.line(g,x,16,x,60,'#00000090',2);this.ui.line(g,x+2,16,x+2,60,'#FFFFFF1A',1);};
+    this.ui.hudIcon(g,'day',18,14,48,48);caption('营业日',74);
+    this.ui.label(g,String(s.day).padStart(2,'0'),74,30,44,32,{size:28,mono:true,color:'#F6EBD4',verticalAlign:'center',wrap:false});
+    this.ui.label(g,'/21',118,36,48,24,{size:16,mono:true,color:C.muted,verticalAlign:'center',wrap:false});
+    sep(178);
+    this.ui.hudIcon(g,'energy',192,14,48,48);caption('行动点',246);
+    const cells=this.ui.container(g,246,34,210,24,'ap-cells').addComponent<Graphics>(Graphics);
+    cells.fillColor=new Color('#05090B');cells.roundRect(-4,-25,206,26,4);cells.fill();
+    for(let i=0;i<12;i++){
+      // Three banks of four cells read as a battery rather than a barcode.
+      const x=i*16+Math.floor(i/4)*4-2,lit=i<s.ap;
+      cells.fillColor=new Color(lit?'#7FE6E0':'#1C2E32');cells.roundRect(x,-21,11,18,2);cells.fill();
+      if(lit){cells.fillColor=new Color('#E4FFFC90');cells.rect(x+2,-19,7,3);cells.fill();}
+    }
+    for(let i=0;i<12;i++)this.ui.container(g,244+i*16+Math.floor(i/4)*4,34,11,24,`ap-cell-${i}`);
+    this.ui.label(g,`${s.ap}/12`,452,30,72,32,{size:22,mono:true,color:'#8BEDE6',glow:'#4FD6CF88',verticalAlign:'center',wrap:false});
+    sep(528);
+    this.ui.hudIcon(g,'credits',542,12,52,52);caption('现金 Cr',600);
+    this.ui.label(g,s.cash.toFixed(s.cash%1?2:0),600,28,122,36,{size:28,mono:true,color:'#FFCB8E',glow:'#E0893A88',verticalAlign:'center',wrap:false,overflow:'shrink'});
+    // Round instrument keys on the right; captions appear on hover.
+    const key=(icon:HudIcon,x:number,tip:string,fn:()=>void,name:string)=>{
+      const b=this.button(p,'',x,18,64,64,fn,{tone:'quiet',name});this.ui.attachIcon(b,icon,40);this.ui.tooltip(b,tip);return b;
+    };
+    key('handbook',1222,'货物图鉴',()=>openGoodsHandbook(this),'button-货物图鉴');
+    const station=key('alert',1310,`站务 · 关注度 ${s.risk}/100`,()=>this.stationDetails(),'button-站务');
+    this.ui.badge(station,String(s.risk),58,6,s.risk>=60?C.danger:C.orange);
+    key(this.prefs.sound?'soundOn':'soundOff',1398,this.prefs.sound?'声音：开':'声音：关',()=>{this.prefs.sound=!this.prefs.sound;this.savePrefs();this.sound('check');},'button-切换声音');
+    key('settings',1486,'设置',()=>this.navigate('settings'),'button-设置');
   }
   private stationDetails():void{
     const s=this.state,m=this.ui.modal('站务与经营记录',{width:680,height:440});
@@ -219,21 +287,18 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.button(m.body,'查看经营日结',26,205,560,48,()=>{m.close();this.navigate('report');},{tone:'quiet',size:18});
   }
   private footer():void{
-    const nav:[PageId,string][]=[['counter','柜台'],['inspect','鉴定'],['repair','维修'],['warehouse','仓储'],['orders','订单'],['report','日结']];
-    const p=this.ui.rail(this.content,400,816,800,72,{fill:'#091319F5',stroke:'#9B947669',name:'navigation-dock'});
-    nav.forEach(([page,title],i)=>{
-      const control=this.button(p,'',8+i*132,8,124,56,()=>this.navigate(page),{tone:'quiet',selected:this.page===page,disabled:page==='inspect'&&!this.currentItem(),name:`button-${String(i+1).padStart(2,'0')} ${title}`});
+    const nav:[PageId,string,HudIcon][]=[['counter','柜台','counter'],['inspect','鉴定','inspect'],['repair','维修','repair'],['warehouse','仓储','warehouse'],['orders','订单','orders'],['report','日结','report']];
+    const p=this.ui.texturePanel(this.content,372,806,856,88,{skin:'rail',name:'navigation-dock'});
+    const active=this.state.orders.filter(o=>o.status==='active').length;
+    nav.forEach(([page,title,icon],i)=>{
+      const selected=this.page===page||(page==='counter'&&this.page==='trade');
+      const control=this.button(p,'',16+i*138,13,130,62,()=>this.navigate(page),{tone:'quiet',selected,disabled:page==='inspect'&&!this.currentItem(),name:`button-${String(i+1).padStart(2,'0')} ${title}`});
       const face=control.getChildByName('tech-button-surface')||control;
-      if(page==='counter')this.ui.object(face,'ITM-009',5,7,43,41);
-      else if(page==='inspect')this.ui.toolIcon(face,'TOL-001',5,7,43,41);
-      else if(page==='repair')this.ui.toolIcon(face,'TOL-004',5,7,43,41);
-      else if(page==='warehouse')this.ui.object(face,'ITM-048',5,7,43,41);
-      else this.ui.icon(face,page==='orders'?'notes':'watch',10,10,32,35);
-      this.row(face,title,51,18,64,29,17,this.page===page?C.text:C.muted);
-      this.row(face,String(i+1),101,3,15,14,10,this.page===page?C.orange:C.muted,'right');
+      this.ui.hudIcon(face,icon,12,9,44,44);
+      this.ui.label(face,title,60,0,62,62,{size:20,color:selected?'#FFE0B0':'#E4DFD2',verticalAlign:'center',wrap:false,outline:'#05080BC0',outlineWidth:1});
+      if(page==='orders'&&active>0)this.ui.badge(control,String(active),124,6);
     });
-    this.row(this.content,this.saveFailed?'存档空间不足':'● 已保存',40,839,260,26,12,this.saveFailed?C.orange:C.muted);
-    this.row(this.content,this.page==='inspect'?'拖动 · 滚轮缩放 · R 旋转 · F 翻面':'Esc 返回 · 空格快进动画',1230,839,330,26,11,C.muted,'right');
+    if(this.saveFailed){const warn=this.ui.texturePanel(this.content,24,826,300,52,{skin:'strip',name:'save-warning'});this.ui.hudIcon(warn,'alert',14,10,32,32);this.row(warn,'存档空间不足，请导出档案',54,0,236,52,15,C.orange);}
   }
   private currentItem():OrbitalItem|undefined{return findItem(this.state,this.selected)||this.state.trade?.item||this.state.inventory[0];}
   private counter():void{
@@ -252,40 +317,62 @@ export class OrbitalMain extends Component implements OrbitalHost {
       const sh=this.ui.container(p,ix+30,iy+298,360,25,'counter-shadow');this.counterShadow=sh;const g=sh.addComponent<Graphics>(Graphics);g.fillColor=new Color('#030A0D99');g.ellipse(180,-10,166,12);g.fill();
       this.counterObject=this.ui.object(p,it.defId,ix,iy,420,316,{damaged:it.condition<.75&&!it.repaired,repaired:it.repaired});
       this.counterObject.on(Node.EventType.TOUCH_END,()=>this.navigate('inspect',it.uid));this.ui.bindPointer(this.counterObject,{cursor:'pointer',disabled:()=>this.busy});
-      if(!trading){const tag=this.ui.panel(p,752,730,296,34,{fill:'#0B171EDF',lineWidth:0,radius:3});this.row(tag,getDef(it.defId).name,10,0,276,34,17,C.text,'center');this.counterTags.push(tag);}
+      if(!trading){
+        // A thermal price tag tied to the goods, rather than a UI caption bar.
+        const name=getDef(it.defId).name,tw=Math.max(170,name.length*22+64);
+        const tag=this.ui.paperSlip(p,900-tw/2,726,tw,44,{name:'counter-item-tag',torn:false,angle:-1.5});
+        const hole=tag.addComponent<Graphics>(Graphics);hole.fillColor=new Color('#3A2E22');hole.circle(18,-22,5);hole.fill();
+        hole.strokeColor=new Color('#B9A27C');hole.lineWidth=2;hole.moveTo(18,-22);hole.lineTo(-6,-6);hole.stroke();
+        this.ui.label(tag,name,32,0,tw-44,44,{size:19,bold:true,color:INK.text,align:'center',verticalAlign:'center',wrap:false});
+        this.counterTags.push(tag);
+      }
     }else if(t?.kind==='sell'){
-      this.button(p,'打开仓库 · 为客人挑选旧物',704,620,408,52,()=>this.navigate('warehouse'),{tone:'gold',size:19});
+      this.button(p,'打开仓库 · 为客人挑选旧物',704,620,408,56,()=>this.navigate('warehouse'),{tone:'gold',size:20});
     }
-    this.counterLeft();
-    const panel=this.ui.texturePanel(p,1172,464,360,300,{materialOpacity:.15,fill:'#0A141BF5',stroke:'#AE9B7748',lineWidth:1,radius:7,name:'counter-terminal'});
+    // Counter terminal: a physical till with a CRT read-out and brass keys.
+    const panel=this.ui.texturePanel(p,1156,448,388,320,{skin:'socket',name:'counter-terminal'});
+    const scr=this.ui.screen(panel,18,18,352,132,'terminal-screen');
+    const glowText=(t:string,x:number,y:number,w:number,h:number,size:number,colour:string,glow:string,mono=false,align:'left'|'right'|'center'='left')=>
+      this.ui.label(scr,t,x,y,w,h,{size:size*(this.prefs.largeText?1.06:1),color:colour,glow,mono,align,verticalAlign:'center',wrap:false});
     if(t){
-      this.row(panel,t.kind==='sell'?'采购商来访':t.kind==='pawn'?'抵押保管申请':'来客报价',24,18,312,23,14,C.muted);
-      this.baseline(panel,`${t.price}`,24,100,228,48,C.text);this.baseline(panel,'Cr',278,100,56,20,C.orange);
-      if(it){const a=estimate(it);this.row(panel,`估值 ${a.exact?a.low:`${a.low}–${a.high}`} Cr  ·  ${it.evidence.length} 项物证`,24,116,312,25,14,C.muted);}
+      glowText(t.kind==='sell'?'采购商来访 · 出价':t.kind==='pawn'?'抵押保管申请':'来客报价',22,14,300,22,15,'#86E6DF','#3FC9C180');
+      glowText(`${t.price}`,22,38,250,58,52,'#FFCB8E','#FF9A4AAA',true);
+      glowText('Cr',270,52,60,40,22,'#FFCB8E','#FF9A4A80',true,'right');
+      if(it){const a=estimate(it);glowText(`估值 ${a.exact?a.low:`${a.low}–${a.high}`} Cr · ${it.evidence.length} 项物证`,22,98,310,22,15,'#86E6DF','#3FC9C160');}
       if(t.locked){
-        this.button(panel,'确认钱货交割',24,160,312,52,()=>this.dispatch({type:'DELIVER',tradeId:t.id}),{tone:'gold',disabled:s.ap<1,size:20});
-        this.button(panel,'取消本次交易',24,230,312,42,()=>this.dispatch({type:'REFUSE'}),{tone:'quiet',size:16});
+        this.button(panel,'确认钱货交割',18,166,352,58,()=>this.dispatch({type:'DELIVER',tradeId:t.id}),{tone:'gold',disabled:s.ap<1,size:21});
+        this.button(panel,'取消本次交易',18,238,352,52,()=>this.dispatch({type:'REFUSE'}),{tone:'quiet',size:17});
       }else{
-        this.button(panel,'拿起实物 · 鉴定',24,160,312,52,()=>it&&this.navigate('inspect',it.uid),{tone:this.page==='trade'?'quiet':'gold',disabled:!it,size:20});
-        this.button(panel,this.page==='trade'?'接受当前报价':'商量报价',24,230,198,42,()=>this.page==='trade'?this.dispatch({type:'ACCEPT'}):this.navigate('trade'),{tone:'quiet',disabled:!it||s.ap<1,size:17});
-        this.button(panel,'更多',234,230,102,42,()=>this.tradeActions(),{tone:'quiet',size:16});
+        this.button(panel,'拿起实物 · 鉴定',18,166,352,58,()=>it&&this.navigate('inspect',it.uid),{tone:this.page==='trade'?'quiet':'gold',disabled:!it,size:21});
+        this.button(panel,this.page==='trade'?'接受当前报价':'商量报价',18,238,232,52,()=>this.page==='trade'?this.dispatch({type:'ACCEPT'}):this.navigate('trade'),{tone:this.page==='trade'?'green':'quiet',disabled:!it||s.ap<1,size:18});
+        this.button(panel,'更多',262,238,108,52,()=>this.tradeActions(),{tone:'quiet',size:17});
       }
     }else{
       const closed=s.cursor>=dailyVisitLimit(s);
-      this.row(panel,closed?'今日预约已结束':'今日营业中',24,21,312,36,25,C.text);this.row(panel,closed?'整理、履约后可以打烊':`下一位 / ${npc.name}  ·  ${s.cursor+1}/${dailyVisitLimit(s)}`,24,78,312,27,17,C.muted);
-      this.button(panel,closed?'六位预约已处理':'接待下一位来客',24,150,312,54,()=>this.dispatch({type:'ARRIVE'}),{tone:'gold',disabled:closed||s.phase!=='open'||s.ap<1,size:20});
-      this.button(panel,'整理后仓',24,230,312,42,()=>this.navigate('warehouse'),{tone:'quiet',size:16});
+      glowText(closed?'今日预约已结束':'今日营业中',22,22,310,42,30,'#FFCB8E','#FF9A4AAA');
+      glowText(closed?'整理、履约后可以打烊':`下一位：${npc.name}`,22,72,230,26,17,'#86E6DF','#3FC9C170');
+      glowText(`${Math.min(s.cursor+1,dailyVisitLimit(s))}/${dailyVisitLimit(s)}`,250,72,82,26,18,'#86E6DF','#3FC9C170',true,'right');
+      this.button(panel,closed?'六位预约已处理':'接待下一位来客',18,166,352,58,()=>this.dispatch({type:'ARRIVE'}),{tone:'gold',disabled:closed||s.phase!=='open'||s.ap<1,size:21});
+      this.button(panel,'整理后仓',18,238,352,52,()=>this.navigate('warehouse'),{tone:'quiet',size:17});
     }
     if(this.page==='trade'&&t)this.negotiation();
     else{
       const line=t?t.line:s.notice||'回环九号下层港，旧货局今日开门。';
-      const dialogue=this.ui.dialogueFrame(p,48,650,560,134);
-      this.row(dialogue,t?`${npc.name}  /  ${npc.title}`:'营业广播',22,14,516,28,20,C.orange);
-      const speech=this.ui.label(dialogue,line,22,50,516,60,{size:18,lineHeight:27,color:C.text,wrap:true,overflow:'clamp'}).getComponent<Label>(Label)!;
-      const hint=this.ui.label(dialogue,'',333,111,205,17,{size:11,color:C.muted,align:'right',wrap:false}).getComponent<Label>(Label)!;
+      const dialogue=this.speechBox(p,36,654,612,136,t?npc.name:'营业广播',t?npc.title:'回环九号');
+      const speech=this.ui.label(dialogue,line,28,36,556,70,{size:20,lineHeight:30,color:'#F2ECDD',wrap:true,overflow:'clamp'}).getComponent<Label>(Label)!;
+      const hint=this.ui.label(dialogue,'',360,104,226,20,{size:12,color:C.muted,align:'right',wrap:false}).getComponent<Label>(Label)!;
       this.presentation.speak(speech,line,`${t?.id||`broadcast-${s.day}-${s.cursor}`}:${line}`,hint);
       dialogue.on(Node.EventType.TOUCH_END,()=>this.presentation.reveal());this.ui.bindPointer(dialogue,{cursor:'pointer'});this.dialogueNodes.push(dialogue);
     }
+  }
+  /** Visual-novel style dialogue box with a brass name plate riveted on its upper edge. */
+  private speechBox(p:Node,x:number,y:number,w:number,h:number,name:string,title:string):Node{
+    const box=this.ui.texturePanel(p,x,y,w,h,{skin:'glass',name:'terminal-dialogue'});
+    const plateW=Math.max(170,name.length*24+title.length*14+70);
+    const plate=this.ui.texturePanel(box,20,-26,plateW,42,{skin:'amber',name:'speaker-plate'});
+    this.ui.label(plate,name,18,0,name.length*24+8,42,{size:21,bold:true,color:'#FFF1D8',verticalAlign:'center',wrap:false,outline:'#3A1C0A',outlineWidth:2});
+    this.ui.label(plate,title,30+name.length*24,0,plateW-40-name.length*24,42,{size:14,color:'#FBE2C0',verticalAlign:'center',wrap:false,outline:'#3A1C0A',outlineWidth:1});
+    return box;
   }
   private tradeActions():void{
     const t=this.state.trade;if(!t)return;const m=this.ui.modal('交易处理',{width:620,height:390});
@@ -322,30 +409,35 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.button(p,'导出经营档案',100,405,390,61,()=>this.exportSave(),{tone:'quiet'});
     this.button(p,'重新开店',550,405,390,61,()=>this.navigate('settings'),{tone:'gold'});
   }
-  private counterLeft():void{
-    const active=this.state.orders.filter(o=>o.status==='active').length;
-    this.button(this.content,`订单夹 · ${active}`,48,116,180,42,()=>this.navigate('orders'),{tone:'quiet',size:17});
-  }
   private negotiation():void{
     const t=this.state.trade!;const it=t.item||(t.selectedUid?findItem(this.state,t.selectedUid):undefined);if(!it)return;
     const bounds=offerBounds(this.state,t,it),relevant=it.evidence.filter(id=>getDef(it.defId).tools.includes(id));
-    const brief=this.ui.texturePanel(this.content,48,184,350,164,{fill:'#0A151DEB',stroke:'#AE9B7748',lineWidth:1,radius:5,name:'customer-needs'});
-    this.row(brief,t.kind==='sell'?'采购需求':'供货人态度',20,15,310,26,19,C.orange);
-    this.ui.label(brief,t.kind==='sell'?customerNeed(t.npcId):'实物估价 · 有底价\n检测痕迹可支持合理还价',20,49,310,62,{size:16,lineHeight:25,color:C.text,wrap:true,overflow:'clamp'});
-    this.row(brief,`耐心  ${3-t.rounds} / 3`,20,119,150,24,15,C.muted);
-    for(let i=0;i<3;i++)this.ui.panel(brief,215+i*30,124,22,10,{fill:i<3-t.rounds?C.orange:'#34434A',radius:2,lineWidth:0});
-    const speech=this.ui.dialogueFrame(this.content,48,370,350,206);
-    this.row(speech,getNpc(t.npcId).name,20,14,310,28,20,C.orange);
-    const speechLabel=this.ui.label(speech,t.line,20,54,310,130,{size:18,lineHeight:28,color:C.text,wrap:true,overflow:'clamp'}).getComponent<Label>(Label)!;
+    // Customer side: what they said, what they want and how much patience is left.
+    const npc=getNpc(t.npcId),speech=this.speechBox(this.content,36,168,392,330,npc.name,npc.title);
+    const speechLabel=this.ui.label(speech,t.line,26,34,340,120,{size:19,lineHeight:29,color:'#F2ECDD',wrap:true,overflow:'clamp'}).getComponent<Label>(Label)!;
     this.presentation.speak(speechLabel,t.line,`${t.id}:${t.line}`);speech.on(Node.EventType.TOUCH_END,()=>this.presentation.reveal());this.ui.bindPointer(speech,{cursor:'pointer'});
-    const p=this.ui.texturePanel(this.content,288,642,852,152,{skin:'strip',materialOpacity:.50,fill:'#0A151DF2',stroke:'#AE9B7748',lineWidth:1,radius:5,name:'negotiation-console'});
-    this.row(p,getDef(it.defId).name,568,8,265,24,15,C.text,'right');
-    if(t.locked){this.baseline(p,'已议定报价',22,38,200,15,C.muted);this.baseline(p,`${t.price} Cr`,22,96,250,34,C.text);this.row(p,'价格已锁定，等待右侧钱货交割。',278,36,550,52,19,C.text);return;}
-    this.row(p,'我的还价',20,7,235,24,15,C.muted);
-    const quote=this.ui.panel(p,20,36,235,53,{fill:'#243039',stroke:'#DB8A5288',radius:5,name:'quote-evidence-target'});
-    const editNode=this.ui.container(quote,8,0,173,53,'native-price-input');
-    const priceSize=34*(this.prefs.largeText?1.08:1),priceBaseline=53/2+.37*priceSize;
-    const priceLabel=this.ui.label(editNode,String(this.offer),0,0,173,53,{size:priceSize,lineHeight:priceSize,color:C.orange,align:'center',verticalAlign:'center',wrap:false}).getComponent<Label>(Label)!;
+    this.ui.line(speech,26,166,366,166,'#E0A16C40',1);
+    this.row(speech,t.kind==='sell'?'采购需求':'供货人态度',26,180,200,24,15,C.orange);
+    this.ui.label(speech,t.kind==='sell'?customerNeed(t.npcId):'实物估价，心里有底价。\n拿出相关物证，可以支持合理还价。',26,210,340,62,{size:16,lineHeight:24,color:C.text,wrap:true,overflow:'clamp'});
+    this.row(speech,'耐心',26,280,60,30,15,C.muted);
+    const left=3-t.rounds,pips=this.ui.container(speech,84,284,140,22,'patience-pips').addComponent<Graphics>(Graphics);
+    for(let i=0;i<3;i++){pips.fillColor=new Color(i<left?(left===1?'#E07B5A':'#F0A55E'):'#2C3A40');pips.roundRect(i*44,-20,36,16,4);pips.fill();}
+    this.ui.label(speech,`${left}/3`,236,280,60,30,{size:18,mono:true,color:left===1?C.danger:C.orange,verticalAlign:'center',wrap:false});
+    // Negotiation desk: price read-out, nudge keys, evidence tickets, submit key.
+    const p=this.ui.texturePanel(this.content,452,628,688,170,{skin:'socket',name:'negotiation-console'});
+    const quote=this.ui.screen(p,18,18,236,88,'quote-evidence-target');
+    this.ui.label(quote,t.locked?'已议定':'我的还价',16,8,200,20,{size:14,color:'#86E6DF',glow:'#3FC9C170',verticalAlign:'center',wrap:false});
+    if(t.locked){
+      this.ui.label(quote,`${t.price}`,16,28,160,52,{size:40,mono:true,color:'#FFCB8E',glow:'#FF9A4AAA',verticalAlign:'center',wrap:false});
+      this.ui.label(quote,'Cr',170,40,50,34,{size:20,mono:true,color:'#FFCB8E',align:'right',verticalAlign:'center',wrap:false});
+      this.ui.hudIcon(p,'lock',284,30,52,52);
+      this.text(p,'价格已锁定。\n在右侧终端确认钱货交割。',350,26,320,80,19,C.text);
+      this.row(p,getDef(it.defId).name,284,120,386,32,16,C.muted);
+      return;
+    }
+    const editNode=this.ui.container(quote,10,26,170,56,'native-price-input');
+    const priceSize=40*(this.prefs.largeText?1.06:1);
+    const priceLabel=this.ui.label(editNode,String(this.offer),0,0,170,56,{size:priceSize,lineHeight:priceSize,mono:true,color:'#FFCB8E',glow:'#FF9A4AAA',align:'center',verticalAlign:'center',wrap:false}).getComponent<Label>(Label)!;
     this.ui.bindPointer(editNode,{cursor:'text',disabled:()=>this.busy});
     // Configure before onLoad: an active EditBox creates a multiline DOM field
     // with its default ANY mode before inputMode can be assigned.
@@ -354,6 +446,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     edit.maxLength=5;editNode.active=true;
     // EditBox.textLabel resets the native label to TOP; restore the intended single-line alignment afterwards.
     priceLabel.verticalAlign=Label.VerticalAlign.CENTER;priceLabel.lineHeight=priceSize;priceLabel.enableWrapText=false;
+    this.ui.label(quote,'Cr',178,40,46,34,{size:20,mono:true,color:'#FFCB8E',glow:'#FF9A4A80',align:'right',verticalAlign:'center',wrap:false});
     let submit:Node|null=null;
     const updateSubmit=()=>{
       if(!submit?.isValid)return;
@@ -365,18 +458,24 @@ export class OrbitalMain extends Component implements OrbitalHost {
     const changed=()=>{const value=edit.string.replace(/[\r\n]/g,'');if(value!==edit.string)edit.string=value;const n=Number(value);this.offer=Number.isSafeInteger(n)&&n>0?n:0;updateSubmit();};
     editNode.on(EditBox.EventType.TEXT_CHANGED,changed);editNode.on(EditBox.EventType.EDITING_DID_ENDED,changed);
     quote.on(Node.EventType.MOUSE_WHEEL,(e:EventMouse)=>{const delta=e.getScrollY();if(this.busy||delta===0)return;this.offer=Math.max(1,Math.min(bounds.max,this.offer+(delta>0?10:-10)));edit.string=String(this.offer);updateSubmit();});
-    this.baseline(quote,'Cr',182,priceBaseline,45,20,C.orange);
-    this.button(p,'−10',20,99,107,44,()=>{this.offer=Math.max(1,this.offer-10);edit.string=String(this.offer);updateSubmit();},{tone:'quiet',size:18});
-    this.button(p,'＋10',147,99,107,44,()=>{this.offer=Math.min(bounds.max,this.offer+10);edit.string=String(this.offer);updateSubmit();},{tone:'quiet',size:18});
-    submit=this.button(p,`提出 ${this.offer} Cr`,568,99,265,44,()=>this.dispatch({type:'OFFER',price:this.offer,evidence:this.chosenEvidence}),{tone:'gold',disabled:t.rounds>=3,size:18});
-    updateSubmit();
-    this.row(p,'物证票据 / 拖到左侧支持还价',278,8,278,24,15,C.muted);
+    const minus=this.button(p,'',18,114,112,42,()=>{this.offer=Math.max(1,this.offer-10);edit.string=String(this.offer);updateSubmit();},{tone:'quiet',name:'button-−10'});
+    this.ui.attachIcon(minus,'minus',22,-22);this.ui.label(minus.getChildByName('tech-button-surface')||minus,'10',58,0,44,42,{size:18,mono:true,color:'#ECE7DA',verticalAlign:'center',wrap:false});
+    const plus=this.button(p,'',142,114,112,42,()=>{this.offer=Math.min(bounds.max,this.offer+10);edit.string=String(this.offer);updateSubmit();},{tone:'quiet',name:'button-＋10'});
+    this.ui.attachIcon(plus,'plus',22,-22);this.ui.label(plus.getChildByName('tech-button-surface')||plus,'10',58,0,44,42,{size:18,mono:true,color:'#ECE7DA',verticalAlign:'center',wrap:false});
+    this.row(p,'物证小票 · 拖到报价屏',274,18,250,24,14,C.muted);
+    this.row(p,getDef(it.defId).name,470,18,200,24,14,C.text,'right');
     relevant.slice(0,3).forEach((id,i)=>{
-      const card=this.ui.statusChip(p,getTool(id).short,278+i*187,39,175,46,this.chosenEvidence===id?C.orange:C.cyan);card.name=`evidence-card-${id}`;
-      this.drag(card,()=>{this.chosenEvidence=id;this.render();},e=>{if(quote.getComponent<UITransform>(UITransform)!.hitTest(e.getLocation())){this.chosenEvidence=id;this.render();}else this.ui.toast('把证据卡放到左侧报价票据旁。');});
+      const chosen=this.chosenEvidence===id;
+      const card=this.ui.paperSlip(p,274+i*134,48,124,58,{name:`evidence-card-${id}`,torn:true,angle:chosen?0:(i-1)*1.5});
+      this.ui.toolIcon(card,id,6,6,40,40);
+      this.ui.label(card,getTool(id).short,48,4,70,44,{size:16,bold:true,color:chosen?INK.rust:INK.text,verticalAlign:'center',wrap:false});
+      if(chosen){const g=this.ui.container(card,0,0,124,58,'evidence-chosen-rim').addComponent<Graphics>(Graphics);g.strokeColor=new Color('#C0582A');g.lineWidth=3;g.rect(1.5,-50.5,121,49);g.stroke();}
+      this.drag(card,()=>{this.chosenEvidence=id;this.render();},e=>{if(quote.getComponent<UITransform>(UITransform)!.hitTest(e.getLocation())){this.chosenEvidence=id;this.render();}else this.ui.toast('把物证小票放到报价屏上。');});
     });
-    if(!relevant.length)this.row(p,'先鉴定：取得这件实物的相关痕迹，再支撑还价。',278,43,540,36,16,C.muted);
-    this.row(p,`本次为第 ${Math.min(3,t.rounds+1)} 次还价 / 最多 3 次`,278,108,272,28,14,C.muted);
+    if(!relevant.length)this.ui.label(p,'还没有相关物证。\n先去鉴定台取得这件实物的痕迹。',274,46,396,62,{size:16,lineHeight:24,color:C.muted,wrap:true});
+    submit=this.button(p,`提出 ${this.offer} Cr`,274,114,282,42,()=>this.dispatch({type:'OFFER',price:this.offer,evidence:this.chosenEvidence}),{tone:'gold',disabled:t.rounds>=3,size:18});
+    updateSubmit();
+    this.ui.label(p,`第 ${Math.min(3,t.rounds+1)}/3 轮`,566,114,104,42,{size:16,mono:false,color:C.muted,align:'center',verticalAlign:'center',wrap:false});
   }
   private pawnContract():void{
     const t=this.state.trade;if(!t)return;
@@ -396,8 +495,9 @@ export class OrbitalMain extends Component implements OrbitalHost {
       const button=this.button(left,'',0,i*94,148,80,()=>{this.tool=t.id;this.render();},{selected:this.tool===t.id,tone:'quiet',name:`tool-target-${t.id}`});
       this.ui.toolIcon(button,t.id,8,10,58,58);this.row(button,t.short,77,15,65,28,17,this.tool===t.id?C.text:C.muted);this.row(button,it.evidence.includes(t.id)?'已存证':'待取证',77,44,65,22,11,it.evidence.includes(t.id)?C.green:C.muted);
     });
-    this.ui.panel(p,212,102,420,84,{fill:'#0A141BA6',lineWidth:0,radius:4,name:'inspection-title-shade'});
-    this.text(p,def.name,220,109,790,42,31,C.text);this.row(p,`${def.id}  /  ${this.back?'背面结构':'正面观察'}`,222,154,620,24,13,C.muted);
+    const head=this.ui.texturePanel(p,206,104,Math.min(560,Math.max(300,def.name.length*34+150)),78,{skin:'strip',name:'inspection-title-plate'});
+    this.ui.label(head,def.name,22,8,520,40,{size:30,bold:true,color:'#F6EBD4',verticalAlign:'center',wrap:false,outline:'#05080B',outlineWidth:2});
+    this.row(head,this.back?'背面结构':'正面观察',24,48,300,22,14,C.cyan);
     const viewport=this.ui.container(p,INSPECTION_AREA.x,INSPECTION_AREA.y,INSPECTION_AREA.width,INSPECTION_AREA.height,'inspection-viewport');
     viewport.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
     this.inspectionShadow=this.ui.container(viewport,0,0,1,1,'inspection-object-shadow');this.inspectionShadow.addComponent<Graphics>(Graphics);
@@ -430,10 +530,12 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.button(p,'实物归位',828,654,122,40,()=>{this.resetInspection(it.uid);this.render();},{tone:'quiet',size:16});
     this.scaleLabel=this.ui.label(p,'',966,654,98,40,{size:13,color:C.muted,align:'center',verticalAlign:'center',wrap:false}).getComponent<Label>(Label)!;this.updateZoomControls();
     this.toolInteraction(p,it,draft);
-    const side=this.ui.texturePanel(p,1252,116,316,672,{materialOpacity:.12,fill:'#0B171EF5',stroke:'#AE9B7748',lineWidth:1,radius:6,name:'evidence-book'});
-    this.row(side,'物证册',24,20,268,32,23,C.text);this.row(side,'APPRAISAL / FIELD NOTES',24,57,268,18,9,C.muted);
-    const a=estimate(it);this.row(side,`${a.exact?a.low:`${a.low} – ${a.high}`} Cr`,24,92,268,47,34,C.text);
-    this.row(side,`参考估值 · ${it.evidence.length} / 6 项物证`,24,147,268,23,13,C.muted);
+    const side=this.ui.texturePanel(p,1252,112,316,680,{skin:'socket',name:'evidence-book'});
+    this.ui.label(side,'物证册',24,18,268,34,{size:24,bold:true,color:'#F6EBD4',verticalAlign:'center',wrap:false});
+    const a=estimate(it),est=this.ui.screen(side,18,60,280,104,'estimate-screen');
+    this.ui.label(est,'参考估值',16,10,140,20,{size:14,color:'#86E6DF',glow:'#3FC9C170',verticalAlign:'center',wrap:false});
+    this.ui.label(est,`${it.evidence.length}/6 物证`,140,10,124,20,{size:14,mono:true,color:'#86E6DF',align:'right',verticalAlign:'center',wrap:false});
+    this.ui.label(est,`${a.exact?a.low:`${a.low}–${a.high}`} Cr`,16,36,252,52,{size:32,mono:true,color:'#FFCB8E',glow:'#FF9A4AAA',verticalAlign:'center',wrap:false,overflow:'shrink'});
     tools.forEach((t,i)=>this.ui.panel(side,24+i*46,187,38,4,{fill:it.evidence.includes(t.id)?C.cyan:'#405253',lineWidth:0,radius:2}));
     it.evidence.slice(-3).forEach((tool,i)=>{
       this.ui.toolIcon(side,tool,24,220+i*99,35,35);this.row(side,getTool(tool).name,71,220+i*99,221,25,16,C.text);
@@ -575,7 +677,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.button(m.body,'打烊并结算',405,260,330,55,()=>{m.close();this.dispatch({type:'SETTLE'});},{tone:'gold'});
   }
   private controls():{name:string;x:number;y:number;w:number;h:number}[]{
-    return this.all(this.ui.root).filter(n=>(n as unknown as {__action?:()=>void}).__action).map(n=>{
+    return this.all(this.ui.root).filter(n=>n.activeInHierarchy&&(n as unknown as {__action?:()=>void}).__action).map(n=>{
       // UITransform.getBoundingBoxToWorld also includes decorative children such as long rules.
       // Report the button's own touch rectangle, rather than their combined visual bounds.
       const t=n.getComponent<UITransform>(UITransform)!,{width,height}=t.contentSize,a=t.anchorPoint;
@@ -587,7 +689,9 @@ export class OrbitalMain extends Component implements OrbitalHost {
   private onKey(e:EventKeyboard):void{
     if(typeof document!=='undefined'&&['INPUT','TEXTAREA'].includes(document.activeElement?.tagName||''))return;
     if(this.busy){if(e.keyCode===KeyCode.SPACE||e.keyCode===KeyCode.ESCAPE)this.skip();return;}
-    const modal=this.ui.root.children.filter(n=>n.name==='modal-overlay'&&n.active).pop();
+    const dialog=this.ui.root.children.filter(n=>n.name==='modal-overlay'&&n.active).pop();
+    const modal=dialog||(this.titleScreen?.isValid?this.titleScreen:undefined);
+    if(!dialog&&modal&&e.keyCode===KeyCode.ESCAPE)return;
     if(modal&&this.focused&&!this.all(modal).includes(this.focused)){this.focus=-1;this.focused=null;}
     if(e.keyCode===KeyCode.TAB){const btns=this.all(modal||this.ui.root).filter(n=>(n as unknown as {__enabled?:boolean}).__enabled);if(btns.length){this.focus=(this.focus+1)%btns.length;this.focused=btns[this.focus];this.ui.focusButton(this.focused);}return;}
     if((e.keyCode===KeyCode.ENTER||e.keyCode===KeyCode.SPACE)&&this.focused?.isValid&&(!modal||this.all(modal).includes(this.focused))){(this.focused as unknown as {__action:()=>void}).__action();return;}

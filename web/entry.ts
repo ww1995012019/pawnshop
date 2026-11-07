@@ -10,7 +10,7 @@ async function main():Promise<void> {
   const status=document.querySelector('#load-status');
   if(status)status.textContent='正在准备场景与旧物…';
   // Cocos' system-font Label can use the same font as Creator's TTF resource.
-  await Promise.all([document.fonts.load('24px "Orbital Sans SC"'),document.fonts.ready]);
+  await Promise.all([document.fonts.load('24px "Orbital Sans SC"'),document.fonts.load('24px "Orbital Mono"'),document.fonts.ready]);
   await registerBuiltins('./builtin-effects.json');
   await game.init({
     debugMode:0,

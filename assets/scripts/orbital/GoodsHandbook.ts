@@ -52,7 +52,7 @@ export function openGoodsHandbook(h:OrbitalHost):void {
       text(p,'可以继续检测、维修和履约。明日会有新的回收批次到港。',100,467,660,40,17,C.muted);
     }
     const def=getDef(selected),detail=h.ui.texturePanel(p,898,0,502,680,{skin:'glass',fill:'#0D1B24',stroke:'#7FB9B14A',name:'handbook-item-detail'});
-    text(detail,`${def.id}   /   ${def.category}`,24,14,318,26,12,C.orange);
+    text(detail,def.category,24,14,318,26,12,C.orange);
     text(detail,def.name,24,52,454,39,28);
     text(detail,'型录展示 · 检测前不代表当前批次状况',24,96,454,25,13,C.muted);
     h.ui.texturePanel(detail,24,137,454,229,{skin:'socket',fill:'#07151D',stroke:'#71908B40',name:'handbook-preview-well'});
