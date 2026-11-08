@@ -191,7 +191,7 @@ func _refresh_info() -> void:
 		var b: Button = tool_buttons[k]
 		var done: bool = it.evidence.has(k)
 		var relevant: bool = def.tools.has(k)
-		b.text = "%s%s\n%s" % [GameData.tool(k).name, "  ✓" if done else "", "已取证" if done else ("型号相关" if relevant else "可取证")]
+		b.text = "%s%s\n%s" % [GameData.tool(k).name, "  ✓" if done else "", "已取证" if done else ("关键仪器 · 可用于议价" if relevant else "辅助取证")]
 		b.tooltip_text = GameData.tool(k).instruction if GameData.tool(k).has("instruction") else ""
 		b.add_theme_stylebox_override("normal", UIKit.key_style("primary" if k == tool else ("good" if done else "secondary"), "normal"))
 
@@ -374,7 +374,9 @@ func _circuit() -> void:
 	for i in 2:
 		var pr := Probe.new()
 		pr.color = Color("d24a3c") if i == 0 else Color("2b2b2b")
-		pr.home = Vector2(560 + i * 90, 900)
+		# Rest on the mat to the right of the lot. The old home (y 900) sat under
+		# the instrument bench and the dock, so the tips were nearly impossible to find.
+		pr.home = Vector2(ITEM_POS.x + 290 + i * 90, ITEM_POS.y + 70)
 		pr.position = pr.home
 		add_world(pr, "top")
 		probes.append(pr)
@@ -409,17 +411,21 @@ func _scale() -> void:
 		g.queue_redraw())
 	bv.add_child(tare)
 	var wr := UIKit.hbox(8)
-	for w in [10, 20, 50, 100]:
-		var b := UIKit.button("%dg" % w, "chip", Vector2(76, 48), 18)
+	# A standard 5-10-20-20-50-100 set reaches every 5 g step up to 205 g, so
+	# every nominal mass (and every off-weight copy) can be balanced.
+	var set_weights := [5, 10, 20, 20, 50, 100]
+	for i in set_weights.size():
+		var w: int = set_weights[i]
+		var b := UIKit.button("%dg" % w, "chip", Vector2(64, 48), 18)
 		b.toggle_mode = true
 		b.toggled.connect(func(on):
 			if on:
-				weights[w] = true
+				weights[i] = w
 			else:
-				weights.erase(w)
+				weights.erase(i)
 			var total := 0
 			for k in weights:
-				total += k
+				total += int(weights[k])
 			g.weights = total
 			shell.sound("drop", -14, 1.6)
 			g.queue_redraw())
@@ -560,7 +566,8 @@ func _process(delta: float) -> void:
 				hold += delta
 				if hold > 0.6:
 					_record()
-			else:
+					hold = -999.0
+			elif hold >= 0.0:
 				hold = 0.0
 		"TOL-004":
 			if drag_probe >= 0:
@@ -604,7 +611,11 @@ func _process(delta: float) -> void:
 			elif hold >= 0.0:
 				hold = 0.0
 				m.progress = 0.0
-	if target >= 0.0 and target < 80.0:
+	if it.evidence.has(tool):
+		# Already on record: keep the reading visible without re-submitting it
+		# (and re-toasting "already recorded") every second.
+		progress = 1.0 if target >= 0.0 and target < 80.0 else 0.0
+	elif target >= 0.0 and target < 80.0:
 		progress += delta / 0.9
 		if progress >= 1.0:
 			_record()
@@ -745,16 +756,23 @@ class Meter extends Control:
 		if not working and l > 30.0:
 			v = l - (l - 30.0) * 0.7 + sin(Time.get_ticks_msec() / 90.0) * 4.0
 		return v
+	## The player holds the applied load in the test band; the output trace is
+	## the reading. A faulty item sags below the load, which is the evidence —
+	## it must not make the test itself impossible to finish.
 	func in_band() -> bool:
-		var v := voltage()
-		return v >= band and v <= band + 12.0
+		var l := float(dial.value)
+		return l >= band and l <= band + 12.0
 	func _process(_d: float) -> void:
 		queue_redraw()
 	func _draw() -> void:
 		draw_rect(Rect2(Vector2.ZERO, size), Color("041010"))
 		var w := size.x - 20
-		draw_rect(Rect2(10 + w * band / 100.0, 34, w * 12.0 / 100.0, size.y - 50), Color(0.35, 0.8, 0.5, 0.35))
+		var top := 34.0
+		var lane := (size.y - top - 22.0) * 0.5
+		draw_rect(Rect2(10 + w * band / 100.0, top - 2, w * 12.0 / 100.0, lane * 2 + 4), Color(0.35, 0.8, 0.5, 0.22))
+		var l := float(dial.value)
 		var v := voltage()
-		draw_rect(Rect2(10, size.y - 40, w * clampf(v, 0, 100) / 100.0, 18), Color("ffb35c") if not in_band() else Color("98ffb0"))
+		draw_rect(Rect2(10, top, w * clampf(l, 0, 100) / 100.0, lane - 4), Color("98ffb0") if in_band() else Color("ffb35c"))
+		draw_rect(Rect2(10, top + lane, w * clampf(v, 0, 100) / 100.0, lane - 4), Color(0.5, 0.85, 1.0, 0.85))
 		draw_rect(Rect2(10, size.y - 14, w * progress, 6), Color("98ffb0"))
-		draw_string(UIKit.mono, Vector2(10, 24), "负载 %d%% · 输出 %d%%  把输出稳定在绿区" % [dial.value, roundi(v)], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.7, 0.9, 0.85))
+		draw_string(UIKit.mono, Vector2(10, 24), "负载 %d%% · 输出 %d%%  转旋钮把负载稳在绿区，观察输出" % [dial.value, roundi(v)], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.7, 0.9, 0.85))

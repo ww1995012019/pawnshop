@@ -113,11 +113,19 @@ func _card(def: Dictionary) -> VBoxContainer:
 	hv.add_child(UIKit.label("报酬 %s · 第 %s 天前 · %s" % [UIKit.money(def.reward), Model.jnum(def.dueDay), {"station": "站务", "salvage": "拾荒", "merchant": "商会"}[def.faction]], 20, UIKit.AMBER, false, true))
 	head.add_child(hv)
 	v.add_child(head)
-	v.add_child(UIKit.label(def.description, 21, UIKit.TEXT, false, true))
+	v.add_child(UIKit.label(_readable(String(def.description)), 21, UIKit.TEXT, false, true))
 	var req := "需要：%s · 品相≥%s%s%s" % [GameData.def(def.itemId).name, UIKit.pct(def.minCondition), " · 须修复" if def.needsRepair else "", " · 顾客原物" if def.get("customerOwned", false) else ""]
 	v.add_child(UIKit.label(req, 19, UIKit.MUTED, false, true))
 	card.set_meta("v", v)
 	return v
+
+## Order briefs reference recipes by internal id (REC-001); show their names.
+func _readable(text: String) -> String:
+	var re := RegEx.create_from_string("REC-\\d{3}")
+	for m in re.search_all(text):
+		var r := GameData.recipe(m.get_string())
+		text = text.replace(m.get_string(), "「%s」" % r.name if not r.is_empty() else "对应工序")
+	return text
 
 func _refresh() -> void:
 	for k in cols:

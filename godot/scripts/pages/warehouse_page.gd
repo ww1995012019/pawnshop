@@ -175,12 +175,22 @@ func _detail() -> void:
 		_act(g, "推荐给顾客", "primary", func():
 			if Game.dispatch({"type": "SELECT_TRADE", "uid": it.uid}):
 				shell.go("counter"), why == null, why if why != null else "")
-	_act(g, "下架" if it.location == "display" else "上架陈列", "good", {"type": "DISPLAY", "uid": it.uid})
-	_act(g, "挂牌 −10", "chip", {"type": "PRICE", "uid": it.uid, "price": maxf(1, it.listPrice - 10)}, it.owner == "shop")
-	_act(g, "挂牌 +10", "chip", {"type": "PRICE", "uid": it.uid, "price": it.listPrice + 10}, it.owner == "shop")
-	_act(g, "安检扫描", "secondary", {"type": "SCAN", "uid": it.uid})
-	_act(g, "来源登记 35Cr·1AP", "secondary", {"type": "REGISTER", "uid": it.uid}, not it.sourceVerified)
-	_act(g, "解除隔离" if it.location == "isolation" else "放入隔离柜", "secondary", {"type": "ISOLATE", "uid": it.uid}, it.owner != "pawn")
+	var reserved := Model.trade_reserved(s, it)
+	var shelf_why := _shelf_block(it, reserved)
+	_act(g, "下架" if it.location == "display" else "上架陈列", "good", {"type": "DISPLAY", "uid": it.uid}, shelf_why == "", shelf_why)
+	var price_ok: bool = it.owner == "shop" and not it.has("orderId") and not reserved
+	_act(g, "挂牌 −10", "chip", {"type": "PRICE", "uid": it.uid, "price": maxf(1, it.listPrice - 10)}, price_ok and it.listPrice > 1)
+	_act(g, "挂牌 +10", "chip", {"type": "PRICE", "uid": it.uid, "price": it.listPrice + 10}, price_ok)
+	_act(g, "已扫描 · 复查" if s.scanned.has(it.uid) else "安检扫描", "secondary", {"type": "SCAN", "uid": it.uid})
+	var reg_why := ""
+	if it.owner == "pawn":
+		reg_why = "抵押保管物不需要登记"
+	elif not s.scanned.has(it.uid):
+		reg_why = "先做安检扫描"
+	elif Model.evidence_count(it) < 2:
+		reg_why = "先在鉴定台取得两条物证"
+	_act(g, "来源已登记" if it.sourceVerified else "来源登记 35Cr·1AP", "secondary", {"type": "REGISTER", "uid": it.uid}, not it.sourceVerified and reg_why == "", reg_why)
+	_act(g, "解除隔离" if it.location == "isolation" else "放入隔离柜", "secondary", {"type": "ISOLATE", "uid": it.uid}, it.owner != "pawn" and not reserved, "正在柜台交易中" if reserved else "")
 	_act(g, "去鉴定", "secondary", func(): shell.go("inspect", it.uid))
 	_act(g, "去维修", "secondary", func(): shell.go("repair", it.uid))
 	if it.owner == "pawn":
@@ -189,11 +199,38 @@ func _detail() -> void:
 	for r in s.ledger:
 		if r.kind == "relief-window" and r.day == s.day:
 			relief = true
+	var item_name: String = def.name
+	var uid: String = it.uid
 	if relief:
-		_act(g, "应急清仓（55%）", "danger", {"type": "EMERGENCY_SALE", "uid": it.uid})
-	_act(g, "主动归还原主", "danger", {"type": "RETURN_ITEM", "uid": it.uid}, it.owner != "pawn")
+		_act(g, "应急清仓（55%）", "danger", func():
+			shell.confirm("应急清仓", "「%s」将按估值的 55%% 立即卖出，不能撤回。" % item_name, "确认清仓", func():
+				Game.dispatch({"type": "EMERGENCY_SALE", "uid": uid})))
+	var return_text := "原物会移交原主并从库存移除，不能撤回。"
+	if it.owner == "shop":
+		return_text = "这是店铺花 %s 收来的货。归还后不会退款，原物从库存移除，不能撤回。" % UIKit.money(it.cost)
+	_act(g, "主动归还原主", "danger", func():
+		shell.confirm("主动归还原主", "「%s」：%s" % [item_name, return_text], "确认归还", func():
+			Game.dispatch({"type": "RETURN_ITEM", "uid": uid})), it.owner != "pawn" and not reserved, "正在柜台交易中" if reserved else "")
 	detail.add_child(g)
+	if shelf_why != "" and it.owner == "shop":
+		detail.add_child(UIKit.label("上架条件：" + shelf_why, 16, UIKit.DANGER, false, true))
+	elif reg_why != "" and not it.sourceVerified:
+		detail.add_child(UIKit.label("登记条件：" + reg_why, 16, UIKit.DANGER, false, true))
 	_stock_summary()
+
+## Mirrors the DISPLAY rule so the shelf key explains why it is unavailable.
+func _shelf_block(it: Dictionary, reserved: bool) -> String:
+	if reserved:
+		return "这件实物已在当前报价中"
+	if it.location == "display":
+		return ""
+	if it.owner != "shop" or it.has("orderId") or it.location == "isolation" or it.sealed:
+		return "受托、预留、隔离或封存物品不能上架"
+	if not it.sourceVerified:
+		return "来源未核验：先扫描并登记"
+	if Model.evidence_count(it) < 2:
+		return "先在鉴定台取得两条物证"
+	return ""
 
 func _stock_summary() -> void:
 	detail.add_child(UIKit.rule())

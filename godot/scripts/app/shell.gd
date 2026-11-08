@@ -562,6 +562,9 @@ func world_mouse() -> Vector2:
 func _input(e: InputEvent) -> void:
 	if e is InputEventMouse:
 		last_screen = (e as InputEventMouse).position
+	elif e is InputEventKey and e.pressed and not e.echo and (e as InputEventKey).keycode == KEY_ESCAPE and modal_open():
+		close_top_modal()
+		get_viewport().set_input_as_handled()
 
 ## Godot controls choose their own cursor on hover. Only select a world cursor
 ## when the pointer is over the world, so panels and modals retain precedence.
@@ -650,6 +653,12 @@ func modal(title_text: String, width := 900.0) -> Array:
 	v.add_child(UIKit.rule())
 	var body := UIKit.vbox(14)
 	v.add_child(body)
+	# Esc (see _input) and a click on the dimmed backdrop both dismiss the sheet.
+	dim.set_meta("close", close)
+	dim.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.pressed and (ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT \
+				and not sheet.get_global_rect().has_point(dim.get_global_mouse_position()):
+			close.call())
 	if not Game.prefs.reduced_motion:
 		sheet.pivot_offset = Vector2(sheet.custom_minimum_size.x * 0.5, 200)
 		sheet.scale = Vector2(0.98, 0.98)
@@ -662,6 +671,32 @@ func modal(title_text: String, width := 900.0) -> Array:
 
 func modal_open() -> bool:
 	return modal_layer.get_child_count() > 0
+
+func close_top_modal() -> void:
+	for i in range(modal_layer.get_child_count() - 1, -1, -1):
+		var dim := modal_layer.get_child(i)
+		if dim.has_meta("close") and not dim.has_meta("closing"):
+			(dim.get_meta("close") as Callable).call()
+			return
+
+## Irreversible actions ask first; nothing is dispatched until the player agrees.
+func confirm(title_text: String, message: String, ok_text: String, fn: Callable) -> void:
+	var m := modal(title_text, 640)
+	var body: VBoxContainer = m[0]
+	body.add_child(UIKit.label(message, 21, UIKit.TEXT, false, true))
+	var row := UIKit.hbox(12)
+	var cancel := UIKit.button("取消", "secondary", Vector2(0, 56), 21)
+	cancel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cancel.pressed.connect(func(): m[1].call())
+	row.add_child(cancel)
+	var ok := UIKit.button(ok_text, "danger", Vector2(0, 56), 21)
+	ok.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ok.pressed.connect(func():
+		m[1].call()
+		fn.call())
+	row.add_child(ok)
+	body.add_child(row)
+	cancel.call_deferred("grab_focus")
 
 func open_events() -> void:
 	var event = Game.today_event()
@@ -776,8 +811,9 @@ func open_settings() -> void:
 	var reset := UIKit.button("新开一家店（清除当前进度）", "danger", Vector2(0, 56))
 	reset.pressed.connect(func():
 		m[1].call()
-		Game.new_game()
-		shutter(1))
+		confirm("新开一家店", "当前存档（第 %d 天）的现金、库存和订单都会清除，无法恢复。" % int(Game.state.day), "清除并新开", func():
+			Game.new_game()
+			shutter(1)))
 	body.add_child(reset)
 
 # ---------------------------------------------------------------- title & shutter
@@ -832,9 +868,10 @@ func _show_title() -> void:
 	if Game.has_save:
 		var fresh := UIKit.button("新开一家店", "secondary", Vector2(0, 52), 21)
 		fresh.pressed.connect(func():
-			_close_title()
-			Game.new_game()
-			shutter(1))
+			confirm("新开一家店", "当前存档（第 %d 天）的现金、库存和订单都会清除，无法恢复。" % int(Game.state.day), "清除并新开", func():
+				_close_title()
+				Game.new_game()
+				shutter(1)))
 		v.add_child(fresh)
 	var hb := UIKit.hbox(12)
 	for spec in [["玩法说明", open_help], ["设置", open_settings]]:

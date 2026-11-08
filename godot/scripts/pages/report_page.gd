@@ -77,7 +77,7 @@ func _refresh() -> void:
 	var heading := UIKit.hbox(12)
 	heading.add_child(UIKit.label("第 %d 天 · %s" % [day, "日结报告" if s.phase == "report" else "营业中"], 28, UIKit.AMBER))
 	heading.add_child(UIKit.spacer(false))
-	heading.add_child(UIKit.label("DAILY LEDGER  /  营业账目", 15, UIKit.MUTED, true))
+	heading.add_child(UIKit.label("营业账目", 17, UIKit.MUTED))
 	body.add_child(heading)
 	body.add_child(UIKit.rule())
 	var today := []

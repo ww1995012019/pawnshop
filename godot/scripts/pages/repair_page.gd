@@ -27,6 +27,8 @@ func scene_name() -> String:
 	return "workbench"
 
 func hint_text() -> String:
+	if stage < 0:
+		return "这件暂时不能开工：原因写在工作台上，或在左侧换一件。" if it_uid != "" else "没有可修的物件。收购故障货或接委修订单后再来。"
 	match stage:
 		0: return "按住鼠标在实物上来回擦，清掉污垢与氧化层。"
 		1: return "把工作台右侧的新零件拖进实物上发光的槽位。"
@@ -173,12 +175,16 @@ func _refresh_info() -> void:
 			mats.append("%s ×%s（有 %s）" % [GameData.material(id).name, Model.jnum(r.materials[id]), Model.jnum(Game.state.materials.get(id, 0))])
 		cv.add_child(UIKit.label("材料：" + "、".join(mats), 16, UIKit.CYAN, false, true))
 		cv.add_child(UIKit.label("确认时消耗 %s AP" % Model.jnum(r.ap), 16, UIKit.MUTED))
+		var why := _repair_block(it, r)
 		var go := UIKit.button("确认修复", "primary", Vector2(0, 56), 21)
-		go.disabled = p != 3 or it.repaired
+		go.disabled = p != 3 or it.repaired or why != ""
+		go.tooltip_text = why
 		go.pressed.connect(func():
 			if Game.dispatch({"type": "REPAIR", "uid": it_uid, "recipeId": r.id}) and Game.item(it_uid) != null and Game.item(it_uid).repaired:
 				_celebrate())
 		cv.add_child(go)
+		if why != "" and not it.repaired:
+			cv.add_child(UIKit.label(why, 16, UIKit.DANGER, false, true))
 		info.add_child(card)
 	var craft := _craft_recipe()
 	if not craft.is_empty() and it.defId == craft.itemId:
@@ -192,9 +198,43 @@ func _refresh_info() -> void:
 		ccv.add_child(b)
 		info.add_child(cc)
 	var dis := UIKit.button("拆解回收（不可逆，1 AP）", "danger", Vector2(0, 52), 19)
-	dis.pressed.connect(func(): Game.dispatch({"type": "DISMANTLE", "uid": it_uid}))
+	var dis_why := _dismantle_block(it)
+	dis.disabled = dis_why != ""
+	dis.tooltip_text = dis_why
+	var dis_name: String = GameData.def(it.defId).name
+	dis.pressed.connect(func():
+		shell.confirm("拆解回收", "「%s」会被拆成导电纤维×2、标准微线圈×1，原物不可恢复，并消耗 1 AP。" % dis_name, "确认拆解", func():
+			Game.dispatch({"type": "DISMANTLE", "uid": it_uid})))
 	info.add_child(dis)
 	_materials()
+
+## Mirrors the REPAIR rule so the button explains itself instead of failing.
+func _repair_block(it: Dictionary, r: Dictionary) -> String:
+	var why := _blocked(it)
+	if why != "" and why != "已经修复":
+		return why
+	if Model.evidence_count(it) < 1:
+		return "先去鉴定台取得至少一条故障诊断物证"
+	for id in r.materials:
+		if Game.state.materials.get(id, 0) < r.materials[id]:
+			return "%s不足，先在下方采购" % GameData.material(id).name
+	if Game.state.ap < r.ap:
+		return "行动点不足（需 %s AP）" % Model.jnum(r.ap)
+	return ""
+
+## Mirrors the DISMANTLE rule.
+func _dismantle_block(it: Dictionary) -> String:
+	if Model.trade_reserved(Game.state, it):
+		return "正在柜台交易中"
+	if it.owner != "shop" or it.has("orderId"):
+		return "受托、抵押或订单占用的物件不能拆解"
+	if it.location == "isolation" or it.sealed or not it.sourceVerified:
+		return "隔离或来源未核验的物件不能拆解"
+	if Model.evidence_count(it) < 1:
+		return "拆解前需要一条故障诊断物证"
+	if Game.state.ap < 1:
+		return "行动点不足"
+	return ""
 
 func _materials() -> void:
 	info.add_child(UIKit.rule())
@@ -214,6 +254,11 @@ func _materials() -> void:
 # ---------------------------------------------------------------- stages
 
 func _stage_ui() -> void:
+	_stage_ui_body()
+	# Selecting another lot changes the stage; keep the dock hint in step.
+	shell.hint(hint_text())
+
+func _stage_ui_body() -> void:
 	UIKit.clear(bench_body)
 	grime_label = null
 	for n in [part, slot]:
@@ -383,11 +428,18 @@ func _process(delta: float) -> void:
 						mask.set_pixel(q.x, q.y, Color(maxf(0.0, old - 0.35), 0, 0))
 		mask_tex.update(mask)
 		if Engine.get_process_frames() % 6 == 0:
+			# Measure only the body of the object (an ellipse inside the reachable
+			# box). Counting the transparent margin made the step impossible to
+			# finish: the item looked clean while 50%+ "grime" remained.
 			var sum := 0.0
-			for y in range(0, 64, 4):
-				for x in range(0, 64, 4):
-					sum += mask.get_pixel(x, y).r
-			dirty = sum / 256.0
+			var n := 0
+			for y in range(0, 64, 2):
+				for x in range(0, 64, 2):
+					var d := Vector2((x + 0.5) / 64.0 - 0.5, (y + 0.5) / 64.0 - 0.5) / 0.4
+					if d.length_squared() <= 1.0:
+						sum += mask.get_pixel(x, y).r
+						n += 1
+			dirty = sum / maxf(1.0, float(n))
 			shell.sound("click", -26, randf_range(0.5, 0.7))
 			if is_instance_valid(grime_label):
 				grime_label.text = "污垢剩余 %d%%" % roundi(dirty * 100)

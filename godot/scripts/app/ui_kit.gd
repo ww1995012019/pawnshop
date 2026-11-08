@@ -31,7 +31,12 @@ static var _cache := {}
 static func ensure() -> void:
 	if font == null:
 		font = load("res://assets/fonts/orbital-sans.ttf")
-		mono = load("res://assets/fonts/orbital-mono.ttf")
+		# The digital face has Latin glyphs only. Fall back to the sans face so
+		# receipts, instrument read-outs and UV marks never render CJK as boxes.
+		var digits := FontVariation.new()
+		digits.base_font = load("res://assets/fonts/orbital-mono.ttf")
+		digits.fallbacks = [font]
+		mono = digits
 
 # ---------------------------------------------------------------- styles
 

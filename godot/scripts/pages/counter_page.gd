@@ -4,18 +4,17 @@ extends Page
 
 var MAT_POS := Vector2(960, 680)
 var STAND := Vector2(650, 400)
-const SHELF_SLOTS := [[1322, 302, 74], [1462, 278, 74], [1532, 278, 70], [1322, 380, 64], [1462, 368, 70], [1532, 368, 66], [1322, 457, 58]]
 
 var customer: Customer
 var mat_item: ItemSprite
 var bell: ServiceBell
-var shelf: Array = []
 var bubble: PanelContainer
 var bubble_label: Label
 var screen: SubViewport
 var scr := {}
 var dial: Dial
 var offer_label: Label
+var nudge_keys: Array = []
 var chips: HFlowContainer
 var actions: GridContainer
 var footer: Label
@@ -63,8 +62,9 @@ func hint_text() -> String:
 	return "拖动实物、右键翻面；拿去鉴定取证，再转动旋钮出价。"
 
 func toast_rect() -> Rect2:
-	var r: Rect2 = shell.content_rect()
-	return Rect2(r.position.x + 16, r.end.y - 150, 490, 135)
+	if stage_rect.size == Vector2.ZERO:
+		return Rect2()
+	return Rect2(stage_rect.end.x - 384, stage_rect.end.y - 316, 360, 300)
 
 func enter() -> void:
 	stage_root = Node2D.new()
@@ -94,7 +94,6 @@ func _stage_world(p: Vector2) -> Vector2:
 # ---------------------------------------------------------------- world
 
 func _sync_world() -> void:
-	_build_shelf()
 	var t = Game.state.trade
 	if t == null:
 		return
@@ -104,25 +103,12 @@ func _sync_world() -> void:
 		_spawn_mat_item(it, false)
 	_say(t.line, false)
 
-func _build_shelf() -> void:
-	for n in shelf:
-		if is_instance_valid(n):
-			n.queue_free()
-	shelf.clear()
-	var shown := []
+func _display_count() -> int:
+	var n := 0
 	for it in Game.state.inventory:
 		if it.location == "display":
-			shown.append(it)
-	for i in mini(shown.size(), SHELF_SLOTS.size()):
-		var slot: Array = SHELF_SLOTS[i]
-		var it: Dictionary = shown[i]
-		var s := ItemSprite.new()
-		s.setup(it.defId, it.uid, slot[2] * shell.K)
-		s.draggable = false
-		s.position = shell.art(slot[0], slot[1]) - Vector2(0, slot[2] * shell.K * 0.42)
-		s.body.modulate = Color(0.92, 0.95, 0.98)
-		add_world(s, "mid")
-		shelf.append(s)
+			n += 1
+	return n
 
 func _spawn_customer(npc_id: String, walk: bool) -> void:
 	if customer != null and is_instance_valid(customer):
@@ -301,12 +287,18 @@ func _refresh_desk() -> void:
 			slot.icon = UIKit.item_icon(it.defId)
 			slot.expand_icon = true
 			slot.add_theme_constant_override("icon_max_width", 58)
-			slot.tooltip_text = "%s · 品相%s" % [GameData.def(it.defId).name, UIKit.pct(it.condition)]
+			slot.tooltip_text = "%s · 品相%s%s" % [GameData.def(it.defId).name, UIKit.pct(it.condition), " · 陈列中" if it.location == "display" else ""]
+			if it.location == "display":
+				slot.add_theme_stylebox_override("normal", UIKit.key_style("good", "normal"))
 			var uid: String = it.uid
 			slot.pressed.connect(func(): shell.go("warehouse", uid))
 		else:
 			slot.disabled = true
 		stock_grid.add_child(slot)
+	if busy and Game.state.trade == null:
+		# The model has already closed the trade, but the visitor and the lot are
+		# still on stage until the exit animation finishes.
+		return
 	var t = Game.state.trade
 	var it = Model.trade_item(Game.state) if t != null else null
 	visitor_label.text = (GameData.npc(t.npcId).name + " · " + GameData.npc(t.npcId).title) if t != null else "柜台空闲 · 等待来客"
@@ -332,11 +324,11 @@ func _build_terminal() -> void:
 	bgc.color = Color("041010")
 	bgc.size = Vector2(440, 190)
 	screen.add_child(bgc)
-	scr.head = _scr_label(Vector2(22, 14), 20, UIKit.CYAN)
-	scr.price = _scr_label(Vector2(18, 36), 60, UIKit.AMBER, true)
-	scr.line1 = _scr_label(Vector2(22, 108), 19, UIKit.CYAN)
-	scr.line2 = _scr_label(Vector2(22, 138), 19, Color("ffb48a"))
-	scr.line3 = _scr_label(Vector2(22, 166), 17, UIKit.MUTED)
+	scr.head = _scr_label(Vector2(22, 8), 20, UIKit.CYAN)
+	scr.price = _scr_label(Vector2(18, 28), 60, UIKit.AMBER, true)
+	scr.line1 = _scr_label(Vector2(22, 100), 19, UIKit.CYAN)
+	scr.line2 = _scr_label(Vector2(22, 128), 19, Color("ffb48a"))
+	scr.line3 = _scr_label(Vector2(22, 156), 17, UIKit.MUTED)
 	var crt := TextureRect.new()
 	crt.texture = screen.get_texture()
 	crt.custom_minimum_size = Vector2(440, 190)
@@ -360,7 +352,18 @@ func _build_terminal() -> void:
 	ov.add_child(UIKit.label("我的出价", 18, UIKit.MUTED))
 	offer_label = UIKit.label("—", 46, UIKit.AMBER, true)
 	ov.add_child(offer_label)
-	ov.add_child(UIKit.label("上下拖动旋钮 · 滚轮 ±5", 15, UIKit.MUTED))
+	# Exact steps for players who find the knob too coarse or too fiddly.
+	var nudges := UIKit.hbox(6)
+	for d in [-10, -1, 1, 10]:
+		var k := UIKit.button(("+%d" % d) if d > 0 else ("−%d" % -d), "chip", Vector2(58, 38), 17)
+		var step: int = d
+		k.pressed.connect(func():
+			dial.set_value(dial.value + step)
+			dial.queue_redraw())
+		nudges.add_child(k)
+		nudge_keys.append(k)
+	ov.add_child(nudges)
+	dial.tooltip_text = "上下拖动旋钮调价 · 滚轮 ±5"
 	oh.add_child(ov)
 	v.add_child(offer)
 	var ev := UIKit.vbox(6)
@@ -424,13 +427,13 @@ func _refresh() -> void:
 		offer_label.text = "—"
 		_act("接待下一位来客", "primary", func(): _ring(), s.phase == "open" and not closed and s.ap >= 1)
 		_act("打烊结算", "secondary", func(): shell.go("report"))
-		footer.text = "柜台陈列：%d 件 · 可在仓储上架" % shelf.size()
+		footer.text = "陈列架：%d 件 · 可在仓储上架" % _display_count()
 	else:
 		var it = Model.trade_item(s)
 		var npc := GameData.npc(t.npcId)
 		var buy: bool = t.kind == "buy"
 		scr.head.text = ("来客报价 · " if buy else "顾客出价 · ") + npc.name
-		scr.price.text = Model.jnum(t.price) + " Cr"
+		scr.price.text = Model.jnum(t.price) + " Cr" if it != null else "待选货"
 		if it != null:
 			var e := Model.estimate(it)
 			scr.line1.text = "%s · 估值 %s" % [GameData.def(it.defId).name.left(8), Model.jnum(e.low) if e.exact else "%s–%s" % [Model.jnum(e.low), Model.jnum(e.high)]]
@@ -469,12 +472,15 @@ func _refresh() -> void:
 			_act("接受报价", "good", func(): Game.dispatch({"type": "ACCEPT"}))
 			_act("拿去鉴定", "secondary", func(): shell.go("inspect", it.uid))
 			if buy:
-				_act("签抵押合同", "secondary", func(): Game.dispatch({"type": "PAWN", "tradeId": t.id}), Model.evidence_count(it) >= 2, false, "需两条物证；付估值约 40% 本金，3 天赎期")
+				var pawn_ok := Model.evidence_count(it) >= 2
+				_act("签抵押合同" if pawn_ok else "抵押（需 2 条物证）", "secondary", func(): Game.dispatch({"type": "PAWN", "tradeId": t.id}), pawn_ok, false, "需两条物证；付估值约 40% 本金，3 天赎期")
 			else:
 				_act("换一件", "secondary", _pick_goods)
 			_act("送客", "danger", func(): Game.dispatch({"type": "REFUSE"}))
 		footer.text = "%s：%s" % [npc.name, Model.customer_need(t.npcId)]
 	dial.enabled = dial_on and not busy
+	for k in nudge_keys:
+		(k as Button).disabled = not dial.enabled
 	offer_panel.visible = dial_on
 	chips.get_parent().visible = dial_on
 	for k in ["line1", "line2", "line3"]:
@@ -521,6 +527,8 @@ func _pick_goods() -> void:
 		cv.add_child(pic)
 		cv.add_child(UIKit.label(GameData.def(it.defId).name, 19, UIKit.TEXT))
 		cv.add_child(UIKit.label("品相 %s · %s · 物证 %d" % [UIKit.pct(it.condition), "正常" if it.working else "故障", Model.evidence_count(it)], 15, UIKit.MUTED))
+		var est := Model.estimate(it)
+		cv.add_child(UIKit.label("挂牌 %s · 成本 %s · 估值 %s" % [UIKit.money(it.listPrice), UIKit.money(it.cost), Model.jnum(est.low) if est.exact else "%s–%s" % [Model.jnum(est.low), Model.jnum(est.high)]], 15, UIKit.AMBER, false, true))
 		var b := UIKit.button("推荐这件" if why == null else "不符合", "primary" if why == null else "chip", Vector2(0, 44), 17)
 		b.disabled = why != null
 		if why != null:
@@ -635,17 +643,6 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 			if nt != null and customer != null:
 				customer.set_mood("focused")
 	_refresh()
-	_build_shelf_if_changed(prev, next)
-
-func _build_shelf_if_changed(prev: Dictionary, next: Dictionary) -> void:
-	var count := func(s: Dictionary) -> int:
-		var n := 0
-		for it in s.inventory:
-			if it.location == "display":
-				n += 1
-		return n
-	if count.call(prev) != count.call(next):
-		_build_shelf()
 
 func _leave_with_goods(t: Dictionary, mood: String) -> void:
 	busy = true
@@ -777,9 +774,6 @@ func world_cursor_shape(p: Vector2) -> int:
 		return Input.CURSOR_POINTING_HAND
 	if is_instance_valid(customer) and Game.state.trade != null and _over_customer(p):
 		return Input.CURSOR_POINTING_HAND
-	for s in shelf:
-		if is_instance_valid(s) and s.contains(p):
-			return Input.CURSOR_POINTING_HAND
 	return Input.CURSOR_ARROW
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -800,10 +794,6 @@ func _unhandled_input(e: InputEvent) -> void:
 				mat_item.begin_drag(p)
 				shell.sound("click", -10, 0.8)
 				return
-			for s in shelf:
-				if is_instance_valid(s) and s.contains(p):
-					shell.go("inspect", s.uid)
-					return
 			if customer != null and is_instance_valid(customer) and Game.state.trade != null and _over_customer(p):
 				shell.open_people(Game.state.trade.npcId)
 		elif mb.button_index == MOUSE_BUTTON_RIGHT and mat_item != null and is_instance_valid(mat_item):
