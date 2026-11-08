@@ -9,6 +9,7 @@ import type {OrderGroup} from './OrderPresentation';
 import {WorkbenchFeedback,type WorkbenchStage} from './WorkbenchFeedback';
 import {getItemHitBounds} from './ItemHitBounds';
 import {getItemFaultLabel} from './ItemReadings';
+import {PhonePanels} from './PhonePanels';
 
 const C={text:'#D6D2C7',muted:'#9BA6A4',cyan:'#76BABB',orange:'#C38A4D',purple:'#AEA4B4',line:'#737C7350',panel:'#101B22B8',deep:'#0B141CD9',red:'#D18D77'};
 const statusText={available:'可接取',active:'进行中',done:'已交付',failed:'已过期'};
@@ -27,6 +28,7 @@ interface DragOptions {
 /** Workspaces share a persistent host; they never commit money outside the reducer. */
 export class OrbitalPanels {
   private page:PageId='repair';
+  private phone:PhonePanels|null=null;
   private parent:Node|null=null;
   private clock=0;
   private orderId='ORD-001';
@@ -61,6 +63,10 @@ export class OrbitalPanels {
     this.cancelDrag();
     this.workbenchFeedback.clear();
     this.page=page;this.parent=parent;this.scanner=null;
+    if(this.h.ui.phone){
+      this.phone??=new PhonePanels(this.h,{orderReasons:(o,it)=>this.orderReasons(o,it),companion:()=>this.orderAlgae()});
+      this.phone.draw(page,parent);return;
+    }
     if(page==='repair')this.repair(parent);
     if(page==='warehouse')this.warehouse(parent);
     if(page==='orders')this.orders(parent);

@@ -8,6 +8,7 @@ const hash=(s:string):number=>{let n=2166136261;for(let i=0;i<s.length;i++){n^=s
 export function tradeItem(s:OrbitalState,t=s.trade):OrbitalItem|undefined{return t?.kind==='sell'?s.inventory.find(i=>i.uid===t.selectedUid):t?.item||undefined;}
 export function relevantEvidence(it:OrbitalItem,used:ToolId[]):ToolId[]{return [...new Set(used)].filter(e=>it.evidence.includes(e)&&getDef(it.defId).tools.includes(e));}
 export function customerNeed(npcId:string):string {
+ const profile=getNpc(npcId);if(profile.purchase&&profile.desire)return profile.desire;
  if(npcId==='CHR-002'||npcId==='CHR-004')return '回收零件与旧设备，可收故障品；来源必须清楚';
  if(npcId==='CHR-003')return '站务采购：正品、功能正常、品相至少65%';
  return '整备与收藏：正品、功能正常、品相至少55%';
@@ -15,6 +16,13 @@ export function customerNeed(npcId:string):string {
 export function saleEligibility(it:OrbitalItem,npcId:string):string|null {
  if(it.owner!=='shop'||it.orderId)return '受托、抵押或订单预留的物品不能出售。';
  if(it.sealed||it.location==='isolation'||!it.sourceVerified)return '先解除封存并核验来源，顾客才会收货。';
+ const demand=getNpc(npcId).purchase;
+ if(demand){
+  if(demand.categories&&!demand.categories.includes(getDef(it.defId).category))return '这件货物不在这位顾客的采购范围内，可从人物档案查看需求。';
+  if(demand.authentic&&!it.authentic)return '这位顾客要求正品，请补齐鉴定或选择其他货物。';
+  if(demand.working&&!it.working)return '这位顾客需要功能正常的设备，请先维修或换货。';
+  if(it.condition<demand.minCondition)return `这位顾客要求品相至少 ${Math.round(demand.minCondition*100)}%。`;
+ }
  if(npcId==='CHR-003'||npcId==='CHR-005'){
   if(!it.authentic)return '这位顾客要求正品，无法按此采购。可寻找零件回收客。';
   if(!it.working)return '这位顾客要能正常工作的设备，请先维修或换货。';

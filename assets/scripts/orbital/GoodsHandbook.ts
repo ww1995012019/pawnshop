@@ -3,9 +3,11 @@ import {itemDefs,getDef,getRecipe,getTool} from './data';
 import {cataloguePage,remainingStock} from './HandbookCatalogue';
 import {ORBITAL_PALETTE as C} from './OrbitalUI';
 import type {OrbitalHost} from './ui-types';
+import {PhoneUI} from './PhoneUI';
 
 /** A visual catalogue and announced arrivals, independent of hidden appraisal readings. */
 export function openGoodsHandbook(h:OrbitalHost):void {
+  if(h.ui.phone){openPhoneHandbook(h);return;}
   const modal=h.ui.modal('旧港货物图鉴',{width:1460,height:824});
   let page=0,selected=itemDefs[0].id,back=false,tab:'catalogue'|'arrivals'='catalogue';
   const text=(parent:Node,value:string,x:number,y:number,w:number,ht:number,size=18,color=C.text)=>h.ui.label(parent,value,x,y,w,ht,{size,color,verticalAlign:'center',wrap:false});
@@ -74,4 +76,29 @@ export function openGoodsHandbook(h:OrbitalHost):void {
     text(detail,recipe?`可维修  ·  ${recipe.name}`:'无专用维修配方 · 可作为贸易或订单货物',36,628,430,33,13,recipe?C.green:C.muted);
   };
   draw();
+}
+
+function openPhoneHandbook(h:OrbitalHost):void {
+  const u=new PhoneUI(h),m=u.sheet('旧港货物图鉴');let page=0,selected=itemDefs[0].id,back=false,arrivals=false;
+  const draw=()=>{
+    h.ui.clear(m.body);const stock=remainingStock(h.state),defs=arrivals?stock.map(s=>getDef(s.stock.defId)):itemDefs,catalogue=cataloguePage(defs,page,3);
+    page=catalogue.page;if(!defs.some(d=>d.id===selected))selected=defs[0]?.id||itemDefs[0].id;
+    u.button(m.body,'货物目录',16,0,440,()=>{arrivals=false;page=0;draw();},{selected:!arrivals,name:'button-图鉴货物目录'});
+    u.button(m.body,'到货预告',504,0,440,()=>{arrivals=true;page=0;draw();},{selected:arrivals,name:'button-图鉴到货预告'});
+    u.button(m.body,back?'查看正面':'查看背面',992,0,440,()=>{back=!back;draw();},{name:'button-图鉴翻面'});
+    catalogue.items.forEach((def,i)=>{
+      const b=h.button(m.body,'',16,126+i*132,440,120,()=>{selected=def.id;back=false;draw();},{selected:def.id===selected,name:`button-图鉴-${def.id}`});
+      h.ui.object(b,def.id,8,6,112,108);u.row(b,def.name,132,4,296,108,30);
+    });
+    if(!defs.length)u.text(m.body,'今日供货预约已处理完毕。',16,160,440,310,36);
+    const def=getDef(selected),detail=u.panel(m.body,480,126,952,396);
+    h.ui.object(detail,def.id,16,10,300,260,{back});
+    u.row(detail,def.name,336,6,600,66,40);
+    const entry=arrivals?stock.find(s=>s.stock.defId===def.id)?.stock:undefined;
+    u.text(detail,`${entry?`预计叫价 ${entry.priceBand[0]}–${entry.priceBand[1]} Cr`:`全新参考价 ${def.value} Cr`}\n${def.description}`,336,86,600,216,30);
+    u.text(detail,`建议检测：${def.tools.map(id=>getTool(id).short).join('、')}\n${def.recipeId?`维修配方：${getRecipe(def.recipeId).name}`:'无专用维修配方'}`,20,282,912,106,28,C.cyan);
+    u.button(m.body,'上一页',16,536,440,()=>{page--;draw();},{disabled:page===0,name:'button-图鉴上一页'});
+    u.row(m.body,`${page+1} / ${catalogue.pages} · 检测前不代表当前批次状况`,504,536,440,108,28,C.muted);
+    u.button(m.body,'下一页',992,536,440,()=>{page++;draw();},{disabled:page+1>=catalogue.pages,name:'button-图鉴下一页'});
+  };draw();
 }

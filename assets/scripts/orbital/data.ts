@@ -1,4 +1,5 @@
 import type { ItemDef, ToolDef, MaterialDef, NpcDef, RecipeDef, OrderDef } from './types';
+import {CONTENT_ITEMS,CONTENT_NPCS,CONTENT_RECIPES,CONTENT_ORDERS,CONTENT_ORDER_EARLIEST,PEOPLE_PROFILES} from './ContentExpansion';
 
 export const itemDefs: ItemDef[] = [
   {
@@ -1053,6 +1054,10 @@ export const orderEarliest: Record<string,number> = {
 };
 
 export const bundleDef: ItemDef = {id:'BND-001',name:'舱门维护套组',category:'组装成品',value:390,sprite:10,size:[3,2],tools:['TOL-004','TOL-006'],description:'伺服器与轴承装在同一维护框内，双向限位已验证。',defect:'封签与接线记录完整。',clues:{'TOL-004':'双向回路闭合','TOL-006':'负载与限位通过'}};
+itemDefs.push(...CONTENT_ITEMS);npcs.push(...CONTENT_NPCS);recipes.push(...CONTENT_RECIPES);orderDefs.push(...CONTENT_ORDERS);
+Object.assign(orderEarliest,CONTENT_ORDER_EARLIEST);
+for(const npc of npcs)Object.assign(npc,PEOPLE_PROFILES[npc.id]||{});
+
 export function getDef(id:string):ItemDef {const v=id==='BND-001'?bundleDef:itemDefs.find(x=>x.id===id);if(!v)throw new Error('Unknown item '+id);return v;}
 export function getTool(id:string):ToolDef {const v=tools.find(x=>x.id===id);if(!v)throw new Error('Unknown tool '+id);return v;}
 export function getNpc(id:string):NpcDef {const v=npcs.find(x=>x.id===id);if(!v)throw new Error('Unknown NPC '+id);return v;}

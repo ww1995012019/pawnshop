@@ -2,6 +2,7 @@ import {tween,Component,Node,BlockInputEvents,Canvas,Camera,UITransform,Layers,C
 import type {ButtonOptions} from '../ui/GameUI';
 import {OrbitalUI,ORBITAL_PALETTE as C,PAPER_INK as INK,type HudIcon} from './OrbitalUI';
 import {OrbitalMotion} from './OrbitalMotion';
+import {createDayShutter} from './DayShutter';
 import {OrbitalPanels} from './OrbitalPanels';
 import {itemDefs,tools,orderDefs,npcs,getDef,getNpc,getTool} from './data';
 import {createOrbital,reduceOrbital,findItem,estimate,serializeOrbital,parseOrbital} from './model';
@@ -17,6 +18,9 @@ import {dailyVisitLimit,marketNpcId} from './Market';
 import {openGoodsHandbook} from './GoodsHandbook';
 import {Coach} from './Coach';
 import {TUTORIAL,PAGE_TIPS,openManual} from './Guide';
+import {PhoneUI} from './PhoneUI';
+import {openPeople} from './People';
+import {openStationEvents} from './StationEventUI';
 
 const INSPECTION_AREA:InspectionRect={x:212,y:200,width:1008,height:440};
 const INSPECTION_LOCAL:InspectionRect={x:-202,y:-202,width:404,height:404};
@@ -80,6 +84,114 @@ export class OrbitalMain extends Component implements OrbitalHost {
   private lastPage:PageId|null=null;
   private evidenceSeen=new Map<string,number>();
   private readonly cancelPointer=()=>{const cleanup=this.pointerCleanup;this.pointerCleanup=null;cleanup?.();this.ui?.resetPointer();};
+  private get phoneUI():PhoneUI{return new PhoneUI(this);}
+  private get inspectionArea():InspectionRect{return this.ui?.phone?{x:244,y:214,width:1324,height:330}:INSPECTION_AREA;}
+  private phoneMenu():void{
+    const u=this.phoneUI,m=u.sheet('营业菜单');
+    const actions:[string,()=>void][]=[
+      ['货物图鉴',()=>openGoodsHandbook(this)],['站务与租金',()=>{
+        const n=u.sheet('站务与经营记录');
+        const rent=Math.round(450*Math.pow(1.1,Math.floor((this.state.day-1)/7)));
+        u.text(n.body,`下一次租金：${7-((this.state.day-1)%7)} 天后 · ${rent} Cr\n站务关注 ${this.state.risk}/100\n现有货物 ${this.state.inventory.length} 件\n在办委托 ${this.state.orders.filter(o=>o.status==='active').length} 张`,24,24,1400,460,40);
+        u.button(n.body,'返回营业',24,536,1400,()=>n.close(),{tone:'gold'});
+      }],
+      [this.prefs.sound?'关闭声音':'开启声音',()=>{this.prefs.sound=!this.prefs.sound;this.savePrefs();}],
+      ['暂停与设置',()=>this.navigate('settings')],['导出经营档案',()=>this.exportSave()],['返回游戏',()=>{}],
+      ['旧港人物档案',()=>openPeople(this)],['每日站内消息',()=>openStationEvents(this)],
+    ];
+    actions.forEach(([text,fn],i)=>u.button(m.body,text,20+(i%2)*716,26+Math.floor(i/2)*150,688,()=>{m.close();fn();},{name:`phone-menu-${i}`}));
+  }
+  private phoneNegotiation():void{
+    const t=this.state.trade,it=t?.item||(t?.selectedUid?findItem(this.state,t.selectedUid):undefined);if(!t||!it)return;
+    const u=this.phoneUI,p=u.panel(this.content,32,132,716,630,'negotiation-console'),bounds=offerBounds(this.state,t,it);
+    const speech=u.text(p,`${getNpc(t.npcId).name} · 还价 ${t.rounds}/3 · 点按全文\n${t.line.slice(0,20)}${t.line.length>20?'…':''}`,20,8,676,106,30);
+    speech.on(Node.EventType.TOUCH_END,()=>{if(!this.busy)openPeople(this,t.npcId,t.line);});
+    if(t.locked){u.text(p,`已议定 ${t.price} Cr\n请在右侧确认钱货交割。`,20,180,676,260,44,C.orange);return;}
+    u.row(p,'我的还价',20,122,222,108,34,C.cyan);
+    const input=this.ui.container(p,244,122,448,108,'native-price-input');input.active=false;
+    const label=this.ui.label(input,String(this.offer),0,0,448,108,{size:52,mono:true,color:C.orange,align:'center',verticalAlign:'center',wrap:false}).getComponent<Label>(Label)!;
+    const edit=input.addComponent<EditBox>(EditBox);edit.textLabel=label;edit.inputMode=EditBox.InputMode.NUMERIC;edit.returnType=EditBox.KeyboardReturnType.DONE;edit.maxLength=5;edit.string=String(this.offer);input.active=true;label.verticalAlign=Label.VerticalAlign.CENTER;
+    let submit:Node;
+    const refresh=()=>this.ui.setButtonEnabled(submit,this.offer>=bounds.min&&this.offer<=bounds.max&&t.rounds<3);
+    input.on(EditBox.EventType.TEXT_CHANGED,()=>{this.offer=Number(edit.string.replace(/\D/g,''))||0;refresh();});
+    const change=(n:number)=>{this.offer=Math.max(bounds.min,Math.min(bounds.max,this.offer+n));edit.string=String(this.offer);refresh();};
+    u.button(p,'− 10 Cr',20,248,328,()=>change(-10),{name:'phone-offer-minus'});
+    u.button(p,'＋ 10 Cr',368,248,328,()=>change(10),{name:'phone-offer-plus'});
+    const relevant=it.evidence.filter(id=>getDef(it.defId).tools.includes(id));
+    u.button(p,this.chosenEvidence?`物证：${getTool(this.chosenEvidence).short}`:'选择支持还价的物证',20,378,676,()=>{
+      const m=u.sheet('选择还价物证');
+      if(!relevant.length)u.text(m.body,'还没有相关物证。先去鉴定台，取得这件实物的痕迹。',20,20,1400,400,40);
+      relevant.forEach((tool,i)=>u.button(m.body,getTool(tool).name,20+(i%2)*716,20+Math.floor(i/2)*190,688,()=>{m.close();this.chosenEvidence=tool;this.render();},{selected:this.chosenEvidence===tool}));
+    },{name:'phone-offer-evidence'});
+    submit=u.button(p,'提出当前还价',20,508,676,()=>this.dispatch({type:'OFFER',price:this.offer,evidence:this.chosenEvidence}),{tone:'gold',name:'phone-offer-submit'});refresh();
+  }
+  private phoneInspection(p:Node,it:OrbitalItem,d:Draft):void{
+    const u=this.phoneUI;
+    u.button(p,`物证 ${it.evidence.length}/6`,1240,128,328,()=>this.phoneEvidence(it),{name:'phone-evidence'});
+    u.text(p,`${getTool(this.tool).name}\n${it.evidence.includes(this.tool)?'证据已保存，可免费复测。':'打开工具操作，按步骤观察和记录。'}`,252,552,776,104,30,C.cyan);
+    u.button(p,'工具操作',1060,552,508,()=>this.phoneTool(it,d),{tone:'gold',name:'phone-tool-actions'});
+    this.zoomOut=u.button(p,'−',244,660,108,()=>this.changeZoom(-.1),{name:'phone-zoom-out'});
+    this.zoomIn=u.button(p,'＋',370,660,108,()=>this.changeZoom(.1),{name:'phone-zoom-in'});
+    u.button(p,'旋转',496,660,248,()=>{this.pose.angle+=30;this.applyInspectionPose();},{name:'button-旋转 R'});
+    u.button(p,this.back?'翻回正面':'翻到背面',762,660,346,()=>{this.back=!this.back;this.render();},{name:this.back?'button-翻回正面 F':'button-翻到背面 F'});
+    u.button(p,'实物归位',1126,660,442,()=>{this.resetInspection(it.uid);this.render();},{name:'button-实物归位'});
+    this.updateZoomControls();
+  }
+  private phoneEvidence(it:OrbitalItem):void{
+    const u=this.phoneUI,m=u.sheet(`物证册 · 估值 ${estimate(it).low}–${estimate(it).high} Cr`);let offset=0;
+    const draw=()=>{
+      this.ui.clear(m.body);
+      it.evidence.slice(offset,offset+3).forEach((id,i)=>{
+        u.row(m.body,getTool(id).name,20,i*166,1400,60,36,C.cyan);
+        u.text(m.body,getItemClue(it,id),20,62+i*166,1400,100,32);
+      });
+      if(!it.evidence.length)u.text(m.body,'从一处痕迹开始。选择仪器，打开「工具操作」逐步取证。\n首次鉴定一件实物消耗 1 AP，后续取证免费。',20,30,1400,380,38);
+      u.button(m.body,'上一页',20,536,440,()=>{offset=Math.max(0,offset-3);draw();},{disabled:offset===0});
+      u.button(m.body,'保存 · 返回柜台',504,536,440,()=>{m.close();this.navigate('counter');},{tone:'gold'});
+      u.button(m.body,'下一页',988,536,440,()=>{offset+=3;draw();},{disabled:offset+3>=it.evidence.length});
+    };draw();
+  }
+  private phoneTool(it:OrbitalItem,d:Draft):void{
+    const u=this.phoneUI,tool=this.tool,m=u.sheet(getTool(tool).name),already=it.evidence.includes(tool);
+    const commit=()=>{m.close();if(already)this.toolEffect(tool,this.content);else this.finishTool(it);};
+    const draw=()=>{
+      this.ui.clear(m.body);
+      const button=(text:string,x:number,y:number,w:number,fn:()=>void,name:string,selected=false)=>u.button(m.body,text,x,y,w,fn,{name,selected});
+      let ready=false,status='';
+      if(already){u.text(m.body,`证据已经保存。\n${getItemClue(it,tool)}\n本次复测不消耗行动点。`,20,20,1400,420,38);ready=true;}
+      else if(tool==='TOL-001'){
+        status=`逐一观察三处接缝疑点 · ${d.marks.size}/3`;
+        [0,1,2].forEach(i=>button(`${d.marks.has(i)?'✓ ':''}观察接缝 ${i+1}`,20+i*476,160,452,()=>{d.marks.add(i);draw();},`phone-mark-${i}`,d.marks.has(i)));ready=d.marks.size===3;
+      }else if(tool==='TOL-002'){
+        status=`${this.back?'背面旧编号':'先翻到背面，再扫描旧编号'} · 扫描 ${Math.round(d.uv*100)}%`;
+        button('翻到背面',20,160,688,()=>{this.back=true;this.render();draw();},'phone-uv-back',this.back);
+        u.button(m.body,'推进扫描',736,160,688,()=>{d.uv=Math.min(1,d.uv+.34);draw();},{disabled:!this.back,name:'phone-uv-scan'});ready=this.back&&d.uv>.85;
+      }else if(tool==='TOL-003'){
+        const targets=[.25,.55,.75];status='调整三条读数，使白色谱峰与参考值对齐。';
+        targets.forEach((target,i)=>{
+          const y=102+i*130;u.row(m.body,`${['青峰','橙峰','紫峰'][i]} · 参考 ${target}`,20,y,660,108,36);
+          button('−',736,y,128,()=>{d.peaks[i]=Math.max(0,d.peaks[i]-.1);draw();},`spectrum-${i}-minus`);
+          u.row(m.body,d.peaks[i].toFixed(1),900,y,280,108,44,C.orange);
+          button('＋',1296,y,128,()=>{d.peaks[i]=Math.min(1,d.peaks[i]+.1);draw();},`spectrum-${i}-plus`);
+        });ready=targets.every((n,i)=>Math.abs(d.peaks[i]-n)<.07);
+      }else if(tool==='TOL-004'){
+        status='触屏接线：先接正极，再接负极，然后读取回路。';
+        [0,1].forEach(i=>button(`${d.probe&(1<<i)?'✓ 已连接':'连接'}${i===0?'正极 ＋':'负极 −'}`,20+i*716,160,688,()=>{d.probe|=1<<i;draw();},`phone-probe-${i}`,!!(d.probe&(1<<i))));ready=d.probe===3;
+      }else if(tool==='TOL-005'){
+        const target=[30,60,70][getDef(it.defId).sprite%3],sum=[...d.weights].reduce((a,n)=>a+n,0);status=`参考质量 ${target}g · 砝码合计 ${sum}g`;
+        if(!d.tared)button('空秤校零',20,160,1404,()=>{d.tared=true;draw();},'phone-tare');
+        else [10,20,50].forEach((n,i)=>button(`${d.weights.has(n)?'✓ ':''}${n}g`,20+i*476,160,452,()=>{if(d.weights.has(n))d.weights.delete(n);else d.weights.add(n);draw();},`phone-weight-${n}`,d.weights.has(n)));
+        ready=d.tared&&sum===target;
+      }else{
+        status=`负载 ${Math.round(d.load*100)}% · 安全采样区 65–85%`;
+        button('减载 15%',20,160,688,()=>{d.load=Math.max(0,d.load-.15);draw();},'phone-load-minus');
+        button('增载 15%',736,160,688,()=>{d.load=Math.min(1,d.load+.15);draw();},'phone-load-plus');ready=d.load>=.65&&d.load<=.85;
+      }
+      if(!already){u.row(m.body,status,20,0,1404,86,34,C.cyan);if(tool!=='TOL-003')u.text(m.body,'完成上面的操作后，点击「记录证据」。\n关闭面板会保留本件实物的操作进度。',20,324,1404,168,34,C.muted);}
+      u.button(m.body,'返回工作台',20,536,688,()=>m.close(),{name:'phone-tool-return'});
+      u.button(m.body,already?'复测读数':'记录证据',736,536,688,commit,{tone:'gold',disabled:!ready,name:'phone-tool-record'});
+    };draw();
+  }
 
   start():void{void this.boot().catch(error=>{console.error('Orbital game initialization failed',error);const el=document.getElementById('load-status');if(el)el.textContent='空间站载入失败，请刷新重试。';});}
   private async boot():Promise<void>{
@@ -101,40 +213,31 @@ export class OrbitalMain extends Component implements OrbitalHost {
     input.on(Input.EventType.KEY_DOWN,this.onKey,this);void this.loadAudio();
     this.pointerCanvas=game.canvas;this.pointerCanvas?.addEventListener('pointerleave',this.cancelPointer);this.pointerCanvas?.addEventListener('mouseleave',this.cancelPointer);
     window.addEventListener('blur',this.cancelPointer);window.addEventListener('pointercancel',this.cancelPointer);window.addEventListener('resize',this.cancelPointer);
-    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v13',start:()=>this.startFromTitle(false),title:()=>!!this.titleScreen?.isValid,snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({coach:this.coach?.active?this.coachStep():null,page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>{this.dismissTitle();this.dispatch(a);},open:(p:PageId,uid?:string)=>{this.dismissTitle();this.navigate(p,uid);},reset:(seed='ORBITAL-TUTORIAL')=>{this.dismissTitle();this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
+    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v15',start:()=>this.startFromTitle(false),title:()=>!!this.titleScreen?.isValid,snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({coach:this.coach?.active?this.coachStep():null,page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>{this.dismissTitle();this.dispatch(a);},open:(p:PageId,uid?:string)=>{this.dismissTitle();this.navigate(p,uid);},reset:(seed='ORBITAL-TUTORIAL')=>{this.dismissTitle();this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
     (window as unknown as {__ORBITAL__:typeof debug;__GREYLINE__:typeof debug}).__ORBITAL__=debug;(window as unknown as {__GREYLINE__:typeof debug}).__GREYLINE__=debug;
     document.dispatchEvent(new CustomEvent('greyline-ready'));
     this.showTitle();
   }
-  /** Title screen over the live counter scene: continue, new shop or settings. */
+  /** Closed shop shutter with the saved date and the opening controls. */
   private showTitle():void{
-    const s=this.state,progress=s.day>1||s.ledger.length>0||s.completedTrades.length>0||!!s.trade;
+    const s=this.state,progress=s.day>1||s.ledger.length>0||s.completedTrades.length>0||!!s.trade,phone=this.ui.phone;
     const o=this.ui.container(this.ui.root,0,0,W,H,'title-screen');this.titleScreen=o;
     if(this.chrome?.isValid)this.chrome.active=false;if(this.content?.isValid)this.content.active=false;
     o.addComponent<BlockInputEvents>(BlockInputEvents);
-    const veil=this.ui.container(o,0,0,W,H,'title-veil').addComponent<Graphics>(Graphics);
-    for(let i=0;i<40;i++){veil.fillColor=new Color(2,5,9,Math.round(240-i*4.6));veil.rect(i*40,-H,40,H);veil.fill();}
-    veil.fillColor=new Color(0,0,0,150);veil.rect(0,-H,W,120);veil.fill();veil.rect(0,-120,W,120);veil.fill();
-    const mark=this.ui.container(o,118,150,120,120,'title-emblem').addComponent<Graphics>(Graphics);
-    mark.fillColor=new Color('#120B06');mark.circle(60,-60,58);mark.fill();mark.fillColor=new Color('#2A1A0E');mark.circle(60,-60,50);mark.fill();
-    mark.lineWidth=5;mark.strokeColor=new Color('#E8A86A');mark.ellipse(60,-60,54,20);mark.stroke();
-    mark.lineWidth=4;mark.strokeColor=new Color('#F2E6CC');mark.circle(60,-60,28);mark.stroke();
-    mark.fillColor=new Color('#FFC98F');mark.circle(110,-52,9);mark.fill();
-    this.ui.label(o,'轨道旧货局',112,282,820,110,{size:92,bold:true,color:'#F8EDD6',verticalAlign:'center',wrap:false,outline:'#1A0E05',outlineWidth:4,glow:'#E0893A70'});
-    this.ui.label(o,'回环九号 · 下层旧港的空间站当铺',118,392,800,36,{size:26,color:'#C9C2B2',verticalAlign:'center',wrap:false});
-    this.ui.label(o,'每件旧物，都有下一程。',118,434,800,32,{size:20,color:C.orange,verticalAlign:'center',wrap:false});
-    const start=this.button(o,progress?`继续营业 · 第 ${s.day} 天`:'开门营业',118,500,400,68,()=>this.startFromTitle(true),{tone:'gold',size:24,name:'title-start'});
-    this.button(o,'新开一家店',118,584,400,58,()=>{
+    createDayShutter(this.ui,o,s.day,'回环九号 · 下层旧港',{name:'title-shutter',shopSign:true});
+    const start=this.button(o,progress?'继续营业':'开门营业',phone?440:540,566,phone?720:520,phone?112:76,()=>this.startFromTitle(true),{tone:'gold',size:phone?38:28,name:'title-start'});
+    const keyY=phone?708:682,keyW=phone?344:300,keyH=phone?108:64,keySize=phone?34:22;
+    this.button(o,'新开一家店',phone?252:320,keyY,keyW,keyH,()=>{
       if(!progress){this.startFromTitle(true);return;}
+      if(this.ui.phone){this.phoneUI.confirm('新开一家店','当前进度会被新店覆盖。需要保留的话，请先返回设置并导出经营档案。',()=>{this.resetGame();this.startFromTitle(true);});return;}
       const m=this.ui.modal('新开一家店',{width:760,height:420});
       this.text(m.body,'当前进度会被新店覆盖。\n需要保留的话，先在设置里导出经营档案。',24,20,640,110,22,C.text);
       this.button(m.body,'返回',24,190,310,58,()=>m.close(),{tone:'quiet'});
       this.button(m.body,'确认新开',356,190,310,58,()=>{m.close();this.resetGame();this.startFromTitle(true);},{tone:'danger'});
-    },{tone:'quiet',size:20,name:'title-new'});
-    this.button(o,'玩法说明',118,656,192,58,()=>this.openHelp(),{tone:'quiet',size:20,name:'title-help'});
-    this.button(o,'设置',326,656,192,58,()=>{this.dismissTitle();this.navigate('settings');},{tone:'quiet',size:20,name:'title-settings'});
-    this.ui.label(o,'Enter 开始',W-260,H-58,220,28,{size:15,color:C.muted,align:'right',verticalAlign:'center',wrap:false});
-    this.ui.label(o,'orbital-p0-v13 · Cocos Creator 3.8.8',40,H-58,500,28,{size:13,color:'#6F7A78',verticalAlign:'center',wrap:false});
+    },{tone:'quiet',size:keySize,name:'title-new'});
+    this.button(o,'玩法说明',phone?628:650,keyY,keyW,keyH,()=>this.openHelp(),{tone:'quiet',size:keySize,name:'title-help'});
+    this.button(o,'设置',phone?1004:980,keyY,keyW,keyH,()=>{this.dismissTitle();this.navigate('settings');},{tone:'quiet',size:keySize,name:'title-settings'});
+    if(!phone)this.ui.label(o,'Enter 开始',600,824,400,32,{size:18,color:C.muted,align:'center',verticalAlign:'center',wrap:false});
     this.focused=start;this.ui.focusButton(start);
     this.ui.animateIn(o);
   }
@@ -153,8 +256,13 @@ export class OrbitalMain extends Component implements OrbitalHost {
     if(!this.titleScreen?.isValid)return;
     const fresh=this.state.day===1&&this.state.ledger.length===0&&!this.state.trade&&this.state.completedTrades.length===0;
     this.dismissTitle();this.sound('open');
-    if(animate)void this.play(()=>this.motion.sceneEntry());
-    if(fresh&&!Coach.tutorialDone())this.coach.start(TUTORIAL,{persist:true});
+    if(animate)void this.play(()=>this.motion.dayTransition(this.state.day,'回环九号 · 下层旧港',true));
+    if(this.ui.phone){
+      if(fresh){
+        let seen=false;try{seen=!!sys.localStorage.getItem('orbital-phone-help-v1');if(!seen)sys.localStorage.setItem('orbital-phone-help-v1','seen');}catch{}
+        if(!seen)this.openHelp();
+      }
+    }else if(fresh&&!Coach.tutorialDone())this.coach.start(TUTORIAL,{persist:true});
   }
   private save():void{try{sys.localStorage.setItem(SAVE,serializeOrbital(this.state));this.saveFailed=false;}catch{this.saveFailed=true;}}
   savePrefs():void{try{sys.localStorage.setItem(PREFS,JSON.stringify(this.prefs));}catch{}this.motion.configure({reducedMotion:this.prefs.reducedMotion});this.render();}
@@ -172,6 +280,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
   }
   dispatch(action:OrbitalAction):void{
     if(this.busy)return;
+    if(this.ui.phone)this.ui.dismissNotifications();
     const before=this.state,oldItem=before.trade?.item||(before.trade?.selectedUid?findItem(before,before.trade.selectedUid):null);
     const counterOrigin=this.counterObject?.isValid?{x:this.counterObject.position.x+210,y:-this.counterObject.position.y+158,size:316}:undefined;
     this.state=reduceOrbital(before,action);this.save();
@@ -220,12 +329,13 @@ export class OrbitalMain extends Component implements OrbitalHost {
   /** Inspection instruments play over the whole mat, centred on the item. */
   private toolEffect(tool:ToolId,parent:Node):void{
     const kind=['magnify','uv','spectrum','probe','scale','pulse'][tools.findIndex(t=>t.id===tool)];
-    this.effect(kind,parent,INSPECTION_AREA,this.inspectionEffectRect());
+    this.effect(kind,parent,this.inspectionArea,this.inspectionEffectRect());
   }
   private async play(run:(active:()=>boolean)=>Promise<void>):Promise<void>{
     const epoch=++this.epoch;this.busy=true;this.ui.pointer.refresh();this.motion.configure({reducedMotion:this.prefs.reducedMotion});
-    this.skipNode?.destroy();this.skipNode=this.ui.container(this.ui.root,1250,770,320,26,'skip-animation');
-    this.row(this.skipNode,'空格 · 跳过动画',0,0,320,26,14,C.text,'right');this.skipNode.on(Node.EventType.TOUCH_END,()=>this.skip());
+    this.skipNode?.destroy();
+    if(this.ui.phone){this.skipNode=this.ui.button(this.ui.root,'跳过动画',32,132,716,108,()=>this.skip(),{size:34,name:'skip-animation'});Object.assign(this.skipNode,{__action:()=>this.skip(),__enabled:true});}
+    else{this.skipNode=this.ui.container(this.ui.root,1250,770,320,26,'skip-animation');this.row(this.skipNode,'空格 · 跳过动画',0,0,320,26,14,C.text,'right');this.skipNode.on(Node.EventType.TOUCH_END,()=>this.skip());}
     try{await run(()=>epoch===this.epoch);}finally{if(epoch===this.epoch){this.busy=false;this.ui.pointer.refresh();this.skipNode?.removeFromParent();this.skipNode?.destroy();this.skipNode=null;this.setCounterVisible(true);}}
   }
   private skip():void{this.epoch++;this.motion?.finish();this.busy=false;this.ui.pointer.refresh();this.skipNode?.removeFromParent();this.skipNode?.destroy();this.skipNode=null;this.setCounterVisible(true);}
@@ -261,6 +371,9 @@ export class OrbitalMain extends Component implements OrbitalHost {
     const pageContent=this.content;this.chrome=this.ui.container(this.ui.root,0,0,W,H,'persistent-chrome');this.content=this.chrome;this.header();this.footer();for(const n of [...this.dialogueNodes,...this.counterTags])if(n.isValid)n.setParent(this.chrome);this.content=pageContent;
     // The title shows only the painted shop; page UI and HUD return when play starts.
     if(this.titleScreen?.isValid){this.titleScreen.setSiblingIndex(this.ui.root.children.length-1);this.chrome.active=false;pageContent.active=false;}
+    // Dispatch can redraw the workspace while a phone instrument or material sheet stays open.
+    // Those sheets must keep swallowing header/footer input after the chrome is rebuilt.
+    for(const overlay of this.ui.root.children.filter(n=>n.name==='modal-overlay'&&n.activeInHierarchy))overlay.setSiblingIndex(this.ui.root.children.length-1);
     this.motion.bindAmbient({parent:this.content,actor:this.actor||undefined,area:{x:310,y:160,width:860,height:500}});
     // Page change: the new workspace rises in; the HUD and dock stay put.
     if(this.lastPage!==null&&this.lastPage!==this.page&&!this.prefs.reducedMotion&&!this.titleScreen){
@@ -270,7 +383,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
       tween<Node>(node).to(.26,{position:new Vec3(node.position.x,y,0)},{easing:'cubicOut'}).start();
     }
     this.lastPage=this.page;
-    if(this.coach&&!this.titleScreen){
+    if(this.coach&&!this.titleScreen&&!this.ui.phone){
       const tip=PAGE_TIPS[this.page];
       if(!this.coach.active&&tip&&Coach.tutorialDone()&&!Coach.tipSeen(tip.id))this.coach.start([tip],{onFinish:()=>Coach.markTip(tip.id)});
       this.coach.refresh();
@@ -278,6 +391,15 @@ export class OrbitalMain extends Component implements OrbitalHost {
   }
   private header():void{
     const s=this.state,p=this.content;
+    if(this.ui.phone){
+      const ui=this.phoneUI,g=ui.panel(p,24,8,968,108,'player-resource-hud');
+      ui.row(g,`第 ${s.day} 天`,24,0,224,108,36);
+      ui.row(g,`行动 ${s.ap}/12`,252,0,284,108,36,C.cyan);
+      this.hudCash=s.cash;this.hudCashLabel=null;
+      ui.row(g,`${s.cash.toLocaleString()} Cr`,552,0,396,108,40,C.orange);
+      ui.button(p,'玩法说明',1012,8,264,()=>this.openHelp(),{name:'button-帮助'});
+      ui.button(p,'菜单',1296,8,280,()=>this.phoneMenu(),{name:'button-菜单'});return;
+    }
     const plate=this.ui.texturePanel(p,20,12,330,76,{skin:'rail',name:'shop-nameplate'});
     const logo=this.ui.container(plate,18,14,48,48,'shop-orbit-mark').addComponent<Graphics>(Graphics);
     logo.fillColor=new Color('#120B06');logo.circle(24,-24,24);logo.fill();
@@ -331,9 +453,20 @@ export class OrbitalMain extends Component implements OrbitalHost {
 站务关注：${s.risk} / 100
 现有货物：${s.inventory.length} 件 · 在办委托：${s.orders.filter(o=>o.status==='active').length} 张`,26,12,560,175,23,C.text);
     this.button(m.body,'查看经营日结',26,205,560,48,()=>{m.close();this.navigate('report');},{tone:'quiet',size:18});
+    this.button(m.body,'每日站内消息',26,267,272,48,()=>{m.close();openStationEvents(this);},{tone:'gold',size:18});
+    this.button(m.body,'旧港人物档案',314,267,272,48,()=>{m.close();openPeople(this);},{tone:'quiet',size:18});
   }
   private footer():void{
     const nav:[PageId,string,HudIcon][]=[['counter','柜台','counter'],['inspect','鉴定','inspect'],['repair','维修','repair'],['warehouse','仓储','warehouse'],['orders','订单','orders'],['report','日结','report']];
+    if(this.ui.phone){
+      const p=this.phoneUI.panel(this.content,20,776,1560,120,'navigation-dock');
+      nav.forEach(([page,title,icon],i)=>{
+        const selected=this.page===page||(page==='counter'&&this.page==='trade');
+        const b=this.button(p,'',8+i*258,5,248,110,()=>this.navigate(page),{selected,tone:'quiet',disabled:page==='inspect'&&!this.currentItem(),name:`button-${String(i+1).padStart(2,'0')} ${title}`});
+        const face=b.getChildByName('tech-button-surface')||b;this.ui.hudIcon(face,icon,18,28,54,54);
+        this.phoneUI.row(face,title,90,0,150,110,36,selected?'#FFE0B0':C.text);
+      });return;
+    }
     const p=this.ui.texturePanel(this.content,372,806,856,88,{skin:'rail',name:'navigation-dock'});
     const active=this.state.orders.filter(o=>o.status==='active').length;
     nav.forEach(([page,title,icon],i)=>{
@@ -351,7 +484,8 @@ export class OrbitalMain extends Component implements OrbitalHost {
     const p=this.content,s=this.state,t=s.trade,it=t?.item||(t?.selectedUid?findItem(s,t.selectedUid):undefined),npc=t?getNpc(t.npcId):getNpc(marketNpcId(s));
     this.shopFixtures();
     this.ui.setMood(npc.id,t?(t.locked?'happy':t.rounds>=2?'reject':t.rounds>0?'question':it&&it.evidence.length>0?'focused':'neutral'):s.day>=3?'tired':'neutral');
-    this.actor=t?this.ui.customer(p,npc.id,445,138,460,440):null;
+    this.actor=t?this.ui.customer(p,npc.id,this.ui.phone?50:445,138,this.ui.phone?620:460,440):null;
+    if(this.actor){this.actor.on(Node.EventType.TOUCH_END,()=>{if(!this.busy)openPeople(this,npc.id,t?.line);});this.ui.bindPointer(this.actor,{cursor:'pointer',disabled:()=>this.busy});}
     // Reuse the original painted foreground so the visitor stands behind the actual counter.
     if(!this.counterForeground){
       const source=this.ui.frames.get('orbital-counter');
@@ -359,7 +493,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     }
     this.ui.frame(p,this.counterForeground||undefined,0,565,W,335,{fit:'stretch',name:'painted-counter-foreground'});
     if(it){
-      const trading=this.page==='trade',ix=690,iy=trading?358:398;
+      const trading=this.page==='trade',ix=this.ui.phone?170:690,iy=this.ui.phone?252:trading?358:398;
       const sh=this.ui.container(p,ix+30,iy+298,360,25,'counter-shadow');this.counterShadow=sh;const g=sh.addComponent<Graphics>(Graphics);g.fillColor=new Color('#030A0D99');g.ellipse(180,-10,166,12);g.fill();
       this.counterObject=this.ui.object(p,it.defId,ix,iy,420,316,{damaged:it.condition<.75&&!it.repaired,repaired:it.repaired});
       this.counterObject.on(Node.EventType.TOUCH_END,()=>this.navigate('inspect',it.uid));this.ui.bindPointer(this.counterObject,{cursor:'pointer',disabled:()=>this.busy});
@@ -373,10 +507,11 @@ export class OrbitalMain extends Component implements OrbitalHost {
         this.counterTags.push(tag);
       }
     }else if(t?.kind==='sell'){
-      this.button(p,'打开仓库 · 为客人挑选旧物',704,620,408,56,()=>this.navigate('warehouse'),{tone:'gold',size:20});
+      this.button(p,'打开仓库 · 为客人挑选旧物',this.ui.phone?32:704,this.ui.phone?394:620,this.ui.phone?716:408,this.ui.phone?108:56,()=>this.navigate('warehouse'),{tone:'gold',size:this.ui.phone?32:20});
     }
     // Counter terminal: a physical till with a CRT read-out and brass keys.
     const panel=this.ui.texturePanel(p,1156,448,388,320,{skin:'socket',name:'counter-terminal'});
+    if(this.ui.phone){panel.setPosition(780,-122);panel.setScale(2.05,2.05,1);}
     const scr=this.ui.screen(panel,18,18,352,132,'terminal-screen');
     const glowText=(t:string,x:number,y:number,w:number,h:number,size:number,colour:string,glow:string,mono=false,align:'left'|'right'|'center'='left')=>
       this.ui.label(scr,t,x,y,w,h,{size:size*(this.prefs.largeText?1.06:1),color:colour,glow,mono,align,verticalAlign:'center',wrap:false});
@@ -401,9 +536,16 @@ export class OrbitalMain extends Component implements OrbitalHost {
       this.button(panel,closed?'六位预约已处理':'接待下一位来客',18,166,352,58,()=>this.dispatch({type:'ARRIVE'}),{tone:'gold',disabled:closed||s.phase!=='open'||s.ap<1,size:21});
       this.button(panel,'整理后仓',18,238,352,52,()=>this.navigate('warehouse'),{tone:'quiet',size:17});
     }
-    if(this.page==='trade'&&t)this.negotiation();
+    if(this.page==='trade'&&t){if(this.ui.phone)this.phoneNegotiation();else this.negotiation();}
     else{
       const line=t?t.line:s.notice||'回环九号下层港，旧货局今日开门。';
+      if(this.ui.phone){
+        const dialogue=this.button(p,'',32,536,716,228,()=>t?openPeople(this,npc.id,line):openStationEvents(this),{tone:'quiet',name:'phone-dialogue'});
+        this.phoneUI.row(dialogue,t?npc.name:'营业广播',24,8,668,54,32,C.orange);
+        this.phoneUI.text(dialogue,`${line.slice(0,64)}${line.length>64?'…':''}`,24,66,668,120,28);
+        this.phoneUI.row(dialogue,t?'点按阅读全文与人物档案':'点按查看每日站内消息',24,188,668,32,22,C.muted);
+        return;
+      }
       const dialogue=this.speechBox(p,36,654,612,136,t?npc.name:'营业广播',t?npc.title:'回环九号');
       const speech=this.ui.label(dialogue,line,28,36,556,70,{size:20,lineHeight:30,color:'#F2ECDD',wrap:true,overflow:'clamp'}).getComponent<Label>(Label)!;
       const hint=this.ui.label(dialogue,'',360,104,226,20,{size:12,color:C.muted,align:'right',wrap:false}).getComponent<Label>(Label)!;
@@ -421,6 +563,12 @@ export class OrbitalMain extends Component implements OrbitalHost {
     return box;
   }
   private tradeActions():void{
+    if(this.ui.phone){
+      const u=this.phoneUI,m=u.sheet('交易处理'),t=this.state.trade;if(!t)return;
+      u.text(m.body,`已还价 ${t.rounds} 次 · 最多 3 次\n拒绝不会转移钱货。抵押品按合同保管，不可当作自有货出售。`,20,20,1400,280,38);
+      u.button(m.body,'礼貌拒绝',20,386,688,()=>{m.close();this.dispatch({type:'REFUSE'});});
+      u.button(m.body,'抵押合同',736,386,688,()=>{m.close();this.pawnContract();},{disabled:t.kind==='sell'||!t.item});return;
+    }
     const t=this.state.trade;if(!t)return;const m=this.ui.modal('交易处理',{width:620,height:390});
     this.button(m.body,'礼貌拒绝',20,24,520,54,()=>{m.close();this.dispatch({type:'REFUSE'});},{tone:'quiet',size:20});
     this.button(m.body,'抵押合同',20,102,520,54,()=>{m.close();this.pawnContract();},{tone:'quiet',disabled:t.kind==='sell'||!t.item,size:20});
@@ -449,6 +597,11 @@ export class OrbitalMain extends Component implements OrbitalHost {
     }
   }
   private ending():void{
+    if(this.ui.phone){
+      const u=this.phoneUI,p=u.panel(this.content,24,132,1552,630),s=this.state;
+      u.text(p,`${s.outcome||'本轮经营结束'}\n经营 ${s.day} 天 · 完成 ${s.completedTrades.length} 笔交易\n履约 ${s.orders.filter(o=>o.status==='done').length} 张订单 · 现金 ${s.cash} Cr\n站务关注 ${s.risk}/100`,28,30,1496,410,42);
+      u.button(p,'导出经营档案',28,488,728,()=>this.exportSave());u.button(p,'重新开店',784,488,740,()=>this.navigate('settings'),{tone:'gold'});return;
+    }
     const p=this.ui.techPanel(this.content,280,177,1040,560,'回环九号 / 经营回顾',C.orange),s=this.state;
     this.text(p,s.outcome||'这一段航程，已经留在档案里。',35,83,970,65,36,C.cyan,'center');
     this.text(p,`经营 ${s.day} 天 · 完成 ${s.completedTrades.length} 笔钱货交易\n履约 ${s.orders.filter(o=>o.status==='done').length} 张订单 · 期末现金 ${s.cash} Cr\n站务关注 ${s.risk} / 100 · 货物和每笔流水均可导出回看`,90,195,860,150,25,C.text,'center');
@@ -526,6 +679,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
   private pawnContract():void{
     const t=this.state.trade;if(!t)return;
     const it=t.item;if(!it)return;const a=estimate(it),principal=Math.floor((a.low+a.high)/2*.4);
+    if(this.ui.phone){this.phoneUI.confirm('抵押保管合同',`${getDef(it.defId).name}\n本金 ${principal} Cr · 3 日赎期 + 1 日宽限\n服务费 8%，本金与费用分开记账。\n保管期间不得出售、维修或拆解。`,()=>this.dispatch({type:'PAWN',tradeId:t.id}));return;}
     const m=this.ui.modal('抵押保管合同',{width:900,height:540});
     this.ui.item(m.body,it.defId,20,20,235,220);
     this.text(m.body,`本金 ${principal} Cr\n3 日赎期 + 1 日宽限\n服务费 8% · 本金与费用分开记账\n保管期间不得出售、维修或拆解`,285,23,510,190,24);
@@ -535,19 +689,28 @@ export class OrbitalMain extends Component implements OrbitalHost {
     const p=this.content,it=this.currentItem();if(!it){this.text(p,'先从柜台或仓库选择一件实物。',400,350,800,80,32,C.text,'center');return;}this.selected=it.uid;
     if(this.poseUid!==it.uid)this.resetInspection(it.uid);
     const def=getDef(it.defId),draft=this.draft();
-    const left=this.ui.container(p,32,152,148,616,'inspection-tools');
+    const phone=this.ui.phone,area=this.inspectionArea;
+    const left=this.ui.container(p,phone?24:32,phone?124:152,phone?200:148,phone?648:616,'inspection-tools');
+    if(phone){
+      tools.forEach((t,i)=>{
+        const b=this.button(left,t.short,0,i*108,200,108,()=>{this.tool=t.id;this.render();},{selected:this.tool===t.id,tone:it.evidence.includes(t.id)?'green':'quiet',size:34,name:`tool-target-${t.id}`});
+        this.ui.tooltip(b,t.name);
+      });
+    }else{
     this.row(left,'鉴定仪器',0,-30,148,25,13,C.muted);
     tools.forEach((t,i)=>{
       const button=this.button(left,'',0,i*94,148,80,()=>{this.tool=t.id;this.render();},{selected:this.tool===t.id,tone:'quiet',name:`tool-target-${t.id}`});
       this.ui.toolIcon(button,t.id,8,10,58,58);this.row(button,t.short,77,15,65,28,17,this.tool===t.id?C.text:C.muted);this.row(button,it.evidence.includes(t.id)?'已存证':'待取证',77,44,65,22,11,it.evidence.includes(t.id)?C.green:C.muted);
     });
+    }
     const head=this.ui.texturePanel(p,206,104,Math.min(560,Math.max(300,def.name.length*34+150)),78,{skin:'strip',name:'inspection-title-plate'});
     this.ui.label(head,def.name,22,8,520,40,{size:30,bold:true,color:'#F6EBD4',verticalAlign:'center',wrap:false,outline:'#05080B',outlineWidth:2});
     this.row(head,this.back?'背面结构':'正面观察',24,48,300,22,14,C.cyan);
-    const viewport=this.ui.container(p,INSPECTION_AREA.x,INSPECTION_AREA.y,INSPECTION_AREA.width,INSPECTION_AREA.height,'inspection-viewport');
+    if(phone){head.setPosition(244,-128);this.phoneUI.row(head,def.name,22,0,800,76,38);head.children.slice(0,-1).forEach(n=>n.active=false);}
+    const viewport=this.ui.container(p,area.x,area.y,area.width,area.height,'inspection-viewport');
     viewport.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
     this.inspectionShadow=this.ui.container(viewport,0,0,1,1,'inspection-object-shadow');this.inspectionShadow.addComponent<Graphics>(Graphics);
-    const obj=this.ui.container(viewport,this.pose.x-INSPECTION_AREA.x,this.pose.y-INSPECTION_AREA.y,404,404,'InspectionObject');
+    const obj=this.ui.container(viewport,this.pose.x-area.x,this.pose.y-area.y,404,404,'InspectionObject');
     obj.getComponent<UITransform>(UITransform)!.setAnchorPoint(.5,.5);this.object=obj;
     const inspectionArt=this.ui.object(obj,it.defId,-202,-202,404,404,{back:this.back,damaged:it.condition<.75&&!it.repaired,repaired:it.repaired});inspectionArt.name='inspection-item-art';
     const hit=getItemHitBounds(it.defId,this.back,404),transform=obj.getComponent<UITransform>(UITransform)!;
@@ -569,6 +732,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     obj.on(Node.EventType.MOUSE_WHEEL,(e:EventMouse)=>{const delta=e.getScrollY();if(!this.busy&&delta!==0)this.changeZoom(delta>0?.08:-.08);});
     this.applyInspectionPose();
     this.inspectionFx??=new InspectionFeedback(this.ui);this.inspectionFx.reducedMotion=this.prefs.reducedMotion;this.inspectionFx.bind(p,inspectionArt,this.inspectionShadow);
+    if(phone){this.phoneInspection(p,it,draft);return;}
     this.zoomOut=this.button(p,'−',420,654,48,40,()=>this.changeZoom(-.1),{tone:'quiet'});
     this.zoomIn=this.button(p,'＋',476,654,48,40,()=>this.changeZoom(.1),{tone:'quiet'});
     const key=(k:string)=>this.ui.touch?'':` ${k}`;
@@ -612,18 +776,19 @@ export class OrbitalMain extends Component implements OrbitalHost {
   private draft():Draft{const key=this.selected+'/'+this.tool;let d=this.drafts.get(key);if(!d){d={marks:new Set(),uv:0,peaks:[.1,.1,.1],probe:0,tared:false,weights:new Set(),load:0};this.drafts.set(key,d);}return d;}
   updateInspectionFeedback(dt:number):void{this.inspectionFx?.update(dt);}
   disposeInspectionFeedback():void{this.inspectionFx?.clear();this.inspectionFx=null;}
-  private resetInspection(uid=this.selected):void{this.inspectionFx?.clear();this.poseUid=uid;this.pose={...INSPECTION_HOME};this.zoom=1;this.back=false;this.object=null;this.objectDragging=false;}
+  private resetInspection(uid=this.selected):void{this.inspectionFx?.clear();this.poseUid=uid;this.pose=this.ui?.phone?{x:906,y:379,angle:0}:{...INSPECTION_HOME};this.zoom=1;this.back=false;this.object=null;this.objectDragging=false;}
   private inspectionLocalBounds():InspectionRect{const it=this.currentItem();return it?getItemHitBounds(it.defId,this.back,404):INSPECTION_LOCAL;}
-  private inspectionPlacement(){return constrain({...this.pose,zoom:this.zoom},this.inspectionLocalBounds(),INSPECTION_AREA,{minZoom:.45,maxZoom:1.35,padding:8,defaults:{...INSPECTION_HOME,zoom:1}});}
+  private inspectionPlacement(){return constrain({...this.pose,zoom:this.zoom},this.inspectionLocalBounds(),this.inspectionArea,{minZoom:.45,maxZoom:1.35,padding:8,defaults:{...INSPECTION_HOME,zoom:1}});}
   private inspectionEffectRect(){return this.inspectionPlacement().aabb;}
   private applyInspectionPose():void{
     const fit=this.inspectionPlacement();this.pose={x:fit.pose.x,y:fit.pose.y,angle:fit.pose.angle};this.zoom=fit.pose.zoom;
-    if(this.object?.isValid){this.object.setPosition(this.pose.x-INSPECTION_AREA.x,-(this.pose.y-INSPECTION_AREA.y));this.object.angle=this.pose.angle;this.object.setScale(fit.pose.zoom,fit.pose.zoom,1);}
-    if(this.inspectionShadow?.isValid){const {aabb}=fit,g=this.inspectionShadow.getComponent<Graphics>(Graphics)!;const radius=Math.min(aabb.width*.36,210)*(this.objectDragging?.72:1);this.inspectionShadow.setPosition(aabb.x+aabb.width/2-INSPECTION_AREA.x,-Math.min(INSPECTION_AREA.height-10,aabb.y+aabb.height-INSPECTION_AREA.y-9));g.clear();g.fillColor=new Color(this.objectDragging?'#02080B29':'#02080B61');g.ellipse(0,0,radius,Math.max(5,Math.min(13,radius*.06)));g.fill();}
+    const area=this.inspectionArea;
+    if(this.object?.isValid){this.object.setPosition(this.pose.x-area.x,-(this.pose.y-area.y));this.object.angle=this.pose.angle;this.object.setScale(fit.pose.zoom,fit.pose.zoom,1);}
+    if(this.inspectionShadow?.isValid){const {aabb}=fit,g=this.inspectionShadow.getComponent<Graphics>(Graphics)!;const radius=Math.min(aabb.width*.36,210)*(this.objectDragging?.72:1);this.inspectionShadow.setPosition(aabb.x+aabb.width/2-area.x,-Math.min(area.height-10,aabb.y+aabb.height-area.y-9));g.clear();g.fillColor=new Color(this.objectDragging?'#02080B29':'#02080B61');g.ellipse(0,0,radius,Math.max(5,Math.min(13,radius*.06)));g.fill();}
     this.updateZoomControls();
   }
   private updateZoomControls():void{
-    const max=constrain({...this.pose,zoom:1.35},this.inspectionLocalBounds(),INSPECTION_AREA,{minZoom:.45,maxZoom:1.35,padding:8}).pose.zoom;
+    const max=constrain({...this.pose,zoom:1.35},this.inspectionLocalBounds(),this.inspectionArea,{minZoom:.45,maxZoom:1.35,padding:8}).pose.zoom;
     for(const [node,enabled]of [[this.zoomIn,this.zoom<max-.005],[this.zoomOut,this.zoom>.455]] as const)if(node?.isValid){this.ui.setButtonEnabled(node,enabled);Object.assign(node,{__enabled:enabled});}
     if(this.scaleLabel?.isValid)this.scaleLabel.string=`${this.zoom.toFixed(1)}×`;
   }
@@ -730,6 +895,10 @@ export class OrbitalMain extends Component implements OrbitalHost {
     node.on(Node.EventType.TOUCH_END,finish);node.on(Node.EventType.TOUCH_CANCEL,finish);
   }
   private confirmClosing():void{
+    if(this.ui.phone){
+      const rent=this.state.day%7===0?Math.round(450*Math.pow(1.1,Math.floor((this.state.day-1)/7))):0;
+      this.phoneUI.confirm('结束今天的营业',`剩余 ${this.state.ap} AP · 现金 ${this.state.cash} Cr\n能源维护 20 Cr · 本日租金 ${rent} Cr\n未完成的订单与保管原物会延续至次日。`,()=>this.dispatch({type:'SETTLE'}));return;
+    }
     const m=this.ui.modal('结束今天的营业',{width:900,height:520});
     this.text(m.body,`剩余 ${this.state.ap} AP · 现金 ${this.state.cash} Cr\n能源维护 20 Cr${this.state.day%7===0?'，本日租金450 Cr':''}\n未完成的订单与保管货物会延续至次日。`,45,35,740,160,28);
     this.button(m.body,'继续营业',45,260,330,55,()=>m.close(),{tone:'quiet'});

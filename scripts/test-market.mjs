@@ -8,12 +8,12 @@ const out=resolve('.cache/market-tests');mkdirSync(out,{recursive:true});
 const compile=spawnSync(process.execPath,['node_modules/typescript/bin/tsc','--strict','--target','ES2019','--module','commonjs','--moduleResolution','node','--skipLibCheck','--outDir',out,'assets/scripts/orbital/model.ts'],{stdio:'inherit'});
 if(compile.status)process.exit(compile.status);
 const require=createRequire(import.meta.url),g=require(resolve(out,'model.js'));
-assert.equal(g.itemDefs.length,36,'market expansion adds twelve distinct goods');
-assert.equal(g.orderDefs.length,24,'orders continue after the three-day tutorial');
+assert.equal(g.itemDefs.length,56,'market expansion adds twenty more distinct goods');
+assert.equal(g.orderDefs.length,32,'orders continue after the three-day tutorial');
 const market=require(resolve(out,'Market.js')),readings=require(resolve(out,'ItemReadings.js'));
 const state=g.createOrbital('MARKET-A');
 assert.equal(market.dailyVisitLimit(state),6,'six visitors can arrive each day');
-const expansion=g.itemDefs.filter(d=>Number(d.id.slice(4))>=61);
+const expansion=g.itemDefs.filter(d=>Number(d.id.slice(4))>=61&&Number(d.id.slice(4))<=72);
 assert.equal(new Set(expansion.map(d=>d.name)).size,12);
 assert.equal(new Set(expansion.map(d=>d.art.index)).size,12);
 assert.ok(expansion.every(d=>d.art.front==='orbital-expansion-front'&&d.art.back==='orbital-expansion-back'&&d.art.columns===4&&d.art.rows===3));
@@ -27,9 +27,9 @@ for(let day=1;day<=3;day++)for(let n=0;n<2;n++){
  assert.equal(stock.sourceVerified,!(day===3&&n===0));
  assert.equal(stock.lotId,undefined,'opening physical instances retain their legacy identity');
 }
-const collect=s=>Array.from({length:12},(_,d)=>[0,2,4].map(slot=>market.marketStock(s,d+4,slot))).flat();
+const collect=s=>Array.from({length:21},(_,d)=>[0,2,4].map(slot=>market.marketStock(s,d+1,slot))).flat();
 const deck=collect(state),other=collect(g.createOrbital('MARKET-B'));
-assert.equal(new Set(deck.map(d=>d.defId)).size,36,'one twelve-day supply deck covers every real good');
+assert.equal(new Set(deck.map(d=>d.defId)).size,56,'twenty-one-day supply covers every real good');
 assert.notDeepEqual(deck,other,'different seeds produce different supplies and conditions');
 assert.deepEqual(deck,collect(state),'seeded supplies are stable across repeated calls');
 assert.ok(new Set(deck.map(d=>d.condition)).size>3&&deck.some(d=>!d.working)&&deck.some(d=>d.working));
@@ -52,7 +52,7 @@ for(let i=0;i<6;i++){
 assert.equal(g.reduceOrbital({...state,cursor:6},{type:'ARRIVE'}).trade,null);
 assert.ok(g.parseOrbital({...state,cursor:6}));assert.equal(g.parseOrbital({...state,cursor:7}),null);
 const old=JSON.parse(unchanged);old.day=10;old.orders=old.orders.slice(0,12);old.orders[0].status='done';
-const migrated=g.parseOrbital(old);assert.ok(migrated);assert.equal(migrated.orders.length,24);
+const migrated=g.parseOrbital(old);assert.ok(migrated);assert.equal(migrated.orders.length,32);
 assert.equal(migrated.orders[0].status,'done');
 assert.ok(migrated.orders.filter(o=>Number(o.id.slice(4))>12&&g.getOrder(o.id).dueDay<10).every(o=>o.status==='failed'),'newly migrated expired work stays expired');
 assert.equal(g.parseOrbital({...old,orders:old.orders.slice(1)}),null,'missing original order is corrupt');

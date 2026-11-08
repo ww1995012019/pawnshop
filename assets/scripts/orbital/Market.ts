@@ -18,8 +18,10 @@ function shuffled(seed:string,cycle:number):string[] {
   return ids;
 }
 function seededId(s:MarketState,day:number,slot:number):string {
-  const index=day<=3?day-1:(day-4)*3+Math.floor(slot/2);
-  const cycle=Math.floor(index/itemDefs.length)+(day<=3?100:0);
+  // The last supply slot in each opening day covers the tail of the main deck.
+  // D4–21 have 54 supply slots; these three bridge slots make all 56 models reachable.
+  const index=day<=3?54+day-1:(day-4)*3+Math.floor(slot/2);
+  const cycle=Math.floor(index/itemDefs.length);
   return shuffled(s.seed,cycle)[index%itemDefs.length];
 }
 export function marketStock(s:MarketState,day=s.day,slot=s.cursor):MarketStock {

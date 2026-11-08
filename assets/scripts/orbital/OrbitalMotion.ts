@@ -1,5 +1,6 @@
 import {Color,Graphics,Mask,Node,Tween,UIOpacity,UITransform,Vec3} from 'cc';
 import type {OrbitalUI} from './OrbitalUI';
+import {createDayShutter} from './DayShutter';
 
 export interface OrbitalPoint {x:number;y:number}
 export interface OrbitalRect extends OrbitalPoint {width?:number;height?:number}
@@ -276,38 +277,23 @@ export class OrbitalMotion {
     },()=>this.drop(clip));
   }
 
-  /** Full-screen shutter between days: plates close, the day plate shows, plates open. */
-  dayTransition(day:number,caption:string):Promise<void>{
+  /** Between days the shutter closes first; the title starts with it already closed. */
+  dayTransition(day:number,caption:string,opening=false):Promise<void>{
     if(this.disposed||!this.root.isValid)return Promise.resolve();
-    const layer=this.own(this.ui.container(this.root,0,0,1600,900,'day-shutter'));
+    const {layer,top,bottom,plate,dayLabel}=createDayShutter(this.ui,this.root,day,caption,{shopSign:opening});
+    this.own(layer);
     layer.setSiblingIndex(this.root.children.length-1);
-    const top=this.ui.container(layer,0,0,1600,450,'shutter-top'),bottom=this.ui.container(layer,0,450,1600,450,'shutter-bottom');
-    for(const [plate,flip] of [[top,false],[bottom,true]] as [Node,boolean][]){
-      const g=plate.addComponent<Graphics>(Graphics);
-      g.fillColor=this.color('#1A2124');g.rect(0,-450,1600,450);g.fill();
-      g.fillColor=this.color('#232C30');for(let y=18;y<450;y+=64){g.rect(0,-y-30,1600,30);}g.fill();
-      g.strokeColor=this.color('#0B0F11');g.lineWidth=3;for(let y=18;y<450;y+=64){g.moveTo(0,-y);g.lineTo(1600,-y);}g.stroke();
-      // Hazard edge where the plates meet.
-      const edge=flip?-4:-446;g.fillColor=this.color('#E0A16C');g.rect(0,edge-4,1600,8);g.fill();
-      g.fillColor=this.color('#141414');for(let x=-40;x<1640;x+=56){g.moveTo(x,edge+4);g.lineTo(x+24,edge+4);g.lineTo(x+44,edge-4);g.lineTo(x+20,edge-4);g.close();}g.fill();
-      g.fillColor=this.color('#5A666A');for(let x=60;x<1600;x+=240){g.circle(x,flip?-40:-410,7);}g.fill();
-    }
-    const plate=this.ui.container(layer,560,372,480,156,'shutter-day-plate');
-    const pg=plate.addComponent<Graphics>(Graphics);
-    pg.fillColor=this.color('#0A0E10E8');pg.roundRect(-6,-162,492,168,14);pg.fill();
-    pg.fillColor=this.color('#2B1A0E');pg.roundRect(0,-156,480,156,12);pg.fill();
-    pg.strokeColor=this.color('#E0A16C');pg.lineWidth=3;pg.roundRect(3,-153,474,150,10);pg.stroke();
-    const dayLabel=this.ui.label(plate,`第 ${day} 天`,0,22,480,72,{size:56,bold:true,color:'#FFE3BC',align:'center',verticalAlign:'center',wrap:false});
-    this.ui.label(plate,caption,0,98,480,36,{size:20,color:'#E9C9A0',align:'center',verticalAlign:'center',wrap:false});
     this.track(plate,'day-shutter');
-    return this.run('day-shutter',1.7,()=>this.attached(layer),p=>{
-      const close=ease(clamp(p/.26)),open=smooth(clamp((p-.74)/.26));
+    return this.run(opening?'day-shutter-opening':'day-shutter',opening?.94:1.7,()=>this.attached(layer),p=>{
+      const close=opening?1:ease(clamp(p/.26)),open=smooth(clamp(opening?(p-.12)/.88:(p-.74)/.26));
       const shut=close*(1-open);
       top.setPosition(0,450*(1-shut));bottom.setPosition(0,-450-450*(1-shut));
-      const show=clamp((p-.2)/.1)*(1-clamp((p-.72)/.08));
+      const show=opening?1-clamp((p-.08)/.3):clamp((p-.2)/.1)*(1-clamp((p-.72)/.08));
       this.opacity(plate).opacity=Math.round(255*show);
-      plate.setScale(.92+.08*ease(clamp((p-.2)/.18)),.92+.08*ease(clamp((p-.2)/.18)),1);
-      if(dayLabel.isValid)dayLabel.setPosition(0,-22-6*(1-ease(clamp((p-.24)/.2))));
+      if(!opening){
+        plate.setScale(.92+.08*ease(clamp((p-.2)/.18)),.92+.08*ease(clamp((p-.2)/.18)),1);
+        if(dayLabel.isValid)dayLabel.setPosition(0,-22-6*(1-ease(clamp((p-.24)/.2))));
+      }
     },()=>this.drop(layer));
   }
 

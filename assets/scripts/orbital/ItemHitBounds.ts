@@ -10,11 +10,13 @@
  * orbital-items-front.png: 1536x1024, sha256 2966a7978f9cb86cc87a83d231644ac7554f22e555a9a89ca846177241ba7580
  * orbital-items-back.png: 1536x1024, sha256 ab00826d69c6a123e05a2f67ab4d0bf38091da8044dc0cdec45b802200f69e6b
  */
+import {ANNEX_BOUNDS} from './AnnexBounds';
 export interface ItemHitRect {x:number;y:number;width:number;height:number}
 type NormalizedHitRect=readonly [x:number,y:number,width:number,height:number];
 
 const FULL_FRAME:NormalizedHitRect=[0,0,1,1];
 const ITEM_ALPHA_BOUNDS:Readonly<Record<string,{front:NormalizedHitRect;back:NormalizedHitRect}>>={
+  ...ANNEX_BOUNDS,
   'ITM-001':{front:[0.113575268, 0.029569892, 0.802251345, 0.970262098],back:[0.088373655, 0.012768817, 0.886256722, 0.987231183]},
   'ITM-002':{front:[0.096774193, 0.033770161, 0.81905242, 0.966229839],back:[0.021169354, 0.008568548, 0.768649195, 0.991431452]},
   'ITM-003':{front:[0.029569892, 0.021169354, 0.936659947, 0.96186156],back:[0.008568548, 0.046370967, 0.966061829, 0.945060485]},

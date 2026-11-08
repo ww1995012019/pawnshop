@@ -1,4 +1,5 @@
 import type {OrbitalItem,ToolId} from './types';
+import {CONTENT_ITEMS} from './ContentExpansion';
 
 // Mechanical/functional symptoms are separate from authenticity and provenance.
 const functionFaults:Record<string,string>={
@@ -25,9 +26,9 @@ const functionFaults:Record<string,string>={
 /** Reads saved physical facts without changing old objects, provenance or collected evidence. */
 export function getItemFaultLabel(it:OrbitalItem):string {
   if(it.working)return it.repaired?'维修与复测通过，功能已恢复。':'功能响应正常，未发现失效症状。';
-  return `异常响应：${functionFaults[it.defId]||'功能响应偏离型号基准'}`;
+  return `异常响应：${functionFaults[it.defId]||CONTENT_ITEMS.find(d=>d.id===it.defId)?.defect||'功能响应偏离型号基准'}`;
 }
-export function getItemClue(it:OrbitalItem,tool:ToolId):string {
+function physicalClue(it:OrbitalItem,tool:ToolId):string {
   const wear=it.condition>=.85?'外壳仅有轻微使用痕迹':it.condition>=.65?'接缝有磨损和旧装配痕迹':'接缝与活动部件磨损明显';
   const result=it.working?(it.repaired?'维修后的复测响应稳定，故障已排除':'工作响应稳定，未出现失效症状'):getItemFaultLabel(it);
   switch(tool){
@@ -38,6 +39,10 @@ export function getItemClue(it:OrbitalItem,tool:ToolId):string {
     case 'TOL-005':return `质量校零：${it.authentic?'质量分布落在原型号公差内':'质量分布偏离原型号公差，需结合暗纹判断真伪'}。`;
     case 'TOL-006':return `模拟负载：${result}。${it.condition<.65?'磨损仍会限制长期可靠性。':''}`;
   }
+}
+export function getItemClue(it:OrbitalItem,tool:ToolId):string {
+  const focus=CONTENT_ITEMS.find(def=>def.id===it.defId)?.clues[tool];
+  return physicalClue(it,tool)+(focus?` 本次核对：${focus}。`:'');
 }
 export function getItemMark(it:OrbitalItem):string {
   return it.authentic?'原始编号与底层暗纹一致':'编号重叠 / 复制暗纹与原厂记录不符';

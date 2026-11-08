@@ -2,6 +2,7 @@ import type {Node} from 'cc';
 import type {CoachStep} from './Coach';
 import type {PageId} from './types';
 import {tools} from './data';
+import {PhoneUI} from './PhoneUI';
 import type {OrbitalUI,HudIcon} from './OrbitalUI';
 
 /** First-day guided tour. Steps with `until` wait for the player to act through the spotlight. */
@@ -41,17 +42,38 @@ const SECTIONS:ManualSection[]=[
   {title:'订单委托',icon:'orders',body:'• 订单分「当前委托 / 历史记录 / 待开放」三组；待开放的委托到指定日期才能接。\n• 选中订单后点「接取订单」。顾客委修的原物会放进保管位，归属仍是顾客。\n• 准备好符合型号、品相、修复状态和物证要求的货，点击或拖进交付盘，系统会列出缺项。\n• 确认交付后领取报酬（1 AP）。过期的委托会失败，原物仍需按归属处理。'},
   {title:'日结与升级',icon:'report',body:'• 点底部「日结」确认打烊：扣除维护费和到期租金，生成当天的营业小票。\n• 第 3 天起，日结时可以选一项设备升级（每天限一项）：\n   精密工作灯 120 Cr：之后每件货的首次鉴定不再消耗 AP。\n   模组销售架 160 Cr：合规货物的挂牌价提高 5%。\n• 点「迎接第 N 天」进入下一天，行动点补满，新客人和新订单陆续到来。'},
   {title:'操作提示',icon:'tip',body:'• 鼠标：点击按钮，拖动货物、物证小票、探针和滑块。悬停顶栏图标可以看到说明。\n• 触屏：点击和拖动相同；手机竖握时游戏会自动横向铺满屏幕。\n• 键盘：Esc 返回或关闭弹窗，空格跳过动画，Tab 切换焦点、回车确认；鉴定台 1–6 换仪器、R 旋转、F 翻面、方向键移动。\n• 右上角：图鉴查看全部货物，站务查看租金和关注度，喇叭开关声音，齿轮进入设置（减少动态、放大文字、导出档案）。'},
+  {title:'每日经营事件',icon:'alert',body:'• 每天可处理一则站内消息，入口在营业菜单或站务。\n• 明确选择后才提交；关闭面板不会自动扣款。\n• 每项会写明现金、AP、材料与关系变化，资源不足时不会部分扣除。\n• 先完成当前交易，再处理事件；同一天不能重复领取结果。\n• 已处理的消息保存在事件记录，收支也会进入营业流水。'},
 ];
 
 /** Illustrated manual with section tabs and a "replay tutorial" key. */
 export function openManual(host:{ui:OrbitalUI;button(parent:Node,text:string,x:number,y:number,w:number,h:number,fn:()=>void,options?:{tone?:'gold'|'quiet'|'green';size?:number;name?:string;selected?:boolean}):Node},replay:()=>void,start=0):void{
+  if(host.ui.phone){
+    const phone=new PhoneUI(host),m=phone.sheet('经营手册');let current=Math.max(0,Math.min(SECTIONS.length-1,start));
+    const draw=()=>{
+      host.ui.clear(m.body);const sec=SECTIONS[current];
+      phone.row(m.body,`${current+1} / ${SECTIONS.length} · ${sec.title}`,20,0,1400,76,40,'#E0A16C');
+      const phoneBody:Record<string,string>={
+        '柜台交易':'• 点击「接待下一位来客」，每天最多 6 位预约，消耗 1 AP。\n• 右侧终端显示客人报价；先鉴定，估值会更准确。\n• 「商量报价」可直接输入或用 ±10 改价，点「选择支持还价的物证」选依据，再提出还价。\n• 客人最多接受 3 轮议价；接受报价只锁价，点「确认钱货交割」才成交（1 AP）。\n• 「更多」可礼貌拒绝，或签抵押合同。顾客赎回时，店铺收回本金与 8% 服务费，并归还原物。',
+        '鉴定仪器':'• 左侧六个大按钮切换仪器，中央可拖动实物。\n• 底部按钮负责缩放、旋转、翻面和归位。\n• 点「工具操作」，逐步观察接缝、背面扫描、调整谱峰、接线、配重或负载；条件达成后点「记录证据」。\n• 首次鉴定一件货消耗 1 AP，之后同件取证或复测免费。\n• 右上「物证」可逐页查看记录；菜单里的货物图鉴会提示建议仪器。',
+        '维修与组装':'• 左侧大卡片选择实物，上一页 / 下一页浏览库存。\n• 按右侧工序按钮依次拆盖、换件、复测，再点「确认维修并复测」。\n• 缺材料时打开「材料箱 / 采购」，购买会立即扣款，维修工时在最后确认时扣除。\n• 「组装维护套组」内先装入伺服器、装入注销轴承、连接端子，再确认消耗主料和材料。\n• 顾客原物、抵押品和隔离件不能当作自有主料。',
+        '仓储与安检':'• 左侧选择货物，右侧查看归属、估值和来源。\n• 「移动仓位 / 旋转」打开大格子面板；先旋转，再点选新仓位的左上格。灰格表示放不下或会重叠。\n• 登记来源需要扫描、两项独立物证、35 Cr 和 1 AP。\n• 「货物详情 / 更多」提供来源记录、隔离柜、抵押柜和返还操作。\n• 还未成交的柜台来件，需要返回柜台交割后才会入库。',
+        '订单委托':'• 顶部切换当前委托、历史记录和待开放。\n• 选择订单后接取；顾客原物仍归顾客所有。\n• 在维修或仓储左侧找到本单原物，鉴定并维修；同型号的自有货不能替代委修原物。\n• 回到订单点「选择交付原物」，检查缺项，再预览并确认交付（1 AP）。\n• 光合灯订单会自动配套合格藻苗罐；两件货和报酬在最终确认时一起提交。',
+        '操作提示':'• 手机横屏操作，竖握时画面会自动旋转。\n• 底部六个大按钮切换柜台、鉴定、维修、仓储、订单和日结。\n• 顶部「菜单」包含货物图鉴、站务记录、声音、设置和导出档案。\n• 工具面板支持逐步点按，关闭后会保留当前实物的操作进度。\n• 设置可开启放大文字和减少动态。确认弹窗里的「返回」会取消本次提交。',
+      };
+      phone.text(m.body,phoneBody[sec.title]||sec.body,20,92,1400,416,32);
+      phone.button(m.body,'上一节',20,536,440,()=>{current=(current+SECTIONS.length-1)%SECTIONS.length;draw();},{name:'manual-prev'});
+      phone.button(m.body,'返回游戏',504,536,440,()=>m.close(),{tone:'gold',name:'manual-phone-return'});
+      phone.button(m.body,'下一节',988,536,440,()=>{current=(current+1)%SECTIONS.length;draw();},{name:'manual-next'});
+    };draw();return;
+  }
   const ui=host.ui,m=ui.modal('经营手册',{width:1380,height:800});
   let current=start;
   const tabs=ui.container(m.body,0,0,300,600,'manual-tabs'),page=ui.container(m.body,320,0,1000,660,'manual-page');
   const draw=()=>{
     ui.clear(tabs);ui.clear(page);
     SECTIONS.forEach((sec,i)=>{
-      const b=host.button(tabs,'',0,i*75,290,64,()=>{current=i;draw();},{tone:'quiet',selected:i===current,name:`manual-tab-${i}`});
+      const step=SECTIONS.length>8?64:75;
+      const b=host.button(tabs,'',0,i*step,290,step-11,()=>{current=i;draw();},{tone:'quiet',selected:i===current,name:`manual-tab-${i}`});
       const face=b.getChildByName('tech-button-surface')||b;
       ui.hudIcon(face,sec.icon,12,9,44,44);
       ui.label(face,sec.title,66,0,212,62,{size:19,color:i===current?'#FFE0B0':'#E4DFD2',verticalAlign:'center',wrap:false});
