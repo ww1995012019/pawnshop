@@ -48,6 +48,6 @@ func audit():
 		child.queue_free()
 	shell._close_title()
 	await process_frame
-	check(shell.page_host.visible and shell.nav.visible, 'Starting restores the working interface')
+	check(shell.page_host.visible and not shell.nav.visible, 'Starting restores the interactive shop without a navigation overlay')
 	print('AUDIT failures=', failures.size())
 	quit(1 if not failures.is_empty() else 0)

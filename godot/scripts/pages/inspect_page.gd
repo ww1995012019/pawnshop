@@ -194,7 +194,7 @@ func _refresh_info() -> void:
 		var b: Button = tool_buttons[k]
 		var done: bool = it.evidence.has(k)
 		var relevant: bool = def.tools.has(k)
-		b.text = "%s%s\n%s" % [GameData.tool(k).name, "  ✓" if done else "", "已取证" if done else ("关键仪器 · 可用于议价" if relevant else "辅助取证")]
+		b.text = "%s%s\n%s" % [GameData.tool(k).name, "  ✓" if done else "", "已取证" if done else ("关键物证 · 可议价" if relevant else "辅助取证")]
 		b.tooltip_text = GameData.tool(k).instruction if GameData.tool(k).has("instruction") else ""
 		b.add_theme_stylebox_override("normal", UIKit.key_style("primary" if k == tool else ("good" if done else "secondary"), "normal"))
 
@@ -381,9 +381,9 @@ func _circuit() -> void:
 	for i in 2:
 		var pr := Probe.new()
 		pr.color = Color("d24a3c") if i == 0 else Color("2b2b2b")
-		# Rest on the mat to the right of the lot. The old home (y 900) sat under
-		# the instrument bench and the dock, so the tips were nearly impossible to find.
-		pr.home = Vector2(ITEM_POS.x + 290 + i * 90, ITEM_POS.y + 70)
+		# Keep both tips clear of the drawer side panel and bottom instrument
+		# shelf, including the workbench camera's inspection zoom.
+		pr.home = ITEM_POS + Vector2(190 + i * 65, -45)
 		pr.position = pr.home
 		add_world(pr, "top")
 		probes.append(pr)
@@ -417,7 +417,7 @@ func _scale() -> void:
 		shell.sound("check", -10, 1.4)
 		g.queue_redraw())
 	bv.add_child(tare)
-	var wr := UIKit.hbox(8)
+	var wr := UIKit.grid(3, 8)
 	# A standard 5-10-20-20-50-100 set reaches every 5 g step up to 205 g, so
 	# every nominal mass (and every off-weight copy) can be balanced.
 	var set_weights := [5, 10, 20, 20, 50, 100]

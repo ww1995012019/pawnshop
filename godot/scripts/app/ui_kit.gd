@@ -45,12 +45,12 @@ static func box(fill: Color, edge := Color.TRANSPARENT, radius := 8, border := 2
 	s.bg_color = fill
 	s.border_color = edge
 	s.set_border_width_all(border if edge.a > 0.0 else 0)
-	s.set_corner_radius_all(radius)
+	s.set_corner_radius_all(0)
 	s.shadow_color = Color(0, 0, 0, 0.45)
 	s.shadow_size = shadow
 	s.shadow_offset = Vector2(0, 3)
 	s.set_content_margin_all(pad)
-	s.anti_aliasing = true
+	s.anti_aliasing = false
 	return s
 
 # ---------------------------------------------------------------- skin
@@ -70,20 +70,14 @@ const SKIN_RIM := {"glass": [49, 50, 41, 63], "strip": [27, 32, 27, 53], "amber"
 	"graphite": [53, 44, 44, 69], "socket": [74, 74, 74, 97], "rail": [30, 54, 38, 83],
 	"paper": [9, 9, 9, 9], "screen": [41, 41, 41, 49]}
 
-static func skin(name: String, size := "lg", pad := -1.0, tint := Color.WHITE) -> StyleBoxTexture:
-	var s := StyleBoxTexture.new()
-	s.texture = tex("res://assets/ui/skin/%s_%s.png" % [name, size])
-	var k: float = SKIN_SCALE[size]
-	var rim: Array = SKIN_RIM[name]
-	var sides := [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]
-	for i in 4:
-		# Border: the full rim (and at least the corner ornament), so only
-		# plain plate is ever stretched.
-		s.set_texture_margin(sides[i], ceilf(maxf(float(SKIN_CAP[name]), float(rim[i]) + 6.0) * k))
-		# Content: clear of the rim on that side, never less than asked for.
-		var inner := ceilf(float(rim[i]) * k) + 6.0
-		s.set_content_margin(sides[i], maxf(inner, pad) if pad >= 0.0 else inner + 6.0)
-	s.modulate_color = tint
+static func skin(name: String, size := "lg", pad := -1.0, tint := Color.WHITE) -> StyleBox:
+	var fills := {"glass": Color("293a3c"), "strip": Color("34313c"), "amber": Color("976e3e"), "graphite": Color("3d3c47"), "socket": Color("191d27"), "rail": Color("302e3b"), "paper": Color("e1d3b0"), "screen": Color("182f30")}
+	var edges := {"glass": Color("6b9290"), "strip": Color("7d716b"), "amber": Color("d9ad69"), "graphite": Color("7a747a"), "socket": Color("5d626a"), "rail": Color("9c8064"), "paper": Color("9d8767"), "screen": Color("628e85")}
+	var padding := (18.0 if size == "lg" else 12.0 if size == "sm" else 8.0) if pad < 0 else pad
+	var s := box(fills.get(name, PLATE) * tint, edges.get(name, PLATE_EDGE) * tint, 0, 3 if size == "lg" else 2, int(padding), 4 if size == "lg" else 2)
+	s.border_width_bottom += 2
+	s.shadow_color = Color("141720")
+	s.shadow_offset = Vector2(3, 4)
 	return s
 
 static func plate_style() -> StyleBox:
@@ -182,6 +176,7 @@ static func button(text: String, kind := "secondary", min_size := Vector2(0, 58)
 	b.custom_minimum_size = min_size
 	b.focus_mode = Control.FOCUS_ALL
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	b.add_theme_font_size_override("font_size", size)
 	var compact := text == ""
 	for st in ["normal", "hover", "pressed", "disabled"]:
@@ -238,6 +233,7 @@ static func switch_row(text: String, on: bool, fn: Callable) -> Button:
 	b.custom_minimum_size = Vector2(0, 62)
 	b.focus_mode = Control.FOCUS_ALL
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	b.add_theme_font_size_override("font_size", 21)
 	for st in ["normal", "hover", "pressed", "disabled", "hover_pressed"]:
 		var base := "hover" if st == "hover" or st == "hover_pressed" else "normal"
@@ -386,31 +382,16 @@ static func lit_atlas(key: String) -> CanvasTexture:
 	var c := CanvasTexture.new()
 	c.diffuse_texture = tex("res://assets/atlas/%s.png" % key)
 	c.normal_texture = tex("res://assets/atlas/%s_n.png" % key)
-	var pixel_item := key.begins_with("orbital-items-") or key.begins_with("orbital-expansion-") or key.begins_with("orbital-annex-")
+	var pixel_item := key == "shop-residents" or key.begins_with("orbital-items-") or key.begins_with("orbital-expansion-") or key.begins_with("orbital-annex-")
 	c.specular_color = Color(0.05, 0.05, 0.05) if pixel_item else Color(0.45, 0.45, 0.45)
 	c.specular_shininess = 0.1 if pixel_item else 0.6
 	_cache[k] = c
 	return c
 
 ## Portrait cell for an NPC and mood; moods exist for the first five residents.
-static func npc_cell(npc_id: String, mood := "neutral") -> Dictionary:
-	var n := GameData.npc(npc_id)
-	var key := "orbital-characters"
-	var cols := 5
-	var rows := 1
-	var index := int(n.get("sprite", 0))
-	if n.has("art") and n.art != null:
-		key = n.art.key
-		cols = n.art.columns
-		rows = n.art.rows
-		index = n.art.index
-	elif mood != "neutral":
-		key = "orbital-characters-%s" % mood
-	var img := tex("res://assets/atlas/%s.png" % key)
-	var cw := img.get_width() / float(cols)
-	var ch := img.get_height() / float(rows)
-	var inset := 0.012
-	return {"key": key, "region": Rect2((index % cols) * cw + cw * inset, (index / cols) * ch + ch * inset, cw * (1 - inset * 2), ch * (1 - inset * 2))}
+static func npc_cell(npc_id: String, _mood := "neutral") -> Dictionary:
+	var index := clampi(int(npc_id.trim_prefix("CHR-")) - 1, 0, 8)
+	return {"key": "shop-residents", "region": Rect2((index % 3) * 256, (index / 3) * 256, 256, 256)}
 
 ## Square headshot from the top of the portrait (always drawn square, so
 ## containers never stretch it).

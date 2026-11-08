@@ -47,24 +47,48 @@ var title: Control
 var capture_dir := ""
 var world_cursor := Input.CURSOR_ARROW
 
+# A drawer gets its own isolated canvas/camera but shares the persistent Game.
+# Only the root Shell owns a customer, the opening screen and ambient audio.
+var workspace_mode := false
+var workspace_parent: Node
+var initial_page := "counter"
+var workspace_shell: Node
+var workspace_overlay: Control
+var workspace_frame: PanelContainer
+var workspace_container: SubViewportContainer
+var workspace_title: Label
+var workspace_close: Button
+var workspace_origin: Control
+var workspace_suspended_focus: Array = []
+const WORKSPACE_LABELS := {"inspect": "鉴定台", "repair": "维修工作台", "warehouse": "货物抽屉", "orders": "委托终端", "report": "营业账本"}
+
 func art(u: float, v: float) -> Vector2:
 	return CENTER + (Vector2(u, v) - Vector2(836, 470.5)) * K
 
 func _exit_tree() -> void:
-	preload("res://scripts/ui/cursor_art.gd").uninstall()
+	if not workspace_mode:
+		preload("res://scripts/ui/cursor_art.gd").uninstall()
 
 func _ready() -> void:
-	preload("res://scripts/ui/cursor_art.gd").install()
+	if not workspace_mode:
+		preload("res://scripts/ui/cursor_art.gd").install()
 	UIKit.ensure()
 	_build_world()
 	_build_ui()
 	_build_audio()
 	get_viewport().size_changed.connect(_fit)
 	_fit()
+	get_viewport().gui_focus_changed.connect(_keyboard_focus_changed)
 	Game.changed.connect(_on_changed)
 	shown_cash = Game.state.cash
-	go("counter")
+	go(initial_page)
 	_refresh_hud()
+	hud.hide()
+	nav.hide()
+	if workspace_mode:
+		hint_label.show()
+		return
+	hint_label.hide()
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--capture="):
 			capture_dir = a.substr(10)
@@ -105,21 +129,8 @@ func _build_world() -> void:
 	_layer("top", 40)
 	bg = Sprite2D.new()
 	bg.position = CENTER
-	bg.scale = Vector2.ONE * K / 1.5
+	bg.scale = Vector2.ONE
 	layers.bg.add_child(bg)
-	var post := CanvasLayer.new()
-	post.layer = 5
-	add_child(post)
-	var bb := BackBufferCopy.new()
-	bb.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
-	post.add_child(bb)
-	var rect := ColorRect.new()
-	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var pm := ShaderMaterial.new()
-	pm.shader = load("res://shaders/post.gdshader")
-	rect.material = pm
-	post.add_child(rect)
 
 func _scene_node(n: Node, parent: Node) -> Node:
 	parent.add_child(n)
@@ -137,22 +148,17 @@ func set_scene(name: String) -> void:
 	flickers.clear()
 	# The counter page plays inside the painted room: the visitor stands
 	# behind the counter front (fg), fixtures sit on the walls and counter.
-	if name == "counter":
-		bg.texture = UIKit.tex("res://assets/scene/counter_bg.png")
+	if name == "counter" and not workspace_mode:
+		bg.texture = UIKit.tex("res://assets/scene/shop_pixel.png")
+		bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		bg.material = Util.unshaded()
-		bg.self_modulate = Color(0.8, 0.83, 0.88)
-		var front := Sprite2D.new()
-		front.texture = UIKit.tex("res://assets/scene/counter_fg.png")
-		front.material = Util.unshaded()
-		front.self_modulate = Color(0.92, 0.92, 0.94)
-		front.position = CENTER
-		front.scale = Vector2.ONE * K / 1.5
-		_scene_node(front, layers.fg)
-		layers.fg.move_child(front, 0)
+		bg.self_modulate = Color.WHITE
+		bg.show()
 		return
-	bg.material = null
-	bg.self_modulate = Color.WHITE
-	bg.texture = Util.lit("res://assets/scene/%s_bg.png" % name, "res://assets/scene/%s_bg_n.png" % name, 0.25, 0.4)
+	bg.hide()
+	var surface := preload("res://scripts/ui/workspace_surface.gd").new()
+	surface.material = Util.unshaded()
+	_scene_node(surface, layers.bg)
 	var warm := Color(1.0, 0.74, 0.45)
 	var teal := Color(0.45, 0.95, 1.0)
 	match name:
@@ -196,7 +202,7 @@ func _light(pos: Vector2, color: Color, energy: float, scale: float, height := 6
 	l.height = height
 	_scene_node(l, self)
 	var g: Sprite2D = null
-	if glow > 0.0:
+	if glow > 0.0 and not workspace_mode:
 		g = Sprite2D.new()
 		g.texture = Util.radial(256, 0.3)
 		g.position = pos
@@ -259,6 +265,7 @@ func _build_ui() -> void:
 	root_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root_ui.theme = UIKit.build_theme()
+	root_ui.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	ui.add_child(root_ui)
 	page_host = Control.new()
 	page_host.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -383,12 +390,14 @@ func _build_nav() -> void:
 
 func _fit() -> void:
 	var vis := get_viewport().get_visible_rect().size
-	zoom_base = maxf(1.0, maxf(vis.x / 1960.0, vis.y / 1100.0))
+	zoom_base = 1.0
 	hud.size.x = vis.x - 40
 	nav.reset_size()
 	nav.position = Vector2((vis.x - nav.size.x) * 0.5, vis.y - nav.size.y - 14)
-	hint_label.size = Vector2(1200, 30)
-	hint_label.position = Vector2(vis.x * 0.5 - 600, nav.position.y - 40)
+	hint_label.size = Vector2(vis.x - 48, 42)
+	hint_label.position = Vector2(24, vis.y - 48)
+	if workspace_open():
+		_layout_workspace()
 	if page != null and page.has_method("relayout"):
 		page.call("relayout")
 	_place_toasts()
@@ -414,11 +423,23 @@ func _place_toasts() -> void:
 ## Content area between HUD and dock, in UI coordinates.
 func content_rect() -> Rect2:
 	var vis := get_viewport().get_visible_rect().size
-	return Rect2(20, 90, vis.x - 40, nav.position.y - 90 - 42)
+	return Rect2(16, 16, vis.x - 32, vis.y - 80) if workspace_mode else Rect2(20, 20, vis.x - 40, vis.y - 40)
 
 # ---------------------------------------------------------------- pages
 
 func go(name: String, focus_uid := "") -> void:
+	if not PAGES.has(name):
+		return
+	if workspace_mode and name == "counter":
+		workspace_parent.close_workspace()
+		return
+	if not workspace_mode:
+		if name != "counter":
+			open_workspace(name, focus_uid)
+			return
+		if workspace_open():
+			close_workspace()
+			return
 	if focus_uid != "":
 		Game.focus_uid = focus_uid
 	if page != null:
@@ -446,23 +467,132 @@ func go(name: String, focus_uid := "") -> void:
 		b.add_theme_stylebox_override("normal", UIKit.key_style("primary" if k == name else "secondary", "normal"))
 	_refresh_hud()
 	hint(page.hint_text())
+	if workspace_mode:
+		workspace_parent._workspace_heading(name)
+
+func workspace_open() -> bool:
+	return is_instance_valid(workspace_shell) and is_instance_valid(workspace_overlay) and not workspace_overlay.is_queued_for_deletion()
+
+func active_shell() -> Node:
+	return workspace_shell if workspace_open() else self
+
+func open_workspace(name: String, focus_uid := "") -> void:
+	if focus_uid != "":
+		Game.focus_uid = focus_uid
+	if workspace_open():
+		workspace_shell.go(name, focus_uid)
+		_workspace_heading(name)
+		return
+	workspace_origin = get_viewport().gui_get_focus_owner()
+	workspace_suspended_focus.clear()
+	_suspend_home_focus()
+	if page.has_method("workspace_state_changed"):
+		page.workspace_state_changed(true)
+	workspace_overlay = Control.new()
+	workspace_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	workspace_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	root_ui.add_child(workspace_overlay)
+	root_ui.move_child(modal_layer, -1)
+	var dim := ColorRect.new()
+	dim.color = Color(0.07, 0.06, 0.09, 0.38)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	workspace_overlay.add_child(dim)
+	workspace_frame = UIKit.plate(UIKit.skin("rail", "lg", 16))
+	workspace_overlay.add_child(workspace_frame)
+	var body := UIKit.vbox(12)
+	workspace_frame.add_child(body)
+	var header := UIKit.hbox(12)
+	workspace_title = UIKit.label("", 27, UIKit.AMBER)
+	workspace_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(workspace_title)
+	header.add_child(UIKit.label("店内操作  /  ESC 收起", 18, UIKit.MUTED))
+	workspace_close = UIKit.button("收起", "secondary", Vector2(108, 48), 20, "close")
+	workspace_close.pressed.connect(close_workspace)
+	header.add_child(workspace_close)
+	body.add_child(header)
+	workspace_container = SubViewportContainer.new()
+	workspace_container.custom_minimum_size = Vector2(1600, 900)
+	workspace_container.stretch = true
+	workspace_container.mouse_filter = Control.MOUSE_FILTER_STOP
+	body.add_child(workspace_container)
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(1600, 900)
+	viewport.world_2d = World2D.new()
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	viewport.handle_input_locally = true
+	workspace_container.add_child(viewport)
+	workspace_shell = load("res://main.tscn").instantiate()
+	workspace_shell.workspace_mode = true
+	workspace_shell.workspace_parent = self
+	workspace_shell.initial_page = name
+	viewport.add_child(workspace_shell)
+	_layout_workspace()
+	workspace_close.call_deferred("grab_focus")
+	sound("page", -8)
+	if not Game.prefs.reduced_motion:
+		var destination := workspace_frame.position
+		workspace_frame.position.y += 28
+		workspace_frame.modulate.a = 0
+		var tw := workspace_frame.create_tween().set_parallel(true)
+		tw.tween_property(workspace_frame, "position", destination, 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(workspace_frame, "modulate:a", 1.0, 0.16)
+
+func _suspend_home_focus() -> void:
+	for control in page.find_children("*", "Control", true, false):
+		if control.focus_mode != Control.FOCUS_NONE:
+			workspace_suspended_focus.append([control, control.focus_mode])
+			control.focus_mode = Control.FOCUS_NONE
+
+func _layout_workspace() -> void:
+	workspace_frame.reset_size()
+	workspace_frame.position = ((get_viewport().get_visible_rect().size - workspace_frame.size) * 0.5).floor()
+
+func _workspace_heading(name: String) -> void:
+	if is_instance_valid(workspace_title):
+		workspace_title.text = WORKSPACE_LABELS.get(name, "店内设备")
+
+func close_workspace() -> void:
+	if not workspace_open():
+		return
+	# Stop processing before queue_free, so Escape cannot close two layers.
+	workspace_shell.set_process_input(false)
+	workspace_overlay.hide()
+	workspace_overlay.queue_free()
+	workspace_shell = null
+	workspace_overlay = null
+	for entry in workspace_suspended_focus:
+		if is_instance_valid(entry[0]):
+			entry[0].focus_mode = entry[1]
+	workspace_suspended_focus.clear()
+	if page.has_method("workspace_state_changed"):
+		page.workspace_state_changed(false)
+	if is_instance_valid(workspace_origin) and workspace_origin.is_visible_in_tree():
+		workspace_origin.grab_focus()
+	sound("page", -12, 0.85)
 
 func _on_changed(prev: Dictionary, next: Dictionary, action: Dictionary) -> void:
 	if action.type == "NEW_GAME":
+		if workspace_mode:
+			return
+		close_workspace()
 		Game.set_meta("counter_offer_drafts", {})
 		go("counter")
 		_refresh_hud()
 		return
-	if next.notice != "" and (next.notice != prev.notice or action.type != "OFFER"):
+	if not workspace_open() and next.notice != "" and (next.notice != prev.notice or action.type != "OFFER"):
 		toast(next.notice)
 	var spent: float = prev.ap - next.ap
-	if spent > 0:
+	if spent > 0 and hud.visible:
 		float_text("−%s AP" % Model.jnum(spent), gauges.ap.get_global_rect().get_center() + Vector2(-10, 70), UIKit.CYAN)
 	if page != null:
 		page.on_changed(prev, next, action)
+	if workspace_open():
+		_suspend_home_focus()
 	_refresh_hud()
 	hint(page.hint_text() if page else "")
-	if action.type == "NEXT" and next.phase == "open":
+	if action.type == "NEXT" and next.phase == "open" and not workspace_mode:
+		close_workspace()
 		shutter(next.day)
 
 func _refresh_hud() -> void:
@@ -550,15 +680,15 @@ func _build_audio() -> void:
 	var amb: AudioStreamPlayer = sounds.ambient_loop
 	amb.volume_db = -18.0
 	amb.finished.connect(func():
-		if Game.prefs.sound:
+		if Game.prefs.sound and not workspace_mode:
 			amb.play())
 	_apply_sound()
 
 func _apply_sound() -> void:
 	var amb: AudioStreamPlayer = sounds.ambient_loop
-	if Game.prefs.sound and not amb.playing:
+	if Game.prefs.sound and not workspace_mode and not amb.playing:
 		amb.play()
-	elif not Game.prefs.sound:
+	elif not Game.prefs.sound or workspace_mode:
 		amb.stop()
 	_refresh_hud()
 
@@ -571,16 +701,141 @@ func world_mouse() -> Vector2:
 		return pointer_override
 	return get_viewport().get_canvas_transform().affine_inverse() * last_screen
 
+# A viewport owns its own GUI focus. Keep one focus owner across the drawer
+# boundary and traverse only the currently visible interaction layer.
+func _focusable_controls(node: Node) -> Array[Control]:
+	var controls: Array[Control] = []
+	if node is SubViewport or node.is_queued_for_deletion():
+		return controls
+	if node is Control:
+		var control := node as Control
+		if not control.is_visible_in_tree():
+			return controls
+		if control.focus_mode == Control.FOCUS_ALL and not (control is BaseButton and control.disabled):
+			controls.append(control)
+	for child in node.get_children():
+		controls.append_array(_focusable_controls(child))
+	return controls
+
+func _modal_controls() -> Array[Control]:
+	for index in range(modal_layer.get_child_count() - 1, -1, -1):
+		var dim := modal_layer.get_child(index)
+		# An exiting sheet still blocks input until it has left the tree.
+		if dim.has_meta("closing"):
+			return []
+		return _focusable_controls(dim)
+	return []
+
+func _keyboard_controls() -> Array[Control]:
+	if modal_open():
+		return _modal_controls()
+	if workspace_open():
+		if workspace_shell.modal_open():
+			return workspace_shell._modal_controls()
+		var controls: Array[Control] = [workspace_close]
+		controls.append_array(workspace_shell._focusable_controls(workspace_shell.page))
+		return controls
+	return []
+
+func _keyboard_owner() -> Control:
+	var owner := get_viewport().gui_get_focus_owner()
+	if owner == null and workspace_open():
+		owner = workspace_shell.get_viewport().gui_get_focus_owner()
+	return owner
+
+func _focus_keyboard(control: Control) -> void:
+	get_viewport().gui_release_focus()
+	if workspace_open():
+		workspace_shell.get_viewport().gui_release_focus()
+	if is_instance_valid(control) and control.is_visible_in_tree() and not control.is_queued_for_deletion():
+		control.grab_focus()
+
+func _keyboard_focus_changed(control: Control) -> void:
+	if workspace_mode:
+		workspace_parent._keyboard_focus_changed(control)
+		return
+	if control == null or not (modal_open() or workspace_open()):
+		return
+	var controls := _keyboard_controls()
+	if not controls.has(control):
+		_focus_keyboard(controls[0] if not controls.is_empty() else null)
+		return
+	if not workspace_open():
+		return
+	# Pointer focus transfers must also retire the other viewport's owner.
+	if control.get_viewport() == get_viewport():
+		workspace_shell.get_viewport().gui_release_focus()
+	else:
+		get_viewport().gui_release_focus()
+
+func _restore_keyboard_focus(previous: Variant) -> void:
+	if workspace_mode:
+		workspace_parent._restore_keyboard_focus(previous)
+		return
+	if modal_open() or workspace_open():
+		var controls := _keyboard_controls()
+		if controls.has(previous):
+			_focus_keyboard(previous)
+		elif not controls.is_empty():
+			_focus_keyboard(controls[0])
+	elif is_instance_valid(previous) and previous.is_visible_in_tree():
+		_focus_keyboard(previous)
+
+func _route_layer_key(event: InputEventKey) -> bool:
+	if workspace_mode or not (modal_open() or workspace_open()):
+		return false
+	var controls := _keyboard_controls()
+	var owner := _keyboard_owner()
+	if event.keycode == KEY_TAB:
+		if event.pressed and not event.echo and not controls.is_empty():
+			var index := controls.find(owner)
+			var next := (controls.size() - 1 if event.shift_pressed else 0) if index < 0 else posmod(index + (-1 if event.shift_pressed else 1), controls.size())
+			_focus_keyboard(controls[next])
+		get_viewport().set_input_as_handled()
+		return true
+	if not controls.has(owner):
+		_focus_keyboard(controls[0] if not controls.is_empty() else null)
+		owner = _keyboard_owner()
+	if owner == null:
+		get_viewport().set_input_as_handled()
+		return true
+	if owner.get_viewport() != get_viewport():
+		# Forward real key events to Godot's GUI machinery, including releases,
+		# so buttons, sliders and selectors retain native activation behavior.
+		get_viewport().set_input_as_handled()
+		owner.get_viewport().push_input(event, true)
+		return true
+	return false
+
 func _input(e: InputEvent) -> void:
+	if e is InputEventKey and e.keycode != KEY_ESCAPE and _route_layer_key(e):
+		return
 	if e is InputEventMouse:
 		last_screen = (e as InputEventMouse).position
-	elif e is InputEventKey and e.pressed and not e.echo and (e as InputEventKey).keycode == KEY_ESCAPE and modal_open():
-		close_top_modal()
+	elif e is InputEventKey and e.pressed and not e.echo and (e as InputEventKey).keycode == KEY_ESCAPE:
+		if modal_open():
+			close_top_modal()
+		elif workspace_open():
+			if workspace_shell.modal_open():
+				workspace_shell.close_top_modal()
+			else:
+				close_workspace()
+		elif workspace_mode:
+			workspace_parent.close_workspace()
+		else:
+			return
 		get_viewport().set_input_as_handled()
 
 ## Godot controls choose their own cursor on hover. Only select a world cursor
 ## when the pointer is over the world, so panels and modals retain precedence.
+func _workspace_pointer_inside() -> bool:
+	return workspace_open() and workspace_container.get_global_rect().has_point(last_screen) and not modal_open()
+
 func _update_cursor() -> void:
+	if _workspace_pointer_inside():
+		return
+	if workspace_mode and not workspace_parent._workspace_pointer_inside():
+		return
 	var hovering := get_viewport().gui_get_hovered_control()
 	var shape := Input.CURSOR_ARROW
 	if hovering is BaseButton:
@@ -594,7 +849,7 @@ func _update_cursor() -> void:
 	elif hovering != null:
 		var local_point := hovering.get_global_transform_with_canvas().affine_inverse() * last_screen
 		shape = hovering.call("cursor_at", local_point) if hovering.has_method("cursor_at") else hovering.get_cursor_shape(local_point)
-	if is_instance_valid(page) and not modal_open():
+	if is_instance_valid(page) and not modal_open() and not workspace_open():
 		var candidate: int = page.world_cursor_shape(world_mouse())
 		# A held world item remains a drag even when crossing a UI panel.
 		if hovering == null or candidate == Input.CURSOR_DRAG:
@@ -614,11 +869,15 @@ func world_to_ui(p: Vector2) -> Vector2:
 
 ## A centred sheet; returns [content VBox, close Callable].
 func modal(title_text: String, width := 900.0) -> Array:
+	var focus_host: Node = workspace_parent if workspace_mode else self
+	var previous_focus: Control = focus_host._keyboard_owner()
+	focus_host._focus_keyboard(null)
 	var dim := ColorRect.new()
 	dim.color = Color(0.01, 0.02, 0.03, 0.62)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	modal_layer.add_child(dim)
+	dim.tree_exited.connect(func(): focus_host.call_deferred("_restore_keyboard_focus", previous_focus))
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.add_child(center)
@@ -661,6 +920,7 @@ func modal(title_text: String, width := 900.0) -> Array:
 	x.expand_icon = true
 	x.pressed.connect(close)
 	head.add_child(x)
+	focus_host.call_deferred("_restore_keyboard_focus", x)
 	v.add_child(head)
 	v.add_child(UIKit.rule())
 	var body := UIKit.vbox(14)
@@ -868,8 +1128,10 @@ func open_settings() -> void:
 func _close_title() -> void:
 	if is_instance_valid(title):
 		title.queue_free()
-	for control in [page_host, hud, nav, hint_label]:
-		control.show()
+	page_host.show()
+	hud.hide()
+	nav.hide()
+	hint_label.visible = workspace_mode
 
 func _show_title() -> void:
 	if is_instance_valid(title):
@@ -883,7 +1145,7 @@ func _show_title() -> void:
 	# Help and settings must appear above the opening screen too.
 	root_ui.move_child(modal_layer, -1)
 	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.03, 0.04, 0.83)
+	dim.color = Color(0.05, 0.04, 0.07, 0.62)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title.add_child(dim)
 	var center := CenterContainer.new()

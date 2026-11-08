@@ -67,6 +67,7 @@ func _mesh_for(cell: Dictionary) -> ArrayMesh:
 
 func _part(cell: Dictionary) -> MeshInstance2D:
 	var mi := MeshInstance2D.new()
+	mi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	mi.mesh = _mesh_for(cell)
 	mi.texture = UIKit.lit_atlas(cell.key)
 	mi.material = mat
@@ -98,7 +99,7 @@ func _process(delta: float) -> void:
 	var talk_nod := 0.0 if still else sin(t * 11.0) * 1.6 * minf(1.0, talking * 3.0)
 	mat.set_shader_parameter("breath", breath)
 	mat.set_shader_parameter("head_nod", gesture.nod + talk_nod + (0.0 if still else sin(t * 0.8) * 0.8))
-	mat.set_shader_parameter("head_turn", gesture.turn + look * 7.0)
+	mat.set_shader_parameter("head_turn", gesture.turn + look * 3.0)
 	mat.set_shader_parameter("head_tilt", gesture.tilt + (0.0 if still else sin(t * 0.63) * 0.018) + look * 0.03)
 	mat.set_shader_parameter("lean", gesture.lean + (0.0 if still else sin(t * 0.47) * 3.5))
 	mat.set_shader_parameter("shrug", gesture.shrug)

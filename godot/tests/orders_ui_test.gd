@@ -36,7 +36,7 @@ func run_check() -> void:
 	shell._close_title()
 	shell.go("orders")
 	await process_frame
-	var page = shell.page
+	var page = shell.active_shell().page
 	check(page.counts.open > 0, "open orders missing")
 	check(page.counts.active == 0, "active should start empty")
 	check(page.scrollers.open.visible and not page.scrollers.active.visible, "only selected list should show")

@@ -40,7 +40,7 @@ void vertex() {
 }
 
 void fragment() {
-	vec4 base = texture(TEXTURE, UV) * COLOR;
+	vec4 base = COLOR;
 	float a = base.a;
 	vec2 luv = (UV - region.xy) / region.zw;
 	// Loupe: micro-scratches everywhere, a bright repaint seam near seam_uv.

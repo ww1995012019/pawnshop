@@ -26,6 +26,9 @@ func left(p: Vector2, pressed: bool) -> void:
 	Input.parse_input_event(event)
 	await process_frame
 	await process_frame
+func point_from(active, world: Vector2) -> Vector2:
+	var p: Vector2 = active.world_to_ui(world)
+	return p + shell.workspace_container.get_global_rect().position if active.workspace_mode else p
 func run() -> void:
 	var game = root.get_node('Game')
 	game.prefs.reduced_motion = true
@@ -39,23 +42,26 @@ func run() -> void:
 	var bell: Vector2 = shell.world_to_ui(p.bell.global_position + Vector2(0,-26))
 	await move(bell)
 	check(Input.get_current_cursor_shape() == Input.CURSOR_POINTING_HAND, 'bell hover')
-	var button: Button = shell.nav_buttons.orders
+	var button: Button = shell.page.fixture_buttons.orders
 	await move(button.get_global_rect().get_center())
 	check(Input.get_current_cursor_shape() == Input.CURSOR_POINTING_HAND, 'button hover')
-	var disabled: Button = p.stock_grid.get_child(19)
-	await move(disabled.get_global_rect().get_center())
-	check(Input.get_current_cursor_shape() != Input.CURSOR_POINTING_HAND, 'disabled button is not clickable')
 	game.state = Model.reduce(game.state, {'type':'ARRIVE'})
 	shell.go('counter')
 	await create_timer(0.3).timeout
 	p = shell.page
+	var disabled: Button
+	for action in p.actions.get_children():
+		if action is Button and action.disabled: disabled = action
+	if disabled != null:
+		await move(disabled.get_global_rect().get_center())
+		check(Input.get_current_cursor_shape() != Input.CURSOR_POINTING_HAND, 'disabled action is not clickable')
 	var pos: Vector2 = shell.world_to_ui(p.mat_item.global_position)
 	await move(pos)
 	check(Input.get_current_cursor_shape() == Input.CURSOR_CAN_DROP, 'item hover')
 	await left(pos,true)
 	await move(pos + Vector2(25,0))
 	check(Input.get_current_cursor_shape() == Input.CURSOR_DRAG, 'dragging item')
-	var nav: Vector2 = shell.nav_buttons.orders.get_global_rect().get_center()
+	var nav: Vector2 = shell.page.fixture_buttons.orders.get_global_rect().get_center()
 	await move(nav)
 	check(Input.get_current_cursor_shape() == Input.CURSOR_DRAG, 'world drag stays closed over UI')
 	await left(nav,false)
@@ -81,16 +87,17 @@ func run() -> void:
 	await process_frame
 	shell.go('inspect')
 	await create_timer(0.2).timeout
-	p = shell.page
+	p = shell.active_shell().page
 	check(p.world_cursor_shape(p.item.global_position) == Input.CURSOR_CAN_DROP, 'inspection item is draggable')
 	p._set_tool('TOL-001')
-	await move(shell.world_to_ui(p.item.global_position))
+	await move(point_from(shell.active_shell(),p.item.global_position))
 	check(Input.get_current_cursor_shape() == Input.CURSOR_CROSS, 'magnifier uses crosshair')
 	shell.go('warehouse')
 	await create_timer(0.2).timeout
-	p = shell.page
+	p = shell.active_shell().page
 	var it = game.state.inventory[0]
-	var grid_point: Vector2 = p.grid.global_position + Vector2(it.x + 0.5,it.y + 0.5)*p.CELL
+	var offset: Vector2 = shell.workspace_container.get_global_rect().position
+	var grid_point: Vector2 = offset + p.grid.global_position + Vector2(it.x + 0.5,it.y + 0.5)*p.CELL
 	await move(grid_point)
 	check(Input.get_current_cursor_shape() == Input.CURSOR_CAN_DROP, 'stock cell hover')
 	await left(grid_point, true)
@@ -98,7 +105,7 @@ func run() -> void:
 	check(Input.get_current_cursor_shape() == Input.CURSOR_DRAG, 'stock cell drag')
 	await left(grid_point + Vector2(12, 0), false)
 	await process_frame
-	var empty_point: Vector2 = p.grid.global_position + Vector2(9.5,5.5)*p.CELL
+	var empty_point: Vector2 = offset + p.grid.global_position + Vector2(9.5,5.5)*p.CELL
 	await move(empty_point)
 	check(Input.get_current_cursor_shape() == Input.CURSOR_ARROW, 'empty cell hover')
 	shell.open_help()

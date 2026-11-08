@@ -2,6 +2,7 @@
 // vertex moves by where it sits on the body (head, chest, base), so one painted
 // image can breathe, nod, tilt and lean like a rigged puppet.
 shader_type canvas_item;
+render_mode unshaded;
 
 uniform vec2 size = vec2(434.0, 724.0);
 uniform vec4 region = vec4(0.0, 0.0, 1.0, 1.0); // atlas UV rect of this portrait
@@ -39,7 +40,7 @@ void vertex() {
 }
 
 void fragment() {
-	vec4 c = texture(TEXTURE, UV) * COLOR;
+	vec4 c = COLOR;
 	c.rgb += vec3(1.0, 0.72, 0.42) * flash * 0.18 * c.a;
 	COLOR = c;
 }

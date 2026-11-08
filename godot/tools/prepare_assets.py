@@ -178,4 +178,6 @@ if __name__ == "__main__":
     # Keep the newer authored item set when rebuilding shared scene assets.
     from prepare_item_art import main as prepare_item_art
     prepare_item_art()
+    from prepare_shop_art import main as prepare_shop_art
+    prepare_shop_art()
     print("Godot slice assets ready in", OUT)

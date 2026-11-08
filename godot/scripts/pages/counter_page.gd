@@ -1,24 +1,18 @@
 extends Page
-## The counter is the room itself: the visitor stands behind the painted
-## counter, the lot lies on the mat, and every control is a fixture of the
-## shop — a wall board for today's events, a till console, the action keys
-## along the counter edge, the stock crate and the archive box below it.
+## Every action belongs to a piece of equipment in the painted shop.
+## Coordinates are the final 1920 x 1080 scene, not the former art transform.
 
-var MAT_POS := Vector2(1000, 760)
-var STAND := Vector2(840, 830)
-const CUSTOMER_HEIGHT := 640.0
-const SIDE := 24.0
-const TERMINAL_W := 420.0
-const CRATE_W := 470.0
-const CRATE_COLS := 7
-
+const CUSTOMER_HEIGHT := 320.0
+const CRATE_COLS := 10
+var MAT_POS := Vector2(990, 610)
+var STAND := Vector2(880, 490)
+var fixture_buttons: Dictionary = {}
 var customer: Customer
 var mat_item: ItemSprite
 var bell: ServiceBell
-var bubble: PanelContainer
+var bubble: Panel
 var bubble_name: Label
-var bubble_label: Label
-var screen: SubViewport
+var bubble_label: RichTextLabel
 var scr := {}
 var dial: Dial
 var offer_label: Label
@@ -28,29 +22,60 @@ var actions: HBoxContainer
 var footer: Label
 var chosen_evidence := ""
 var busy := false
+var _workspace_suspended := false
+var _last_offer_value := 100
 var terminal: PanelContainer
 var offer_panel: PanelContainer
 var evidence_box: VBoxContainer
-var board: PanelContainer
+var board: Control
 var board_day: Label
 var board_rent: Label
-var board_title: Label
-var board_state: Label
 var crate: PanelContainer
 var stock_grid: GridContainer
 var stock_count: Label
-var archive: PanelContainer
-var orders_tile: Button
+var display_goods: Control
+var orders_readout: Label
+var status_readout: Label
 var tag: PanelContainer
 var tag_name: Label
 var tag_info: Label
 var idle_label: Label
+var idle_jobs: Label
 var offer_button: Button
 var stage_root: Node2D
 var back_root: Node2D
-var mat_rect := Rect2()
-var drag_rect := Rect2()
-var bubble_rect := Rect2()
+var resident_window: Control
+var mat_rect := Rect2(650, 550, 665, 115)
+var drag_rect := Rect2(740, 605, 490, 12)
+var bubble_rect := Rect2(1040, 190, 275, 245)
+
+## Transparent equipment buttons retain the illustration at rest. Hover and
+## keyboard focus add crisp pixel corner marks and a compact nameplate.
+class FixtureButton extends Button:
+	var caption := ""
+	var accent := Color("e7ba70")
+	var permanent := true
+	func _ready() -> void:
+		mouse_entered.connect(queue_redraw)
+		mouse_exited.connect(queue_redraw)
+		focus_entered.connect(queue_redraw)
+		focus_exited.connect(queue_redraw)
+	func _draw() -> void:
+		var active := is_hovered() or has_focus()
+		if active:
+			var r := Rect2(Vector2(3, 3), size - Vector2(6, 6))
+			for c in [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]:
+				var dx := 1.0 if c.x == r.position.x else -1.0
+				var dy := 1.0 if c.y == r.position.y else -1.0
+				draw_rect(Rect2(c + Vector2(minf(0, dx * 16), 0), Vector2(18, 3)), accent)
+				draw_rect(Rect2(c + Vector2(0, minf(0, dy * 16)), Vector2(3, 18)), accent)
+		if caption == "" or (not permanent and not active):
+			return
+		var w := minf(size.x - 10, UIKit.font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 22)
+		var box := Rect2(Vector2((size.x - w) * 0.5, size.y - 32), Vector2(w, 28))
+		draw_rect(box, Color("233536") if active else Color("29242c"))
+		draw_rect(Rect2(box.position, Vector2(w, 2)), accent)
+		draw_string(UIKit.font, box.position + Vector2(11, 21), caption, HORIZONTAL_ALIGNMENT_LEFT, w - 20, 20, Color("f0dfbd"))
 
 func scene_name() -> String:
 	return "counter"
@@ -58,39 +83,47 @@ func scene_name() -> String:
 func hint_text() -> String:
 	var s := Game.state
 	if s.phase != "open":
-		return "今日已打烊，去日结页迎接明天。"
+		return "今日已打烊，打开日结账本迎接明天。"
 	if s.trade == null:
 		return "按柜台上的服务铃，请下一位客人进来。" if s.cursor < Model.daily_visit_limit() else "今天的预约都接待完了：去维修、整理仓储或打烊。"
 	var t: Dictionary = s.trade
 	if t.locked:
 		return "价格已锁定：确认钱货交割（1 AP）。"
 	if t.kind == "sell" and not t.has("selectedUid"):
-		return "顾客想买东西：在左下货箱里点一件合格的自有货推荐给他。"
-	return "拖动实物、右键翻面；拿去鉴定取证，再转动终端旋钮出价。"
+		return "在陈列柜或下方货物抽屉里，点一件合格的自有货推荐给顾客。"
+	return "拖动实物、右键翻面；点击鉴定仪取证，再转动报价旋钮出价。"
 
-## Notices rise in the open room between the visitor and the till.
 func toast_rect() -> Rect2:
-	if bubble_rect.size == Vector2.ZERO:
-		return Rect2()
-	return Rect2(bubble_rect.position.x, 330, bubble_rect.size.x, mat_rect.position.y - 350)
+	return Rect2(666, 126, 630, 70)
 
 func enter() -> void:
-	# The visitor stands in the room, behind the painted counter front (fg).
 	back_root = Node2D.new()
+	back_root.material = Util.unshaded()
 	add_world(back_root, "mid")
+	resident_window = Control.new()
+	resident_window.position = Vector2(644, 124)
+	resident_window.size = Vector2(690, 366)
+	resident_window.clip_contents = true
+	resident_window.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	back_root.add_child(resident_window)
 	stage_root = Node2D.new()
 	stage_root.material = Util.unshaded()
 	add_world(stage_root, "top")
 	_align_stage()
+	# The bell is already painted in the master scene. Keep its physical hit
+	# and ringing API while the transparent scene target supplies focus/hover.
 	bell = ServiceBell.new()
-	bell.material = Util.unshaded()
+	bell.position = Vector2(540, 650)
+	bell.visible = false
 	stage_root.add_child(bell)
 	_build_board()
 	_build_terminal()
 	_build_tag()
 	_build_strip()
 	_build_crate()
-	_build_archive()
+	_build_equipment()
+	Game.prefs_changed.connect(_refresh_utility_icons)
+	_refresh_utility_icons()
 	_build_bubble()
 	relayout()
 	_sync_world()
@@ -103,17 +136,27 @@ func _align_stage() -> void:
 	if back_root != null:
 		back_root.global_transform = inv
 
-## Painted-art coordinates (the 1672×941 counter plate) in UI space, through
-## the resting camera. The live camera may still carry another page's zoom or
-## a shake when the page lays out, which used to push the fixtures off place.
-func _art_ui(u: float, v: float) -> Vector2:
-	var vis := get_viewport().get_visible_rect().size
-	return (shell.art(u, v) - shell.CENTER) * shell.zoom_base + vis * 0.5
+func _scene_blocked() -> bool:
+	return _workspace_suspended or shell.modal_open() or (shell.has_method("workspace_open") and shell.workspace_open())
+
+## Shell calls this synchronously at the workspace boundary. A Control with
+## an existing GUI drag can retain pointer capture even behind the new sheet.
+func workspace_state_changed(opened: bool) -> void:
+	_workspace_suspended = opened
+	if opened:
+		if is_instance_valid(dial):
+			dial.cancel_drag()
+			dial.enabled = false
+			dial.queue_redraw()
+		for key in nudge_keys:
+			(key as Button).disabled = true
+		if is_instance_valid(mat_item) and mat_item.dragging:
+			mat_item.end_drag()
+	else:
+		_refresh()
 
 func _crate_point() -> Vector2:
-	return stage_root.to_global(crate.get_global_rect().get_center()) if is_instance_valid(crate) else Vector2(-200, 900)
-
-# ---------------------------------------------------------------- world
+	return stage_root.to_global(crate.get_global_rect().get_center()) if is_instance_valid(crate) else Vector2(940, 860)
 
 func _sync_world() -> void:
 	var t = Game.state.trade
@@ -131,22 +174,22 @@ func _spawn_customer(npc_id: String, walk: bool) -> void:
 	customer = Customer.new()
 	customer.setup(npc_id)
 	customer.scale = Vector2.ONE * (CUSTOMER_HEIGHT / customer.size.y)
-	customer.position = STAND
-	back_root.add_child(customer)
+	customer.position = STAND - resident_window.position
+	resident_window.add_child(customer)
 	if walk:
-		customer.walk_in(2350.0)
+		customer.walk_in(920.0)
 
 func _spawn_mat_item(it: Dictionary, animate: bool, from := Vector2.ZERO) -> void:
 	if mat_item != null and is_instance_valid(mat_item):
 		mat_item.queue_free()
 	mat_item = ItemSprite.new()
-	mat_item.setup(it.defId, it.uid, 250.0)
+	mat_item.setup(it.defId, it.uid, 135.0)
 	mat_item.bounds = drag_rect
 	mat_item.position = MAT_POS
 	mat_item.dropped.connect(func():
 		shell.sound("drop", -4.0, randf_range(0.9, 1.1))
-		shell.dust_burst(mat_item.global_position + Vector2(0, 70), shell.layer("fg"))
-		shell.shake = maxf(shell.shake, 0.22))
+		shell.dust_burst(mat_item.global_position + Vector2(0, 35), shell.layer("fg"))
+		shell.shake = maxf(shell.shake, 0.12))
 	mat_item.flipped.connect(func(_b): shell.sound("page", -6))
 	stage_root.add_child(mat_item)
 	if animate and not Game.prefs.reduced_motion:
@@ -157,87 +200,108 @@ func _spawn_mat_item(it: Dictionary, animate: bool, from := Vector2.ZERO) -> voi
 		var tw := create_tween()
 		tw.tween_method(func(p: float):
 			mat_item.position = start.lerp(dest, p)
-			mat_item.lift = sin(p * PI) * 120.0 + (1.0 - p) * 30.0
+			mat_item.lift = sin(p * PI) * 65.0 + (1.0 - p) * 20.0
 			mat_item.body.rotation = lerpf(-0.4, 0.0, p), 0.0, 1.0, 0.55).set_trans(Tween.TRANS_SINE)
 		tw.tween_callback(func(): mat_item.land())
 
-# ---------------------------------------------------------------- fixtures
+func _flat(fill: Color, edge := Color.TRANSPARENT, pad := 0) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill
+	style.border_color = edge
+	style.set_border_width_all(2 if edge.a > 0 else 0)
+	style.set_content_margin_all(pad)
+	style.anti_aliasing = false
+	return style
 
-## A small metal sign: what happens today, and when rent falls due.
+func _fixture(key: String, rect: Rect2, caption: String, fn: Callable, permanent := true, accent := Color("e7ba70")) -> Button:
+	var b := FixtureButton.new()
+	b.name = "fixture_" + key
+	b.position = rect.position
+	b.size = rect.size
+	b.caption = caption
+	b.permanent = permanent
+	b.accent = accent
+	b.tooltip_text = caption + " · 点击打开操作面板"
+	b.focus_mode = Control.FOCUS_ALL
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	for state in ["normal", "hover", "pressed", "focus"]:
+		b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	b.pressed.connect(func():
+		if _scene_blocked() or busy:
+			return
+		shell.sound("click", -6)
+		fn.call())
+	add_child(b)
+	fixture_buttons[key] = b
+	return b
+
 func _build_board() -> void:
-	board = UIKit.plate(UIKit.skin("glass", "sm", 20.0))
-	board.mouse_filter = Control.MOUSE_FILTER_STOP
-	board.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	board.tooltip_text = "打开今日站内消息"
-	board.gui_input.connect(func(e: InputEvent):
-		if e is InputEventMouseButton and e.pressed and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-			shell.sound("click", -6)
-			shell.open_events())
+	_fixture("events", Rect2(330, 60, 230, 112), "", func(): shell.open_events())
+	board = Control.new()
+	board.position = Vector2(352, 80)
+	board.size = Vector2(185, 70)
+	board.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(board)
-	var v := UIKit.vbox(6)
-	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	board.add_child(v)
-	var head := UIKit.hbox(8)
-	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var title := UIKit.label("今日事件", 22, UIKit.AMBER)
-	head.add_child(title)
-	head.add_child(UIKit.spacer(false))
-	board_day = UIKit.label("", 20, UIKit.AMBER, true)
-	head.add_child(board_day)
-	v.add_child(head)
-	v.add_child(UIKit.rule())
-	board_title = UIKit.label("", 20, UIKit.TEXT, false, true)
-	v.add_child(board_title)
-	board_state = UIKit.label("", 16, UIKit.MUTED)
-	v.add_child(board_state)
-	board_rent = UIKit.label("", 16, UIKit.CYAN)
-	v.add_child(board_rent)
-	for c in [title, board_day, board_title, board_state, board_rent]:
-		(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	board_day = UIKit.label("", 22, Color("392b30"), true)
+	board_day.position = Vector2(2, 4)
+	board.add_child(board_day)
+	board_rent = UIKit.label("", 17, Color("694335"))
+	board_rent.position = Vector2(2, 37)
+	board.add_child(board_rent)
+	for label in [board_day, board_rent]:
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fixture("report", Rect2(292, 673, 246, 52), "日结账本 · 打烊", func(): shell.go("report"))
 
-
-## A paper tag laid on the counter next to the lot.
 func _build_tag() -> void:
-	tag = UIKit.plate(UIKit.paper_style(12))
+	tag = UIKit.plate(_flat(Color("d8c9a8"), Color("887859"), 5))
 	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tag.rotation = -0.035
 	add_child(tag)
-	var v := UIKit.vbox(2)
+	var v := UIKit.vbox(1)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tag.add_child(v)
-	tag_name = UIKit.label("", 20, UIKit.INK, false, true)
-	tag_info = UIKit.label("", 15, UIKit.RUST, false, true)
+	tag_name = UIKit.label("", 19, Color("322b2f"))
+	tag_info = UIKit.label("", 15, Color("805041"))
 	v.add_child(tag_name)
 	v.add_child(tag_info)
-	idle_label = UIKit.label("", 24, Color("d9cdb4"))
-	idle_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	idle_label.add_theme_constant_override("outline_size", 6)
+	for label in [tag_name, tag_info]:
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	idle_label = UIKit.label("", 21, Color("eadbb9"), false, true)
 	idle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	idle_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	idle_label.add_theme_color_override("font_outline_color", Color("342c30"))
+	idle_label.add_theme_constant_override("outline_size", 3)
 	add_child(idle_label)
+	idle_jobs = UIKit.label("", 24, Color("dfcfad"), false, true)
+	idle_jobs.position = Vector2(697, 207)
+	idle_jobs.size = Vector2(570, 250)
+	idle_jobs.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	idle_jobs.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	idle_jobs.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	idle_jobs.add_theme_color_override("font_outline_color", Color("211c26"))
+	idle_jobs.add_theme_constant_override("outline_size", 3)
+	add_child(idle_jobs)
 
-## Action keys set into the counter edge, under the mat.
 func _build_strip() -> void:
 	actions = HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 8)
+	actions.add_theme_constant_override("separation", 6)
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(actions)
 
-## The stock crate: what the shop holds. During a sale, a click recommends.
 func _build_crate() -> void:
-	crate = UIKit.plate(UIKit.skin("socket", "sm", 16.0))
+	# The copper drawer frame and dark interior are supplied by the scene art.
+	crate = UIKit.plate(_flat(Color.TRANSPARENT, Color.TRANSPARENT, 0))
 	add_child(crate)
-	var v := UIKit.vbox(8)
+	var v := UIKit.vbox(5)
 	crate.add_child(v)
 	var head := UIKit.hbox(8)
-	head.add_child(UIKit.label("货箱", 20, UIKit.AMBER))
-	stock_count = UIKit.label("", 16, UIKit.MUTED)
-	stock_count.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(UIKit.label("在库货物", 19, UIKit.AMBER))
+	stock_count = UIKit.label("", 17, UIKit.MUTED)
 	head.add_child(stock_count)
 	head.add_child(UIKit.spacer(false))
-	var open_stock := UIKit.button("整理仓储", "chip", Vector2(0, 32), 15, "warehouse")
-	open_stock.add_theme_constant_override("icon_max_width", 20)
-	open_stock.pressed.connect(func(): shell.go("warehouse"))
+	var open_stock := UIKit.button("整理抽屉", "chip", Vector2(100, 28), 16)
+	open_stock.pressed.connect(func():
+		if not _scene_blocked():
+			shell.go("warehouse"))
 	head.add_child(open_stock)
 	v.add_child(head)
 	var sc := ScrollContainer.new()
@@ -247,173 +311,197 @@ func _build_crate() -> void:
 	stock_grid = UIKit.grid(CRATE_COLS, 6)
 	sc.add_child(stock_grid)
 
-## The archive box: the shop's paperwork, one drawer each.
-func _build_archive() -> void:
-	archive = UIKit.plate(UIKit.skin("graphite", "sm", 16.0))
-	add_child(archive)
-	var v := UIKit.vbox(8)
-	archive.add_child(v)
-	v.add_child(UIKit.label("档案箱", 20, UIKit.AMBER))
-	var row := UIKit.hbox(8)
-	v.add_child(row)
-	for spec in [["订单委托", "orders"], ["人物档案", "handbook"], ["经营手册", "help"], ["今日账本", "report"], ["站内消息", "speech"]]:
-		var b := UIKit.button(spec[0], "secondary", Vector2(76, 92), 14, spec[1])
-		UIKit.compact(b)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		b.add_theme_constant_override("icon_max_width", 34)
-		var drawer: String = spec[1]
-		b.pressed.connect(func(): _open_drawer(drawer))
-		row.add_child(b)
-		if spec[1] == "orders":
-			orders_tile = b
-	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
+func _build_equipment() -> void:
+	_fixture("warehouse", Rect2(200, 735, 312, 280), "仓储 · 隔离柜", func(): shell.go("warehouse"))
+	_fixture("display", Rect2(170, 220, 386, 314), "陈列柜 · 选货", func(): shell.go("warehouse"), false)
+	display_goods = Control.new()
+	display_goods.position = Vector2(170, 220)
+	display_goods.size = Vector2(386, 314)
+	display_goods.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(display_goods)
+	_fixture("repair", Rect2(1410, 730, 400, 290), "维修工作台", func(): _open_instrument("repair"))
+	# The gauge takes precedence over the surrounding repair station.
+	_fixture("inspect", Rect2(1414, 730, 151, 158), "鉴定仪", func(): _open_instrument("inspect"), true, Color("a3d6c4"))
+	_fixture("orders", Rect2(1420, 240, 240, 230), "订单终端", func(): shell.go("orders"))
+	orders_readout = UIKit.label("", 19, Color("a6d9ba"), true)
+	orders_readout.position = Vector2(1486, 280)
+	orders_readout.size = Vector2(140, 105)
+	orders_readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	orders_readout.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	orders_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(orders_readout)
+	_fixture("people", Rect2(1700, 320, 115, 140), "人物档案", func(): shell.open_people())
+	_fixture("bell", Rect2(488, 575, 105, 85), "接客铃", _bell_clicked, false)
+	status_readout = UIKit.label("", 20, Color("ecdabb"), true)
+	status_readout.position = Vector2(1394, 185)
+	status_readout.size = Vector2(435, 32)
+	status_readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	status_readout.add_theme_color_override("font_outline_color", Color("261d28"))
+	status_readout.add_theme_constant_override("outline_size", 4)
+	status_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(status_readout)
+	var x := 1637.0
+	for spec in [["help", "手册", "help"], ["sound", "声音", "soundOn"], ["settings", "设置", "settings"]]:
+		var key: String = spec[0]
+		var b := UIKit.button("", "chip", Vector2(48, 42), 17, spec[2])
+		b.position = Vector2(x, 112)
+		b.tooltip_text = spec[1]
+		b.add_theme_constant_override("icon_max_width", 26)
+		b.pressed.connect(func(): _utility_clicked(key, b))
+		add_child(b)
+		fixture_buttons[key] = b
+		x += 60
 
-func _open_drawer(drawer: String) -> void:
-	shell.sound("page", -8)
-	match drawer:
-		"orders": shell.go("orders")
-		"handbook": shell.open_people()
+func _refresh_utility_icons() -> void:
+	if fixture_buttons.has("sound"):
+		fixture_buttons.sound.icon = UIKit.icon("soundOn" if Game.prefs.sound else "soundOff")
+
+func _bell_clicked() -> void:
+	if Game.state.trade == null and Game.state.phase == "open":
+		_ring()
+	else:
+		shell.sound("check", -8, 1.3)
+
+func _utility_clicked(key: String, button: Button) -> void:
+	if _scene_blocked():
+		return
+	match key:
 		"help": shell.open_help()
-		"report": shell.go("report")
-		"speech": shell.open_events()
+		"settings": shell.open_settings()
+		"sound":
+			Game.prefs.sound = not Game.prefs.sound
+			Game.save_prefs()
+			shell._apply_sound()
+			button.icon = UIKit.icon("soundOn" if Game.prefs.sound else "soundOff")
+
+func _open_instrument(which: String) -> void:
+	var it = Model.trade_item(Game.state) if Game.state.trade != null else null
+	shell.go(which, it.uid if it != null else "")
 
 func relayout() -> void:
 	if not is_instance_valid(terminal) or not is_instance_valid(crate):
 		return
 	_align_stage()
-	var vis := get_viewport().get_visible_rect().size
-	var top := 96.0
-	var a := _art_ui(250, 594)
-	var b := _art_ui(1500, 736)
-	mat_rect = Rect2(a, b - a)
-	var counter_top := _art_ui(0, 586).y
-	# Fixtures along the walls.
-	board.position = Vector2(SIDE, top)
-	board_title.custom_minimum_size.x = 408
-	board.reset_size()
-	terminal.position = Vector2(vis.x - SIDE - TERMINAL_W, top)
-	footer.custom_minimum_size.x = TERMINAL_W - 36
-	terminal.reset_size()
-	# Visitor and speech in the room.
-	STAND = Vector2(lerpf(a.x, b.x, 0.36), counter_top + 150.0)
-	if is_instance_valid(customer) and not customer.walking:
-		customer.position = STAND
-	var bx := STAND.x + 200.0
-	bubble_rect = Rect2(bx, 150, terminal.position.x - 24 - bx, 0)
+	terminal.position = Vector2(1330, 543)
+	terminal.size = Vector2(486, 140)
+	crate.position = Vector2(604, 759)
+	crate.size = Vector2(672, 224)
+	actions.position = Vector2(560, 685)
+	actions.size = Vector2(1250, 44)
 	bubble.position = bubble_rect.position
-	# Wrapping labels need a real width, or they measure one glyph per line
-	# and the plate grows to the bottom of the screen.
-	bubble_label.custom_minimum_size.x = bubble_rect.size.x - 32
-	bubble.size = Vector2(bubble_rect.size.x, 0)
-	bubble.reset_size()
-	# The mat: lot, bell, paper tag.
-	MAT_POS = Vector2(lerpf(a.x, b.x, 0.56), mat_rect.position.y + 52.0)
-	drag_rect = Rect2(Vector2(a.x + 330, mat_rect.position.y + 20), Vector2(maxf(80, mat_rect.size.x - 470), maxf(30, mat_rect.size.y - 70)))
-	bell.position = Vector2(a.x + 96, mat_rect.end.y - 26)
-	tag.position = Vector2(a.x + 170, mat_rect.position.y + 18)
-	tag_name.custom_minimum_size.x = 226
-	tag_info.custom_minimum_size.x = 226
-	tag.reset_size()
-	idle_label.position = Vector2(a.x, mat_rect.get_center().y - 18)
-	idle_label.size = Vector2(mat_rect.size.x, 40)
+	bubble.size = bubble_rect.size
+	bubble_name.position = Vector2(12, 10)
+	bubble_name.size = Vector2(251, 27)
+	bubble_label.position = Vector2(12, 43)
+	bubble_label.size = Vector2(251, 188)
+	tag.position = Vector2(666, 572)
+	tag.size = Vector2(222, 58)
+	tag_name.custom_minimum_size.x = 210
+	tag_info.custom_minimum_size.x = 210
+	idle_label.position = Vector2(692, 590)
+	idle_label.size = Vector2(610, 56)
+	if is_instance_valid(customer) and not customer.walking:
+		customer.position = STAND - resident_window.position
 	if is_instance_valid(mat_item):
 		mat_item.bounds = drag_rect
 		if not mat_item.dragging:
 			mat_item.position = MAT_POS
-	# Under the counter: crate, keys, archive.
-	var low := mat_rect.end.y + 14.0
-	crate.position = Vector2(SIDE, low)
-	crate.size = Vector2(CRATE_W, vis.y - 14 - low)
-	archive.position = Vector2(vis.x - SIDE - CRATE_W, low)
-	archive.size = Vector2(CRATE_W, vis.y - 14 - low)
-	var strip_x := SIDE + CRATE_W + 16
-	actions.position = Vector2(strip_x, low)
-	actions.size = Vector2(vis.x - 2 * strip_x, 58)
 
 func _refresh_board() -> void:
 	var s := Game.state
 	var day := int(s.day)
-	board_day.text = "第%02d天" % day
+	board_day.text = "第 %02d 天 · %s" % [day, "营业" if s.phase == "open" else "休息"]
+	var rent_day := mini(int(ceil(day / 7.0)) * 7, 21)
+	board_rent.text = "今晚缴租 · 点此看事件" if rent_day == day else "租期余 %d 天 · 事件" % (rent_day - day)
+	fixture_buttons.events.tooltip_text = "今日事件 · " + ("已处理" if Game.event_done() else "待查看")
+	status_readout.text = "%s Cr   AP %d   关注 %d" % [Model.jnum(s.cash), int(s.ap), int(s.risk)]
+	var active := 0
+	for order in s.orders:
+		if order.status == "active":
+			active += 1
+	orders_readout.text = "委托订单\n%d 笔待办" % active
 	var event = Game.today_event()
-	board_title.text = event.title if event != null else "今天没有站务消息"
-	if event == null:
-		board_state.text = "整理货物，准备迎接来客"
+	idle_jobs.text = "轨道旧货局 · 今日营业\n\n" + (event.title + "\n点左上日牌查看站内消息" if event != null and not Game.event_done() else "整理陈列 · 鉴定旧物 · 维修履约") + "\n\n服务铃就在柜台左侧"
+
+func _stock_slot(it: Dictionary, picking: bool, display := false) -> Button:
+	var def := GameData.def(it.defId)
+	var t = Game.state.trade
+	var why = Model.sale_eligibility(it, t.npcId) if picking and it.owner == "shop" else null
+	if picking and it.owner != "shop":
+		why = "不是店铺自有货"
+	var slot := UIKit.button("", "chip", Vector2(76, 78) if display else Vector2(58, 58), 14)
+	slot.icon = UIKit.item_icon(it.defId)
+	slot.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	slot.expand_icon = true
+	slot.add_theme_constant_override("icon_max_width", 74 if display else 52)
+	if display:
+		slot.add_theme_stylebox_override("normal", _flat(Color.TRANSPARENT))
+		slot.add_theme_stylebox_override("hover", _flat(Color(0.6, 0.8, 0.7, 0.12), Color("e7ba70")))
 	else:
-		board_state.text = "[已处理]" if Game.event_done() else "[待处理 · 点此查看]"
-	board_state.add_theme_color_override("font_color", UIKit.AMBER if event != null and not Game.event_done() else UIKit.MUTED)
-	var rent_day := int(ceil(day / 7.0)) * 7
-	if rent_day > 21:
-		board_rent.text = "本期租约已到最后一天"
-	else:
-		var left := rent_day - day
-		board_rent.text = "租金 %s · %s" % [UIKit.money(Model.rent_due(rent_day)), "今晚结算" if left == 0 else "%d 天后到期" % left]
+		slot.add_theme_stylebox_override("normal", _flat(Color("29222d"), Color("65524e"), 2))
+	if picking and why == null:
+		slot.add_theme_stylebox_override("normal", _flat(Color(0.24, 0.48, 0.4, 0.3), Color("8db99d"), 2))
+	elif picking:
+		slot.modulate.a = 0.45
+	slot.tooltip_text = "%s · 品相 %s%s" % [def.name, UIKit.pct(it.condition), " · 陈列中" if it.location == "display" else ""]
+	slot.tooltip_text += ("\n点击推荐给顾客" if why == null else "\n" + String(why)) if picking else "\n点击在仓储查看"
+	var uid: String = it.uid
+	var reason = why
+	slot.pressed.connect(func(): _stock_clicked(uid, picking, reason))
+	return slot
 
 func _refresh_desk() -> void:
 	if crate == null:
 		return
 	_refresh_board()
 	UIKit.clear(stock_grid)
+	UIKit.clear(display_goods)
 	var s := Game.state
 	var items: Array = s.inventory
-	stock_count.text = "在库 %d 件" % items.size()
+	stock_count.text = "%d 件 · 点击选货" % items.size()
 	var t = s.trade
 	var picking: bool = t != null and t.kind == "sell" and not t.has("selectedUid") and not t.locked
 	for i in maxi(CRATE_COLS * 3, ceili(items.size() / float(CRATE_COLS)) * CRATE_COLS):
-		var slot := UIKit.button("", "chip", Vector2(56, 56), 14)
-		slot.tooltip_text = "空货位"
 		if i < items.size():
-			var it: Dictionary = items[i]
-			var def := GameData.def(it.defId)
-			slot.icon = UIKit.item_icon(it.defId)
-			slot.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			slot.expand_icon = true
-			slot.add_theme_constant_override("icon_max_width", 46)
-			var why = Model.sale_eligibility(it, t.npcId) if picking and it.owner == "shop" else null
-			var line := "%s · 品相%s%s" % [def.name, UIKit.pct(it.condition), " · 陈列中" if it.location == "display" else ""]
-			if picking:
-				if it.owner != "shop":
-					why = "不是店铺自有货"
-				slot.tooltip_text = line + ("\n点击推荐给顾客" if why == null else "\n" + String(why))
-				slot.add_theme_stylebox_override("normal", UIKit.key_style("primary" if why == null else "chip", "normal"))
-				if why != null:
-					slot.modulate = Color(1, 1, 1, 0.45)
-			else:
-				slot.tooltip_text = line + "\n点击在仓储查看"
-				if it.location == "display":
-					slot.add_theme_stylebox_override("normal", UIKit.key_style("good", "normal"))
-			var uid: String = it.uid
-			var reason = why
-			slot.pressed.connect(func(): _stock_clicked(uid, picking, reason))
+			stock_grid.add_child(_stock_slot(items[i], picking))
 		else:
-			slot.disabled = true
-		stock_grid.add_child(slot)
-	var active := 0
-	for o in s.orders:
-		if o.status == "active":
-			active += 1
-	orders_tile.text = "订单委托" if active == 0 else "订单 · %d" % active
+			var empty := Control.new()
+			empty.custom_minimum_size = Vector2(58, 58)
+			empty.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			stock_grid.add_child(empty)
+	# Actual shop-owned goods populate the painted shelves, display goods first.
+	var shown: Array = []
+	for it in items:
+		if it.owner == "shop" and it.location == "display":
+			shown.append(it)
+	for it in items:
+		if it.owner == "shop" and it.location != "display":
+			shown.append(it)
+	for i in mini(shown.size(), 9):
+		var slot := _stock_slot(shown[i], picking, true)
+		slot.position = Vector2(30 + (i % 3) * 124, 17 + (i / 3) * 103)
+		display_goods.add_child(slot)
+	if shown.is_empty():
+		var empty := UIKit.label("陈列架暂空\n点击整理仓储", 21, UIKit.MUTED)
+		empty.position = Vector2(56, 109)
+		empty.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		display_goods.add_child(empty)
 	if busy and t == null:
-		# The model has already closed the trade, but the visitor and the lot are
-		# still on stage until the exit animation finishes.
 		return
 	var it = Model.trade_item(s) if t != null else null
 	tag.visible = it != null
 	if it != null:
 		tag_name.text = GameData.def(it.defId).name
-		tag_info.text = "品相 %s · %s · 取证 %d/6" % [UIKit.pct(it.condition), "正常运转" if it.working else "存在故障", Model.evidence_count(it)]
-		tag.reset_size()
+		tag_info.text = "%s · %s · 物证 %d" % [UIKit.pct(it.condition), "运转" if it.working else "故障", Model.evidence_count(it)]
 	idle_label.visible = it == null
+	idle_jobs.visible = t == null
 	if t == null:
-		idle_label.text = "按服务铃接待下一位来客" if s.phase == "open" and s.cursor < Model.daily_visit_limit() else "今天的预约都接待完了"
+		idle_label.text = "按左侧服务铃 · 接待下一位来客" if s.phase == "open" and s.cursor < Model.daily_visit_limit() else "预约已接待完 · 打开日结账本"
 	else:
-		idle_label.text = "从左下货箱挑一件货推荐给 %s" % GameData.npc(t.npcId).name
+		idle_label.text = "请从陈列柜或下方抽屉选货"
 
 func _stock_clicked(uid: String, picking: bool, why) -> void:
-	if busy:
+	if busy or _scene_blocked():
 		return
 	if not picking:
 		shell.go("warehouse", uid)
@@ -424,78 +512,81 @@ func _stock_clicked(uid: String, picking: bool, why) -> void:
 	shell.sound("click", -6)
 	Game.dispatch({"type": "SELECT_TRADE", "uid": uid})
 
-# ---------------------------------------------------------------- terminal
-
 func _build_terminal() -> void:
-	terminal = UIKit.plate(UIKit.skin("strip", "sm", 20.0))
+	terminal = UIKit.plate(_flat(Color("282a2f"), Color("9d8060"), 0))
 	add_child(terminal)
-	var v := UIKit.vbox(10)
-	terminal.add_child(v)
-	v.add_child(UIKit.label("交易终端", 22, UIKit.AMBER))
-	screen = SubViewport.new()
-	screen.size = Vector2i(440, 190)
-	screen.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	add_child(screen)
-	var bgc := ColorRect.new()
-	bgc.color = Color("041010")
-	bgc.size = Vector2(440, 190)
-	screen.add_child(bgc)
-	scr.head = _scr_label(Vector2(22, 8), 20, UIKit.CYAN)
-	scr.price = _scr_label(Vector2(18, 28), 60, UIKit.AMBER, true)
-	scr.line1 = _scr_label(Vector2(22, 100), 19, UIKit.CYAN)
-	scr.line2 = _scr_label(Vector2(22, 128), 19, Color("ffb48a"))
-	scr.line3 = _scr_label(Vector2(22, 156), 17, UIKit.MUTED)
-	var crt := TextureRect.new()
-	crt.texture = screen.get_texture()
-	crt.custom_minimum_size = Vector2(384, 166)
-	crt.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	crt.stretch_mode = TextureRect.STRETCH_SCALE
-	var frame := UIKit.plate(UIKit.inset_style(0))
-	frame.add_child(crt)
-	v.add_child(frame)
-	offer_panel = UIKit.plate(UIKit.inset_style(10))
-	var oh := UIKit.hbox(12)
-	offer_panel.add_child(oh)
+	var content := Control.new()
+	content.custom_minimum_size = Vector2(486, 140)
+	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	terminal.add_child(content)
+	scr.head = _terminal_label(content, Vector2(12, 5), Vector2(318, 26), 18, UIKit.CYAN)
+	scr.price = _terminal_label(content, Vector2(333, 2), Vector2(140, 32), 28, UIKit.AMBER, true)
+	scr.line1 = _terminal_label(content, Vector2(12, 32), Vector2(465, 24), 17, UIKit.TEXT)
+	scr.line2 = _terminal_label(content, Vector2(12, 54), Vector2(465, 24), 16, UIKit.MUTED)
+	scr.line3 = _terminal_label(content, Vector2.ZERO, Vector2.ZERO, 16, UIKit.MUTED)
+	scr.line3.visible = false
+	offer_panel = UIKit.plate(_flat(Color.TRANSPARENT))
+	offer_panel.position = Vector2(2, 77)
+	offer_panel.size = Vector2(480, 60)
+	content.add_child(offer_panel)
+	var controls := Control.new()
+	controls.custom_minimum_size = Vector2(480, 60)
+	controls.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	offer_panel.add_child(controls)
 	dial = Dial.new()
-	dial.custom_minimum_size = Vector2(118, 118)
-	dial.tooltip_text = "上下拖动旋钮调价 · 滚轮 ±5"
+	dial.position = Vector2(2, -9)
+	dial.tooltip_text = "上下拖动旋钮调价 · 滚轮 ±5；也可用精确加减按钮"
 	dial.changed.connect(func(val):
+		if _scene_blocked():
+			# Signal delivery follows Dial.set_value; restore the accepted quote
+			# without emitting again if a programmatic change bypassed input.
+			dial.set_value(_last_offer_value, false)
+			return
 		_update_offer_value(val)
 		shell.sound("click", -20, 1.7))
-	oh.add_child(dial)
-	var ov := UIKit.vbox(4)
-	ov.alignment = BoxContainer.ALIGNMENT_CENTER
-	ov.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ov.add_child(UIKit.label("我的出价", 16, UIKit.MUTED))
-	offer_label = UIKit.label("—", 40, UIKit.AMBER, true)
-	ov.add_child(offer_label)
-	# Exact steps for players who find the knob too coarse or too fiddly.
-	var nudges := UIKit.hbox(5)
+	controls.add_child(dial)
+	# Dial._init installs a 150px minimum. Apply the compact minimum in-tree
+	# and resize after minimum-size invalidation has propagated, otherwise a
+	# same-frame size assignment is clamped back to that cached 150px value.
+	dial.custom_minimum_size = Vector2(68, 68)
+	dial.set_deferred("size", Vector2(68, 68))
+	offer_label = UIKit.label("—", 28, UIKit.AMBER, true)
+	offer_label.position = Vector2(77, 0)
+	controls.add_child(offer_label)
+	var nudges := UIKit.hbox(4)
+	nudges.position = Vector2(238, -2)
 	for d in [-10, -1, 1, 10]:
-		var k := UIKit.button(("+%d" % d) if d > 0 else ("−%d" % -d), "chip", Vector2(50, 36), 16)
+		var k := UIKit.button(("+%d" % d) if d > 0 else ("−%d" % -d), "chip", Vector2(54, 28), 16)
 		var step: int = d
 		k.pressed.connect(func():
-			dial.set_value(dial.value + step)
-			dial.queue_redraw())
+			if not _scene_blocked():
+				dial.set_value(dial.value + step)
+				dial.queue_redraw())
 		nudges.add_child(k)
 		nudge_keys.append(k)
-	ov.add_child(nudges)
-	oh.add_child(ov)
-	v.add_child(offer_panel)
-	evidence_box = UIKit.vbox(6)
-	evidence_box.add_child(UIKit.label("援引物证（可选）", 15, UIKit.MUTED))
+	controls.add_child(nudges)
+	evidence_box = UIKit.vbox(0)
+	evidence_box.position = Vector2(78, 32)
+	evidence_box.size = Vector2(396, 28)
+	controls.add_child(evidence_box)
 	chips = HFlowContainer.new()
-	chips.add_theme_constant_override("h_separation", 6)
-	chips.add_theme_constant_override("v_separation", 6)
+	chips.add_theme_constant_override("h_separation", 4)
+	chips.add_theme_constant_override("v_separation", 2)
 	evidence_box.add_child(chips)
-	v.add_child(evidence_box)
-	footer = UIKit.label("", 16, UIKit.MUTED, false, true)
-	v.add_child(footer)
+	footer = UIKit.label("", 16, Color("d0c6ad"), false, true)
+	footer.position = Vector2(1046, 443)
+	footer.size = Vector2(268, 43)
+	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	footer.visible = false
+	add_child(footer)
 
-func _scr_label(pos: Vector2, size: int, color: Color, is_mono := false) -> Label:
-	var l := UIKit.label("", size, color, is_mono)
+func _terminal_label(parent: Control, pos: Vector2, extent: Vector2, font_size: int, color: Color, mono := false) -> Label:
+	var l := UIKit.label("", font_size, color, mono)
 	l.position = pos
-	screen.add_child(l)
+	l.size = extent
+	l.clip_text = true
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(l)
 	return l
 
 const ACTION_ICONS := {"出价": "credits", "接受报价": "check", "拿去鉴定": "inspect", "签抵押合同": "lock", "抵押（需 2 条物证）": "lock",
@@ -507,12 +598,14 @@ func _act(text: String, kind: String, fn: Callable, enabled := true, _wide := fa
 	for k in ACTION_ICONS:
 		if text.begins_with(k):
 			icon = ACTION_ICONS[k]
-	var b := UIKit.button(text, kind, Vector2(0, 58), 20, icon)
-	b.custom_minimum_size.x = 150
-	b.add_theme_constant_override("icon_max_width", 28)
+	var b := UIKit.button(text, kind, Vector2(0, 44), 18, icon)
+	b.custom_minimum_size.x = 92
+	b.add_theme_constant_override("icon_max_width", 22)
 	b.disabled = not enabled or busy
 	b.tooltip_text = tip
 	b.pressed.connect(func():
+		if _scene_blocked():
+			return
 		shell.sound("click", -6)
 		fn.call())
 	actions.add_child(b)
@@ -582,14 +675,16 @@ func _refresh() -> void:
 			for e in it.evidence:
 				if not GameData.def(it.defId).tools.has(e):
 					continue
-				var chip := UIKit.button(GameData.tool(e).short, "primary" if chosen_evidence == e else "chip", Vector2(0, 36), 16)
+				var chip := UIKit.button(GameData.tool(e).short, "primary" if chosen_evidence == e else "chip", Vector2(0, 26), 15)
 				var eid: String = e
 				chip.pressed.connect(func():
+					if _scene_blocked():
+						return
 					chosen_evidence = "" if chosen_evidence == eid else eid
 					_refresh())
 				chips.add_child(chip)
 			if chips.get_child_count() == 0:
-				chips.add_child(UIKit.label("还没有相关物证：先拿去鉴定。", 15, UIKit.MUTED))
+				chips.add_child(UIKit.label("无物证 · 点击鉴定仪取证", 15, UIKit.MUTED))
 			offer_button = _act("出价 " + UIKit.money(dial.value), "primary", func(): _offer())
 			_act("接受报价", "good", func(): Game.dispatch({"type": "ACCEPT"}))
 			_act("拿去鉴定", "secondary", func(): shell.go("inspect", it.uid))
@@ -600,11 +695,13 @@ func _refresh() -> void:
 				_act("换一件", "secondary", _pick_goods)
 			_act("送客", "danger", func(): Game.dispatch({"type": "REFUSE"}))
 		footer.text = "%s：%s" % [npc.name, Model.customer_need(t.npcId)]
-	dial.enabled = dial_on and not busy
+	dial.enabled = dial_on and not busy and not _scene_blocked()
 	for k in nudge_keys:
 		(k as Button).disabled = not dial.enabled
 	offer_panel.visible = dial_on
 	evidence_box.visible = dial_on
+	footer.visible = t != null
+	footer.tooltip_text = footer.text
 	for k in ["line1", "line2", "line3"]:
 		var l: Label = scr[k]
 		if l.text.length() > 21:
@@ -612,6 +709,7 @@ func _refresh() -> void:
 	dial.queue_redraw()
 
 func _update_offer_value(value: int) -> void:
+	_last_offer_value = value
 	offer_label.text = UIKit.money(value)
 	if is_instance_valid(offer_button):
 		offer_button.text = "出价 " + UIKit.money(value)
@@ -673,20 +771,28 @@ func _pick_goods() -> void:
 # ---------------------------------------------------------------- bubble
 
 func _build_bubble() -> void:
-	bubble = UIKit.plate(UIKit.paper_style(18))
+	# A plain Panel deliberately does not inherit the wrapped text's minimum
+	# height. Long dialogue scrolls inside the fixed service-window note.
+	bubble = Panel.new()
+	bubble.add_theme_stylebox_override("panel", _flat(Color("ded0ac"), Color("8e775c"), 0))
+	bubble.clip_contents = true
 	bubble.modulate.a = 0.0
 	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bubble)
-	var v := UIKit.vbox(4)
-	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bubble.add_child(v)
 	bubble_name = UIKit.label("", 17, UIKit.RUST)
+	bubble_name.clip_text = true
 	bubble_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(bubble_name)
-	bubble_label = UIKit.label("", 22, UIKit.INK, false, true)
+	bubble.add_child(bubble_name)
+	bubble_label = RichTextLabel.new()
+	bubble_label.fit_content = false
+	bubble_label.bbcode_enabled = false
+	bubble_label.scroll_active = true
 	bubble_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	bubble_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(bubble_label)
+	bubble_label.add_theme_font_override("normal_font", UIKit.font)
+	bubble_label.add_theme_font_size_override("normal_font_size", 21)
+	bubble_label.add_theme_color_override("default_color", Color("332d32"))
+	bubble_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	bubble.add_child(bubble_label)
 
 func _say(text: String, type := true, mood := "") -> void:
 	if customer == null or not is_instance_valid(customer):
@@ -696,7 +802,8 @@ func _say(text: String, type := true, mood := "") -> void:
 	var npc := GameData.npc(customer.npc_id)
 	bubble_name.text = "%s · %s" % [npc.name, npc.title]
 	bubble_label.text = text
-	bubble.reset_size()
+	bubble_label.tooltip_text = text
+	bubble_label.scroll_to_line(0)
 	var dur := text.length() * 0.035
 	customer.say(dur + 0.2)
 	bubble.modulate.a = 1.0
@@ -898,7 +1005,7 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 	add_child(paper)
 	paper.reset_size()
 	# Prints below the till, clear of the visitor's speech.
-	var final_pos := Vector2(terminal.position.x + (terminal.size.x - paper.size.x) * 0.5, terminal.position.y + terminal.size.y + 14)
+	var final_pos := Vector2(1030, 700)
 	paper.pivot_offset = Vector2(paper.size.x * 0.5, 0)
 	if Game.prefs.reduced_motion:
 		paper.position = final_pos
@@ -960,10 +1067,10 @@ func _stamp(paper: Control, pawn: bool, t: Dictionary, animate: bool) -> void:
 # ---------------------------------------------------------------- input & frame
 
 func world_cursor_shape(p: Vector2) -> int:
+	if busy or _scene_blocked():
+		return Input.CURSOR_ARROW
 	if is_instance_valid(mat_item) and mat_item.dragging:
 		return Input.CURSOR_DRAG
-	if busy or shell.modal_open():
-		return Input.CURSOR_ARROW
 	if is_instance_valid(mat_item) and mat_item.draggable and not mat_item.busy and mat_item.contains(p):
 		return Input.CURSOR_CAN_DROP
 	if is_instance_valid(bell) and bell.hit_test(p):
@@ -973,7 +1080,7 @@ func world_cursor_shape(p: Vector2) -> int:
 	return Input.CURSOR_ARROW
 
 func _unhandled_input(e: InputEvent) -> void:
-	if shell.modal_open() or busy:
+	if _scene_blocked() or busy:
 		return
 	var p: Vector2 = shell.world_mouse()
 	if e is InputEventMouseButton and e.pressed:
@@ -1005,14 +1112,14 @@ func _over_customer(p: Vector2) -> bool:
 
 func _process(_delta: float) -> void:
 	_align_stage()
-	# Container minimum sizes settle over a few frames after content changes;
-	# keep the console hugging its contents instead of keeping an old height.
-	if is_instance_valid(terminal) and terminal.size.y > terminal.get_combined_minimum_size().y + 1.0:
-		terminal.reset_size()
+	if _scene_blocked():
+		if is_instance_valid(mat_item) and mat_item.dragging:
+			mat_item.end_drag()
+		return
 	var p: Vector2 = shell.world_mouse()
-	if mat_item != null and is_instance_valid(mat_item):
+	if is_instance_valid(mat_item):
 		if mat_item.dragging:
 			mat_item.drag_to(p)
 		mat_item.hover = lerpf(mat_item.hover, 1.0 if mat_item.contains(p) or mat_item.dragging else 0.0, 0.2)
-	if customer != null and is_instance_valid(customer):
+	if is_instance_valid(customer):
 		customer.look = clampf((p.x - customer.global_position.x) / 700.0, -1.0, 1.0)

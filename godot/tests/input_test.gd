@@ -15,6 +15,8 @@ func click_button(button: Button) -> void:
 		check(false, "Required action button exists")
 		return
 	var center := button.get_global_rect().get_center()
+	if button.get_viewport() != get_viewport():
+		center += shell.workspace_container.get_global_rect().position
 	_send_motion(center)
 	await get_tree().process_frame
 	_send_button(center, true)
@@ -96,17 +98,19 @@ func run(s) -> void:
 	check(quote == mini(old_value + 5, shell.page.dial.max_value), "Wheel changes quote")
 	var offer := find_action("出价")
 	check(offer != null and offer.text.contains(str(quote)), "Offer button shows the chosen quote")
-	await click_button(shell.nav_buttons.inspect)
-	check(shell.page_name == "inspect", "Navigation opens inspection")
-	await click_button(shell.nav_buttons.counter)
+	await click_button(shell.page.fixture_buttons.inspect)
+	check(shell.workspace_open() and shell.workspace_shell.page_name == "inspect", "Inspection equipment opens its drawer")
+	await click_button(shell.workspace_close)
 	check(shell.page_name == "counter" and shell.page.dial.value == quote, "Returning preserves the chosen quote")
 	await click_button(find_action("接受报价"))
 	check(Game.state.trade != null and Game.state.trade.locked, "Accept button locks the price")
 	var cash_before: float = Game.state.cash
 	await click_button(find_action("确认钱货交割"))
 	check(Game.state.trade == null and Game.state.cash != cash_before, "Delivery button completes the transaction")
-	await click_button(shell.nav_buttons.orders)
-	check(shell.page_name == "orders", "Navigation opens orders")
-	await click_button(shell.nav_buttons.report)
-	check(shell.page_name == "report", "Navigation opens the daily ledger")
+	await get_tree().create_timer(4.0).timeout
+	await click_button(shell.page.fixture_buttons.orders)
+	check(shell.workspace_open() and shell.workspace_shell.page_name == "orders", "CRT equipment opens orders")
+	await click_button(shell.workspace_close)
+	await click_button(shell.page.fixture_buttons.report)
+	check(shell.workspace_open() and shell.workspace_shell.page_name == "report", "Counter ledger opens daily accounts")
 	get_tree().quit(1 if not failures.is_empty() else 0)

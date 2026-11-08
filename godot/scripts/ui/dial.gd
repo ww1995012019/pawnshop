@@ -34,6 +34,9 @@ func _gui_input(e: InputEvent) -> void:
 		set_value(_start_v + int(round((_start_y - (e as InputEventMouseMotion).position.y) / 3.0)) * step)
 		accept_event()
 
+func cancel_drag() -> void:
+	_drag = false
+
 func set_value(v: int, emit := true) -> void:
 	v = clampi(v, min_value, max_value)
 	if v != value:
