@@ -62,18 +62,27 @@ const SKIN_SCALE := {"lg": 0.45, "sm": 0.2, "xs": 0.13}
 const SKIN_CAP := {"glass": 84, "strip": 70, "amber": 84, "graphite": 84, "socket": 96, "rail": 70, "paper": 40, "screen": 76}
 const SKIN_EDGE := {"glass": 22, "strip": 22, "amber": 22, "graphite": 22, "socket": 22, "rail": 22, "paper": 8, "screen": 6}
 
+## Painted rim thickness per side (left, top, right, bottom) in the 512 px
+## source cell, measured from the art. The nine-patch border must cover the
+## whole rim, or part of the decoration lands in the stretched centre and the
+## plate looks warped as it grows.
+const SKIN_RIM := {"glass": [49, 50, 41, 63], "strip": [27, 32, 27, 53], "amber": [46, 58, 54, 70],
+	"graphite": [53, 44, 44, 69], "socket": [74, 74, 74, 97], "rail": [30, 54, 38, 83],
+	"paper": [9, 9, 9, 9], "screen": [41, 41, 41, 49]}
+
 static func skin(name: String, size := "lg", pad := -1.0, tint := Color.WHITE) -> StyleBoxTexture:
 	var s := StyleBoxTexture.new()
 	s.texture = tex("res://assets/ui/skin/%s_%s.png" % [name, size])
 	var k: float = SKIN_SCALE[size]
-	s.set_texture_margin_all(roundf(SKIN_CAP[name] * k))
-	# Never draw outside the control: frames pushed past their box got cut
-	# at the screen edge and overlapped neighbours. The thin transparent
-	# border of the source cell is simply part of the inset.
-	# Content always clears the painted rim (keys override this afterwards).
-	var rim := roundf(SKIN_CAP[name] * k) - 4.0
-	var p := maxf(pad, rim) if pad >= 0.0 else rim + 6.0
-	s.set_content_margin_all(p)
+	var rim: Array = SKIN_RIM[name]
+	var sides := [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]
+	for i in 4:
+		# Border: the full rim (and at least the corner ornament), so only
+		# plain plate is ever stretched.
+		s.set_texture_margin(sides[i], ceilf(maxf(float(SKIN_CAP[name]), float(rim[i]) + 6.0) * k))
+		# Content: clear of the rim on that side, never less than asked for.
+		var inner := ceilf(float(rim[i]) * k) + 6.0
+		s.set_content_margin(sides[i], maxf(inner, pad) if pad >= 0.0 else inner + 6.0)
 	s.modulate_color = tint
 	return s
 
@@ -162,7 +171,9 @@ static func label(text: String, size := 22, color := TEXT, is_mono := false, wra
 	if is_mono:
 		l.add_theme_font_override("font", mono)
 	if wrap:
-		l.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+		# Word-smart breaking keeps CJK punctuation off the start of a line
+		# and numbers like "9–90" in one piece.
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return l
 
 static func button(text: String, kind := "secondary", min_size := Vector2(0, 58), size := 22, icon_name := "") -> Button:
@@ -216,6 +227,44 @@ static func _button_feedback(b: Button, target_scale: Vector2, target_color: Col
 	b.set_meta("feedback_tween", tw)
 	tw.tween_property(b, "scale", target_scale, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tw.tween_property(b, "modulate", target_color, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+## A settings row: the whole plate toggles, with a drawn switch at the right.
+static func switch_row(text: String, on: bool, fn: Callable) -> Button:
+	var b := Button.new()
+	b.toggle_mode = true
+	b.button_pressed = on
+	b.text = text
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.custom_minimum_size = Vector2(0, 62)
+	b.focus_mode = Control.FOCUS_ALL
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.add_theme_font_size_override("font_size", 21)
+	for st in ["normal", "hover", "pressed", "disabled", "hover_pressed"]:
+		var base := "hover" if st == "hover" or st == "hover_pressed" else "normal"
+		var sb := key_style("chip", base)
+		sb.content_margin_left = 20
+		sb.content_margin_right = 100
+		b.add_theme_stylebox_override(st, sb)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
+		b.add_theme_color_override(c, TEXT)
+	var sw := SwitchKnob.new()
+	sw.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sw.set_anchors_preset(Control.PRESET_FULL_RECT)
+	b.add_child(sw)
+	b.toggled.connect(func(v: bool):
+		sw.queue_redraw()
+		fn.call(v))
+	return b
+
+class SwitchKnob extends Control:
+	func _draw() -> void:
+		var on: bool = (get_parent() as Button).button_pressed
+		var r := Rect2(size.x - 88, size.y * 0.5 - 16, 64, 32)
+		draw_style_box(UIKit.box(Color("8a5226") if on else Color("10171a"), Color("f0b56a") if on else Color("4b5a5a"), 16, 2, 0, 0), r)
+		var knob := Vector2(r.end.x - 16 if on else r.position.x + 16, r.get_center().y)
+		draw_circle(knob + Vector2(0, 2), 12, Color(0, 0, 0, 0.35))
+		draw_circle(knob, 12, Color("fff3df") if on else Color("8b939a"))
+		draw_string(UIKit.font, Vector2(r.position.x - 44, r.get_center().y + 7), "开" if on else "关", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, UIKit.AMBER if on else UIKit.MUTED)
 
 ## Re-skin an existing key as compact (thin rim, tight padding).
 static func compact(b: Button, kind := "secondary") -> void:

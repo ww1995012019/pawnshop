@@ -397,8 +397,9 @@ func _fit() -> void:
 func _place_toasts() -> void:
 	var r: Rect2 = page.toast_rect() if page != null else Rect2()
 	if r.size == Vector2.ZERO:
+		# Default: a strip under the HUD, over the room's back wall.
 		var vis := get_viewport().get_visible_rect().size
-		r = Rect2(vis.x * 0.5 - 330, 116, 660, 300)
+		r = Rect2(vis.x * 0.5 - 330, 96, 660, 200)
 	# Narrow existing notices first: a Control cannot shrink below its
 	# children's minimum size, so resizing the box first kept the old width.
 	for c in toast_box.get_children():
@@ -489,23 +490,29 @@ func hint(text: String) -> void:
 # ---------------------------------------------------------------- feedback
 
 func toast(text: String, tone := "info") -> void:
+	# The same notice twice in a row (e.g. arriving and then opening the
+	# workbench) only refreshes the one already shown.
+	if toast_box.get_child_count() > 0:
+		var last := toast_box.get_child(toast_box.get_child_count() - 1)
+		if not last.is_queued_for_deletion() and (last.get_child(0) as Label).text == text:
+			return
 	var p := UIKit.plate(UIKit.paper_style(14))
 	var l := UIKit.label(text, 20, UIKit.INK if tone == "info" else UIKit.RUST, false, true)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(toast_box.size.x - 36, 0)
 	p.add_child(l)
 	toast_box.add_child(p)
-	while toast_box.get_child_count() > 3:
+	while toast_box.get_child_count() > 2:
 		var old := toast_box.get_child(0)
 		toast_box.remove_child(old)
 		old.queue_free()
 	if Game.prefs.reduced_motion:
-		get_tree().create_timer(4.0).timeout.connect(func():
-			if is_instance_valid(p):
-				p.queue_free())
+		var hold := p.create_tween()
+		hold.tween_interval(4.0)
+		hold.tween_callback(p.queue_free)
 		return
 	p.modulate.a = 0.0
-	var tw := create_tween()
+	var tw := p.create_tween()
 	tw.tween_property(p, "modulate:a", 1.0, 0.18)
 	tw.tween_interval(3.6)
 	tw.tween_property(p, "modulate:a", 0.0, 0.4)
@@ -518,11 +525,11 @@ func float_text(text: String, at: Vector2, color := UIKit.AMBER) -> void:
 	fx.add_child(l)
 	l.position = at - Vector2(40, 0)
 	if Game.prefs.reduced_motion:
-		get_tree().create_timer(1.2).timeout.connect(func():
-			if is_instance_valid(l):
-				l.queue_free())
+		var hold := l.create_tween()
+		hold.tween_interval(1.2)
+		hold.tween_callback(l.queue_free)
 		return
-	var tw := create_tween()
+	var tw := l.create_tween()
 	tw.tween_property(l, "position:y", at.y - 50, 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(l, "modulate:a", 0.0, 0.9).set_delay(0.3)
 	tw.tween_callback(l.queue_free)
@@ -792,21 +799,13 @@ func open_help() -> void:
 func open_settings() -> void:
 	var m := modal("设置", 640)
 	var body: VBoxContainer = m[0]
-	var snd := CheckButton.new()
-	snd.text = "声音"
-	snd.button_pressed = Game.prefs.sound
-	snd.toggled.connect(func(on):
+	body.add_child(UIKit.switch_row("声音", Game.prefs.sound, func(on: bool):
 		Game.prefs.sound = on
 		Game.save_prefs()
-		_apply_sound())
-	body.add_child(snd)
-	var rm := CheckButton.new()
-	rm.text = "减少动态效果"
-	rm.button_pressed = Game.prefs.reduced_motion
-	rm.toggled.connect(func(on):
+		_apply_sound()))
+	body.add_child(UIKit.switch_row("减少动态效果", Game.prefs.reduced_motion, func(on: bool):
 		Game.prefs.reduced_motion = on
-		Game.save_prefs())
-	body.add_child(rm)
+		Game.save_prefs()))
 	body.add_child(UIKit.rule())
 	var fs := UIKit.button("切换全屏", "secondary", Vector2(0, 56))
 	fs.pressed.connect(func():
@@ -830,6 +829,8 @@ func _close_title() -> void:
 		control.show()
 
 func _show_title() -> void:
+	if is_instance_valid(title):
+		title.queue_free()
 	for control in [page_host, hud, nav, hint_label]:
 		control.hide()
 	title = Control.new()

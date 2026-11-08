@@ -52,6 +52,12 @@ func enter() -> void:
 	_refresh()
 	relayout()
 
+## Notices sit in the board's header row, right of the tabs.
+func toast_rect() -> Rect2:
+	if not is_instance_valid(board):
+		return Rect2()
+	return Rect2(board.position.x + 760, board.position.y + 70, minf(640.0, board.size.x - 800), 150)
+
 func relayout() -> void:
 	if not is_instance_valid(board):
 		return

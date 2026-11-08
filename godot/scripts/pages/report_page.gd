@@ -40,7 +40,9 @@ func relayout() -> void:
 	var r: Rect2 = shell.content_rect()
 	var width := minf(1100.0, r.size.x)
 	var max_height := minf(760.0, r.size.y)
-	var height := minf(max_height, maxf(360.0, body.get_combined_minimum_size().y + 40.0))
+	var style: StyleBox = sheet.get_theme_stylebox("panel")
+	var pad := style.get_content_margin(SIDE_TOP) + style.get_content_margin(SIDE_BOTTOM)
+	var height := minf(max_height, maxf(360.0, body.get_combined_minimum_size().y + pad + 4.0))
 	sheet.position = Vector2(r.position.x + (r.size.x - width) * 0.5, r.position.y)
 	sheet.size = Vector2(width, height)
 

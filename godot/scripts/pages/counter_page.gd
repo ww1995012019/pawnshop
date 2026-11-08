@@ -650,7 +650,8 @@ func _pick_goods() -> void:
 		cv.add_child(UIKit.label(GameData.def(it.defId).name, 19, UIKit.TEXT))
 		cv.add_child(UIKit.label("品相 %s · %s · 物证 %d" % [UIKit.pct(it.condition), "正常" if it.working else "故障", Model.evidence_count(it)], 15, UIKit.MUTED))
 		var est := Model.estimate(it)
-		cv.add_child(UIKit.label("挂牌 %s · 成本 %s · 估值 %s" % [UIKit.money(it.listPrice), UIKit.money(it.cost), Model.jnum(est.low) if est.exact else "%s–%s" % [Model.jnum(est.low), Model.jnum(est.high)]], 15, UIKit.AMBER, false, true))
+		cv.add_child(UIKit.label("挂牌 %s · 成本 %s" % [UIKit.money(it.listPrice), UIKit.money(it.cost)], 15, UIKit.AMBER))
+		cv.add_child(UIKit.label("估值 %s" % (UIKit.money(est.low) if est.exact else "%s–%s Cr" % [Model.jnum(est.low), Model.jnum(est.high)]), 15, UIKit.CYAN))
 		var b := UIKit.button("推荐这件" if why == null else "不符合", "primary" if why == null else "chip", Vector2(0, 44), 17)
 		b.disabled = why != null
 		if why != null:
@@ -700,8 +701,12 @@ func _say(text: String, type := true, mood := "") -> void:
 	if type and not Game.prefs.reduced_motion:
 		bubble_label.visible_ratio = 0.0
 		create_tween().tween_property(bubble_label, "visible_ratio", 1.0, dur)
+		# Typewriter ticks run on a tween owned by this page, so leaving the
+		# counter mid-sentence stops them instead of calling into a freed page.
+		var ticks := create_tween()
 		for i in int(text.length() / 4):
-			get_tree().create_timer(i * 0.14).timeout.connect(func(): shell.sound("click", -26.0, randf_range(1.8, 2.3)))
+			ticks.tween_callback(func(): shell.sound("click", -26.0, randf_range(1.8, 2.3)))
+			ticks.tween_interval(0.14)
 	else:
 		bubble_label.visible_ratio = 1.0
 
@@ -896,9 +901,9 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 	if Game.prefs.reduced_motion:
 		paper.position = final_pos
 		_stamp(paper, pawn, t, false)
-		get_tree().create_timer(3.2).timeout.connect(func():
-			if is_instance_valid(paper):
-				paper.queue_free())
+		var hold := paper.create_tween()
+		hold.tween_interval(3.2)
+		hold.tween_callback(paper.queue_free)
 		return
 	# Print: the slip feeds out of the till edge, line by line.
 	paper.position = final_pos + Vector2(40, -20)

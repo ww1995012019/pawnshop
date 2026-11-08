@@ -140,8 +140,11 @@ func relayout() -> void:
 	instrument_panel.size = Vector2(300, minf(r.size.y, desired_height))
 	detail_panel.position = Vector2(r.end.x - 470, r.position.y)
 	detail_panel.size = Vector2(470, r.size.y)
-	bench.position = Vector2(r.position.x + 320, r.end.y - 220)
-	bench.size = Vector2(r.size.x - 810, 220)
+	# Grow upward to fit the current instrument, so the scale and load rigs
+	# never spill over the hint line under the bench.
+	var h := maxf(220.0, bench.get_combined_minimum_size().y)
+	bench.position = Vector2(r.position.x + 320, r.end.y - h)
+	bench.size = Vector2(r.size.x - 810, h)
 
 func _fill_picker() -> void:
 	picker.clear()
@@ -265,6 +268,9 @@ func _set_tool(id: String) -> void:
 	if item != null and is_instance_valid(item):
 		item.mat.set_shader_parameter("lens_r", 0.0)
 		item.mat.set_shader_parameter("uv_r", 0.0)
+		# The hidden mark has its own material; switch its UV window off too,
+		# or the last reading stays printed on the object under other tools.
+		(item.reveal.material as ShaderMaterial).set_shader_parameter("uv_r", 0.0)
 	if id != "":
 		shell.sound("click", -6, 1.2)
 		shell.focus = 1.0
@@ -280,6 +286,7 @@ func _set_tool(id: String) -> void:
 		"TOL-006": _load()
 	_refresh_info()
 	shell.hint(hint_text())
+	call_deferred("relayout")
 
 func _lens() -> void:
 	lens = Node2D.new()
@@ -693,8 +700,9 @@ class Spectrum extends Control:
 			shifted.append(t + offset)
 		for k in 120:
 			var x := k / 119.0
-			ref.append(Vector2(x * size.x, size.y - 8 - _curve(targets, x) * (size.y - 20)))
-			cur.append(Vector2(x * size.x, size.y - 8 - _curve(peaks, x) * (size.y - 20)))
+			# Peaks stay below the caption line.
+			ref.append(Vector2(x * size.x, size.y - 8 - _curve(targets, x) * (size.y - 42)))
+			cur.append(Vector2(x * size.x, size.y - 8 - _curve(peaks, x) * (size.y - 42)))
 		draw_polyline(ref, Color(0.45, 0.8, 0.75, 0.55), 2.0)
 		draw_polyline(cur, Color("ffb35c") if not matched() else Color("98ffb0"), 3.0)
 		var f: Font = UIKit.mono

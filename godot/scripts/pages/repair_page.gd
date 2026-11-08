@@ -64,8 +64,13 @@ func enter() -> void:
 	add_child(bench)
 	bench_body = UIKit.vbox(10)
 	bench.add_child(bench_body)
-	var it = Game.item(Game.focus_uid)
-	if it == null or _recipe(it).is_empty():
+	# Only lots in the shop's own storage can go on the bench; the visitor's
+	# item at the counter (Game.item finds it too) is not ours to work on.
+	var it = null
+	for c in _candidates():
+		if c.uid == Game.focus_uid:
+			it = c
+	if it == null:
 		var c := _candidates()
 		it = c[0] if not c.is_empty() else null
 	_select(it.uid if it != null else "")

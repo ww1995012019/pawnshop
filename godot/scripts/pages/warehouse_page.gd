@@ -24,11 +24,11 @@ func hint_text() -> String:
 		return "饶静预约核验：来源待核的货要扫描并登记，或放进隔离柜。"
 	return "拖动货物换格位，拖动时右键旋转；点选查看详情与操作。"
 
+## Notices drop in at the bottom of the room, under the storage plates
+## (the left margin was only ~200 px wide and wrapped every notice).
 func toast_rect() -> Rect2:
 	var r: Rect2 = shell.content_rect()
-	var group_width := CELL * 10 + 40 + PANEL_GAP + DETAIL_WIDTH
-	var left := r.position.x + maxf(0.0, (r.size.x - group_width) * 0.5)
-	return Rect2(r.position.x, r.position.y, maxf(200.0, left - r.position.x - 12), 300)
+	return Rect2(r.position.x + (r.size.x - 640.0) * 0.5, r.end.y - 230.0, 640, 220)
 
 func enter() -> void:
 	holder = UIKit.plate()
@@ -55,7 +55,8 @@ func enter() -> void:
 	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.add_child(detail)
 	detail_panel.add_child(sc)
-	selected = Game.focus_uid if Game.item(Game.focus_uid) != null else ""
+	# Only stock in our storage; the visitor's lot at the counter is not ours.
+	selected = Game.focus_uid if Model.find_inventory(Game.state, Game.focus_uid) != null else ""
 	_refresh()
 	relayout()
 
@@ -70,10 +71,11 @@ func relayout() -> void:
 	if not is_instance_valid(holder) or not is_instance_valid(detail_panel):
 		return
 	var r: Rect2 = shell.content_rect()
-	var group_width := CELL * 10 + 40 + PANEL_GAP + DETAIL_WIDTH
+	var holder_w := holder.get_combined_minimum_size().x
+	var group_width := holder_w + PANEL_GAP + DETAIL_WIDTH
 	var left := r.position.x + maxf(0.0, (r.size.x - group_width) * 0.5)
 	holder.position = Vector2(left, r.position.y)
-	detail_panel.position = Vector2(left + CELL * 10 + 40 + PANEL_GAP, r.position.y)
+	detail_panel.position = Vector2(left + holder_w + PANEL_GAP, r.position.y)
 	_resize_panels()
 
 ## Keep the work surfaces close to their contents instead of stretching down to
@@ -81,9 +83,13 @@ func relayout() -> void:
 func _resize_panels() -> void:
 	if not is_instance_valid(holder) or not is_instance_valid(detail_panel):
 		return
-	holder.size = Vector2(CELL * 10 + 40, holder.get_combined_minimum_size().y)
+	# Shrink-wrap to the contents, padding included, so the plate's bottom
+	# bar never covers the last row.
+	holder.reset_size()
 	var available: float = shell.content_rect().size.y
-	var detail_height := clampf(detail.get_combined_minimum_size().y + 40.0, 240.0, minf(700.0, available))
+	var style: StyleBox = detail_panel.get_theme_stylebox("panel")
+	var pad := style.get_content_margin(SIDE_TOP) + style.get_content_margin(SIDE_BOTTOM)
+	var detail_height := clampf(detail.get_combined_minimum_size().y + pad + 4.0, 240.0, minf(700.0, available))
 	detail_panel.size = Vector2(DETAIL_WIDTH, detail_height)
 
 func _lists() -> void:
