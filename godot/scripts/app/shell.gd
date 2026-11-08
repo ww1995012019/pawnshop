@@ -135,16 +135,16 @@ func set_scene(name: String) -> void:
 			n.queue_free()
 	scene_nodes.clear()
 	flickers.clear()
-	# The counter is a mostly opaque operating desk. Keep the room as a static
-	# border instead of rendering hidden normal maps, lights and particles.
+	# The counter page plays inside the painted room: the visitor stands
+	# behind the counter front (fg), fixtures sit on the walls and counter.
 	if name == "counter":
 		bg.texture = UIKit.tex("res://assets/scene/counter_bg.png")
 		bg.material = Util.unshaded()
-		bg.self_modulate = Color(0.58, 0.62, 0.65)
+		bg.self_modulate = Color(0.8, 0.83, 0.88)
 		var front := Sprite2D.new()
 		front.texture = UIKit.tex("res://assets/scene/counter_fg.png")
 		front.material = Util.unshaded()
-		front.self_modulate = Color(0.58, 0.62, 0.65)
+		front.self_modulate = Color(0.92, 0.92, 0.94)
 		front.position = CENTER
 		front.scale = Vector2.ONE * K / 1.5
 		_scene_node(front, layers.fg)
