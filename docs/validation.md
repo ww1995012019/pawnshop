@@ -18,6 +18,8 @@
 
 **产物**：dist/play 的 43 个发布文件逐字节一致，脚本 SHA-256 为 `264ce03bcb797fef1eb0a0121e49c204c7afb696db4a2fffbaffa23168f5e342`。证据、日志、生产截图与实录查看页位于 `/workspace/scratch/counter-v17/`；视口指标在 `/workspace/scratch/viewport-v17/metrics.json`。
 
+**发布**：2026年11月8日 12:40（北京时间）部署成功。应用源码 `f6bdab32f88b7a65ae4fbda6494b095903ea98a0` 已推送 main，生产文件 `9bb5cb5d88333bf49c1d7a905feb3a87c15325dc` 已推送 gh-pages 根目录；[GitHub Pages 任务 42447724882](https://github.com/ww1995012019/pawnshop/actions/runs/42447724882) 的 build / report-build-status / deploy 全部 success。远程 version.json 为 orbital-p0-v17，43 个文件与已验收 play/ 相符，objects-v6 与 v2–v6 六个旧版树逐一相同。网址为 https://ww1995012019.github.io/pawnshop/ 。本次线上状态由 Pages 结果与远程提交核对；当前网络仍无法直接打开该 github.io 网页，交互证据来自相同生产构建的本地浏览器。
+
 **边界**：本次深入交互为上述三件，其余货物沿用既有鉴定；部件姿态在会话内保存，未增加存档 schema。Chromium 模拟与原生输入验证不等于实体 iOS / Android 的全屏、方向锁定、安全区域或性能验收。
 
 ## v16 初始化加载与手机交互修正

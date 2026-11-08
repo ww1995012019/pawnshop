@@ -45,10 +45,12 @@ Interfaces: PrototypeState {open:boolean;extracted:boolean;power:boolean;dial:nu
 ### Task 4: Root — verification and release
 - [x] Run complete tests, typecheck, focused native interactions and production phone regression.
 - [x] Inspect actual scenes and all three mechanisms, get one fresh code review and fix material findings.
-- [ ] Build v17/pages, record a continuous real-input demo, push source and Pages preserving archived releases, confirm deployment success.
+- [x] Build v17/pages, record a continuous real-input demo, push source and Pages preserving archived releases, confirm deployment success.
 
 ## Evidence so far
 - `scripts/test-prop-mechanics.mjs`: 21 checks for real UID/eligibility, independent assembly, immutability and original CHECK fees.
 - `scripts/test-live-counter.py`: native rack drop/cancel; actual part movement; same UID on inspection; first/repeat CHECK; three mechanisms, full-scene bounds and reduced motion. Native filter drag was first reproduced failing and fixed by distinguishing the original release event code from OS cancellation.
 - Fresh read-only review independently rechecked that fix at 667×375 touch / 1920×910 mouse and the two-contact modal guards (synthetic DOM events through Cocos). No remaining material findings.
 - Final typecheck/build, production regression, seven viewport cases, native fullscreen-button entry/exit and a 45.28 s continuous production recording all passed. Production bundle SHA-256: `264ce03bcb797fef1eb0a0121e49c204c7afb696db4a2fffbaffa23168f5e342`.
+
+- Released source `f6bdab32f88b7a65ae4fbda6494b095903ea98a0` and Pages `9bb5cb5d88333bf49c1d7a905feb3a87c15325dc`; [Pages run 42447724882](https://github.com/ww1995012019/pawnshop/actions/runs/42447724882) completed successfully. All 43 published files match; six archived release trees preserved.
