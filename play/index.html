@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="轨道旧货局">
+  <meta name="screen-orientation" content="landscape">
+  <meta name="x5-orientation" content="landscape">
+  <meta name="x5-fullscreen" content="true">
+  <meta name="full-screen" content="yes">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="theme-color" content="#1A2124">
+  <meta name="description" content="轨道旧货局，使用 Cocos Creator 引擎开发的空间站经营网页游戏。鉴定、维修、仓储安检与订单交付。">
+  <title>轨道旧货局 · 回环九号</title>
+  <link rel="icon" href="./favicon.svg">
+  <style>
+    @font-face{font-family:'Orbital Sans SC';src:url('./resources/fonts/orbital-sans.ttf') format('truetype');font-display:swap}
+    @font-face{font-family:'Orbital Mono';src:url('./resources/fonts/orbital-mono.ttf') format('truetype');font-display:swap}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-text-size-adjust:100%;background:#1A2124;color:#E3E0D5}
+    body{font-family:'Orbital Sans SC','Noto Sans CJK SC',sans-serif}#GameDiv{width:100%;height:100%;position:relative;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+    #Cocos3dGameContainer{width:100%;height:100%}canvas{display:block;touch-action:none;outline:none;width:100%;height:100%}
+    #loading{position:fixed;inset:0;z-index:10;overflow:hidden;text-align:center;background:#1A2124;color:#E3E0D5;isolation:isolate}
+    .loading-door{position:absolute;inset:0;background:repeating-linear-gradient(to bottom,#232C30 0 14px,#1A2124 14px 30px,#0B0F11 30px 32px);z-index:-1}
+    .loading-door:before,.loading-door:after{content:"";position:absolute;left:0;right:0;top:50%;height:8px;transform:translateY(-50%);background:repeating-linear-gradient(30deg,#141414 0 14px,#E0A16C 14px 28px);box-shadow:0 -1px #080C0E,0 1px #080C0E}
+    .loading-door:after{height:52px;background:radial-gradient(circle at center,#5A666A 0 3px,transparent 4px) 20px 0/100px 52px;box-shadow:none;z-index:-1}
+    .loading-sign{position:absolute;top:16%;left:5%;right:5%}
+    #loading h1{font-size:clamp(30px,4.5vw,72px);line-height:1.25;font-weight:700;letter-spacing:.06em;color:#E3E0D5;margin:0;text-shadow:0 2px 0 #0B0F11}
+    .loading-motto{font-size:clamp(13px,1.8vw,28px);color:#ABB7B5;margin:12px 0 0}
+    .loading-plate{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);box-sizing:border-box;width:clamp(204px,30vw,480px);padding:clamp(9px,1.8vh,24px) 16px;background:#2B1A0E;border:2px solid #E0A16C;border-radius:9px;box-shadow:0 0 0 5px #0A0E10E8,inset 0 0 0 2px #1A0E06;color:#FFE3BC}
+    #loading-day{display:block;font-size:clamp(28px,3.6vw,56px);font-weight:700;line-height:1.3}
+    .loading-place{display:block;font-size:clamp(11px,1.4vw,20px);line-height:1.5;color:#E9C9A0;margin-top:3px}
+    .loading-floor{position:absolute;left:50%;top:calc(50% + clamp(56px,11vh,110px));transform:translateX(-50%);width:min(84vw,560px)}
+    .loading-progress{height:4px;overflow:hidden;background:#0C1112;border:1px solid #3C4545;border-radius:2px}
+    .loading-progress span{display:block;width:38%;height:100%;background:#E0A16C;box-shadow:0 0 10px #E0A16C88;animation:loading-pass 1.8s ease-in-out infinite}
+    #load-status{font-size:clamp(13px,1.5vw,19px);line-height:1.5;letter-spacing:.04em;color:#C4C6BA;margin:14px 0 0}
+    #loading-retry{font:inherit;font-size:17px;min-height:48px;min-width:180px;border:1px solid #D59B5E;border-radius:3px;background:linear-gradient(#68421F,#3B2410);color:#FFE3BC;padding:10px 24px;margin:12px auto 0;cursor:pointer}
+    #loading-retry[hidden]{display:none}#loading-retry:focus-visible{outline:3px solid #FFE3BC;outline-offset:3px}
+    #loading.failed .loading-progress{display:none}#loading.failed #load-status{color:#F1CAA0}
+    @keyframes loading-pass{0%{transform:translateX(-110%)}70%,100%{transform:translateX(365%)}}
+    @media(prefers-reduced-motion:reduce){.loading-progress span{animation:none;width:100%;opacity:.65}}
+    body[data-loading-reduced="true"] .loading-progress span{animation:none;width:100%;opacity:.65}
+    @media(max-height:420px){.loading-motto{margin-top:8px}#load-status{margin-top:10px}#loading-retry{margin-top:8px;min-height:44px}}
+
+  </style>
+</head>
+<body>
+  <main id="GameDiv" aria-label="轨道旧货局游戏">
+    <div id="Cocos3dGameContainer"><canvas id="GameCanvas" tabindex="0" aria-label="轨道旧货局，鼠标拖动物品，1–6选择工具，Esc返回"></canvas></div>
+  </main>
+  <div id="loading" role="status" aria-live="polite">
+    <div class="loading-door" aria-hidden="true"></div>
+    <div class="loading-sign"><h1>轨道旧货局</h1><p class="loading-motto">每件旧物，都有下一程。</p></div>
+    <div class="loading-plate"><strong id="loading-day">第 1 天</strong><span class="loading-place">回环九号 · 下层旧港</span></div>
+    <div class="loading-floor"><div class="loading-progress" aria-hidden="true"><span></span></div><p id="load-status">正在接通回环九号…</p><button id="loading-retry" type="button" hidden>重新打开</button></div>
+  </div>
+  <script>
+    (()=>{
+      try{
+        const saved=JSON.parse(localStorage.getItem('orbital-save-v3')||'null');
+        if(saved?.schema===3&&Number.isInteger(saved.day)&&saved.day>=1&&saved.day<=21)document.getElementById('loading-day').textContent=`第 ${saved.day} 天`;
+        const prefs=JSON.parse(localStorage.getItem('orbital-prefs-v3')||'null');
+        if(prefs?.reducedMotion===true)document.body.dataset.loadingReduced='true';
+      }catch{}
+      window.__ORBITAL_LOADING_FAILED__=message=>{
+        const panel=document.getElementById('loading');if(!panel)return;
+        panel.classList.add('failed');document.getElementById('load-status').textContent=message||'空间站暂时未能接通，请检查网络后重试。';
+        document.getElementById('loading-retry').hidden=false;
+      };
+      document.getElementById('loading-retry').addEventListener('click',()=>location.reload());
+    })();
+  </script>
+  <script type="module" src="./game.js?v=d2a5e3037502" onerror="window.__ORBITAL_LOADING_FAILED__?.('空间站暂时未能接通，请检查网络后重试。')"></script>
+</body>
+</html>
