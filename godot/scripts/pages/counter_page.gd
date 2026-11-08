@@ -49,6 +49,18 @@ var mat_rect := Rect2(650, 550, 665, 115)
 var drag_rect := Rect2(740, 605, 490, 12)
 var bubble_rect := Rect2(1040, 190, 275, 245)
 
+## Only the painted machine can intercept the mouse. Transparent feet/gutters
+## leave the real equipment below reachable, including on the Web build.
+class QuotationBody extends PanelContainer:
+	var silhouette: Image
+	func _has_point(point: Vector2) -> bool:
+		if not Rect2(Vector2.ZERO, size).has_point(point):
+			return false
+		if silhouette == null:
+			return true
+		var pixel := Vector2i(point / size * Vector2(silhouette.get_size()))
+		return silhouette.get_pixelv(pixel).a >= 0.5
+
 ## Transparent equipment buttons retain the illustration at rest. Hover and
 ## keyboard focus add crisp pixel corner marks and a compact nameplate.
 class FixtureButton extends Button:
@@ -124,6 +136,8 @@ func enter() -> void:
 	_build_equipment()
 	Game.prefs_changed.connect(_refresh_utility_icons)
 	_refresh_utility_icons()
+	# The till stands in front of the counter fixtures, like the illustration.
+	move_child(terminal, -1)
 	_build_bubble()
 	relayout()
 	_sync_world()
@@ -283,9 +297,9 @@ func _build_tag() -> void:
 
 func _build_strip() -> void:
 	actions = HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 6)
+	actions.add_theme_constant_override("separation", 4)
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	add_child(actions)
+	terminal.get_child(0).add_child(actions)
 
 func _build_crate() -> void:
 	# The copper drawer frame and dark interior are supplied by the scene art.
@@ -299,6 +313,7 @@ func _build_crate() -> void:
 	head.add_child(stock_count)
 	head.add_child(UIKit.spacer(false))
 	var open_stock := UIKit.button("整理抽屉", "chip", Vector2(100, 28), 16)
+	_till_key(open_stock, "secondary")
 	open_stock.pressed.connect(func():
 		if not _scene_blocked():
 			shell.go("warehouse"))
@@ -322,7 +337,7 @@ func _build_equipment() -> void:
 	_fixture("repair", Rect2(1410, 730, 400, 290), "维修工作台", func(): _open_instrument("repair"))
 	# The gauge takes precedence over the surrounding repair station.
 	_fixture("inspect", Rect2(1414, 730, 151, 158), "鉴定仪", func(): _open_instrument("inspect"), true, Color("a3d6c4"))
-	_fixture("orders", Rect2(1420, 240, 240, 230), "订单终端", func(): shell.go("orders"))
+	_fixture("orders", Rect2(1420, 240, 240, 172), "订单终端", func(): shell.go("orders"))
 	orders_readout = UIKit.label("", 19, Color("a6d9ba"), true)
 	orders_readout.position = Vector2(1486, 280)
 	orders_readout.size = Vector2(140, 105)
@@ -330,7 +345,7 @@ func _build_equipment() -> void:
 	orders_readout.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	orders_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(orders_readout)
-	_fixture("people", Rect2(1700, 320, 115, 140), "人物档案", func(): shell.open_people())
+	_fixture("people", Rect2(1700, 320, 115, 92), "人物档案", func(): shell.open_people())
 	_fixture("bell", Rect2(488, 575, 105, 85), "接客铃", _bell_clicked, false)
 	status_readout = UIKit.label("", 20, Color("ecdabb"), true)
 	status_readout.position = Vector2(1394, 185)
@@ -382,12 +397,12 @@ func relayout() -> void:
 	if not is_instance_valid(terminal) or not is_instance_valid(crate):
 		return
 	_align_stage()
-	terminal.position = Vector2(1330, 543)
-	terminal.size = Vector2(486, 140)
+	terminal.position = Vector2(1310, 414)
+	terminal.size = Vector2(580, 336)
 	crate.position = Vector2(604, 759)
 	crate.size = Vector2(672, 224)
-	actions.position = Vector2(560, 685)
-	actions.size = Vector2(1250, 44)
+	actions.position = Vector2(54, 237)
+	actions.size = Vector2(472, 44)
 	bubble.position = bubble_rect.position
 	bubble.size = bubble_rect.size
 	bubble_name.position = Vector2(12, 10)
@@ -513,50 +528,63 @@ func _stock_clicked(uid: String, picking: bool, why) -> void:
 	Game.dispatch({"type": "SELECT_TRADE", "uid": uid})
 
 func _build_terminal() -> void:
-	terminal = UIKit.plate(_flat(Color("282a2f"), Color("9d8060"), 0))
+	terminal = QuotationBody.new()
+	terminal.silhouette = UIKit.tex("res://assets/ui/quotation-console.png").get_image()
+	terminal.add_theme_stylebox_override("panel", _flat(Color.TRANSPARENT))
 	add_child(terminal)
 	var content := Control.new()
-	content.custom_minimum_size = Vector2(486, 140)
+	content.custom_minimum_size = Vector2(580, 336)
 	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	terminal.add_child(content)
-	scr.head = _terminal_label(content, Vector2(12, 5), Vector2(318, 26), 18, UIKit.CYAN)
-	scr.price = _terminal_label(content, Vector2(333, 2), Vector2(140, 32), 28, UIKit.AMBER, true)
-	scr.line1 = _terminal_label(content, Vector2(12, 32), Vector2(465, 24), 17, UIKit.TEXT)
-	scr.line2 = _terminal_label(content, Vector2(12, 54), Vector2(465, 24), 16, UIKit.MUTED)
-	scr.line3 = _terminal_label(content, Vector2.ZERO, Vector2.ZERO, 16, UIKit.MUTED)
+	var housing := TextureRect.new()
+	housing.texture = UIKit.tex("res://assets/ui/quotation-console.png")
+	housing.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	housing.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	housing.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	housing.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(housing)
+	# Live readouts sit in the painted LCD, not on an extra rectangular plate.
+	scr.head = _terminal_label(content, Vector2(107, 48), Vector2(238, 23), 15, Color("a7cbbb"))
+	scr.price = _terminal_label(content, Vector2(350, 43), Vector2(128, 33), 25, Color("e1c487"), true)
+	scr.line1 = _terminal_label(content, Vector2(107, 75), Vector2(371, 22), 16, Color("d0d4b6"))
+	scr.line2 = _terminal_label(content, Vector2(107, 98), Vector2(371, 20), 14, Color("9bb8a8"))
+	scr.line3 = _terminal_label(content, Vector2.ZERO, Vector2.ZERO, 14, UIKit.MUTED)
 	scr.line3.visible = false
 	offer_panel = UIKit.plate(_flat(Color.TRANSPARENT))
-	offer_panel.position = Vector2(2, 77)
-	offer_panel.size = Vector2(480, 60)
+	offer_panel.position = Vector2(56, 146)
+	offer_panel.size = Vector2(466, 71)
 	content.add_child(offer_panel)
 	var controls := Control.new()
-	controls.custom_minimum_size = Vector2(480, 60)
+	controls.custom_minimum_size = Vector2(466, 71)
 	controls.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	offer_panel.add_child(controls)
 	dial = Dial.new()
-	dial.position = Vector2(2, -9)
+	dial.position = Vector2(0, 0)
 	dial.tooltip_text = "上下拖动旋钮调价 · 滚轮 ±5；也可用精确加减按钮"
 	dial.changed.connect(func(val):
 		if _scene_blocked():
-			# Signal delivery follows Dial.set_value; restore the accepted quote
-			# without emitting again if a programmatic change bypassed input.
 			dial.set_value(_last_offer_value, false)
 			return
 		_update_offer_value(val)
 		shell.sound("click", -20, 1.7))
 	controls.add_child(dial)
-	# Dial._init installs a 150px minimum. Apply the compact minimum in-tree
-	# and resize after minimum-size invalidation has propagated, otherwise a
-	# same-frame size assignment is clamped back to that cached 150px value.
 	dial.custom_minimum_size = Vector2(68, 68)
 	dial.set_deferred("size", Vector2(68, 68))
-	offer_label = UIKit.label("—", 28, UIKit.AMBER, true)
-	offer_label.position = Vector2(77, 0)
+	var printed_label := UIKit.label("我的还价", 13, Color("363e36"))
+	printed_label.position = Vector2(82, -7)
+	printed_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	controls.add_child(printed_label)
+	offer_label = UIKit.label("—", 26, Color("f0dfb3"), true)
+	offer_label.position = Vector2(82, 10)
+	offer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	offer_label.add_theme_color_override("font_shadow_color", Color("333a34"))
+	offer_label.add_theme_constant_override("shadow_offset_y", 2)
 	controls.add_child(offer_label)
 	var nudges := UIKit.hbox(4)
-	nudges.position = Vector2(238, -2)
+	nudges.position = Vector2(252, 10)
 	for d in [-10, -1, 1, 10]:
-		var k := UIKit.button(("+%d" % d) if d > 0 else ("−%d" % -d), "chip", Vector2(54, 28), 16)
+		var k := UIKit.button(("+%d" % d) if d > 0 else ("−%d" % -d), "chip", Vector2(46, 30), 16)
+		_till_key(k, "secondary")
 		var step: int = d
 		k.pressed.connect(func():
 			if not _scene_blocked():
@@ -566,8 +594,8 @@ func _build_terminal() -> void:
 		nudge_keys.append(k)
 	controls.add_child(nudges)
 	evidence_box = UIKit.vbox(0)
-	evidence_box.position = Vector2(78, 32)
-	evidence_box.size = Vector2(396, 28)
+	evidence_box.position = Vector2(82, 45)
+	evidence_box.size = Vector2(384, 24)
 	controls.add_child(evidence_box)
 	chips = HFlowContainer.new()
 	chips.add_theme_constant_override("h_separation", 4)
@@ -580,6 +608,27 @@ func _build_terminal() -> void:
 	footer.visible = false
 	add_child(footer)
 
+## Restrained physical keycaps only for this worn metal device.
+func _till_key(button: Button, kind: String) -> void:
+	var fills := {"primary": Color("8d6e43"), "good": Color("496b5a"), "danger": Color("6a4c46"), "secondary": Color("565e53")}
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var fill: Color = fills.get(kind, fills.secondary)
+		if state == "hover": fill = fill.lightened(0.12)
+		elif state == "pressed": fill = fill.darkened(0.15)
+		elif state == "disabled": fill = Color("40473f")
+		var cap := _flat(fill, Color("282f2c"), 5)
+		cap.border_width_bottom = 4 if state != "pressed" else 2
+		cap.shadow_color = Color(0.07, 0.09, 0.08, 0.6)
+		cap.shadow_size = 1
+		cap.shadow_offset = Vector2(0, 2)
+		cap.content_margin_top = 4
+		cap.content_margin_bottom = 4
+		button.add_theme_stylebox_override(state, cap)
+	for state in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
+		button.add_theme_color_override(state, Color("eee0bb"))
+	button.add_theme_color_override("font_disabled_color", Color("858975"))
+	button.add_theme_constant_override("outline_size", 0)
+
 func _terminal_label(parent: Control, pos: Vector2, extent: Vector2, font_size: int, color: Color, mono := false) -> Label:
 	var l := UIKit.label("", font_size, color, mono)
 	l.position = pos
@@ -589,18 +638,10 @@ func _terminal_label(parent: Control, pos: Vector2, extent: Vector2, font_size: 
 	parent.add_child(l)
 	return l
 
-const ACTION_ICONS := {"出价": "credits", "接受报价": "check", "拿去鉴定": "inspect", "签抵押合同": "lock", "抵押（需 2 条物证）": "lock",
-	"换一件": "warehouse", "挑选货物": "warehouse", "送客": "close", "取消交易": "close", "确认钱货交割": "credits",
-	"接待下一位来客": "next", "打烊结算": "report"}
-
 func _act(text: String, kind: String, fn: Callable, enabled := true, _wide := false, tip := "") -> Button:
-	var icon := ""
-	for k in ACTION_ICONS:
-		if text.begins_with(k):
-			icon = ACTION_ICONS[k]
-	var b := UIKit.button(text, kind, Vector2(0, 44), 18, icon)
-	b.custom_minimum_size.x = 92
-	b.add_theme_constant_override("icon_max_width", 22)
+	var caption := "抵押合同" if text.begins_with("抵押（") or text == "签抵押合同" else text
+	var b := UIKit.button(caption, kind, Vector2(70, 42), 17)
+	_till_key(b, kind)
 	b.disabled = not enabled or busy
 	b.tooltip_text = tip
 	b.pressed.connect(func():
@@ -677,6 +718,7 @@ func _refresh() -> void:
 					continue
 				var chip := UIKit.button(GameData.tool(e).short, "primary" if chosen_evidence == e else "chip", Vector2(0, 26), 15)
 				var eid: String = e
+				_till_key(chip, "primary" if chosen_evidence == e else "secondary")
 				chip.pressed.connect(func():
 					if _scene_blocked():
 						return
@@ -684,7 +726,7 @@ func _refresh() -> void:
 					_refresh())
 				chips.add_child(chip)
 			if chips.get_child_count() == 0:
-				chips.add_child(UIKit.label("无物证 · 点击鉴定仪取证", 15, UIKit.MUTED))
+				chips.add_child(UIKit.label("物证插槽 · 先在鉴定仪取证", 13, Color("36463e")))
 			offer_button = _act("出价 " + UIKit.money(dial.value), "primary", func(): _offer())
 			_act("接受报价", "good", func(): Game.dispatch({"type": "ACCEPT"}))
 			_act("拿去鉴定", "secondary", func(): shell.go("inspect", it.uid))

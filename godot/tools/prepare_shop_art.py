@@ -57,7 +57,11 @@ def main():
     (SOURCE / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n')
     pack_icons('hud-master.png',8,4,28,128,26,4,'ui/orbital-hud.png')
     pack_icons('tools-master.png',3,2,6,512,112,4,'atlas/orbital-tools.png')
-    print('Imported pixel shop, nine residents, 28 HUD icons and six instruments')
+    console = Image.open(SOURCE / 'quotation-master.png').convert('RGBA')
+    console = console.resize((290,168),Image.Resampling.BOX)
+    console.putalpha(console.getchannel('A').point(lambda a: 255 if a >= 128 else 0))
+    console.resize((580,336),Image.Resampling.NEAREST).save(ASSETS / 'ui/quotation-console.png')
+    print('Imported pixel shop, residents, interface art and countertop quotation machine')
 
 if __name__ == '__main__':
     main()
