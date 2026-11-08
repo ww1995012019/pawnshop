@@ -1,220 +1,235 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
-		<title>轨道旧货局</title>
-		<style>
-html, body, #canvas {
-	margin: 0;
-	padding: 0;
-	border: 0;
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, viewport-fit=cover">
+	<meta name="theme-color" content="#161d21">
+	<meta name="description" content="轨道旧货局：空间站旧货铺经营游戏。鉴定、议价、维修、仓储与订单。">
+	<title>轨道旧货局 · 回环九号</title>
+	<style>
+:root {
+	--slat: #222b2f;
+	--seam: #0e1315;
+	--door: #161d21;
+	--amber: #ffc27a;
+	--amber-deep: #c9913f;
+	--plate: #3b2414;
+	--plate-edge: #5a3a1e;
+	--paper: #e9c9a0;
+	--muted: #9aa8a5;
+	--text: #ece7d9;
+	--sans: "PingFang SC", "Noto Sans SC", "Noto Sans CJK SC", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
+	--mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--door); overflow: hidden; touch-action: none; }
+body { color: var(--text); font-family: var(--sans); -webkit-user-select: none; user-select: none; }
+#canvas { display: block; outline: none; }
+
+/* ---- the shop shutter, matching the in-game day shutter ---- */
+#loader {
+	position: fixed; inset: 0; z-index: 10;
+	display: grid; place-items: center;
+	background:
+		linear-gradient(to bottom, rgba(255,255,255,.05) 0 2px, transparent 2px) 0 0 / 100% 54px,
+		repeating-linear-gradient(to bottom, var(--slat) 0 46px, var(--seam) 46px 50px, var(--door) 50px 54px);
+	transition: opacity .45s ease, transform .6s cubic-bezier(.6,0,.4,1);
+}
+#loader.opening { transform: translateY(-100%); }
+#loader::after { /* hazard stripe along the shutter's bottom bar */
+	content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 40px;
+	background: repeating-linear-gradient(90deg, var(--amber-deep) 0 48px, #1a1a1a 48px 96px);
+	box-shadow: 0 -4px 0 var(--seam);
+}
+#loader::before { /* a warm work light falling on the door */
+	content: ""; position: absolute; inset: 0; pointer-events: none;
+	background: radial-gradient(ellipse 60% 55% at 50% 42%, rgba(255,190,120,.10), transparent 70%);
 }
 
-body {
-	color: white;
-	background-color: black;
-	overflow: hidden;
-	touch-action: none;
-}
+.panel { position: relative; width: min(560px, 88vw); text-align: center; }
 
-#canvas {
-	display: block;
+.plate {
+	position: relative; padding: 26px 24px 22px;
+	background: var(--plate);
+	border: 3px solid var(--plate-edge);
+	box-shadow: 0 0 0 8px var(--seam), 0 18px 40px rgba(0,0,0,.55), inset 0 0 0 2px rgba(0,0,0,.35);
 }
+.plate i { /* rivets */
+	position: absolute; width: 8px; height: 8px; border-radius: 50%;
+	background: radial-gradient(circle at 35% 35%, #d9b98a, #7a5530 60%, #3a2412);
+}
+.plate i:nth-child(1) { top: 8px; left: 8px; } .plate i:nth-child(2) { top: 8px; right: 8px; }
+.plate i:nth-child(3) { bottom: 8px; left: 8px; } .plate i:nth-child(4) { bottom: 8px; right: 8px; }
+.station { font-size: 15px; letter-spacing: .3em; color: var(--paper); opacity: .8; }
+h1 {
+	margin: 8px 0 6px; font-size: clamp(38px, 7vw, 60px); font-weight: 700; letter-spacing: .12em;
+	color: #ffc98f; text-shadow: 0 2px 0 #1a0e06, 0 0 22px rgba(255,170,90,.25);
+}
+.motto { font-size: 17px; color: var(--paper); letter-spacing: .08em; }
 
-#canvas:focus {
-	outline: none;
+/* ---- progress: an inset gauge with amber cells ---- */
+.gauge { margin-top: 30px; }
+.track {
+	position: relative; height: 18px; padding: 3px;
+	background: #0a0f11; border: 1px solid #3c4545; border-radius: 3px;
+	box-shadow: inset 0 2px 4px rgba(0,0,0,.7);
 }
+.fill {
+	height: 100%; width: 0%;
+	background:
+		repeating-linear-gradient(90deg, transparent 0 10px, rgba(0,0,0,.45) 10px 12px),
+		linear-gradient(#ffd59a, var(--amber-deep));
+	box-shadow: 0 0 12px rgba(255,180,100,.55);
+	transition: width .25s ease-out;
+}
+.track.indeterminate .fill { width: 30% !important; animation: sweep 1.4s ease-in-out infinite; }
+@keyframes sweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+.readout {
+	display: flex; justify-content: space-between; margin-top: 10px;
+	font-family: var(--mono); font-size: 14px; color: var(--muted); letter-spacing: .04em;
+}
+.readout b { color: var(--amber); font-weight: 600; }
+#stage { margin-top: 14px; font-size: 16px; color: var(--text); letter-spacing: .06em; min-height: 1.5em; }
+#tip {
+	margin-top: 18px; font-size: 14px; color: var(--muted); line-height: 1.6; min-height: 3.2em;
+	transition: opacity .35s;
+}
+#tip::before { content: "店内须知 · "; color: var(--amber-deep); }
 
-#status, #status-splash, #status-progress {
-	position: absolute;
-	left: 0;
-	right: 0;
+#fail { display: none; margin-top: 20px; }
+#loader.failed #fail { display: block; }
+#loader.failed .gauge, #loader.failed #tip { display: none; }
+#fail p { color: #f1caa0; font-size: 16px; line-height: 1.6; margin: 0 0 14px; white-space: pre-line; }
+#retry {
+	font: inherit; font-size: 17px; letter-spacing: .1em; min-width: 180px; min-height: 48px; cursor: pointer;
+	color: #fff3df; background: linear-gradient(#a2642e, #6b3d17); border: 2px solid #f0b56a; border-radius: 3px;
+	box-shadow: 0 3px 0 #2a1608; text-shadow: 0 1px 0 #3a1c08;
 }
+#retry:hover { filter: brightness(1.12); }
+#retry:active { transform: translateY(2px); box-shadow: 0 1px 0 #2a1608; }
 
-#status, #status-splash {
-	top: 0;
-	bottom: 0;
+@media (max-height: 520px) {
+	.plate { padding: 16px 18px 14px; } h1 { margin: 4px 0; } .gauge { margin-top: 18px; } #tip { display: none; }
 }
-
-#status {
-	background-color: #0b1118;
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	align-items: center;
-	visibility: hidden;
+@media (prefers-reduced-motion: reduce) {
+	#loader, .fill { transition: none; }
+	.track.indeterminate .fill { animation: none; width: 100% !important; opacity: .6; }
 }
-
-#status-splash {
-	max-height: 100%;
-	max-width: 100%;
-	margin: auto;
-}
-
-#status-splash.show-image--false {
-	display: none;
-}
-
-#status-splash.fullsize--true {
-	height: 100%;
-	width: 100%;
-	object-fit: contain;
-}
-
-#status-splash.use-filter--false {
-	image-rendering: pixelated;
-}
-
-#status-progress, #status-notice {
-	display: none;
-}
-
-#status-progress {
-	bottom: 10%;
-	width: 50%;
-	margin: 0 auto;
-}
-
-#status-notice {
-	background-color: #5b3943;
-	border-radius: 0.5rem;
-	border: 1px solid #9b3943;
-	color: #e0e0e0;
-	font-family: 'Noto Sans', 'Droid Sans', Arial, sans-serif;
-	line-height: 1.3;
-	margin: 0 2rem;
-	overflow: hidden;
-	padding: 1rem;
-	text-align: center;
-	z-index: 1;
-}
-		</style>
-		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
+	</style>
+	<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
-<style>body{background:#0b111b}</style>
-	</head>
-	<body>
-		<canvas id="canvas">
-			Your browser does not support the canvas tag.
-		</canvas>
 
-		<noscript>
-			Your browser does not support JavaScript.
-		</noscript>
+</head>
+<body>
+	<canvas id="canvas">你的浏览器不支持画布。</canvas>
+	<noscript><div style="position:fixed;inset:0;display:grid;place-items:center;color:#ece7d9">需要开启 JavaScript 才能开门营业。</div></noscript>
 
-		<div id="status">
-			<img id="status-splash" class="show-image--false fullsize--true use-filter--true" src="index.png" alt="">
-			<progress id="status-progress"></progress>
-			<div id="status-notice"></div>
+	<div id="loader" role="status" aria-live="polite">
+		<div class="panel">
+			<div class="plate">
+				<i></i><i></i><i></i><i></i>
+				<div class="station">回环九号 · 下层旧港</div>
+				<h1>轨道旧货局</h1>
+				<div class="motto">每件旧物，都有下一程。</div>
+			</div>
+			<div class="gauge">
+				<div class="track" id="track"><div class="fill" id="fill"></div></div>
+				<div class="readout"><span id="bytes">0.0 / — MB</span><b id="pct">0%</b></div>
+				<div id="stage">正在拉起卷帘门…</div>
+			</div>
+			<div id="tip"></div>
+			<div id="fail"><p id="fail-text"></p><button id="retry" type="button">重新开门</button></div>
 		</div>
+	</div>
 
-		<script src="index.js"></script>
-		<script>
+	<script src="index.js"></script>
+	<script>
 const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"workbench-7d26095627d2.pck":21865116,"index.wasm":37700666},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"mainPack":"workbench-7d26095627d2.pck"};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
 (function () {
-	const statusOverlay = document.getElementById('status');
-	const statusProgress = document.getElementById('status-progress');
-	const statusNotice = document.getElementById('status-notice');
+	const loader = document.getElementById('loader');
+	const track = document.getElementById('track');
+	const fill = document.getElementById('fill');
+	const pct = document.getElementById('pct');
+	const bytes = document.getElementById('bytes');
+	const stage = document.getElementById('stage');
+	const tip = document.getElementById('tip');
+	const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-	let initializing = true;
-	let statusMode = '';
-
-	function setStatusMode(mode) {
-		if (statusMode === mode || !initializing) {
-			return;
-		}
-		if (mode === 'hidden') {
-			statusOverlay.remove();
-			initializing = false;
-			return;
-		}
-		statusOverlay.style.visibility = 'visible';
-		statusProgress.style.display = mode === 'progress' ? 'block' : 'none';
-		statusNotice.style.display = mode === 'notice' ? 'block' : 'none';
-		statusMode = mode;
+	const TIPS = [
+		'先鉴定再出价：两条独立物证会让估值收窄，议价时还能援引。',
+		'接受报价只是锁价，确认交割才真正付钱拿货，花 1 点行动。',
+		'来源不明的货要先扫描、登记，或者放进隔离柜。',
+		'维修的三道工序做完后才扣材料与行动点，中途离开不吃亏。',
+		'第 7、14、21 天要交租金，留够现金再打烊。',
+		'委修单必须交还顾客的原物，别拿店里的同款顶替。',
+	];
+	let tipIndex = Math.floor(Math.random() * TIPS.length);
+	function nextTip() {
+		tip.style.opacity = 0;
+		setTimeout(() => {
+			tip.textContent = TIPS[tipIndex % TIPS.length];
+			tipIndex += 1;
+			tip.style.opacity = 1;
+		}, reduced ? 0 : 350);
 	}
+	nextTip();
+	const tipTimer = setInterval(nextTip, 5200);
 
-	function setStatusNotice(text) {
-		while (statusNotice.lastChild) {
-			statusNotice.removeChild(statusNotice.lastChild);
-		}
-		const lines = text.split('\n');
-		lines.forEach((line) => {
-			statusNotice.appendChild(document.createTextNode(line));
-			statusNotice.appendChild(document.createElement('br'));
-		});
-	}
+	const mb = (n) => (n / 1048576).toFixed(1);
+	let finished = false;
 
-	function displayFailureNotice(err) {
+	function fail(err) {
 		console.error(err);
-		if (err instanceof Error) {
-			setStatusNotice(err.message);
-		} else if (typeof err === 'string') {
-			setStatusNotice(err);
-		} else {
-			setStatusNotice('An unknown error occurred.');
-		}
-		setStatusMode('notice');
-		initializing = false;
+		finished = true;
+		clearInterval(tipTimer);
+		const msg = err instanceof Error ? err.message : (typeof err === 'string' ? err : '');
+		document.getElementById('fail-text').textContent = '卷帘门卡住了，没能接通回环九号。\n请检查网络后重试。' + (msg ? '\n（' + msg + '）' : '');
+		loader.classList.add('failed');
+		stage.textContent = '';
+	}
+	document.getElementById('retry').addEventListener('click', () => location.reload());
+
+	function open() {
+		finished = true;
+		clearInterval(tipTimer);
+		fill.style.width = '100%';
+		pct.textContent = '100%';
+		stage.textContent = '开门营业';
+		// Roll the shutter up, revealing the game behind it.
+		setTimeout(() => {
+			if (reduced) { loader.remove(); return; }
+			loader.classList.add('opening');
+			setTimeout(() => loader.remove(), 650);
+		}, 250);
 	}
 
-	const missing = Engine.getMissingFeatures({
-		threads: GODOT_THREADS_ENABLED,
-	});
-
+	const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
 	if (missing.length !== 0) {
-		if (GODOT_CONFIG['serviceWorker'] && GODOT_CONFIG['ensureCrossOriginIsolationHeaders'] && 'serviceWorker' in navigator) {
-			let serviceWorkerRegistrationPromise;
-			try {
-				serviceWorkerRegistrationPromise = navigator.serviceWorker.getRegistration();
-			} catch (err) {
-				serviceWorkerRegistrationPromise = Promise.reject(new Error('Service worker registration failed.'));
-			}
-			// There's a chance that installing the service worker would fix the issue
-			Promise.race([
-				serviceWorkerRegistrationPromise.then((registration) => {
-					if (registration != null) {
-						return Promise.reject(new Error('Service worker already exists.'));
-					}
-					return registration;
-				}).then(() => engine.installServiceWorker()),
-				// For some reason, `getRegistration()` can stall
-				new Promise((resolve) => {
-					setTimeout(() => resolve(), 2000);
-				}),
-			]).then(() => {
-				// Reload if there was no error.
-				window.location.reload();
-			}).catch((err) => {
-				console.error('Error while registering service worker:', err);
-			});
-		} else {
-			// Display the message as usual
-			const missingMsg = 'Error\nThe following features required to run Godot projects on the Web are missing:\n';
-			displayFailureNotice(missingMsg + missing.join('\n'));
-		}
-	} else {
-		setStatusMode('progress');
-		engine.startGame({
-			'onProgress': function (current, total) {
-				if (current > 0 && total > 0) {
-					statusProgress.value = current;
-					statusProgress.max = total;
-				} else {
-					statusProgress.removeAttribute('value');
-					statusProgress.removeAttribute('max');
-				}
-			},
-		}).then(() => {
-			setStatusMode('hidden');
-		}, displayFailureNotice);
+		fail('浏览器缺少运行所需的功能：' + missing.join('、'));
+		return;
 	}
+
+	engine.startGame({
+		'onProgress': function (current, total) {
+			if (finished) return;
+			if (current > 0 && total > 0) {
+				track.classList.remove('indeterminate');
+				const p = Math.min(100, Math.floor(current / total * 100));
+				fill.style.width = p + '%';
+				pct.textContent = p + '%';
+				bytes.textContent = mb(current) + ' / ' + mb(total) + ' MB';
+				stage.textContent = p < 100 ? '正在搬运货架与库存…' : '正在通电、点亮柜台…';
+			} else {
+				track.classList.add('indeterminate');
+				stage.textContent = '正在通电、点亮柜台…';
+			}
+		},
+	}).then(open, fail);
 }());
-		</script>
-	</body>
+	</script>
+</body>
 </html>
 
