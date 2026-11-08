@@ -12,7 +12,11 @@
 
 **独立审查**：未发现 Critical / Important。审查复现 AP 浮字在生成后被页面动作重绑定清掉，现改为先重绑定再生成反馈；原生成交专项增加可见 −1 AP、精确收支、原物归属和结束清理验证并通过。审查还核对现金滚动 1200→1190、工具条件及关闭流程。规则与保存格式未变。
 
-**规则与构建**：`npm test` 与最终 `npm run typecheck` 通过；`npm run build:pages` 生成 v16，生产构建重跑完整手机脚本通过：667×375 / 844×390 的六工具、顾客原物维修/交付、材料、交易、仓位、取消、次日与组装，1440×900 桌面、390×844 竖握拖动/转回横屏及抵押原物赎回均保持通过。入口、脚本和版本在 dist/play 逐字节一致；脚本 SHA-256 为 `b588efc98f2b2b7d8012f2209b12fd7ac8d2182f71cfedf116f45dc7ea8a9177`。GitHub Pages 发布结果另行记录。截图和日志位于 `/workspace/scratch/phone-motion-v16/`。
+**规则与构建**：`npm test` 与最终 `npm run typecheck` 通过；`npm run build:pages` 生成 v16，生产构建重跑完整手机脚本通过：667×375 / 844×390 的六工具、顾客原物维修/交付、材料、交易、仓位、取消、次日与组装，1440×900 桌面、390×844 竖握拖动/转回横屏及抵押原物赎回均保持通过。入口、脚本和版本在 dist/play 逐字节一致；脚本 SHA-256 为 `b588efc98f2b2b7d8012f2209b12fd7ac8d2182f71cfedf116f45dc7ea8a9177`。GitHub Pages 发布结果如下。截图和日志位于 `/workspace/scratch/phone-motion-v16/`。
+
+**发布**：应用源码 `02dde5bbb73ee239eb2637ee8984c24a7f9e285f` 已推送 main，生产静态文件 `8a77ac4c8d334556211f842127f6f1a1bfc7e9ff` 已推送 gh-pages 根目录；[发布任务 42442494812](https://github.com/ww1995012019/pawnshop/actions/runs/42442494812) 的 build / report-build-status / deploy 全部 success，远程 version.json 确认为 orbital-p0-v16，网址仍为 https://ww1995012019.github.io/pawnshop/ 。发布树与已验收 play/ 逐字节一致，旧版本目录未变。本轮线上状态由 GitHub Pages 结果核对；环境仍无法直接打开该 github.io 网页。
+
+**实录**：同一生产构建另录 20.92 秒连续原生触屏流程，包含正常初始化、标题、来访/递物、接缝观察、记录物证、翻面/旋转、双探针、接受报价及交割，无注入动画、暂停、状态修改或剪辑变速。原始 WebM 与 MP4（仅编码转换）位于 `/workspace/scratch/phone-motion-v16/phone-actions-v16.*`；该流程没有浏览器异常。
 
 **边界**：Chromium 中的触摸与阶段画面验证不代表已通过实体 iOS / Android 性能、触觉或音画同步验证。
 
