@@ -1,17 +1,18 @@
-class_name PawnItem
+class_name ItemSprite
 extends Node2D
-## A physical object on the counter: picked up with inertia and tilt, casts a
-## lifting shadow, lands with squash, dust and sound, and flips over.
+## A physical object in the room: normal-mapped atlas art lit by the scene,
+## picked up with inertia and tilt, a lifting contact shadow, a landing squash,
+## flipping to its back, and hidden layers that only instruments reveal.
 
 signal dropped
 signal flipped(back: bool)
 
+var def_id := ""
+var uid := ""
 var body: Sprite2D
 var shadow: Sprite2D
 var mat: ShaderMaterial
-var serial: Label
-var front: CanvasTexture
-var back_tex: CanvasTexture
+var reveal: Label
 var back := false
 var dragging := false
 var grab := Vector2.ZERO
@@ -20,58 +21,74 @@ var vel := Vector2.ZERO
 var lift := 0.0
 var lift_target := 0.0
 var hover := 0.0
-var bounds := Rect2(560, 700, 900, 170)
-var display_scale := 0.72
+var bounds := Rect2(-10000, -10000, 20000, 20000)
+var display_scale := 1.0
 var busy := false
+var draggable := true
 
-func _init() -> void:
-	front = Util.lit("res://assets/items/itm011_front.png", "res://assets/items/itm011_front_n.png", 0.55, 0.7)
-	back_tex = Util.lit("res://assets/items/itm011_back.png", "res://assets/items/itm011_back_n.png", 0.55, 0.7)
+## height: on-screen height in px for the front face.
+func setup(id: String, item_uid := "", height := 300.0, start_back := false) -> void:
+	def_id = id
+	uid = item_uid
+	back = start_back
 	shadow = Sprite2D.new()
 	shadow.texture = Util.radial(256, 0.35)
-	shadow.modulate = Color(0, 0, 0, 0.62)
+	shadow.modulate = Color(0, 0, 0, 0.6)
 	shadow.material = Util.unshaded()
 	add_child(shadow)
 	body = Sprite2D.new()
-	body.texture = front
+	body.region_enabled = true
 	mat = ShaderMaterial.new()
 	mat.shader = load("res://shaders/item.gdshader")
 	body.material = mat
-	body.scale = Vector2.ONE * display_scale
 	add_child(body)
-	# Old registry number under the new paint; only the UV wand shows it.
-	serial = Label.new()
-	serial.text = "HX-0417 · 回环港务登记"
-	serial.add_theme_font_override("font", load("res://assets/fonts/orbital-mono.ttf"))
-	serial.add_theme_font_size_override("font_size", 30)
-	serial.add_theme_color_override("font_color", Color(0.55, 1.0, 0.82))
-	serial.add_theme_color_override("font_outline_color", Color(0.2, 1.0, 0.7, 0.5))
-	serial.add_theme_constant_override("outline_size", 6)
+	_apply_face()
+	display_scale = height / body.region_rect.size.y
+	body.scale = Vector2.ONE * display_scale
+	reveal = Label.new()
+	reveal.add_theme_font_override("font", UIKit.mono)
+	reveal.add_theme_font_size_override("font_size", 26)
+	reveal.add_theme_color_override("font_color", Color(0.55, 1.0, 0.82))
+	reveal.add_theme_color_override("font_outline_color", Color(0.2, 1.0, 0.7, 0.5))
+	reveal.add_theme_constant_override("outline_size", 6)
 	var rm := ShaderMaterial.new()
 	rm.shader = load("res://shaders/reveal.gdshader")
-	serial.material = rm
-	serial.position = Vector2(-150, 30)
-	serial.rotation = -0.12
-	serial.visible = false
-	body.add_child(serial)
+	reveal.material = rm
+	reveal.rotation = -0.1
+	reveal.visible = false
+	body.add_child(reveal)
+
+func _apply_face() -> void:
+	var cell := UIKit.item_cell(def_id, back)
+	body.texture = UIKit.lit_atlas(cell.key)
+	body.region_rect = cell.region
+	var asz: Vector2 = UIKit.tex("res://assets/atlas/%s.png" % cell.key).get_size()
+	var r: Rect2 = cell.region
+	mat.set_shader_parameter("region", Vector4(r.position.x / asz.x, r.position.y / asz.y, r.size.x / asz.x, r.size.y / asz.y))
+	mat.set_shader_parameter("back_face", 1.0 if back else 0.0)
+
+func set_reveal(text: String, at_uv: Vector2) -> void:
+	reveal.text = text
+	reveal.reset_size()
+	reveal.position = (at_uv - Vector2(0.5, 0.5)) * tex_size() - reveal.size * 0.5
+	reveal.visible = true
 
 func tex_size() -> Vector2:
-	return (front.diffuse_texture as Texture2D).get_size()
+	return body.region_rect.size
 
 func contains(global_point: Vector2) -> bool:
 	var p := body.to_local(global_point)
-	var s := tex_size() * 0.42
+	var s := tex_size() * 0.44
 	return absf(p.x) < s.x and absf(p.y) < s.y
 
-## Global position of a point given in the item's texture UV.
 func uv_global(uv: Vector2) -> Vector2:
 	return body.to_global((uv - Vector2(0.5, 0.5)) * tex_size())
 
-func serial_center() -> Vector2:
-	return serial.get_global_transform() * (serial.size * 0.5)
+func reveal_center() -> Vector2:
+	return reveal.get_global_transform() * (reveal.size * 0.5)
 
 func begin_drag(global_point: Vector2) -> void:
-	if busy:
+	if busy or not draggable:
 		return
 	dragging = true
 	grab = position - get_parent().to_local(global_point)
@@ -85,10 +102,9 @@ func drag_to(global_point: Vector2) -> void:
 		target.y = clampf(target.y, bounds.position.y, bounds.end.y)
 
 func end_drag() -> void:
-	if not dragging:
-		return
-	dragging = false
-	land()
+	if dragging:
+		dragging = false
+		land()
 
 func land(height := 0.0) -> void:
 	lift_target = 0.0
@@ -109,9 +125,7 @@ func flip() -> void:
 	tw.parallel().tween_property(body, "scale:x", 0.0, 0.14).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	tw.tween_callback(func():
 		back = not back
-		body.texture = back_tex if back else front
-		mat.set_shader_parameter("back_face", 1.0 if back else 0.0)
-		serial.visible = back
+		_apply_face()
 		flipped.emit(back))
 	tw.tween_property(body, "scale:x", display_scale, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(func():
@@ -129,7 +143,8 @@ func _process(delta: float) -> void:
 	body.rotation = lerpf(body.rotation, clampf(vel.x * 0.00045, -0.22, 0.22), 1.0 - exp(-delta * 12.0))
 	body.position = Vector2(0, -lift)
 	var h := clampf(lift / 60.0, 0.0, 1.0)
-	shadow.position = Vector2(lift * 0.35, tex_size().y * 0.3 * display_scale)
-	shadow.scale = Vector2(tex_size().x * display_scale / 256.0 * (1.15 + h * 0.25), 0.34 * (1.0 + h * 0.2))
+	var foot := tex_size() * display_scale
+	shadow.position = Vector2(lift * 0.35, foot.y * 0.36)
+	shadow.scale = Vector2(foot.x / 256.0 * (1.05 + h * 0.25), foot.x / 256.0 * 0.2 * (1.0 + h * 0.2))
 	shadow.modulate.a = 0.6 * (1.0 - h * 0.55)
 	mat.set_shader_parameter("hover", hover)

@@ -145,7 +145,32 @@ def copy_shared() -> None:
         shutil.copy(wav, OUT / "audio" / wav.name)
 
 
+def other_scenes() -> None:
+    for name in ("workbench", "warehouse"):
+        img = upscale(Image.open(SRC / f"art/orbital-{name}.png").convert("RGB"), SCALE)
+        save(img, f"scene/{name}_bg.png")
+        save(normal_map(img, strength=1.6), f"scene/{name}_bg_n.png")
+
+
+def atlases() -> None:
+    """Whole atlases with matching normal maps; sprites pick their cell by region."""
+    for key in ("orbital-items-front", "orbital-items-back", "orbital-expansion-front", "orbital-expansion-back",
+                "orbital-annex-front", "orbital-annex-back"):
+        img = Image.open(SRC / f"art/{key}.png").convert("RGBA")
+        save(img, f"atlas/{key}.png")
+        save(normal_map(img, strength=3.0, shape=3), f"atlas/{key}_n.png")
+    for key in ("orbital-characters", "orbital-characters-focused", "orbital-characters-question", "orbital-characters-happy",
+                "orbital-characters-reject", "orbital-characters-tired", "orbital-people-annex"):
+        img = Image.open(SRC / f"art/{key}.png").convert("RGBA")
+        save(img, f"atlas/{key}.png")
+        save(normal_map(img, strength=2.6, shape=4), f"atlas/{key}_n.png")
+    for key in ("orbital-tools",):
+        save(Image.open(SRC / f"art/{key}.png").convert("RGBA"), f"atlas/{key}.png")
+
+
 if __name__ == "__main__":
+    other_scenes()
+    atlases()
     counter_layers()
     characters()
     items()

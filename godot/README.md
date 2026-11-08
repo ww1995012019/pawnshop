@@ -1,53 +1,57 @@
-# 轨道旧货局 · Godot 柜台切片
+# 轨道旧货局 · Godot 4 版
 
-用 **Godot 4.6（GL Compatibility 渲染）** 重做的柜台垂直切片，用来判断换引擎之后的画面和交互感。只有一位来客、一件货物、两种鉴定仪器、一轮议价和一次成交，不包含完整经营规则。
+用 **Godot 4.6（GL Compatibility 渲染）** 重做的完整游戏。经营规则从 Cocos 版逐行移植，用轨迹比对测试保证两边结果完全一致；画面换成分层、带真实 2D 光照的场景，所有操作都有实物反馈。
 
-网页版构建在仓库根目录的 `play-godot/`，本地用任意静态服务器打开 `index.html` 即可（不需要跨源隔离，导出时关闭了多线程）。
+网页版在仓库根目录的 `play-godot/`，也部署在网站首页；原 Cocos 版在网站的 `/play/`。
 
-## 玩法
+## 能玩到的内容
 
-1. 按柜台左侧的服务铃，栗叔从右侧走进来，把折叠巡检蜂递到工作垫上。
-2. 拖动实物，它会被拿起、倾斜、落下时扬起灰尘；右键或 `F` 翻面。
-3. `2` 放大镜：镜片实时放大画面，移到机臂根部停留，找到补漆接缝。
-4. `3` 紫外灯：店里的灯暗下来，翻到背面扫机腹，新漆下的旧编号会发光。
-5. 每找到一条物证，估值区间收窄，客人会改口、降价，表情和动作随之变化。
-6. 在右侧终端转动旋钮出价，客人会接受、还价或生气；耐心用完就带货离开。
-7. 成交后钞票一张张飞进客人手里，收据打印出来并盖章，货物飞到后面的货架上。
+和 Cocos 版规则完全相同：56 类货物、9 位人物、21 天经营、32 张订单、21 个每日事件、23 条维修/组装配方、抵押与赎回、来源核验与安检、租金与救济清仓、第 3 天起的设备升级和三种结局。
 
-## 画面做法
-
-| 部分 | 实现 |
+| 页面 | 交互 |
 |---|---|
-| 分层场景 | `tools/prepare_assets.py` 把原来的柜台整幅画拆成背景和前景两层：台面、台灯、显示器、杯子、植物用 GrabCut 抠出来，背景里被遮挡的部分用 OpenCV 补画。来客站在两层之间，被柜台挡住下半身；三层随鼠标做视差。 |
-| 2D 光照 | 每张图由亮度生成法线贴图，配合 `PointLight2D`：台灯、窗光、顶灯、霓虹、样品管和吊灯都是真实光源，会闪烁、呼吸；`CanvasModulate` 压暗环境光，紫外模式下整体变暗。 |
-| 人物 | 单张立绘铺在网格上，`shaders/customer.gdshader` 按身体部位做顶点变形：呼吸、点头、摇头、侧头、前倾后仰、耸肩，表情图之间交叉淡入。走进走出带步伐起伏。 |
-| 鉴定仪器 | `lens.gdshader` 读取屏幕并放大，带折射边缘和色散；`item.gdshader` 只在镜片或紫外光范围内显示划痕、补漆接缝和荧光残留；`reveal.gdshader` 让旧编号只在紫外光下发光。 |
-| 终端 | 报价屏是 SubViewport 加 `crt.gdshader`（弧面、扫描线、辉光、闪烁）；出价是可拖动的旋钮；按键会按下回弹。 |
-| 收尾 | 屏幕暗角、冷暖分离和颗粒（`post.gdshader`），浮尘、杯子热气、样品管气泡用 CPUParticles2D，舷窗外的驳船和星光裁剪在玻璃区域内。 |
+| 柜台 | 按服务铃，客人从右侧走到柜台后面，把货递到工作垫上。拖动实物（拿起、倾斜、落下扬尘），右键或 `F` 翻面。右侧 CRT 终端转旋钮出价、援引物证，客人会点头、摇头、前倾、后仰、换表情；成交时钞票一张张飞过去、打印收据盖章。卖货时从库存挑一件合格的推荐给客人。陈列中的货物摆在后面的货架上。 |
+| 鉴定 | 六种仪器各是一个小操作：放大镜（镜片实时放大画面，停在接缝上）、紫外灯（店里变暗，扫出暗纹）、光谱台（拖三根滑杆对齐参考谱）、万用探针（把红黑探针拖到发光接口上，看示波器）、力秤（先校零，再配砝码让指针归零）、负载夹（转旋钮把输出稳在绿区）。读数来自物件真实状态：故障件在负载下会掉电，复制品谱线和质量都偏移。 |
+| 维修 | 三道工序都是手上的活：在实物上来回擦掉污垢、把新零件拖进发光槽位、按住负载复测在绿区松开。最后确认时才扣材料和 AP。也可以组装维护套组、拆解回收、采购耗材。 |
+| 仓储 | 10×6 占格后仓，拖动换位、拖动时右键旋转，非法位置会标红。陈列架、隔离柜、抵押柜，扫描、登记、隔离、归还、赎回、救济清仓。 |
+| 订单 | 可接 / 进行中 / 已结束三栏，交付前逐条显示规则校验结果。 |
+| 日结 | 当日流水、维护费与租金、升级二选一、换天卷帘、21 天结局。 |
 
-## 目录
+另外还有：每日站内消息（三选一）、人物档案、经营手册、设置（声音、减少动态、全屏、新开一家店）、标题画面、自动存档。
+
+## 结构
 
 ```
 godot/
-  project.godot, main.tscn, export_presets.cfg
-  scripts/   main.gd 流程与场景、customer.gd 人物、item.gd 实物、terminal.gd 终端、knob.gd 旋钮、bell.gd 服务铃、util.gd
-  shaders/   customer / item / reveal / lens / crt / post
-  assets/    由 tools/prepare_assets.py 从 assets/resources 生成
-  tools/prepare_assets.py
+  project.godot  main.tscn  export_presets.cfg
+  data/game_data.json          由 tools/export_data.mjs 从 TS 源数据导出
+  scripts/model/               model.gd（规则移植）、game_data.gd
+  scripts/app/                 game.gd（全局状态与存档）、shell.gd（场景/HUD/导航/弹窗）、ui_kit.gd、capture.gd
+  scripts/pages/               counter / inspect / repair / warehouse / orders / report
+  scripts/world/item_sprite.gd 实物；scripts/customer.gd 人物网格变形
+  shaders/                     customer / item / reveal / lens / crt / post
+  tests/                       replay.gd（规则比对）、input_test.gd（真实输入）
+  tools/                       prepare_assets.py、export_data.mjs、trace.mjs
 ```
 
 ## 命令
 
 ```bash
-python3 godot/tools/prepare_assets.py             # 重新生成分层素材和法线贴图（需要 opencv-python-headless、Pillow）
-godot --path godot                                # 编辑器或直接运行
+python3 godot/tools/prepare_assets.py      # 生成分层场景、图集和法线贴图
+node godot/tools/export_data.mjs           # 从 TS 源导出游戏数据
+node godot/tools/trace.mjs 16 400          # 用 TS 规则录制随机对局轨迹
+node godot/tools/trace.mjs 10 1400 0.1 long
+godot --headless --path godot --script res://tests/replay.gd   # 逐步比对 GDScript 规则
+godot --path godot -- --inputtest          # 真实鼠标事件：按铃、拖动
+godot --path godot -- --capture=/tmp/shots # 自动走完各页面并截图
 godot --headless --path godot --export-release "Web" build/web/index.html
-godot --path godot -- --capture=/tmp/shots        # 自动跑完整流程并截图
-godot --path godot -- --dragtest=/tmp/shots       # 用合成鼠标事件验证拖放
 ```
+
+当前轨迹比对：26 局、17,364 步，与 TypeScript 规则逐字段一致（含金额、文案和存档结构）。
 
 ## 已知限制
 
-- 素材仍是旧版：货物每格只有 256 像素、放大两倍后偏软；人物是整张立绘，手臂不能单独动。换成分层出图（人物拆部件、货物单独 1024 像素以上）后，同一套代码可以直接接入骨骼动画。
-- 网页首次加载约 60 MB（引擎 37.7 MB + 素材 23.8 MB，服务器 gzip 后小很多），比 Cocos 版重。
-- 手机触屏还没有单独适配布局，也没在真机上测过。
+- 素材仍来自旧版：货物每格 256 像素左右，人物是整张立绘（用网格变形做动作，手臂不能单独动）。换成分层高清出图后可以直接替换 `assets/`。
+- 网页首次加载约 59 MB（引擎 37.7 MB + 数据包 21.3 MB，服务器 gzip 后更小）。
+- 手机触屏还没有专门布局，也没在真机上测过。
+- Cocos 版存档不会自动迁移到 Godot 版（两边存储位置不同）。

@@ -4,6 +4,7 @@
 shader_type canvas_item;
 
 uniform vec2 size = vec2(434.0, 724.0);
+uniform vec4 region = vec4(0.0, 0.0, 1.0, 1.0); // atlas UV rect of this portrait
 uniform float neck = 0.34;      // UV height of the neck pivot
 uniform float waist = 0.78;     // below this the body is anchored by the counter
 uniform float breath = 0.0;     // -1..1
@@ -15,7 +16,7 @@ uniform float shrug = 0.0;      // px, shoulders up
 uniform float flash = 0.0;      // brief warm highlight on reactions
 
 void vertex() {
-	vec2 uv = UV;
+	vec2 uv = (UV - region.xy) / region.zw;
 	vec2 v = VERTEX;
 	float head = 1.0 - smoothstep(neck - 0.05, neck + 0.07, uv.y);
 	float torso = smoothstep(neck - 0.08, neck + 0.12, uv.y) * (1.0 - smoothstep(neck + 0.15, waist, uv.y));

@@ -6,42 +6,50 @@ extends Node2D
 signal arrived
 signal left
 
-const MOODS := ["neutral", "focused", "question", "happy", "reject", "tired"]
+var npc_id := "CHR-004"
 var size := Vector2(434, 724)
 var mat: ShaderMaterial
 var current: MeshInstance2D
 var incoming: MeshInstance2D
-var textures := {}
-var normal: Texture2D
 var t := 0.0
 var talking := 0.0
-var look := 0.0           # -1..1, where the visitor looks
+var look := 0.0
 var walking := false
 var gesture := {"nod": 0.0, "turn": 0.0, "tilt": 0.0, "lean": 0.0, "shrug": 0.0, "flash": 0.0}
 var mood := "neutral"
+var _mesh_cache := {}
 
-func _init() -> void:
-	normal = load("res://assets/chars/chr004_n.png")
-	for m in MOODS:
-		textures[m] = load("res://assets/chars/chr004_%s.png" % m)
-	size = (textures["neutral"] as Texture2D).get_size()
+func setup(id: String, start_mood := "neutral") -> void:
+	npc_id = id
+	mood = start_mood
 	mat = ShaderMaterial.new()
 	mat.shader = load("res://shaders/customer.gdshader")
+	var cell := UIKit.npc_cell(id, mood)
+	size = (cell.region as Rect2).size
 	mat.set_shader_parameter("size", size)
-	var mesh := _grid(size, 10, 22)
-	current = _part(mesh, "neutral")
-	incoming = _part(mesh, "neutral")
+	current = _part(cell)
+	incoming = _part(cell)
 	incoming.modulate.a = 0.0
 
-func _grid(s: Vector2, cols: int, rows: int) -> ArrayMesh:
+func _mesh_for(cell: Dictionary) -> ArrayMesh:
+	var atlas: Texture2D = UIKit.tex("res://assets/atlas/%s.png" % cell.key)
+	var r: Rect2 = cell.region
+	var asz := atlas.get_size()
+	var uv0 := r.position / asz
+	var uv1 := r.end / asz
+	var key := "%s:%s" % [cell.key, r]
+	if _mesh_cache.has(key):
+		return _mesh_cache[key]
+	var cols := 10
+	var rows := 22
 	var verts := PackedVector2Array()
 	var uvs := PackedVector2Array()
 	var idx := PackedInt32Array()
 	for y in rows + 1:
 		for x in cols + 1:
-			var uv := Vector2(float(x) / cols, float(y) / rows)
-			verts.append(uv * s)
-			uvs.append(uv)
+			var f := Vector2(float(x) / cols, float(y) / rows)
+			verts.append(f * size)
+			uvs.append(uv0 + (uv1 - uv0) * f)
 	for y in rows:
 		for x in cols:
 			var i := y * (cols + 1) + x
@@ -53,48 +61,46 @@ func _grid(s: Vector2, cols: int, rows: int) -> ArrayMesh:
 	arrays[Mesh.ARRAY_INDEX] = idx
 	var m := ArrayMesh.new()
 	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_mesh_cache[key] = m
+	mat.set_shader_parameter("region", Vector4(uv0.x, uv0.y, uv1.x - uv0.x, uv1.y - uv0.y))
 	return m
 
-func _part(mesh: ArrayMesh, m: String) -> MeshInstance2D:
+func _part(cell: Dictionary) -> MeshInstance2D:
 	var mi := MeshInstance2D.new()
-	mi.mesh = mesh
-	mi.texture = _tex(m)
+	mi.mesh = _mesh_for(cell)
+	mi.texture = UIKit.lit_atlas(cell.key)
 	mi.material = mat
 	mi.position = Vector2(-size.x * 0.5, -size.y)
 	add_child(mi)
 	return mi
 
-func _tex(m: String) -> CanvasTexture:
-	var c := CanvasTexture.new()
-	c.diffuse_texture = textures[m]
-	c.normal_texture = normal
-	c.specular_color = Color(0.25, 0.22, 0.2)
-	c.specular_shininess = 0.35
-	return c
-
-## Cross-fade to another painted expression.
+## Cross-fade to another painted expression (when this resident has one).
 func set_mood(m: String) -> void:
-	if m == mood or not textures.has(m):
+	if m == mood:
 		return
 	mood = m
-	incoming.texture = _tex(m)
+	var cell := UIKit.npc_cell(npc_id, m)
+	incoming.mesh = _mesh_for(cell)
+	incoming.texture = UIKit.lit_atlas(cell.key)
 	incoming.modulate.a = 0.0
 	var tw := create_tween()
 	tw.tween_property(incoming, "modulate:a", 1.0, 0.18)
 	tw.tween_callback(func():
+		current.mesh = incoming.mesh
 		current.texture = incoming.texture
 		incoming.modulate.a = 0.0)
 
 func _process(delta: float) -> void:
 	t += delta
 	talking = maxf(0.0, talking - delta)
-	var breath := sin(t * (2.2 if talking > 0.0 else 1.55))
-	var talk_nod := sin(t * 11.0) * 1.6 * minf(1.0, talking * 3.0)
+	var still: bool = Game.prefs.reduced_motion
+	var breath := 0.0 if still else sin(t * (2.2 if talking > 0.0 else 1.55))
+	var talk_nod := 0.0 if still else sin(t * 11.0) * 1.6 * minf(1.0, talking * 3.0)
 	mat.set_shader_parameter("breath", breath)
-	mat.set_shader_parameter("head_nod", gesture.nod + talk_nod + sin(t * 0.8) * 0.8)
+	mat.set_shader_parameter("head_nod", gesture.nod + talk_nod + (0.0 if still else sin(t * 0.8) * 0.8))
 	mat.set_shader_parameter("head_turn", gesture.turn + look * 7.0)
-	mat.set_shader_parameter("head_tilt", gesture.tilt + sin(t * 0.63) * 0.018 + look * 0.03)
-	mat.set_shader_parameter("lean", gesture.lean + sin(t * 0.47) * 3.5)
+	mat.set_shader_parameter("head_tilt", gesture.tilt + (0.0 if still else sin(t * 0.63) * 0.018) + look * 0.03)
+	mat.set_shader_parameter("lean", gesture.lean + (0.0 if still else sin(t * 0.47) * 3.5))
 	mat.set_shader_parameter("shrug", gesture.shrug)
 	mat.set_shader_parameter("flash", gesture.flash)
 
@@ -130,17 +136,21 @@ func cheer() -> void:
 	tw.tween_method(func(v): gesture.shrug = v; gesture.flash = v / 10.0, 10.0, 0.0, 0.35).set_trans(Tween.TRANS_BOUNCE)
 	nod()
 
-## Walk from `from_x` to the current position with a stepping bob, then settle.
 func walk_in(from_x: float) -> void:
 	var dest := position
 	position.x = from_x
 	walking = true
+	if Game.prefs.reduced_motion:
+		position = dest
+		walking = false
+		arrived.emit.call_deferred()
+		return
 	var tw := create_tween()
 	tw.tween_method(func(p: float):
 		position.x = lerpf(from_x, dest.x, p)
 		position.y = dest.y - absf(sin(p * PI * 5.0)) * 16.0 * (1.0 - p * 0.3)
 		gesture.lean = (dest.x - from_x) * -0.012 * (1.0 - p)
-		rotation = sin(p * PI * 5.0) * 0.012, 0.0, 1.0, 1.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		rotation = sin(p * PI * 5.0) * 0.012, 0.0, 1.0, 1.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(func():
 		rotation = 0.0
 		position = dest
@@ -151,6 +161,9 @@ func walk_in(from_x: float) -> void:
 func walk_out(to_x: float) -> void:
 	var start := position
 	walking = true
+	if Game.prefs.reduced_motion:
+		left.emit.call_deferred()
+		return
 	var tw := create_tween()
 	tw.tween_method(func(p: float):
 		position.x = lerpf(start.x, to_x, p)
@@ -162,7 +175,6 @@ func walk_out(to_x: float) -> void:
 		walking = false
 		left.emit())
 
-## Screen point near the visitor's mouth, for the speech bubble.
 func mouth() -> Vector2:
 	return to_global(Vector2(size.x * 0.12, -size.y * 0.74))
 
