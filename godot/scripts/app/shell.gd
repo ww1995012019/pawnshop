@@ -722,6 +722,8 @@ func open_events() -> void:
 	face.texture = UIKit.npc_icon(event.speakerId)
 	face.custom_minimum_size = Vector2(120, 120)
 	face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	face.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	head.add_child(face)
 	var hv := UIKit.vbox(6)
 	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -760,35 +762,76 @@ func open_events() -> void:
 		row.add_child(card)
 	body.add_child(row)
 
+## Residents' dossier: a roster of headshots on the left, the selected
+## resident's full portrait and file on the right. No scrolling, nothing
+## stretched; opens on the visitor the player clicked.
 func open_people(npc_id := "") -> void:
-	var m := modal("旧港人物档案", 1200)
+	var m := modal("旧港人物档案", 1240)
 	var body: VBoxContainer = m[0]
-	var g := UIKit.grid(3, 14)
-	for n in GameData.npcs:
-		var card := UIKit.plate(UIKit.inset_style(14))
-		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var h := UIKit.hbox(14)
-		var face := TextureRect.new()
-		face.texture = UIKit.npc_icon(n.id)
-		face.custom_minimum_size = Vector2(96, 96)
-		face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		h.add_child(face)
-		var v := UIKit.vbox(4)
+	var row := UIKit.hbox(20)
+	body.add_child(row)
+	var roster := UIKit.grid(3, 10)
+	roster.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	row.add_child(roster)
+	var file := UIKit.plate(UIKit.inset_style(20))
+	file.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	file.custom_minimum_size = Vector2(0, 600)
+	row.add_child(file)
+	var detail := UIKit.hbox(22)
+	file.add_child(detail)
+	var keys := {}
+	var show := func(id: String) -> void:
+		UIKit.clear(detail)
+		var n := GameData.npc(id)
+		var frame := UIKit.plate(UIKit.skin("socket", "sm", 8.0))
+		frame.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		var art := TextureRect.new()
+		art.texture = UIKit.npc_portrait(id)
+		art.custom_minimum_size = Vector2(300, 520)
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		frame.add_child(art)
+		detail.add_child(frame)
+		var v := UIKit.vbox(10)
 		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		v.add_child(UIKit.label("%s · %s" % [n.name, n.title], 21, UIKit.AMBER if n.id == npc_id else Color("f3e6cc"), false, true))
-		var need := Model.customer_need(n.id) if n.id != "CHR-001" else "店主"
-		v.add_child(UIKit.label(String(n.get("bio", n.line)), 16, UIKit.TEXT, false, true))
-		v.add_child(UIKit.label("需求：" + need, 16, UIKit.CYAN, false, true))
-		h.add_child(v)
-		card.add_child(h)
-		card.custom_minimum_size = Vector2(360, 0)
-		g.add_child(card)
-	var sc := ScrollContainer.new()
-	sc.custom_minimum_size = Vector2(0, 640)
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sc.add_child(g)
-	body.add_child(sc)
+		v.add_child(UIKit.label(n.name, 34, Color("f3e6cc")))
+		v.add_child(UIKit.label(n.title, 19, UIKit.AMBER, false, true))
+		v.add_child(UIKit.rule())
+		var bio := UIKit.label(String(n.get("bio", n.line)), 19, UIKit.TEXT, false, true)
+		bio.custom_minimum_size.x = 380
+		v.add_child(bio)
+		if id != "CHR-001":
+			var need := UIKit.plate(UIKit.paper_style(14))
+			var nl := UIKit.label("来店需求：" + Model.customer_need(id), 17, UIKit.INK, false, true)
+			nl.custom_minimum_size.x = 350
+			need.add_child(nl)
+			v.add_child(need)
+			if n.has("line"):
+				var quote := UIKit.label("「%s」" % String(n.line), 17, UIKit.MUTED, false, true)
+				quote.custom_minimum_size.x = 380
+				v.add_child(quote)
+		else:
+			v.add_child(UIKit.label("这是你。", 17, UIKit.MUTED))
+		detail.add_child(v)
+		for k in keys:
+			UIKit.compact(keys[k], "primary" if k == id else "secondary")
+	for n in GameData.npcs:
+		var b := UIKit.button("", "secondary", Vector2(120, 150), 15)
+		b.icon = UIKit.npc_icon(n.id)
+		b.expand_icon = true
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+		b.add_theme_constant_override("icon_max_width", 96)
+		b.text = n.name
+		b.tooltip_text = "%s · %s" % [n.name, n.title]
+		var id: String = n.id
+		b.pressed.connect(func():
+			sound("page", -10)
+			show.call(id))
+		roster.add_child(b)
+		keys[id] = b
+	var first: String = npc_id if npc_id != "" else String(GameData.npcs[1].id if GameData.npcs.size() > 1 else GameData.npcs[0].id)
+	show.call(first)
 
 func open_help() -> void:
 	var m := modal("经营手册", 1000)

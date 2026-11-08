@@ -412,12 +412,27 @@ static func npc_cell(npc_id: String, mood := "neutral") -> Dictionary:
 	var inset := 0.012
 	return {"key": key, "region": Rect2((index % cols) * cw + cw * inset, (index / cols) * ch + ch * inset, cw * (1 - inset * 2), ch * (1 - inset * 2))}
 
+## Square headshot from the top of the portrait (always drawn square, so
+## containers never stretch it).
 static func npc_icon(npc_id: String) -> AtlasTexture:
+	var key := "npc_icon:" + npc_id
+	if _cache.has(key):
+		return _cache[key]
 	var c := npc_cell(npc_id)
 	var a := AtlasTexture.new()
 	a.atlas = tex("res://assets/atlas/%s.png" % c.key)
 	var r: Rect2 = c.region
-	a.region = Rect2(r.position + Vector2(r.size.x * 0.18, r.size.y * 0.04), Vector2(r.size.x * 0.64, r.size.x * 0.64))
+	var side := r.size.x * 0.56
+	a.region = Rect2(r.position + Vector2((r.size.x - side) * 0.5, r.size.y * 0.03), Vector2(side, side))
+	_cache[key] = a
+	return a
+
+## The whole painted portrait of a resident.
+static func npc_portrait(npc_id: String) -> AtlasTexture:
+	var c := npc_cell(npc_id)
+	var a := AtlasTexture.new()
+	a.atlas = tex("res://assets/atlas/%s.png" % c.key)
+	a.region = c.region
 	return a
 
 static func tool_icon(tool_id: String) -> AtlasTexture:
