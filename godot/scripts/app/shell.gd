@@ -102,6 +102,10 @@ func _ready() -> void:
 		cap.run(self, capture_dir)
 	else:
 		_show_title()
+	if OS.has_feature("web"):
+		var touch := preload("res://scripts/app/web_touch.gd").new()
+		add_child(touch)
+		touch.setup(self)
 
 # ---------------------------------------------------------------- world
 
@@ -1235,6 +1239,7 @@ func shutter(day: int) -> void:
 		Audio.music_for("counter")
 		Audio.day_opened(day)
 	var door := Control.new()
+	door.set_meta("blocks_shop_input", true)
 	door.set_anchors_preset(Control.PRESET_FULL_RECT)
 	door.mouse_filter = Control.MOUSE_FILTER_STOP
 	fx.add_child(door)

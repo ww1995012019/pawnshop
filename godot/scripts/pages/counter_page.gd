@@ -426,7 +426,7 @@ func relayout() -> void:
 	terminal.scale = Vector2(0.84, 0.84)
 	crate.position = Vector2(604, 759)
 	crate.size = Vector2(672, 224)
-	actions.position = Vector2(54, 237)
+	actions.position = Vector2(54, 245)
 	actions.size = Vector2(472, 44)
 	bubble.position = bubble_rect.position
 	bubble.size = bubble_rect.size
@@ -567,14 +567,15 @@ func _build_terminal() -> void:
 	housing.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	content.add_child(housing)
 	# Live readouts sit in the painted LCD, not on an extra rectangular plate.
-	scr.head = _terminal_label(content, Vector2(107, 48), Vector2(238, 23), 18, Color("a7cbbb"))
-	scr.price = _terminal_label(content, Vector2(350, 43), Vector2(128, 33), 25, Color("e1c487"), true)
+	scr.head = _terminal_label(content, Vector2(107, 48), Vector2(223, 23), 18, Color("a7cbbb"))
+	scr.price = _terminal_label(content, Vector2(338, 42), Vector2(144, 36), 28, Color("f0d49b"), true)
 	scr.line1 = _terminal_label(content, Vector2(107, 75), Vector2(371, 22), 18, Color("d0d4b6"))
 	scr.line2 = _terminal_label(content, Vector2(107, 98), Vector2(371, 20), 16, Color("9bb8a8"))
-	scr.line3 = _terminal_label(content, Vector2.ZERO, Vector2.ZERO, 14, UIKit.MUTED)
+	scr.line3 = _terminal_label(content, Vector2(92, 218), Vector2(408, 24), 17, Color("f0dfbd"))
+	scr.line3.add_theme_stylebox_override("normal", _flat(Color("243b35")))
 	scr.line3.visible = false
 	offer_panel = UIKit.plate(_flat(Color.TRANSPARENT))
-	offer_panel.position = Vector2(56, 146)
+	offer_panel.position = Vector2(56, 139)
 	offer_panel.size = Vector2(466, 71)
 	content.add_child(offer_panel)
 	var controls := Control.new()
@@ -597,7 +598,7 @@ func _build_terminal() -> void:
 	printed_label.position = Vector2(82, -7)
 	printed_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	controls.add_child(printed_label)
-	offer_label = UIKit.label("—", 26, Color("f0dfb3"), true)
+	offer_label = UIKit.label("—", 30, Color("f0dfb3"), true)
 	offer_label.position = Vector2(82, 10)
 	offer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	offer_label.add_theme_color_override("font_shadow_color", Color("333a34"))
@@ -663,7 +664,7 @@ func _terminal_label(parent: Control, pos: Vector2, extent: Vector2, font_size: 
 
 func _act(text: String, kind: String, fn: Callable, enabled := true, _wide := false, tip := "") -> Button:
 	var caption := "抵押合同" if text.begins_with("抵押（") or text == "签抵押合同" else text
-	var b := UIKit.button(caption, kind, Vector2(70, 42), 19)
+	var b := UIKit.button(caption, kind, Vector2(70, 42), 18)
 	_till_key(b, kind)
 	b.disabled = not enabled or busy
 	b.tooltip_text = tip
@@ -720,9 +721,11 @@ func _refresh() -> void:
 		else:
 			scr.line1.text = "需求：" + Model.customer_need(t.npcId).left(20)
 			scr.line2.text = "在货箱里挑一件合格的自有货"
-		scr.line3.text = "现金 %s · 行动 %d AP" % [UIKit.money(s.cash), int(s.ap)]
+		var cash_after: float = s.cash + (-float(t.price) if buy else float(t.price))
+		scr.line3.text = "%s %s · 余 %s · 1 AP" % ["支出" if buy else "收入", UIKit.money(t.price), UIKit.money(cash_after)] if it != null else "选定货物后核对金额"
+		scr.line3.tooltip_text = scr.line3.text
 		if t.locked:
-			_act("确认钱货交割", "primary", func(): Game.dispatch({"type": "DELIVER", "tradeId": t.id}), s.ap >= 1)
+			_act(("支付 " if buy else "收款 ") + UIKit.money(t.price) + " 并交割", "primary", func(): Game.dispatch({"type": "DELIVER", "tradeId": t.id}), s.ap >= 1)
 			_act("取消交易", "secondary", func(): Game.dispatch({"type": "REFUSE"}))
 		elif it == null:
 			_act("挑选货物", "primary", _pick_goods)
@@ -751,7 +754,7 @@ func _refresh() -> void:
 			if chips.get_child_count() == 0:
 				chips.add_child(UIKit.label("物证插槽 · 先在鉴定仪取证", 13, Color("36463e")))
 			offer_button = _act("出价 " + UIKit.money(dial.value), "primary", func(): _offer())
-			_act("接受报价", "good", func(): Game.dispatch({"type": "ACCEPT"}))
+			_act("接受 " + UIKit.money(t.price), "good", func(): Game.dispatch({"type": "ACCEPT"}), s.ap >= 1 and (not buy or s.cash >= t.price))
 			_act("拿去鉴定", "secondary", func(): shell.go("inspect", it.uid))
 			if buy:
 				var pawn_ok := Model.evidence_count(it) >= 2
@@ -765,9 +768,10 @@ func _refresh() -> void:
 		(k as Button).disabled = not dial.enabled
 	offer_panel.visible = dial_on
 	evidence_box.visible = dial_on
+	scr.line3.visible = t != null
 	footer.visible = t != null
 	footer.tooltip_text = footer.text
-	for k in ["line1", "line2", "line3"]:
+	for k in ["line1", "line2"]:
 		var l: Label = scr[k]
 		if l.text.length() > 21:
 			l.text = l.text.left(20) + "…"

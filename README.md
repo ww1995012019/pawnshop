@@ -1,4 +1,12 @@
-# 轨道旧货局 Cocos Creator 网页版
+# 轨道旧货局
+
+当前游戏主线使用 **Godot 4.6.3**。运行 `npm run build:godot` 后，使用
+`npm run preview:godot` 打开本地网页版；构建、手机操作和检查说明见 [Godot 文档](godot/README.md)。
+`play-godot/` 为自动生成的发布目录，历史数据包不再提交到源码仓库。
+
+以下保留 Cocos Creator / TypeScript 版本及共享经营规则的开发说明。
+
+## Cocos Creator 网页版
 
 使用 **Cocos Creator 3.8.8 与 TypeScript** 开发的空间站当铺经营游戏，按[太空当铺游戏设计与素材需求文档](page://page_f44de03a1914819194a52f23e05cf877)的 P0 页面、物品与首三天流程实现。当前界面版本为 `orbital-p0-v18`；游戏中的场景、货物、人物、工具和 UI 均由原生 Cocos 节点绘制，HTML 只承载画布和加载页。
 

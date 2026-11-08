@@ -34,7 +34,36 @@ godot/
   tools/                       prepare_assets.py、export_data.mjs、trace.mjs
 ```
 
-## 命令
+## 网页构建、预览与检查
+
+使用 Godot **4.6.3**，与 `vendor/godot-web/runtime.json` 中固定的网页引擎一致：
+
+```bash
+npm run build:godot        # 导入资源、导出数据包、生成 play-godot/
+npm run preview:godot      # http://127.0.0.1:4174/，支持 gzip、ETag 与缓存
+npm run test:godot         # 7 组原生回归和打包/缓存测试
+python3 -m pip install -r scripts/requirements-web-test.txt
+python3 -m playwright install chromium
+npm run test:godot:web     # 先启动预览；桌面、真实音频输出与手机触控
+```
+
+构建只使用 `--export-pack`，无需下载完整导出模板。脚本验证固定引擎文件的 SHA-256，
+为引擎、数据包和触控资源生成内容指纹，并生成 gzip 文件与 `release.json`。
+未使用的旧场景、旧人物与旧 UI 素材不进入网页包；源画稿保留。
+
+手机先横屏再加载大型资源，横屏提供至少 44 CSS 像素的快捷操作、仪器选择与独立报价面板。
+报价、交割、现金与 AP 检查始终由 Godot 原有规则执行；旋转和关闭鉴定抽屉保留当前来客及还价。
+
+`play-godot/` 是忽略的生成目录。引擎作为固定依赖保留在 `vendor/godot-web/`，游戏发布包由 CI
+生成并保存为 14 天的工作流产物。清理源码中的旧包不会重写已有 Git 历史。
+同一输出目录连续构建会保留当前及上一版的指纹资源，避免正在打开的页面立即失效。
+正式托管接入发布流程时，也应保留旧指纹资源至少一个发布窗口，不能直接清空资源目录。
+
+预览缓存策略：HTML 与清单使用 `no-cache`；带指纹的资源使用一年 `immutable` 缓存；
+按 `Accept-Encoding` 提供 gzip 并设置 `Vary`、`ETag`。静态/CDN 托管需要配置相同的
+`Content-Encoding` 和缓存规则；仅上传 `.gz` 文件不代表服务器会自动使用它。
+
+## 其他开发命令
 
 ```bash
 python3 godot/tools/prepare_assets.py      # 生成场景并重建物品图集
@@ -62,6 +91,6 @@ godot --headless --path godot --export-release "Web" build/web/index.html
 ## 已知限制
 
 - 物品使用新的像素精灵集：56 类货物和独立组装套组都有正反面；原始画稿保存在 `art-source/items-v2/`，导入工具生成固定像素密度的运行图集。新主店面、九位居民、28 个界面图标、六种仪器使用统一像素风；原始画稿保存在 `art-source/shop-v3/`。人物采用半身像及轻量动作，尚未拆分独立手臂。
-- 网页首次加载约 55 MB（引擎 37.7 MB + 数据包约 17 MB，服务器 gzip 后更小）。
-- 手机触屏还没有专门布局，也没在真机上测过。
+- 网页引擎与游戏包原始约 45.6 MB，其中数据包约 7.9 MB；相同 gzip 条件下合计约 17.0 MB。实际传输量取决于服务器的压缩与缓存配置。
+- 手机横屏入口、快捷操作与报价面板已通过 Chromium 触控模拟；六种实物仪器仍使用原有画布交互，尚未完成手机真机测试。
 - Cocos 版存档不会自动迁移到 Godot 版（两边存储位置不同）。

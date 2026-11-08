@@ -1,0 +1,58 @@
+name: Godot Web checks
+on:
+  pull_request:
+    paths: ['godot/**', 'scripts/*godot*', 'scripts/requirements-web-test.txt', 'vendor/godot-web/**', '.github/workflows/godot-web.yml']
+  push:
+    branches: [main]
+    paths: ['godot/**', 'scripts/*godot*', 'scripts/requirements-web-test.txt', 'vendor/godot-web/**', '.github/workflows/godot-web.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  godot-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install matching Godot editor
+        run: |
+          curl -fsSL --retry 3 https://github.com/godotengine/godot-builds/releases/download/4.6.3-stable/Godot_v4.6.3-stable_linux.x86_64.zip -o "$RUNNER_TEMP/godot.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot-bin"
+          mv "$RUNNER_TEMP/godot-bin/Godot_v4.6.3-stable_linux.x86_64" "$RUNNER_TEMP/godot-bin/godot"
+          chmod +x "$RUNNER_TEMP/godot-bin/godot"
+          echo "$RUNNER_TEMP/godot-bin" >> "$GITHUB_PATH"
+      - name: Install browser tests
+        run: |
+          python -m pip install -r scripts/requirements-web-test.txt
+          python -m playwright install --with-deps chromium
+      - name: Import and run native regressions
+        run: |
+          godot --headless --editor --path godot --import
+          python scripts/test-godot-native.py
+          python scripts/test-godot-packaging.py
+      - name: Build and check exported resources
+        run: |
+          python scripts/build-godot-web.py
+          XDG_DATA_HOME="$RUNNER_TEMP/godot-export-check" godot --headless --main-pack build/godot/game.pck --script "$GITHUB_WORKSPACE/godot/tests/export_assets_test.gd"
+      - name: Browser, sound and phone regressions
+        run: |
+          python scripts/serve-godot-web.py --port 4174 > work/web-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          python scripts/test-godot-web.py http://127.0.0.1:4174/
+          python scripts/test-godot-phone.py http://127.0.0.1:4174/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: godot-check-logs
+          path: work/
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: godot-web
+          path: play-godot/
+          include-hidden-files: true
+          retention-days: 14

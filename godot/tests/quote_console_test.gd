@@ -20,6 +20,8 @@ func audit(label: String) -> void:
 		check(bounds.encloses(chip.get_global_rect()),label+": evidence control stays inside the device")
 		for nudge in page.nudge_keys:
 			check(not chip.get_global_rect().intersects(nudge.get_global_rect()),label+": evidence stays clear of price keys")
+		if page.scr.line3.visible:
+			check(not chip.get_global_rect().intersects(page.scr.line3.get_global_rect()),label+": evidence stays clear of cash projection")
 	for i in buttons.size():
 		for j in range(i+1,buttons.size()):
 			check(not buttons[i].get_global_rect().intersects(buttons[j].get_global_rect()),label+": action keys do not overlap")
@@ -45,12 +47,17 @@ func run() -> void:
 	shell.go("counter")
 	await audit("buy")
 	var lot = Model.trade_item(game.state)
+	# A draft of 107 must never look like accepting the visitor's 134 Cr.
+	var accept_button: Button = shell.page.actions.get_child(1)
+	check(accept_button.text.contains("134"), "accept names the visitor's actual 134 Cr offer")
+	check(shell.page.scr.line3.visible and shell.page.scr.line3.text.contains("1066"), "purchase projects 1200 minus 134 as 1066 Cr")
 	lot.evidence = GameData.def(lot.defId).tools.duplicate()
 	shell.page._refresh()
 	await audit("evidence")
 	game.state = Model.reduce(game.state,{"type":"ACCEPT"})
 	shell.go("counter")
 	await audit("locked")
+	check(shell.page.actions.get_child(0).text.contains("134"), "locked purchase confirms the actual 134 Cr payment")
 	game.new_game("ORBITAL-P0")
 	game.state.cursor = 1
 	game.state = Model.reduce(game.state,{"type":"ARRIVE"})
@@ -64,6 +71,8 @@ func run() -> void:
 	game.state = Model.reduce(game.state,{"type":"SELECT_TRADE","uid":stock.uid})
 	shell.go("counter")
 	await audit("sale selected")
+	var sale_price: float = game.state.trade.price
+	check(shell.page.scr.line3.text.contains(Model.jnum(game.state.cash + sale_price)), "sale projects receipt instead of subtracting payment")
 	print("CONSOLE failures=",failures)
 	shell.queue_free()
 	await frame()

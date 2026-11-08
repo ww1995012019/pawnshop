@@ -102,10 +102,10 @@ func run(s) -> void:
 	check(shell.workspace_open() and shell.workspace_shell.page_name == "inspect", "Inspection equipment opens its drawer")
 	await click_button(shell.workspace_close)
 	check(shell.page_name == "counter" and shell.page.dial.value == quote, "Returning preserves the chosen quote")
-	await click_button(find_action("接受报价"))
+	await click_button(find_action("接受 " + UIKit.money(Game.state.trade.price)))
 	check(Game.state.trade != null and Game.state.trade.locked, "Accept button locks the price")
 	var cash_before: float = Game.state.cash
-	await click_button(find_action("确认钱货交割"))
+	await click_button(find_action(("支付 " if Game.state.trade.kind == "buy" else "收款 ") + UIKit.money(Game.state.trade.price) + " 并交割"))
 	check(Game.state.trade == null and Game.state.cash != cash_before, "Delivery button completes the transaction")
 	await get_tree().create_timer(4.0).timeout
 	await click_button(shell.page.fixture_buttons.orders)

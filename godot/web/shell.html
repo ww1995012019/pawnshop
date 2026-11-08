@@ -68,6 +68,7 @@ h1 { margin: 0; color: var(--paper); font-size: clamp(24px, 4.5vw, 31px); letter
 @media (prefers-reduced-motion: reduce) { #loader, .fill, #tip { transition: none; } .track.indeterminate .fill { animation: none; width: 100% !important; opacity: .6; } }
 
 	</style>
+	<link rel="stylesheet" href="web-ui.css">
 	$GODOT_HEAD_INCLUDE
 </head>
 <body>
@@ -93,6 +94,7 @@ h1 { margin: 0; color: var(--paper); font-size: clamp(24px, 4.5vw, 31px); letter
 		</div>
 	</div>
 
+	<script src="web-ui.js"></script>
 	<script src="$GODOT_URL"></script>
 	<script>
 const GODOT_CONFIG = $GODOT_CONFIG;
@@ -164,7 +166,7 @@ const engine = new Engine(GODOT_CONFIG);
 		return;
 	}
 
-	engine.startGame({
+	window.OrbitalTouch.whenLandscape().then(() => engine.startGame({
 		'onProgress': function (current, total) {
 			if (finished) return;
 			if (current > 0 && total > 0) {
@@ -180,7 +182,7 @@ const engine = new Engine(GODOT_CONFIG);
 				stage.textContent = '正在通电、点亮柜台…';
 			}
 		},
-	}).then(open, fail);
+	})).then(open, fail);
 }());
 	</script>
 </body>
