@@ -2,6 +2,14 @@
 
 记录日期：2026年11月8日。当前界面为 `orbital-p0-v15`，运行于真实 Cocos Creator 3.8.8 引擎。规则测试、鼠标交互与画面评审分别记录；通过功能检查不等于美术质量或完整 P1 内容验收。
 
+## v15 GitHub Pages 发布
+
+2026-11-08 02:56 UTC 已发布到 https://ww1995012019.github.io/pawnshop/ 。应用源码提交 `8f26ac3b577f2f6e69f492fb124723b946ecff30` 已推送到 main；生产静态文件提交 `ed648b74047a1dccb8f9d77acb4cd37b3ddc0372` 已推送到 gh-pages 根目录。该分支的入口、版本、脚本及三张新增 WebP 与本地已验收的 play/ 逐字节一致；objects-v6 和 v2–v6 旧版本目录保持原树。
+
+[GitHub Pages 发布任务 42440582356](https://github.com/ww1995012019/pawnshop/actions/runs/42440582356) 的 build、report-build-status、deploy 全部 success。部署日志返回 `Reported success!` 并明确环境地址为上述用户指定网址；远程 version.json 为 orbital-p0-v15，包含 56 类货物、4 位新人物、21 个每日事件与 32 张委托。脚本 SHA-256 仍为 `3be3cbbb489ce65608f05786eca8e5dc43b4b4fc0f37feb370b01fe562d6f7fa`。
+
+本地网络策略未允许 github.io 和 api.github.com，直接 HTTPS 检查被阻挡；GitHub API 状态通过连接器核对。云浏览器启动报 sandbox 错误，不能补做线上画布操作。本次线上发布成功以 GitHub Pages 部署结果和精确提交为依据；交互验收来自同一构建的上一节本地 Cocos 浏览器测试。
+
 ## v15 道具、人物、经营事件与开场闸门
 
 **实际内容**：新增 20 类独立正反面货物（合计 56 类 / 112 面），在 21 日的每日六客供应中可到货。新增 4 位独立立绘来客，合计 9 位角色（含店主）；四人各有背景、采购条件与分阶段对白，原人物补充背景和需求。另加 8 条专用维修配方与 8 张错峰委托，合计 32 张订单。21 个每日经营事件各有三种选择，明确现金、AP、材料、关系和风险结果；选择后一次提交，关闭不扣款，历史随档保存。
