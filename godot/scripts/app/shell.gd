@@ -45,11 +45,16 @@ var focus := 0.0
 var sounds := {}
 var title: Control
 var capture_dir := ""
+var world_cursor := Input.CURSOR_ARROW
 
 func art(u: float, v: float) -> Vector2:
 	return CENTER + (Vector2(u, v) - Vector2(836, 470.5)) * K
 
+func _exit_tree() -> void:
+	preload("res://scripts/ui/cursor_art.gd").uninstall()
+
 func _ready() -> void:
+	preload("res://scripts/ui/cursor_art.gd").install()
 	UIKit.ensure()
 	_build_world()
 	_build_ui()
@@ -558,6 +563,35 @@ func _input(e: InputEvent) -> void:
 	if e is InputEventMouse:
 		last_screen = (e as InputEventMouse).position
 
+## Godot controls choose their own cursor on hover. Only select a world cursor
+## when the pointer is over the world, so panels and modals retain precedence.
+func _update_cursor() -> void:
+	var hovering := get_viewport().gui_get_hovered_control()
+	var shape := Input.CURSOR_ARROW
+	if hovering is BaseButton:
+		var button := hovering as BaseButton
+		button.mouse_default_cursor_shape = Control.CURSOR_FORBIDDEN if button.disabled else Control.CURSOR_POINTING_HAND
+		shape = Input.CURSOR_FORBIDDEN if button.disabled else Input.CURSOR_POINTING_HAND
+	elif hovering is HSlider:
+		shape = Input.CURSOR_HSIZE
+	elif hovering is VSlider:
+		shape = Input.CURSOR_VSIZE
+	elif hovering != null:
+		var local_point := hovering.get_global_transform_with_canvas().affine_inverse() * last_screen
+		shape = hovering.call("cursor_at", local_point) if hovering.has_method("cursor_at") else hovering.get_cursor_shape(local_point)
+	if is_instance_valid(page) and not modal_open():
+		var candidate: int = page.world_cursor_shape(world_mouse())
+		# A held world item remains a drag even when crossing a UI panel.
+		if hovering == null or candidate == Input.CURSOR_DRAG:
+			shape = candidate
+	if shape != world_cursor or shape != Input.get_current_cursor_shape():
+		world_cursor = shape
+		Input.set_default_cursor_shape(shape)
+		# A world drag is not captured by a Control. Keep its closed-hand shape
+		# even while crossing an interactive panel until the mouse is released.
+		if shape == Input.CURSOR_DRAG and hovering != null:
+			DisplayServer.cursor_set_shape(DisplayServer.CURSOR_DRAG)
+
 func world_to_ui(p: Vector2) -> Vector2:
 	return get_viewport().get_canvas_transform() * p
 
@@ -839,6 +873,7 @@ func shutter(day: int) -> void:
 # ---------------------------------------------------------------- frame
 
 func _process(delta: float) -> void:
+	_update_cursor()
 	var t := Time.get_ticks_msec() / 1000.0
 	ambient.color = ambient.color.lerp(ambient_target, 1.0 - exp(-delta * 6.0))
 	cam.zoom = Vector2.ONE * zoom_base * (1.0 + 0.14 * focus)

@@ -44,6 +44,7 @@ node godot/tools/trace.mjs 10 1400 0.1 long
 godot --headless --path godot --script res://tests/replay.gd   # 逐步比对 GDScript 规则
 XDG_DATA_HOME=/tmp/pawnshop-input-test godot --path godot -- --inputtest # 真实输入：接客、拖动、报价、导航、锁价、交割
 XDG_DATA_HOME=/tmp/pawnshop-capture godot --path godot -- --capture=/tmp/shots # 页面截图
+XDG_DATA_HOME=/tmp/pawnshop-cursor-test godot --path godot --script res://tests/cursor_test.gd # 图形环境：指针状态
 XDG_DATA_HOME=/tmp/pawnshop-ui-test godot --headless --path godot --script res://tests/ui_regression.gd
 XDG_DATA_HOME=/tmp/pawnshop-orders-test godot --headless --path godot --script res://tests/orders_ui_test.gd
 godot --headless --path godot --export-release "Web" build/web/index.html

@@ -333,6 +333,19 @@ func on_changed(_p: Dictionary, _n: Dictionary, a: Dictionary) -> void:
 
 # ---------------------------------------------------------------- input & frame
 
+func world_cursor_shape(p: Vector2) -> int:
+	if not is_instance_valid(item):
+		return Input.CURSOR_ARROW
+	if dragging_part:
+		return Input.CURSOR_DRAG
+	if shell.modal_open():
+		return Input.CURSOR_ARROW
+	if stage == 0 and item.contains(p):
+		return Input.CURSOR_CROSS
+	if stage == 1 and is_instance_valid(part) and p.distance_to(part.global_position) < 70:
+		return Input.CURSOR_CAN_DROP
+	return Input.CURSOR_ARROW
+
 func _unhandled_input(e: InputEvent) -> void:
 	if shell.modal_open() or item == null or not is_instance_valid(item):
 		return

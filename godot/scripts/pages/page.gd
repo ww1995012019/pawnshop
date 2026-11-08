@@ -33,6 +33,10 @@ func leave() -> void:
 func on_changed(_prev: Dictionary, _next: Dictionary, _action: Dictionary) -> void:
 	pass
 
+## Cursor over world-space objects; controls supply their own cursor shapes.
+func world_cursor_shape(_world_point: Vector2) -> int:
+	return Input.CURSOR_ARROW
+
 ## Where notices stack; zero size = default (top centre).
 func toast_rect() -> Rect2:
 	return Rect2()

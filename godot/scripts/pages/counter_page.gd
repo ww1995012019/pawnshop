@@ -766,6 +766,22 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 
 # ---------------------------------------------------------------- input & frame
 
+func world_cursor_shape(p: Vector2) -> int:
+	if is_instance_valid(mat_item) and mat_item.dragging:
+		return Input.CURSOR_DRAG
+	if busy or shell.modal_open():
+		return Input.CURSOR_ARROW
+	if is_instance_valid(mat_item) and mat_item.draggable and not mat_item.busy and mat_item.contains(p):
+		return Input.CURSOR_CAN_DROP
+	if is_instance_valid(bell) and bell.hit_test(p):
+		return Input.CURSOR_POINTING_HAND
+	if is_instance_valid(customer) and Game.state.trade != null and _over_customer(p):
+		return Input.CURSOR_POINTING_HAND
+	for s in shelf:
+		if is_instance_valid(s) and s.contains(p):
+			return Input.CURSOR_POINTING_HAND
+	return Input.CURSOR_ARROW
+
 func _unhandled_input(e: InputEvent) -> void:
 	if shell.modal_open() or busy:
 		return

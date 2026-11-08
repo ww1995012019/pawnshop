@@ -469,6 +469,23 @@ func on_changed(_p: Dictionary, _n: Dictionary, _a: Dictionary) -> void:
 
 # ---------------------------------------------------------------- input & frame
 
+func world_cursor_shape(p: Vector2) -> int:
+	if not is_instance_valid(item):
+		return Input.CURSOR_ARROW
+	if item.dragging or drag_probe >= 0:
+		return Input.CURSOR_DRAG
+	if shell.modal_open():
+		return Input.CURSOR_ARROW
+	if tool == "TOL-001" or tool == "TOL-002":
+		return Input.CURSOR_CROSS
+	if tool == "TOL-004":
+		for probe in probes:
+			if is_instance_valid(probe) and p.distance_to(probe.tip()) < 40:
+				return Input.CURSOR_CAN_DROP
+	elif tool == "" and item.draggable and not item.busy and item.contains(p):
+		return Input.CURSOR_CAN_DROP
+	return Input.CURSOR_ARROW
+
 func _unhandled_input(e: InputEvent) -> void:
 	if shell.modal_open() or item == null or not is_instance_valid(item):
 		return

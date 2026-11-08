@@ -218,6 +218,11 @@ class StorageGrid extends Control:
 	var moved := false
 	var ghost: TextureRect
 
+	func cursor_at(at_position: Vector2) -> int:
+		if drag_uid != "":
+			return Input.CURSOR_DRAG
+		return Input.CURSOR_CAN_DROP if _uid_at(at_position) != "" else Input.CURSOR_ARROW
+
 	func rebuild() -> void:
 		for c in get_children():
 			c.queue_free()
@@ -301,6 +306,8 @@ class StorageGrid extends Control:
 			if moved:
 				_update_ghost(mm.position)
 			queue_redraw()
+		if e is InputEventMouse:
+			mouse_default_cursor_shape = cursor_at((e as InputEventMouse).position)
 
 	func _update_ghost(pos: Vector2) -> void:
 		if ghost == null:
