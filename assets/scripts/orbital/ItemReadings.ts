@@ -2,7 +2,7 @@ import type {OrbitalItem,ToolId} from './types';
 import {CONTENT_ITEMS} from './ContentExpansion';
 
 // Mechanical/functional symptoms are separate from authenticity and provenance.
-const functionFaults:Record<string,string>={
+export const functionFaults:Record<string,string>={
   'ITM-001':'滤层接缝渗漏，循环压力无法维持','ITM-002':'加热温升断续，底部触点电阻偏高',
   'ITM-003':'灯叶照度不均，老化透片使光斑偏蓝','ITM-009':'投影三色轮廓存在像差，光路需要重校',
   'ITM-010':'电流偏高，电源线圈接近失效','ITM-011':'一臂转速延迟，悬浮重心偏移',
