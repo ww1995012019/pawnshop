@@ -399,12 +399,16 @@ func _place_toasts() -> void:
 	if r.size == Vector2.ZERO:
 		var vis := get_viewport().get_visible_rect().size
 		r = Rect2(vis.x * 0.5 - 330, 116, 660, 300)
-	toast_box.position = r.position
-	toast_box.size = r.size
-	toast_box.alignment = BoxContainer.ALIGNMENT_END if r.position.y > 300 else BoxContainer.ALIGNMENT_BEGIN
+	# Narrow existing notices first: a Control cannot shrink below its
+	# children's minimum size, so resizing the box first kept the old width.
 	for c in toast_box.get_children():
 		var l: Label = c.get_child(0)
 		l.custom_minimum_size.x = r.size.x - 36
+		(c as Control).reset_size()
+	toast_box.position = r.position
+	toast_box.reset_size()
+	toast_box.size = r.size
+	toast_box.alignment = BoxContainer.ALIGNMENT_END if r.position.y > 300 else BoxContainer.ALIGNMENT_BEGIN
 
 ## Content area between HUD and dock, in UI coordinates.
 func content_rect() -> Rect2:
@@ -487,6 +491,7 @@ func hint(text: String) -> void:
 func toast(text: String, tone := "info") -> void:
 	var p := UIKit.plate(UIKit.paper_style(14))
 	var l := UIKit.label(text, 20, UIKit.INK if tone == "info" else UIKit.RUST, false, true)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(toast_box.size.x - 36, 0)
 	p.add_child(l)
 	toast_box.add_child(p)
