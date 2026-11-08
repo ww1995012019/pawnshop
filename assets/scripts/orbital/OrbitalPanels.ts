@@ -1,3 +1,4 @@
+import {toggleBrowserFullscreen} from './ResponsiveViewport';
 import {Button,Canvas,Color,EventKeyboard,EventTouch,game,Graphics,input,Input,KeyCode,Label,Node,UIOpacity,UITransform,Vec2,Vec3,view} from 'cc';
 import type {OrbitalHost} from './ui-types';
 import type {OrbitalItem,OrderDef,PageId,RecipeDef} from './types';
@@ -905,9 +906,10 @@ export class OrbitalPanels {
       track.fillColor=new Color('#E3DFD2');track.circle(enabled?44:14,-13,9);track.fill();
     });
     this.line(p,53,602,945,'#8B86706B');
-    this.button(p,'导出经营档案',53,620,294,57,()=>this.h.exportSave(),'green');
-    this.button(p,'重新开始…',365,620,294,57,()=>this.confirmDialog('重新开始经营','这会覆盖当前轨道旧货局进度。\n可先取消并导出经营档案。\n旧版灰线旧货铺存档仍保留在独立键中。',()=>this.h.resetGame()),'danger');
-    this.button(p,'返回柜台',677,620,321,57,()=>this.h.navigate('counter'),'gold');
+    this.button(p,'导出经营档案',53,620,220,57,()=>this.h.exportSave(),'green');
+    this.button(p,'重新开始…',289,620,220,57,()=>this.confirmDialog('重新开始经营','这会覆盖当前轨道旧货局进度。\n可先取消并导出经营档案。\n旧版灰线旧货铺存档仍保留在独立键中。',()=>this.h.resetGame()),'danger');
+    this.button(p,document.fullscreenElement?'退出全屏':'全屏显示',525,620,220,57,()=>{void toggleBrowserFullscreen().then(ok=>{if(!ok)this.h.ui.toast('这个浏览器暂不能进入全屏，画面仍会铺满可用窗口。');});},'quiet');
+    this.button(p,'返回柜台',761,620,237,57,()=>this.h.navigate('counter'),'gold');
     this.h.ui.texturePanel(p,53,700,945,71,{skin:'strip',fill:'#10191DCB',lineWidth:0,materialOpacity:.25,name:'settings-console-note'});
     this.paragraph(p,'浏览、工具瞄准与查看证据不消耗行动点。所有扣款在最后确认时提交。',72,716,907,39,16,C.muted);
     this.h.ui.texturePanel(p,1040,130,530,640,{skin:'glass',fill:'#10191DD4',stroke:C.line,materialOpacity:.36,name:'settings-field-manual'});

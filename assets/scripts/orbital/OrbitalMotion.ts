@@ -285,10 +285,11 @@ export class OrbitalMotion {
     this.own(layer);
     layer.setSiblingIndex(this.root.children.length-1);
     this.track(plate,'day-shutter');
+    const topOrigin=top.position.clone(),bottomOrigin=bottom.position.clone(),topTravel=top.getComponent<UITransform>(UITransform)!.height,bottomTravel=bottom.getComponent<UITransform>(UITransform)!.height;
     return this.run(opening?'day-shutter-opening':'day-shutter',opening?.94:1.7,()=>this.attached(layer),p=>{
       const close=opening?1:ease(clamp(p/.26)),open=smooth(clamp(opening?(p-.12)/.88:(p-.74)/.26));
       const shut=close*(1-open);
-      top.setPosition(0,450*(1-shut));bottom.setPosition(0,-450-450*(1-shut));
+      top.setPosition(topOrigin.x,topOrigin.y+topTravel*(1-shut));bottom.setPosition(bottomOrigin.x,bottomOrigin.y-bottomTravel*(1-shut));
       const show=opening?1-clamp((p-.08)/.3):clamp((p-.2)/.1)*(1-clamp((p-.72)/.08));
       this.opacity(plate).opacity=Math.round(255*show);
       if(!opening){
