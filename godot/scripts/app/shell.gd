@@ -1123,7 +1123,7 @@ func open_settings() -> void:
 		Game.prefs.sound = on
 		Game.save_prefs()
 		_apply_sound()))
-	for spec in [["音乐", "music_volume", 0.6], ["音效", "sfx_volume", 0.8], ["终端语音", "voice_volume", 0.9]]:
+	for spec in [["音乐", "music_volume", 0.6], ["音效", "sfx_volume", 0.8]]:
 		body.add_child(_volume_row(spec[0], spec[1], spec[2]))
 	body.add_child(UIKit.switch_row("减少动态效果", Game.prefs.reduced_motion, func(on: bool):
 		Game.prefs.reduced_motion = on

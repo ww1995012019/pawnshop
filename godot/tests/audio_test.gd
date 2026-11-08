@@ -1,5 +1,5 @@
 extends SceneTree
-## Audio wiring: buses, music per room, crossfade, voice triggers, prefs.
+## Audio wiring: buses, music per room, crossfade, prefs.
 var fails := 0
 func check(ok, msg):
 	print(('PASS ' if ok else 'FAIL ') + msg)
@@ -12,7 +12,8 @@ func run():
 	var shell = load('res://main.tscn').instantiate()
 	root.add_child(shell)
 	await create_timer(0.3).timeout
-	check(AudioServer.get_bus_index('Music') > 0 and AudioServer.get_bus_index('SFX') > 0 and AudioServer.get_bus_index('Voice') > 0, 'three buses exist')
+	check(AudioServer.get_bus_index('Music') > 0 and AudioServer.get_bus_index('SFX') > 0, 'music and effects buses exist')
+	check(AudioServer.get_bus_index('Voice') < 0, 'no voice bus')
 	check(audio.current_music == 'shop', 'title plays the shop theme: ' + audio.current_music)
 	shell._close_title()
 	game.new_game('ORBITAL-P0')
