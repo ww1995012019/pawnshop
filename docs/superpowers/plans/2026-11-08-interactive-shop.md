@@ -44,4 +44,4 @@
 ### Task 5: Review, export, publish (coordinator)
 - [x] Run real-input, workspace, item art, quote and order checks; inspect browser output.
 - [x] Review diff and concurrent remote changes, commit source, export versioned PCK.
-- [ ] Publish to existing gh-pages branch and confirm deployment success.
+- [x] Publish to existing gh-pages branch and confirm deployment success.

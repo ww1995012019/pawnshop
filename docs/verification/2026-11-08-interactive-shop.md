@@ -25,3 +25,9 @@ The exported Web build was run in Chromium at 1280×800 and 1280×720. Title, id
 A full task review and whole-branch review were completed. The captured Dial, wrapped speech minimum, compact Dial minimum, keyboard focus boundary and instrument geometry findings were reproduced, fixed and checked again. Final scoped review found no remaining blocking issue.
 
 Tests use isolated save directories and ephemeral browser contexts. Some headless regression shutdowns retain the existing unfinished shutter timer/resource warning; the final native workspace run had no script errors or resource cleanup warning. No production audio/timer behavior or game/save rules were changed.
+
+## Deployment
+
+Source implementation: `8bea691`. Published branch commit: `bdae48adfae189ca292279b7ebfa381a79267de6`. GitHub Actions [42489521948](https://github.com/ww1995012019/pawnshop/actions/runs/42489521948) reports all three jobs (`build`, `deploy`, `report-build-status`) completed successfully, including `Deploy to GitHub Pages`. The deployed HTML, PCK and versioned PCK are byte-identical to the tested release.
+
+Live game: https://ww1995012019.github.io/pawnshop/?v=c7f845cc799f
