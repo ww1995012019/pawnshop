@@ -55,7 +55,7 @@ XDG_DATA_HOME=/tmp/pawnshop-colour-test godot --path godot --script res://tests/
 godot --headless --path godot --export-release "Web" build/web/index.html
 ```
 
-输入测试失败会以非零状态退出。截图和输入测试会创建新游戏，请始终使用独立的 `XDG_DATA_HOME`，避免覆盖日常存档。工作台保持 16:9 构图，其他窗口比例会留边以保留全部操作区域。
+输入测试失败会以非零状态退出。截图和输入测试会创建新游戏，请始终使用独立的 `XDG_DATA_HOME`，避免覆盖日常存档。店铺保持原始比例，窗口比例不同时延展周围场景来铺满画面；柜台工作面已加深，实物可在更大的二维范围内拖动。当前交易规则仍一次处理一件货物。
 
 本次轨迹比对：16 局、6,394 步，与 TypeScript 规则逐字段一致（含金额、文案和存档结构）。
 

@@ -61,7 +61,9 @@ def main():
     console = console.resize((290,168),Image.Resampling.BOX)
     console.putalpha(console.getchannel('A').point(lambda a: 255 if a >= 128 else 0))
     console.resize((580,336),Image.Resampling.NEAREST).save(ASSETS / 'ui/quotation-console.png')
-    print('Imported pixel shop, residents, interface art and countertop quotation machine')
+    wall = Image.open(SOURCE / 'wall-extension-master.png').convert('RGB')
+    wall.resize((270,270),Image.Resampling.BOX).resize((1080,1080),Image.Resampling.NEAREST).save(ASSETS / 'scene/shop_side_wall.png')
+    print('Imported pixel shop, residents, interface art, countertop machine and side walls')
 
 if __name__ == '__main__':
     main()

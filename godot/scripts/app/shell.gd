@@ -154,6 +154,9 @@ func set_scene(name: String) -> void:
 		bg.material = Util.unshaded()
 		bg.self_modulate = Color.WHITE
 		bg.show()
+		var edges := preload("res://scripts/ui/shop_edges.gd").new()
+		_scene_node(edges, layers.bg)
+		layers.bg.move_child(edges, 0)
 		return
 	bg.hide()
 	var surface := preload("res://scripts/ui/workspace_surface.gd").new()
@@ -388,8 +391,18 @@ func _build_nav() -> void:
 		nav_buttons[id] = b
 	root_ui.add_child(nav)
 
+func counter_offset() -> Vector2:
+	if workspace_mode:
+		return Vector2.ZERO
+	return ((get_viewport().get_visible_rect().size - Vector2(1920, 1080)) * 0.5).floor()
+
 func _fit() -> void:
 	var vis := get_viewport().get_visible_rect().size
+	var pad := counter_offset()
+	page_host.offset_left = pad.x
+	page_host.offset_right = -pad.x
+	page_host.offset_top = pad.y
+	page_host.offset_bottom = -pad.y
 	zoom_base = 1.0
 	hud.size.x = vis.x - 40
 	nav.reset_size()
@@ -405,6 +418,8 @@ func _fit() -> void:
 ## Each page names a free spot for notices so they never cover its controls.
 func _place_toasts() -> void:
 	var r: Rect2 = page.toast_rect() if page != null else Rect2()
+	if r.size != Vector2.ZERO and not workspace_mode and page_name == "counter":
+		r.position += counter_offset()
 	if r.size == Vector2.ZERO:
 		# Default: a strip under the HUD, over the room's back wall.
 		var vis := get_viewport().get_visible_rect().size

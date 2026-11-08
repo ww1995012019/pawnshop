@@ -4,7 +4,7 @@ extends Page
 
 const CUSTOMER_HEIGHT := 320.0
 const CRATE_COLS := 10
-var MAT_POS := Vector2(990, 610)
+var MAT_POS := Vector2(990, 575)
 var STAND := Vector2(880, 490)
 var fixture_buttons: Dictionary = {}
 var customer: Customer
@@ -45,9 +45,30 @@ var offer_button: Button
 var stage_root: Node2D
 var back_root: Node2D
 var resident_window: Control
-var mat_rect := Rect2(650, 550, 665, 115)
-var drag_rect := Rect2(740, 605, 490, 12)
+var mat_rect := Rect2(600, 490, 710, 175)
+var drag_rect := Rect2(660, 545, 600, 67)
 var bubble_rect := Rect2(1040, 190, 275, 245)
+
+## Extra counter depth in the room's original sage palette. The extension is
+## behind all goods and controls, with stepped highlights like the painted desk.
+class CounterExtension extends Node2D:
+	func _draw() -> void:
+		var shape := PackedVector2Array([Vector2(568,490), Vector2(1552,490), Vector2(1820,590), Vector2(210,590)])
+		draw_colored_polygon(shape, Color("889374"))
+		draw_colored_polygon(PackedVector2Array([Vector2(568,490),Vector2(680,490),Vector2(500,590),Vector2(210,590)]), Color("869171"))
+		draw_colored_polygon(PackedVector2Array([Vector2(1444,490),Vector2(1552,490),Vector2(1820,590),Vector2(1700,590)]), Color("8a9576"))
+		draw_line(Vector2(568,491), Vector2(1552,491), Color("a1ab8c"), 3)
+		draw_line(Vector2(568,491), Vector2(210,590), Color("7a8068"), 3)
+		draw_line(Vector2(1552,491), Vector2(1820,590), Color("77826b"), 3)
+		# Sparse horizontal pixel wear, kept behind the working surface.
+		var random := RandomNumberGenerator.new()
+		random.seed = 8142
+		for i in 72:
+			var x := random.randi_range(640, 1460)
+			var y := random.randi_range(503, 580)
+			var w := random.randi_range(3, 15)
+			var col := Color(0.7, 0.74, 0.6, 0.10) if i % 2 == 0 else Color(0.32, 0.38, 0.3, 0.08)
+			draw_rect(Rect2(x, y, w, 2), col)
 
 ## Only the painted machine can intercept the mouse. Transparent feet/gutters
 ## leave the real equipment below reachable, including on the Web build.
@@ -118,6 +139,7 @@ func enter() -> void:
 	resident_window.clip_contents = true
 	resident_window.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	back_root.add_child(resident_window)
+	back_root.add_child(CounterExtension.new())
 	stage_root = Node2D.new()
 	stage_root.material = Util.unshaded()
 	add_world(stage_root, "top")
@@ -144,7 +166,7 @@ func enter() -> void:
 	_refresh()
 
 func _align_stage() -> void:
-	var inv := get_viewport().get_canvas_transform().affine_inverse()
+	var inv := get_viewport().get_canvas_transform().affine_inverse() * Transform2D(0.0, shell.counter_offset())
 	if stage_root != null:
 		stage_root.global_transform = inv
 	if back_root != null:
@@ -170,7 +192,7 @@ func workspace_state_changed(opened: bool) -> void:
 		_refresh()
 
 func _crate_point() -> Vector2:
-	return stage_root.to_global(crate.get_global_rect().get_center()) if is_instance_valid(crate) else Vector2(940, 860)
+	return get_viewport().get_canvas_transform().affine_inverse() * crate.get_global_rect().get_center() if is_instance_valid(crate) else Vector2(940, 860)
 
 func _sync_world() -> void:
 	var t = Game.state.trade
@@ -197,7 +219,7 @@ func _spawn_mat_item(it: Dictionary, animate: bool, from := Vector2.ZERO) -> voi
 	if mat_item != null and is_instance_valid(mat_item):
 		mat_item.queue_free()
 	mat_item = ItemSprite.new()
-	mat_item.setup(it.defId, it.uid, 135.0)
+	mat_item.setup(it.defId, it.uid, 105.0)
 	mat_item.bounds = drag_rect
 	mat_item.position = MAT_POS
 	mat_item.dropped.connect(func():
@@ -273,8 +295,8 @@ func _build_tag() -> void:
 	var v := UIKit.vbox(1)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tag.add_child(v)
-	tag_name = UIKit.label("", 19, Color("322b2f"))
-	tag_info = UIKit.label("", 15, Color("805041"))
+	tag_name = UIKit.label("", 16, Color("322b2f"))
+	tag_info = UIKit.label("", 13, Color("805041"))
 	v.add_child(tag_name)
 	v.add_child(tag_info)
 	for label in [tag_name, tag_info]:
@@ -409,18 +431,16 @@ func relayout() -> void:
 	bubble_name.size = Vector2(251, 27)
 	bubble_label.position = Vector2(12, 43)
 	bubble_label.size = Vector2(251, 188)
-	tag.position = Vector2(666, 572)
-	tag.size = Vector2(222, 58)
-	tag_name.custom_minimum_size.x = 210
-	tag_info.custom_minimum_size.x = 210
+	tag.position = Vector2(640, 665)
+	tag.size = Vector2(195, 48)
+	tag_name.custom_minimum_size.x = 180
+	tag_info.custom_minimum_size.x = 180
 	idle_label.position = Vector2(692, 590)
 	idle_label.size = Vector2(610, 56)
 	if is_instance_valid(customer) and not customer.walking:
 		customer.position = STAND - resident_window.position
 	if is_instance_valid(mat_item):
 		mat_item.bounds = drag_rect
-		if not mat_item.dragging:
-			mat_item.position = MAT_POS
 
 func _refresh_board() -> void:
 	var s := Game.state

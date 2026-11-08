@@ -34,13 +34,13 @@ func run() -> void:
 	game.new_game("ORBITAL-P0")
 	await audit("idle")
 	var motion := InputEventMouseMotion.new()
-	motion.position = root.get_final_transform() * Vector2(1490,744)
+	motion.position = root.get_final_transform() * (Vector2(1490,744) + shell.counter_offset())
 	motion.global_position = motion.position
 	Input.parse_input_event(motion)
 	await frame()
 	check(root.gui_get_hovered_control() == shell.page.fixture_buttons.inspect,"visible inspection equipment remains clickable through transparent till margin")
 	for key in ["orders","people"]:
-		check(shell.page.fixture_buttons[key].get_global_rect().end.y <= shell.page.terminal.position.y,key+" nameplate remains visible above the till")
+		check(shell.page.fixture_buttons[key].get_global_rect().end.y <= shell.page.terminal.get_global_rect().position.y,key+" nameplate remains visible above the till")
 	game.state = Model.reduce(game.state,{"type":"ARRIVE"})
 	shell.go("counter")
 	await audit("buy")
