@@ -37,13 +37,15 @@ godot/
 ## 命令
 
 ```bash
-python3 godot/tools/prepare_assets.py      # 生成分层场景、图集和法线贴图
+python3 godot/tools/prepare_assets.py      # 生成场景并重建物品图集
+python3 godot/tools/prepare_item_art.py    # 单独重建新物品图集（Pillow / NumPy / SciPy）
 node godot/tools/export_data.mjs           # 从 TS 源导出游戏数据
 node godot/tools/trace.mjs 16 400          # 用 TS 规则录制随机对局轨迹
 node godot/tools/trace.mjs 10 1400 0.1 long
 godot --headless --path godot --script res://tests/replay.gd   # 逐步比对 GDScript 规则
 XDG_DATA_HOME=/tmp/pawnshop-input-test godot --path godot -- --inputtest # 真实输入：接客、拖动、报价、导航、锁价、交割
 XDG_DATA_HOME=/tmp/pawnshop-capture godot --path godot -- --capture=/tmp/shots # 页面截图
+XDG_DATA_HOME=/tmp/pawnshop-art-test godot --headless --path godot --script res://tests/item_art_test.gd # 57件物品、114张正反面
 XDG_DATA_HOME=/tmp/pawnshop-cursor-test godot --path godot --script res://tests/cursor_test.gd # 图形环境：指针状态
 XDG_DATA_HOME=/tmp/pawnshop-ui-test godot --headless --path godot --script res://tests/ui_regression.gd
 XDG_DATA_HOME=/tmp/pawnshop-orders-test godot --headless --path godot --script res://tests/orders_ui_test.gd
@@ -56,7 +58,7 @@ godot --headless --path godot --export-release "Web" build/web/index.html
 
 ## 已知限制
 
-- 素材仍来自旧版：货物每格 256 像素左右，人物是整张立绘（用网格变形做动作，手臂不能单独动）。换成分层高清出图后可以直接替换 `assets/`。
+- 物品使用新的像素精灵集：56 类货物和独立组装套组都有正反面；原始画稿保存在 `art-source/items-v2/`，导入工具生成固定像素密度的运行图集。场景和人物仍是原来的绘制风格，人物手臂尚未单独分层。
 - 网页首次加载约 59 MB（引擎 37.7 MB + 数据包 21.3 MB，服务器 gzip 后更小）。
 - 手机触屏还没有专门布局，也没在真机上测过。
 - Cocos 版存档不会自动迁移到 Godot 版（两边存储位置不同）。

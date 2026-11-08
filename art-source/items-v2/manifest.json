@@ -1,0 +1,30 @@
+{
+  "style": "Handcrafted pixel clusters, colored outlines, deliberate enamel/brass/glass palettes; Godot item art only.",
+  "cell_size": 256,
+  "logical_sprite_extent": 112,
+  "groups": {
+    "core": {
+      "columns": 6,
+      "rows": 4,
+      "prefix": "orbital-items"
+    },
+    "expansion": {
+      "columns": 4,
+      "rows": 3,
+      "prefix": "orbital-expansion"
+    },
+    "annex": {
+      "columns": 5,
+      "rows": 5,
+      "prefix": "orbital-annex"
+    }
+  },
+  "sources": {
+    "core-front": "exec-5bf807ab-036d-4878-abd5-23e49feb56cf.png",
+    "core-back": "exec-24790de6-5195-4686-81d1-b3261222f686.png",
+    "expansion-front": "exec-501b3d32-3022-474c-85c0-041aba332b3a.png",
+    "expansion-back": "exec-93a5b295-5880-4d7c-8a83-190e0477c9ce.png",
+    "annex-front": "exec-f21d1c93-710e-4130-9f3c-965307c5b660.png",
+    "annex-back": "exec-906207dc-0e16-4194-88e2-c334f32c0ba4.png"
+  }
+}

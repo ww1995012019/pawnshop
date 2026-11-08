@@ -175,4 +175,7 @@ if __name__ == "__main__":
     characters()
     items()
     copy_shared()
+    # Keep the newer authored item set when rebuilding shared scene assets.
+    from prepare_item_art import main as prepare_item_art
+    prepare_item_art()
     print("Godot slice assets ready in", OUT)

@@ -356,6 +356,8 @@ static func icon(name: String) -> AtlasTexture:
 ## Atlas key and pixel region of an item face.
 static func item_cell(def_id: String, back := false) -> Dictionary:
 	var art = GameData.art.get(def_id, GameData.art.get("ITM-026"))
+	if def_id == "BND-001":
+		art = {"front": "orbital-annex-front", "back": "orbital-annex-back", "index": 20, "columns": 5, "rows": 5, "inset": 0.035}
 	var key: String = art.back if back else art.front
 	var img := tex("res://assets/atlas/%s.png" % key)
 	var cw := img.get_width() / float(art.columns)
@@ -384,8 +386,9 @@ static func lit_atlas(key: String) -> CanvasTexture:
 	var c := CanvasTexture.new()
 	c.diffuse_texture = tex("res://assets/atlas/%s.png" % key)
 	c.normal_texture = tex("res://assets/atlas/%s_n.png" % key)
-	c.specular_color = Color(0.45, 0.45, 0.45)
-	c.specular_shininess = 0.6
+	var pixel_item := key.begins_with("orbital-items-") or key.begins_with("orbital-expansion-") or key.begins_with("orbital-annex-")
+	c.specular_color = Color(0.05, 0.05, 0.05) if pixel_item else Color(0.45, 0.45, 0.45)
+	c.specular_shininess = 0.1 if pixel_item else 0.6
 	_cache[k] = c
 	return c
 

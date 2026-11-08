@@ -37,6 +37,7 @@ func setup(id: String, item_uid := "", height := 300.0, start_back := false) -> 
 	shadow.material = Util.unshaded()
 	add_child(shadow)
 	body = Sprite2D.new()
+	body.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	body.region_enabled = true
 	mat = ShaderMaterial.new()
 	mat.shader = load("res://shaders/item.gdshader")

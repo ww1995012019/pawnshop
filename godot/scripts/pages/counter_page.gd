@@ -369,6 +369,7 @@ func _refresh_desk() -> void:
 			var it: Dictionary = items[i]
 			var def := GameData.def(it.defId)
 			slot.icon = UIKit.item_icon(it.defId)
+			slot.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 			slot.expand_icon = true
 			slot.add_theme_constant_override("icon_max_width", 46)
 			var why = Model.sale_eligibility(it, t.npcId) if picking and it.owner == "shop" else null
@@ -643,6 +644,7 @@ func _pick_goods() -> void:
 		card.add_child(cv)
 		var pic := TextureRect.new()
 		pic.texture = UIKit.item_icon(it.defId)
+		pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		pic.custom_minimum_size = Vector2(0, 120)
 		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED

@@ -129,6 +129,7 @@ func _card(def: Dictionary) -> VBoxContainer:
 	var frame := UIKit.plate(UIKit.skin("socket", "xs", 6.0))
 	var pic := TextureRect.new()
 	pic.texture = UIKit.item_icon(def.itemId)
+	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	pic.custom_minimum_size = Vector2(84, 84)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED

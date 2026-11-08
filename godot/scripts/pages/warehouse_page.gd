@@ -112,6 +112,7 @@ func _lists() -> void:
 		for it in items:
 			var b := UIKit.button("", "primary" if it.uid == selected else "chip", Vector2(52, 52))
 			b.icon = UIKit.item_icon(it.defId)
+			b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 			b.expand_icon = true
 			b.tooltip_text = GameData.def(it.defId).name
 			var uid: String = it.uid
@@ -157,6 +158,7 @@ func _detail() -> void:
 	var head := UIKit.hbox(14)
 	var pic := TextureRect.new()
 	pic.texture = UIKit.item_icon(it.defId)
+	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	pic.custom_minimum_size = Vector2(120, 120)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -275,6 +277,7 @@ class StorageGrid extends Control:
 				continue
 			var tr := TextureRect.new()
 			tr.texture = UIKit.item_icon(it.defId)
+			tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 			tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -340,6 +343,7 @@ class StorageGrid extends Control:
 				moved = true
 				ghost = TextureRect.new()
 				ghost.texture = UIKit.item_icon(Game.item(drag_uid).defId)
+				ghost.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 				ghost.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 				ghost.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 				ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE

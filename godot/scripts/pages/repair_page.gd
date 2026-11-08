@@ -115,6 +115,7 @@ func _fill_list() -> void:
 	for it in _candidates():
 		var row := UIKit.button("", "primary" if it.uid == it_uid else "secondary", Vector2(0, 84), 18)
 		row.icon = UIKit.item_icon(it.defId)
+		row.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		row.expand_icon = true
 		row.add_theme_constant_override("icon_max_width", 64)
 		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
