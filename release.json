@@ -1,0 +1,112 @@
+{
+  "release_id": "40c1cb70892e37c1",
+  "pack": "workbench-75a97fcf4478693a.pck",
+  "engine": "engine-309843874cfdebe8",
+  "current_files": [
+    ".nojekyll",
+    "engine-309843874cfdebe8.apple-touch-icon.png",
+    "engine-309843874cfdebe8.audio.position.worklet.js",
+    "engine-309843874cfdebe8.audio.position.worklet.js.gz",
+    "engine-309843874cfdebe8.audio.worklet.js",
+    "engine-309843874cfdebe8.audio.worklet.js.gz",
+    "engine-309843874cfdebe8.icon.png",
+    "engine-309843874cfdebe8.js",
+    "engine-309843874cfdebe8.js.gz",
+    "engine-309843874cfdebe8.wasm",
+    "engine-309843874cfdebe8.wasm.gz",
+    "godot-license.txt",
+    "index.html",
+    "loading-shop-c50ece6927cc5cbd.png",
+    "touch-8a55840d7c6356af.css",
+    "touch-8a55840d7c6356af.css.gz",
+    "touch-91b35f1dbee71c0e.js",
+    "touch-91b35f1dbee71c0e.js.gz",
+    "workbench-75a97fcf4478693a.pck",
+    "workbench-75a97fcf4478693a.pck.gz"
+  ],
+  "previous_files": [],
+  "files": {
+    ".nojekyll": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "engine-309843874cfdebe8.apple-touch-icon.png": {
+      "bytes": 11952,
+      "sha256": "9b374ecbc8558f480421e646f38aaa8a69d5b1d65ff7b48d0735da214c46773a"
+    },
+    "engine-309843874cfdebe8.audio.position.worklet.js": {
+      "bytes": 2973,
+      "sha256": "be33985bc7160d6bf9646f259cd86b259cd67b02ccb297ee5c44f8ac84327bc8"
+    },
+    "engine-309843874cfdebe8.audio.position.worklet.js.gz": {
+      "bytes": 1161,
+      "sha256": "b94388429a6190c344028b8dd49c1804e148cdec022c385e55005c2346721b6b"
+    },
+    "engine-309843874cfdebe8.audio.worklet.js": {
+      "bytes": 7298,
+      "sha256": "5b476a9c9ce642c0ee4256436d1bc31d9c38f868aca0f9a8e2a57c18d2dec2a3"
+    },
+    "engine-309843874cfdebe8.audio.worklet.js.gz": {
+      "bytes": 2194,
+      "sha256": "f332939f44b7432fc83e154b670b24006960849eb938fac86db544fc027ba2b1"
+    },
+    "engine-309843874cfdebe8.icon.png": {
+      "bytes": 5702,
+      "sha256": "08808dd5397e9a502cb3624944151f87a9705b5b66b5c365c5ca4c6ab51525f5"
+    },
+    "engine-309843874cfdebe8.js": {
+      "bytes": 315759,
+      "sha256": "e3f56ee40e6f84371053db06692cfac15e2c8659547b11c6b2dfa1996dabd981"
+    },
+    "engine-309843874cfdebe8.js.gz": {
+      "bytes": 78364,
+      "sha256": "439111ab7a35d820f1b39b7fd0ba23acf61b2692cda827de7ebcc79a5a5c1bb5"
+    },
+    "engine-309843874cfdebe8.wasm": {
+      "bytes": 37700666,
+      "sha256": "26b61ce95247012ab3dca3ff51e96d1cdbff44ee91a8c20a83e150afca83f1b6"
+    },
+    "engine-309843874cfdebe8.wasm.gz": {
+      "bytes": 9382282,
+      "sha256": "9352825a316f4449b81d326706e78be95ed5a81c0e797f35879ef8b39bc505bd"
+    },
+    "godot-license.txt": {
+      "bytes": 1310,
+      "sha256": "05a526849e266fb2a134ec06fac0cfa4e40b9f9eb68ef6bcb9280dd1156a0ce8"
+    },
+    "index.html": {
+      "bytes": 9311,
+      "sha256": "4a6ffb5df9326ffd162338f9d1c52cb36a75bbdbcddbc7ade181356d138a901e"
+    },
+    "loading-shop-c50ece6927cc5cbd.png": {
+      "bytes": 266052,
+      "sha256": "c50ece6927cc5cbd66e2f29ecdba955452ee2aa2d7654822aec7feb99ddb45fa"
+    },
+    "touch-8a55840d7c6356af.css": {
+      "bytes": 3400,
+      "sha256": "8a55840d7c6356afe9e465c0404be3b896d54756b68016fd562222d1d8ff857b"
+    },
+    "touch-8a55840d7c6356af.css.gz": {
+      "bytes": 1192,
+      "sha256": "5d8efadffd893820a2f556958d44ac995c1ebc17fddf4bd03aa89b45907ba43d"
+    },
+    "touch-91b35f1dbee71c0e.js": {
+      "bytes": 9891,
+      "sha256": "91b35f1dbee71c0e41b276d11b4600110b7d2249f1814436a1bc9739e090aa23"
+    },
+    "touch-91b35f1dbee71c0e.js.gz": {
+      "bytes": 3173,
+      "sha256": "e44e8b0738f57cb263140426323de91a01885d279ff3fdd804254fc5151ad7a4"
+    },
+    "workbench-75a97fcf4478693a.pck": {
+      "bytes": 7861432,
+      "sha256": "75a97fcf4478693a78497dec9c3df90163e0585221d06b9ac9d5e248466a9edc"
+    },
+    "workbench-75a97fcf4478693a.pck.gz": {
+      "bytes": 7591084,
+      "sha256": "e4c1232a10aba3dee7d26a39f785a25dc6a4eb183a355a615b4076fd732b1334"
+    }
+  },
+  "initial_raw_bytes": 45562098,
+  "initial_gzip_bytes": 16973366
+}
