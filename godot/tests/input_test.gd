@@ -2,14 +2,41 @@ extends Node
 ## Synthesised mouse input through the real event path: bell, drag, offer dial.
 ## godot --path godot -- --inputtest
 var shell
+var failures: Array[String] = []
+var mouse_down := false
+
+func check(ok: bool, description: String) -> void:
+	print("INPUT ", "PASS " if ok else "FAIL ", description)
+	if not ok:
+		failures.append(description)
+
+func click_button(button: Button) -> void:
+	if button == null:
+		check(false, "Required action button exists")
+		return
+	var center := button.get_global_rect().get_center()
+	_send_motion(center)
+	await get_tree().process_frame
+	_send_button(center, true)
+	await get_tree().process_frame
+	_send_button(center, false)
+	await get_tree().create_timer(0.4).timeout
+
+func find_action(prefix: String) -> Button:
+	for child in shell.page.actions.get_children():
+		if child is Button and child.text.begins_with(prefix):
+			return child
+	return null
 
 ## Base-resolution UI point -> window pixels (parse_input_event applies the stretch).
 func _win(p: Vector2) -> Vector2:
-	return p * (Vector2(DisplayServer.window_get_size()) / get_viewport().get_visible_rect().size)
+	return get_viewport().get_final_transform() * p
 
 func _send_button(pos: Vector2, pressed: bool) -> void:
 	pos = _win(pos)
+	mouse_down = pressed
 	var mb := InputEventMouseButton.new()
+	mb.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
 	mb.button_index = MOUSE_BUTTON_LEFT
 	mb.pressed = pressed
 	mb.position = pos
@@ -21,7 +48,7 @@ func _send_motion(pos: Vector2) -> void:
 	var mm := InputEventMouseMotion.new()
 	mm.position = pos
 	mm.global_position = pos
-	mm.button_mask = MOUSE_BUTTON_MASK_LEFT
+	mm.button_mask = MOUSE_BUTTON_MASK_LEFT if mouse_down else 0
 	Input.parse_input_event(mm)
 
 func run(s) -> void:
@@ -36,9 +63,10 @@ func run(s) -> void:
 	_send_button(bell_ui, true)
 	_send_button(bell_ui, false)
 	await get_tree().create_timer(3.5).timeout
-	print("INPUT bell -> trade: ", Game.state.trade != null)
+	check(Game.state.trade != null, "Bell click opens a trade")
 	if shell.page.mat_item == null:
-		get_tree().quit()
+		check(false, "Trade has a draggable item")
+		get_tree().quit(1)
 		return
 	var it_ui: Vector2 = shell.world_to_ui(shell.page.mat_item.global_position)
 	var before: Vector2 = shell.page.mat_item.position
@@ -49,7 +77,36 @@ func run(s) -> void:
 		_send_motion(it_ui + Vector2(-20 * i, -3 * i))
 		await get_tree().process_frame
 	await get_tree().create_timer(0.3).timeout
-	print("INPUT drag moved: ", shell.page.mat_item.position.distance_to(before) > 100)
+	check(shell.page.mat_item.position.distance_to(before) > 100, "Real pointer drag moves the item")
 	_send_button(it_ui + Vector2(-280, -42), false)
 	await get_tree().create_timer(0.5).timeout
-	get_tree().quit()
+	var old_value: int = shell.page.dial.value
+	var wheel := InputEventMouseButton.new()
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel.pressed = true
+	wheel.position = _win(shell.page.dial.get_global_rect().get_center())
+	wheel.global_position = wheel.position
+	Input.parse_input_event(wheel)
+	await get_tree().process_frame
+	# A complete wheel gesture releases GUI mouse focus before later clicks.
+	wheel.pressed = false
+	Input.parse_input_event(wheel)
+	await get_tree().process_frame
+	var quote: int = shell.page.dial.value
+	check(quote == mini(old_value + 5, shell.page.dial.max_value), "Wheel changes quote")
+	var offer := find_action("出价")
+	check(offer != null and offer.text.contains(str(quote)), "Offer button shows the chosen quote")
+	await click_button(shell.nav_buttons.inspect)
+	check(shell.page_name == "inspect", "Navigation opens inspection")
+	await click_button(shell.nav_buttons.counter)
+	check(shell.page_name == "counter" and shell.page.dial.value == quote, "Returning preserves the chosen quote")
+	await click_button(find_action("接受报价"))
+	check(Game.state.trade != null and Game.state.trade.locked, "Accept button locks the price")
+	var cash_before: float = Game.state.cash
+	await click_button(find_action("确认钱货交割"))
+	check(Game.state.trade == null and Game.state.cash != cash_before, "Delivery button completes the transaction")
+	await click_button(shell.nav_buttons.orders)
+	check(shell.page_name == "orders", "Navigation opens orders")
+	await click_button(shell.nav_buttons.report)
+	check(shell.page_name == "report", "Navigation opens the daily ledger")
+	get_tree().quit(1 if not failures.is_empty() else 0)

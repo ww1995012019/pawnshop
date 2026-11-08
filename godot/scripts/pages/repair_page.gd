@@ -3,6 +3,7 @@ extends Page
 ## test, then commit (materials and AP are only spent on the final step).
 
 const ITEM_POS := Vector2(860, 500)
+const PART_HOME := Vector2(1230, 610)
 
 var item: ItemSprite
 var it_uid := ""
@@ -19,6 +20,7 @@ var dragging_part := false
 var test_hold := false
 var test_value := 0.0
 var test_bar: ProgressBar
+var grime_label: Label
 var stage := 0
 
 func scene_name() -> String:
@@ -27,7 +29,7 @@ func scene_name() -> String:
 func hint_text() -> String:
 	match stage:
 		0: return "按住鼠标在实物上来回擦，清掉污垢与氧化层。"
-		1: return "把右下角的新零件拖进实物上发光的槽位。"
+		1: return "把工作台右侧的新零件拖进实物上发光的槽位。"
 		2: return "按住「负载复测」，指针进入绿区时松开。"
 		3: return "三道工序完成：确认修复后才扣材料与行动点。"
 	return ""
@@ -36,7 +38,9 @@ func enter() -> void:
 	var left := left_panel(380)
 	var lv := UIKit.vbox(10)
 	left.add_child(lv)
-	lv.add_child(UIKit.label("待修物件", 22, UIKit.MUTED))
+	lv.add_child(UIKit.label("待修物件", 24, UIKit.AMBER))
+	lv.add_child(UIKit.label("选货后按工序完成维修", 16, UIKit.MUTED))
+	lv.add_child(UIKit.rule())
 	var sc := ScrollContainer.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -53,8 +57,8 @@ func enter() -> void:
 	right.add_child(rsc)
 	var r: Rect2 = shell.content_rect()
 	var bench := UIKit.plate()
-	bench.position = Vector2(r.position.x + 380 + 20, r.end.y - 190)
-	bench.size = Vector2(r.size.x - 380 - 470 - 40, 190)
+	bench.position = Vector2(r.position.x + 380 + 20, r.end.y - 240)
+	bench.size = Vector2(r.size.x - 380 - 470 - 40, 240)
 	add_child(bench)
 	bench_body = UIKit.vbox(10)
 	bench.add_child(bench_body)
@@ -211,6 +215,7 @@ func _materials() -> void:
 
 func _stage_ui() -> void:
 	UIKit.clear(bench_body)
+	grime_label = null
 	for n in [part, slot]:
 		if n != null and is_instance_valid(n):
 			n.queue_free()
@@ -228,20 +233,29 @@ func _stage_ui() -> void:
 		stage = -1
 		return
 	item.mat.set_shader_parameter("grime", 1.0 if stage == 0 else 0.0)
-	var titles := ["① 清洁排故", "② 换件连接", "③ 负载复测", "工序完成"]
-	bench_body.add_child(UIKit.label(titles[mini(stage, 3)] + " · " + hint_text(), 20, UIKit.AMBER, false, true))
+	var titles := ["清洁排故", "换件连接", "负载复测"]
+	var steps := UIKit.hbox(8)
+	for i in 3:
+		var tag := UIKit.plate(UIKit.inset_style(6))
+		tag.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var text := UIKit.label("%02d  %s%s" % [i + 1, titles[i], "  ✓" if i < stage else ""], 16, UIKit.GOOD if i < stage else (UIKit.AMBER if i == stage else UIKit.MUTED))
+		tag.add_child(text)
+		steps.add_child(tag)
+	bench_body.add_child(steps)
+	bench_body.add_child(UIKit.label("工序完成 · " + hint_text() if stage >= 3 else hint_text(), 19, UIKit.TEXT, false, true))
 	match stage:
 		0:
 			mask.fill(Color.WHITE)
 			mask_tex.update(mask)
 			dirty = 1.0
-			bench_body.add_child(UIKit.label("污垢剩余 100%", 18, UIKit.MUTED))
+			grime_label = UIKit.label("污垢剩余 100%", 18, UIKit.MUTED)
+			bench_body.add_child(grime_label)
 		1:
 			slot = Slot.new()
 			slot.position = item.uv_global(Vector2(0.58, 0.48))
 			add_world(slot, "top")
 			part = Part.new()
-			part.position = Vector2(1250, 860)
+			part.position = PART_HOME
 			add_world(part, "top")
 		2:
 			test_bar = ProgressBar.new()
@@ -274,9 +288,16 @@ func _step(n: int) -> void:
 
 func _celebrate() -> void:
 	shell.sound("check", 0, 1.2)
-	shell.shake = 0.4
 	_sparks(item.global_position)
-	item.land(60.0)
+	if not Game.prefs.reduced_motion:
+		shell.shake = 0.4
+		item.land(60.0)
+
+func _return_part() -> void:
+	if Game.prefs.reduced_motion:
+		part.position = PART_HOME
+	else:
+		create_tween().tween_property(part, "position", PART_HOME, 0.25).set_trans(Tween.TRANS_BACK)
 
 func _sparks(at: Vector2) -> void:
 	if Game.prefs.reduced_motion:
@@ -330,7 +351,7 @@ func _unhandled_input(e: InputEvent) -> void:
 					part.global_position = slot.global_position
 					_step(1)
 				else:
-					create_tween().tween_property(part, "position", Vector2(1250, 860), 0.25).set_trans(Tween.TRANS_BACK)
+					_return_part()
 
 func _process(delta: float) -> void:
 	if item == null or not is_instance_valid(item):
@@ -355,9 +376,8 @@ func _process(delta: float) -> void:
 					sum += mask.get_pixel(x, y).r
 			dirty = sum / 256.0
 			shell.sound("click", -26, randf_range(0.5, 0.7))
-			var lbl: Label = bench_body.get_child(1) if bench_body.get_child_count() > 1 else null
-			if lbl:
-				lbl.text = "污垢剩余 %d%%" % roundi(dirty * 100)
+			if is_instance_valid(grime_label):
+				grime_label.text = "污垢剩余 %d%%" % roundi(dirty * 100)
 			if dirty < 0.18:
 				scrubbing = false
 				item.mat.set_shader_parameter("grime", 0.0)
@@ -379,7 +399,8 @@ class Slot extends Node2D:
 		queue_redraw()
 	func _draw() -> void:
 		var t := Time.get_ticks_msec() / 1000.0
-		draw_rect(Rect2(-34, -22, 68, 44), Color(1.0, 0.7, 0.3, 0.18 + 0.1 * sin(t * 5.0)))
+		var pulse := 0.0 if Game.prefs.reduced_motion else 0.1 * sin(t * 5.0)
+		draw_rect(Rect2(-34, -22, 68, 44), Color(1.0, 0.7, 0.3, 0.18 + pulse))
 		draw_rect(Rect2(-34, -22, 68, 44), Color(1.0, 0.75, 0.35), false, 3.0)
 
 

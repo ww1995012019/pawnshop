@@ -2,12 +2,16 @@ extends Page
 ## Back room: a 10×6 storage grid you drag goods around (right-click rotates),
 ## the display shelf, the isolation locker and pawn safe, and item actions.
 
-const CELL := 84.0
+const CELL := 72.0
+const DETAIL_WIDTH := 520.0
+const PANEL_GAP := 18.0
 
 var grid: StorageGrid
 var lists: VBoxContainer
 var detail: VBoxContainer
 var selected := ""
+var holder: PanelContainer
+var detail_panel: PanelContainer
 
 func scene_name() -> String:
 	return "warehouse"
@@ -22,41 +26,65 @@ func hint_text() -> String:
 
 func toast_rect() -> Rect2:
 	var r: Rect2 = shell.content_rect()
-	var x: float = r.position.x + CELL * 10 + 60
-	return Rect2(x, r.position.y, maxf(320.0, r.end.x - 520 - 20 - x), 360)
+	var group_width := CELL * 10 + 40 + PANEL_GAP + DETAIL_WIDTH
+	var left := r.position.x + maxf(0.0, (r.size.x - group_width) * 0.5)
+	return Rect2(r.position.x, r.position.y, maxf(200.0, left - r.position.x - 12), 300)
 
 func enter() -> void:
-	var r: Rect2 = shell.content_rect()
-	var holder := UIKit.plate()
-	holder.position = r.position
+	holder = UIKit.plate()
 	add_child(holder)
-	var v := UIKit.vbox(14)
+	var v := UIKit.vbox(10)
 	holder.add_child(v)
 	var head := UIKit.hbox()
-	head.add_child(UIKit.label("后仓 10×6", 22, UIKit.AMBER))
-	head.add_child(UIKit.label("拖动换位 · 拖动时右键旋转", 17, UIKit.MUTED))
+	head.add_child(UIKit.label("货物保管区", 24, UIKit.AMBER))
+	head.add_child(UIKit.spacer(false))
+	head.add_child(UIKit.label("10 × 6  /  拖动换位 · 右键旋转", 16, UIKit.MUTED))
 	v.add_child(head)
 	grid = StorageGrid.new()
 	grid.page = self
 	grid.custom_minimum_size = Vector2(CELL * 10, CELL * 6)
 	v.add_child(grid)
-	lists = UIKit.vbox(10)
+	lists = UIKit.vbox(7)
 	v.add_child(lists)
-	holder.size = Vector2(CELL * 10 + 40, r.size.y)
-	var right := side_panel(520)
+	holder.size = Vector2(CELL * 10 + 40, 0)
+	detail_panel = UIKit.plate()
+	add_child(detail_panel)
 	var sc := ScrollContainer.new()
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	detail = UIKit.vbox(12)
 	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.add_child(detail)
-	right.add_child(sc)
+	detail_panel.add_child(sc)
 	selected = Game.focus_uid if Game.item(Game.focus_uid) != null else ""
 	_refresh()
+	relayout()
 
 func _refresh() -> void:
 	grid.rebuild()
 	_lists()
 	_detail()
+	call_deferred("_resize_panels")
+
+## Called by the shell after it updates its HUD and navigation geometry.
+func relayout() -> void:
+	if not is_instance_valid(holder) or not is_instance_valid(detail_panel):
+		return
+	var r: Rect2 = shell.content_rect()
+	var group_width := CELL * 10 + 40 + PANEL_GAP + DETAIL_WIDTH
+	var left := r.position.x + maxf(0.0, (r.size.x - group_width) * 0.5)
+	holder.position = Vector2(left, r.position.y)
+	detail_panel.position = Vector2(left + CELL * 10 + 40 + PANEL_GAP, r.position.y)
+	_resize_panels()
+
+## Keep the work surfaces close to their contents instead of stretching down to
+## the navigation bar. Long item details stay reachable through their scroller.
+func _resize_panels() -> void:
+	if not is_instance_valid(holder) or not is_instance_valid(detail_panel):
+		return
+	holder.size = Vector2(CELL * 10 + 40, holder.get_combined_minimum_size().y)
+	var available: float = shell.content_rect().size.y
+	var detail_height := clampf(detail.get_combined_minimum_size().y + 40.0, 240.0, minf(700.0, available))
+	detail_panel.size = Vector2(DETAIL_WIDTH, detail_height)
 
 func _lists() -> void:
 	UIKit.clear(lists)
@@ -66,15 +94,23 @@ func _lists() -> void:
 			if it.location == spec[0]:
 				items.append(it)
 		var row := UIKit.hbox(8)
-		row.add_child(UIKit.label("%s %d/%d" % [spec[1], items.size(), spec[2]], 17, UIKit.MUTED))
-		for it in items.slice(0, 9):
-			var b := UIKit.button("", "primary" if it.uid == selected else "chip", Vector2(64, 64))
+		var caption := UIKit.label("%s\n%d / %d" % [spec[1], items.size(), spec[2]], 15, UIKit.MUTED)
+		caption.custom_minimum_size.x = 116
+		row.add_child(caption)
+		var sc := ScrollContainer.new()
+		sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		var items_row := UIKit.hbox(8)
+		sc.add_child(items_row)
+		row.add_child(sc)
+		for it in items:
+			var b := UIKit.button("", "primary" if it.uid == selected else "chip", Vector2(52, 52))
 			b.icon = UIKit.item_icon(it.defId)
 			b.expand_icon = true
 			b.tooltip_text = GameData.def(it.defId).name
 			var uid: String = it.uid
 			b.pressed.connect(func(): select(uid))
-			row.add_child(b)
+			items_row.add_child(b)
 		lists.add_child(row)
 
 func select(uid: String) -> void:
@@ -84,6 +120,7 @@ func select(uid: String) -> void:
 	grid.queue_redraw()
 	_lists()
 	_detail()
+	call_deferred("_resize_panels")
 
 func _act(g: GridContainer, text: String, kind: String, a, enabled := true, tip := "") -> void:
 	var b := UIKit.button(text, kind, Vector2(0, 54), 19)

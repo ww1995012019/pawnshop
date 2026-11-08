@@ -3,9 +3,9 @@ class_name UIKit
 ## and item/character art lookup. Layouts use containers so edges line up.
 
 const BG := Color("0b1118")
-const PLATE := Color(0.075, 0.098, 0.11, 0.94)
-const PLATE_EDGE := Color("4d5759")
-const INSET := Color(0.035, 0.05, 0.055, 0.95)
+const PLATE := Color(0.075, 0.082, 0.09, 0.97)
+const PLATE_EDGE := Color("58615f")
+const INSET := Color(0.035, 0.042, 0.047, 0.97)
 const AMBER := Color("ffc27a")
 const AMBER_DEEP := Color("8a5226")
 const CYAN := Color("7fe6dc")
@@ -49,13 +49,14 @@ static func box(fill: Color, edge := Color.TRANSPARENT, radius := 8, border := 2
 	return s
 
 static func plate_style() -> StyleBoxFlat:
-	var s := box(PLATE, PLATE_EDGE, 10, 2, PAD, 14)
-	s.border_width_top = 3
-	s.border_color = Color("5c6567")
+	var s := box(PLATE, PLATE_EDGE, 2, 2, PAD, 8)
+	# A small bevel reads as a painted metal rim without increasing the panel's
+	# padding or obscuring its content.
+	s.border_blend = true
 	return s
 
 static func inset_style(pad := 14) -> StyleBoxFlat:
-	return box(INSET, Color("26302f"), 6, 1, pad, 0)
+	return box(INSET, Color("394443"), 2, 1, pad, 0)
 
 static func paper_style(pad := 18) -> StyleBoxFlat:
 	return box(PAPER, Color("a8987a"), 4, 1, pad, 8)
@@ -72,12 +73,12 @@ static func key_style(kind: String, state: String) -> StyleBoxFlat:
 		"disabled":
 			fill = Color("12181b")
 			edge = Color("2c3537")
-	var s := box(fill, edge, 7, 2, 0, 4 if state != "pressed" else 1)
-	s.border_width_bottom = 2 if state == "pressed" else 5
-	s.content_margin_left = 16
-	s.content_margin_right = 16
-	s.content_margin_top = 8 + (2 if state == "pressed" else 0)
-	s.content_margin_bottom = 8
+	var s := box(fill, edge, 2, 1, 0, 3 if state != "pressed" else 1)
+	s.border_width_bottom = 1 if state == "pressed" else 3
+	s.content_margin_left = 12
+	s.content_margin_right = 12
+	s.content_margin_top = 6 + (1 if state == "pressed" else 0)
+	s.content_margin_bottom = 6
 	return s
 
 static func build_theme() -> Theme:
@@ -92,6 +93,9 @@ static func build_theme() -> Theme:
 		var s := key_style("secondary", st if st != "focus" else "hover")
 		if st == "focus":
 			s.draw_center = false
+			s.border_color = AMBER
+			s.set_border_width_all(2)
+			s.set_expand_margin_all(3)
 		t.set_stylebox(st, "Button", s)
 	t.set_color("font_color", "Button", TEXT)
 	t.set_color("font_hover_color", "Button", Color.WHITE)
@@ -135,7 +139,7 @@ static func button(text: String, kind := "secondary", min_size := Vector2(0, 58)
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size = min_size
-	b.focus_mode = Control.FOCUS_NONE
+	b.focus_mode = Control.FOCUS_ALL
 	b.add_theme_font_size_override("font_size", size)
 	for st in ["normal", "hover", "pressed", "disabled"]:
 		b.add_theme_stylebox_override(st, key_style(kind, st))
@@ -145,16 +149,55 @@ static func button(text: String, kind := "secondary", min_size := Vector2(0, 58)
 		b.icon = icon(icon_name)
 		b.expand_icon = true
 		b.add_theme_constant_override("icon_max_width", 34)
-	b.button_down.connect(func():
-		b.pivot_offset = b.size * 0.5
-		b.create_tween().tween_property(b, "scale", Vector2(0.97, 0.94), 0.05))
-	b.button_up.connect(func(): b.create_tween().tween_property(b, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT))
+	b.mouse_entered.connect(func(): _button_rest_feedback(b))
+	b.mouse_exited.connect(func(): _button_rest_feedback(b))
+	b.focus_entered.connect(func(): _button_rest_feedback(b))
+	b.focus_exited.connect(func(): _button_rest_feedback(b))
+	b.button_down.connect(func(): _button_feedback(b, Vector2(0.98, 0.97), Color.WHITE))
+	b.button_up.connect(func(): _button_rest_feedback(b))
 	return b
 
+static func _button_rest_feedback(b: Button) -> void:
+	var active := not b.disabled and (b.is_hovered() or b.has_focus())
+	_button_feedback(b, Vector2.ONE, Color(1.08, 1.08, 1.08) if active else Color.WHITE)
+
+## Replace an in-flight tween so rapid hover and press changes cannot leave a
+## key stuck at the wrong scale. Reduced motion keeps the static theme states.
+static func _button_feedback(b: Button, target_scale: Vector2, target_color: Color) -> void:
+	var previous: Tween = b.get_meta("feedback_tween") if b.has_meta("feedback_tween") else null
+	if previous != null and previous.is_valid():
+		previous.kill()
+	if Game.prefs.reduced_motion:
+		b.scale = Vector2.ONE
+		b.modulate = Color.WHITE
+		return
+	b.pivot_offset = b.size * 0.5
+	var tw := b.create_tween().set_parallel(true)
+	b.set_meta("feedback_tween", tw)
+	tw.tween_property(b, "scale", target_scale, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(b, "modulate", target_color, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
 static func plate(style: StyleBox = null) -> PanelContainer:
-	var p := PanelContainer.new()
+	var p: PanelContainer = IndustrialPlate.new() if style == null else PanelContainer.new()
 	p.add_theme_stylebox_override("panel", style if style != null else plate_style())
 	return p
+
+## The details stay in the rim, leaving the panel's content and hit area
+## untouched. Integer coordinates and square corners echo the shop's hardware.
+class IndustrialPlate extends PanelContainer:
+	func _draw() -> void:
+		if size.x < 48 or size.y < 36:
+			return
+		var highlight := Color("77847c")
+		highlight.a = 0.65
+		var dark := Color("090d10")
+		var screw := Color("ad9978")
+		screw.a = 0.75
+		draw_line(Vector2(14, 4), Vector2(size.x - 14, 4), highlight, 1.0)
+		draw_line(Vector2(14, size.y - 4), Vector2(size.x - 14, size.y - 4), dark, 1.0)
+		for pt in [Vector2(7, 7), Vector2(size.x - 7, 7), Vector2(7, size.y - 7), Vector2(size.x - 7, size.y - 7)]:
+			draw_rect(Rect2(pt - Vector2(2, 2), Vector2(4, 4)), dark)
+			draw_rect(Rect2(pt - Vector2(1, 1), Vector2(2, 2)), screw)
 
 static func vbox(sep := GAP) -> VBoxContainer:
 	var v := VBoxContainer.new()
@@ -183,7 +226,7 @@ static func spacer(v := true) -> Control:
 
 static func rule() -> ColorRect:
 	var r := ColorRect.new()
-	r.color = Color(1, 1, 1, 0.08)
+	r.color = Color(0.64, 0.54, 0.39, 0.38)
 	r.custom_minimum_size = Vector2(0, 1)
 	return r
 

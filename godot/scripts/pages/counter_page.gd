@@ -2,8 +2,8 @@ extends Page
 ## The counter: visitors walk in behind the counter, hand over or ask for goods,
 ## and haggle through the till. Every model change is played out on stage.
 
-const MAT_POS := Vector2(1000, 800)
-const STAND := Vector2(900, 1015)
+var MAT_POS := Vector2(960, 680)
+var STAND := Vector2(650, 400)
 const SHELF_SLOTS := [[1322, 302, 74], [1462, 278, 74], [1532, 278, 70], [1322, 380, 64], [1462, 368, 70], [1532, 368, 66], [1322, 457, 58]]
 
 var customer: Customer
@@ -21,7 +21,30 @@ var actions: GridContainer
 var footer: Label
 var chosen_evidence := ""
 var busy := false
-var trade_id := ""
+var desk: Control
+var stock_panel: PanelContainer
+var terminal: PanelContainer
+var offer_panel: PanelContainer
+var event_title: Label
+var event_description: Label
+var event_state: Label
+var event_button: Button
+var stock_grid: GridContainer
+var stock_count: Label
+var event_panel: PanelContainer
+var stage_root: Node2D
+var surface: WorkSurface
+var stage_header: Label
+var stage_status: Label
+var item_caption: Label
+var item_details: Label
+var idle_label: Label
+var visitor_label: Label
+var offer_button: Button
+var stock_scroll: ScrollContainer
+var bench_rect := Rect2()
+var stage_rect := Rect2()
+var drag_rect := Rect2()
 
 func scene_name() -> String:
 	return "counter"
@@ -40,17 +63,33 @@ func hint_text() -> String:
 	return "拖动实物、右键翻面；拿去鉴定取证，再转动旋钮出价。"
 
 func toast_rect() -> Rect2:
-	return Rect2(24, 430, 560, 300)
+	var r: Rect2 = shell.content_rect()
+	return Rect2(r.position.x + 16, r.end.y - 150, 490, 135)
 
 func enter() -> void:
+	stage_root = Node2D.new()
+	stage_root.material = Util.unshaded()
+	add_world(stage_root, "top")
+	_align_stage()
+	surface = WorkSurface.new()
+	surface.material = Util.unshaded()
+	stage_root.add_child(surface)
 	bell = ServiceBell.new()
-	bell.position = Vector2(340, 800)
 	bell.material = Util.unshaded()
-	add_world(bell, "fg")
+	stage_root.add_child(bell)
 	_build_terminal()
+	_build_desk()
 	_build_bubble()
+	relayout()
 	_sync_world()
 	_refresh()
+
+func _align_stage() -> void:
+	if stage_root != null:
+		stage_root.global_transform = get_viewport().get_canvas_transform().affine_inverse()
+
+func _stage_world(p: Vector2) -> Vector2:
+	return stage_root.to_global(p)
 
 # ---------------------------------------------------------------- world
 
@@ -59,7 +98,6 @@ func _sync_world() -> void:
 	var t = Game.state.trade
 	if t == null:
 		return
-	trade_id = t.id
 	_spawn_customer(t.npcId, false)
 	var it = Model.trade_item(Game.state)
 	if it != null:
@@ -92,9 +130,9 @@ func _spawn_customer(npc_id: String, walk: bool) -> void:
 	customer = Customer.new()
 	customer.setup(npc_id)
 	var h: float = customer.size.y
-	customer.scale = Vector2.ONE * (850.0 / h)
+	customer.scale = Vector2.ONE * (164.0 / h)
 	customer.position = STAND
-	add_world(customer, "mid")
+	stage_root.add_child(customer)
 	if walk:
 		customer.walk_in(2350.0)
 
@@ -102,17 +140,17 @@ func _spawn_mat_item(it: Dictionary, animate: bool, from := Vector2.ZERO) -> voi
 	if mat_item != null and is_instance_valid(mat_item):
 		mat_item.queue_free()
 	mat_item = ItemSprite.new()
-	mat_item.setup(it.defId, it.uid, 300.0)
-	mat_item.bounds = Rect2(520, 700, 940, 170)
+	mat_item.setup(it.defId, it.uid, 290.0)
+	mat_item.bounds = drag_rect
 	mat_item.position = MAT_POS
 	mat_item.dropped.connect(func():
 		shell.sound("drop", -4.0, randf_range(0.9, 1.1))
 		shell.dust_burst(mat_item.global_position + Vector2(0, 80), shell.layer("fg"))
 		shell.shake = maxf(shell.shake, 0.22))
 	mat_item.flipped.connect(func(_b): shell.sound("page", -6.0))
-	add_world(mat_item, "fg")
+	stage_root.add_child(mat_item)
 	if animate and not Game.prefs.reduced_motion:
-		var start := from
+		var start := stage_root.to_local(from)
 		var dest := MAT_POS
 		mat_item.position = start
 		mat_item.body.rotation = -0.4
@@ -123,41 +161,197 @@ func _spawn_mat_item(it: Dictionary, animate: bool, from := Vector2.ZERO) -> voi
 			mat_item.body.rotation = lerpf(-0.4, 0.0, p), 0.0, 1.0, 0.55).set_trans(Tween.TRANS_SINE)
 		tw.tween_callback(func(): mat_item.land())
 
+# ---------------------------------------------------------------- counter desk
+
+## One continuous operating surface keeps stock, the physical lot, and
+## negotiation together while the room stays at the edges.
+func _build_desk() -> void:
+	desk = Control.new()
+	desk.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(desk)
+	event_panel = UIKit.plate(UIKit.box(Color("202a2b"), Color("65716b"), 2, 1, 16, 0))
+	desk.add_child(event_panel)
+	var event_row := UIKit.hbox(20)
+	event_panel.add_child(event_row)
+	var marker := UIKit.vbox(2)
+	marker.custom_minimum_size.x = 150
+	marker.add_child(UIKit.label("今日站内消息", 21, UIKit.AMBER))
+	event_state = UIKit.label("", 17, UIKit.MUTED)
+	marker.add_child(event_state)
+	event_row.add_child(marker)
+	var summary := UIKit.vbox(2)
+	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	event_title = UIKit.label("", 23, UIKit.TEXT)
+	event_description = UIKit.label("", 18, UIKit.MUTED)
+	event_description.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	summary.add_child(event_title)
+	summary.add_child(event_description)
+	event_row.add_child(summary)
+	event_button = UIKit.button("处理消息", "secondary", Vector2(158, 52), 20, "speech")
+	event_button.pressed.connect(func(): shell.open_events())
+	event_row.add_child(event_button)
+
+	stock_panel = UIKit.plate(UIKit.box(Color("182123"), Color("53625f"), 2, 1, 18, 0))
+	desk.add_child(stock_panel)
+	var sv := UIKit.vbox(12)
+	stock_panel.add_child(sv)
+	var sh := UIKit.hbox(8)
+	sh.add_child(UIKit.label("在库货物", 25, UIKit.TEXT))
+	sh.add_child(UIKit.spacer(false))
+	stock_count = UIKit.label("", 18, UIKit.MUTED)
+	sh.add_child(stock_count)
+	sv.add_child(sh)
+	sv.add_child(UIKit.rule())
+	sv.add_child(UIKit.label("点击货物查看详情", 17, UIKit.MUTED))
+	stock_scroll = ScrollContainer.new()
+	stock_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	stock_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stock_scroll.follow_focus = true
+	sv.add_child(stock_scroll)
+	stock_grid = UIKit.grid(4, 7)
+	stock_scroll.add_child(stock_grid)
+	var open_stock := UIKit.button("整理仓储", "secondary", Vector2(0, 52), 20, "warehouse")
+	open_stock.pressed.connect(func(): shell.go("warehouse"))
+	sv.add_child(open_stock)
+
+	stage_header = UIKit.label("柜台工作区", 27, UIKit.AMBER)
+	stage_header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	desk.add_child(stage_header)
+	stage_status = UIKit.label("01 接待  /  02 鉴定  /  03 议价  /  04 交割", 18, UIKit.MUTED)
+	stage_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	desk.add_child(stage_status)
+	visitor_label = UIKit.label("暂无来客", 22, UIKit.TEXT)
+	visitor_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	desk.add_child(visitor_label)
+	item_caption = UIKit.label("当前交易物件", 25, UIKit.TEXT)
+	item_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	desk.add_child(item_caption)
+	item_details = UIKit.label("", 18, UIKit.MUTED)
+	item_details.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	desk.add_child(item_details)
+	idle_label = UIKit.label("按服务铃接待下一位来客", 23, UIKit.MUTED)
+	idle_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	idle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desk.add_child(idle_label)
+
+func relayout() -> void:
+	if desk == null or surface == null:
+		return
+	_align_stage()
+	var r: Rect2 = shell.content_rect()
+	bench_rect = Rect2(r.position + Vector2(12, 8), r.size - Vector2(24, 8))
+	var body_top := bench_rect.position.y + 104.0
+	var body_h := bench_rect.size.y - 104.0
+	var left_w := 330.0
+	var right_w := 500.0
+	stage_rect = Rect2(bench_rect.position.x + left_w + 14, body_top, bench_rect.size.x - left_w - right_w - 28, body_h)
+	event_panel.position = bench_rect.position
+	event_panel.size = Vector2(bench_rect.size.x, 90)
+	stock_panel.position = Vector2(bench_rect.position.x, body_top)
+	stock_panel.size = Vector2(left_w, body_h)
+	terminal.position = Vector2(bench_rect.end.x - right_w, body_top)
+	terminal.size = Vector2(right_w, body_h)
+	stage_header.position = stage_rect.position + Vector2(24, 18)
+	stage_status.position = stage_rect.position + Vector2(24, 60)
+	visitor_label.position = stage_rect.position + Vector2(192, 108)
+	visitor_label.size = Vector2(stage_rect.size.x - 218, 32)
+	item_caption.position = stage_rect.position + Vector2(24, 272)
+	item_details.position = stage_rect.position + Vector2(24, 310)
+	item_details.size = Vector2(stage_rect.size.x - 48, 32)
+	idle_label.position = stage_rect.position + Vector2(24, 390)
+	idle_label.size = Vector2(stage_rect.size.x - 48, 90)
+	STAND = stage_rect.position + Vector2(100, 252)
+	MAT_POS = Vector2(stage_rect.get_center().x + 28, stage_rect.position.y + 525)
+	drag_rect = Rect2(stage_rect.position + Vector2(160, 400), Vector2(maxf(80, stage_rect.size.x - 300), maxf(35, body_h - 500)))
+	MAT_POS.y = minf(MAT_POS.y, stage_rect.end.y - 120)
+	bell.position = Vector2(stage_rect.position.x + 84, stage_rect.end.y - 48)
+	if is_instance_valid(customer) and not customer.walking:
+		customer.position = STAND
+	if is_instance_valid(mat_item):
+		mat_item.bounds = drag_rect
+		if not mat_item.dragging:
+			mat_item.position = MAT_POS
+	if bubble != null:
+		bubble.position = stage_rect.position + Vector2(192, 147)
+		bubble.custom_minimum_size = Vector2(stage_rect.size.x - 216, 100)
+		bubble.size = Vector2(stage_rect.size.x - 216, 100)
+	surface.area = bench_rect
+	surface.stage = stage_rect
+	surface.queue_redraw()
+
+func _refresh_desk() -> void:
+	if desk == null:
+		return
+	var event = Game.today_event()
+	var state_text := "无事件" if event == null else ("已处理" if Game.event_done() else "待处理")
+	event_state.text = "第 %02d 天 · %s" % [int(Game.state.day), state_text]
+	event_state.add_theme_color_override("font_color", UIKit.AMBER if event != null and not Game.event_done() else UIKit.MUTED)
+	event_title.text = event.title if event != null else "今日营业准备"
+	event_description.text = event.description if event != null else "整理货物，准备迎接下一位来客。"
+	event_button.disabled = event == null
+	event_button.text = "查看消息" if Game.event_done() else "处理消息"
+	UIKit.clear(stock_grid)
+	var items: Array = Game.state.inventory
+	stock_count.text = "%02d 件" % items.size()
+	for i in maxi(20, ceili(items.size() / 4.0) * 4):
+		var slot := UIKit.button("", "chip", Vector2(67, 76), 14)
+		slot.tooltip_text = "空货位"
+		if i < items.size():
+			var it: Dictionary = items[i]
+			slot.icon = UIKit.item_icon(it.defId)
+			slot.expand_icon = true
+			slot.add_theme_constant_override("icon_max_width", 58)
+			slot.tooltip_text = "%s · 品相%s" % [GameData.def(it.defId).name, UIKit.pct(it.condition)]
+			var uid: String = it.uid
+			slot.pressed.connect(func(): shell.go("warehouse", uid))
+		else:
+			slot.disabled = true
+		stock_grid.add_child(slot)
+	var t = Game.state.trade
+	var it = Model.trade_item(Game.state) if t != null else null
+	visitor_label.text = (GameData.npc(t.npcId).name + " · " + GameData.npc(t.npcId).title) if t != null else "柜台空闲 · 等待来客"
+	item_caption.text = GameData.def(it.defId).name if it != null else "当前交易物件"
+	item_details.text = ("品相 %s  ·  %s  ·  已取证 %d/6" % [UIKit.pct(it.condition), "正常运转" if it.working else "存在故障", Model.evidence_count(it)]) if it != null else "来客交来的货物将在这里展示"
+	idle_label.visible = it == null
+	idle_label.text = "先挑选一件货物推荐给顾客" if t != null else "按服务铃接待下一位来客"
+
 # ---------------------------------------------------------------- terminal
 
 func _build_terminal() -> void:
-	var panel := side_panel(480)
-	var v := UIKit.vbox(14)
+	terminal = UIKit.plate(UIKit.box(Color("182123"), Color("65716b"), 2, 1, 18, 0))
+	add_child(terminal)
+	var panel := terminal
+	var v := UIKit.vbox(12)
 	panel.add_child(v)
+	v.add_child(UIKit.label("交易终端", 25, UIKit.AMBER))
 	screen = SubViewport.new()
-	screen.size = Vector2i(440, 230)
+	screen.size = Vector2i(440, 190)
 	screen.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(screen)
 	var bgc := ColorRect.new()
 	bgc.color = Color("041010")
-	bgc.size = Vector2(440, 230)
+	bgc.size = Vector2(440, 190)
 	screen.add_child(bgc)
 	scr.head = _scr_label(Vector2(22, 14), 20, UIKit.CYAN)
-	scr.price = _scr_label(Vector2(18, 40), 76, UIKit.AMBER, true)
-	scr.line1 = _scr_label(Vector2(22, 136), 19, UIKit.CYAN)
-	scr.line2 = _scr_label(Vector2(22, 168), 19, Color("ffb48a"))
-	scr.line3 = _scr_label(Vector2(22, 196), 17, UIKit.MUTED)
+	scr.price = _scr_label(Vector2(18, 36), 60, UIKit.AMBER, true)
+	scr.line1 = _scr_label(Vector2(22, 108), 19, UIKit.CYAN)
+	scr.line2 = _scr_label(Vector2(22, 138), 19, Color("ffb48a"))
+	scr.line3 = _scr_label(Vector2(22, 166), 17, UIKit.MUTED)
 	var crt := TextureRect.new()
 	crt.texture = screen.get_texture()
-	crt.custom_minimum_size = Vector2(440, 230)
+	crt.custom_minimum_size = Vector2(440, 190)
 	crt.stretch_mode = TextureRect.STRETCH_SCALE
-	var m := ShaderMaterial.new()
-	m.shader = load("res://shaders/crt.gdshader")
-	crt.material = m
 	var frame := UIKit.plate(UIKit.inset_style(0))
 	frame.add_child(crt)
 	v.add_child(frame)
-	var offer := UIKit.plate(UIKit.inset_style(12))
+	offer_panel = UIKit.plate(UIKit.inset_style(12))
+	var offer := offer_panel
 	var oh := UIKit.hbox(16)
 	offer.add_child(oh)
 	dial = Dial.new()
+	dial.custom_minimum_size = Vector2(134, 134)
 	dial.changed.connect(func(val):
-		offer_label.text = UIKit.money(val)
+		_update_offer_value(val)
 		shell.sound("click", -20, 1.7))
 	oh.add_child(dial)
 	var ov := UIKit.vbox(4)
@@ -179,7 +373,6 @@ func _build_terminal() -> void:
 	v.add_child(ev)
 	actions = UIKit.grid(2, 10)
 	v.add_child(actions)
-	v.add_child(UIKit.spacer())
 	footer = UIKit.label("", 17, UIKit.MUTED, false, true)
 	v.add_child(footer)
 
@@ -205,8 +398,10 @@ func _act(text: String, kind: String, fn: Callable, enabled := true, wide := fal
 	return b
 
 func _refresh() -> void:
+	_refresh_desk()
 	var s := Game.state
 	var t = s.trade
+	offer_button = null
 	UIKit.clear(actions)
 	UIKit.clear(chips)
 	var dial_on := false
@@ -255,10 +450,10 @@ func _refresh() -> void:
 			var b := Model.offer_bounds(s, t, it)
 			dial.min_value = 1
 			dial.max_value = int(maxf(1, b.max))
-			if trade_id != t.id or dial.value > dial.max_value:
-				dial.set_value(int(t.price * (0.8 if buy else 1.15)), false)
-				trade_id = t.id
-			offer_label.text = UIKit.money(dial.value)
+			var drafts: Dictionary = Game.get_meta("counter_offer_drafts", {})
+			var initial := int(t.price * (0.8 if buy else 1.15))
+			dial.set_value(int(drafts.get(t.id, initial)), false)
+			_update_offer_value(dial.value)
 			for e in it.evidence:
 				if not GameData.def(it.defId).tools.has(e):
 					continue
@@ -270,7 +465,7 @@ func _refresh() -> void:
 				chips.add_child(chip)
 			if chips.get_child_count() == 0:
 				chips.add_child(UIKit.label("还没有相关物证：先拿去鉴定。", 16, UIKit.MUTED))
-			_act("出价 " + UIKit.money(dial.value), "primary", func(): _offer())
+			offer_button = _act("出价 " + UIKit.money(dial.value), "primary", func(): _offer())
 			_act("接受报价", "good", func(): Game.dispatch({"type": "ACCEPT"}))
 			_act("拿去鉴定", "secondary", func(): shell.go("inspect", it.uid))
 			if buy:
@@ -280,12 +475,23 @@ func _refresh() -> void:
 			_act("送客", "danger", func(): Game.dispatch({"type": "REFUSE"}))
 		footer.text = "%s：%s" % [npc.name, Model.customer_need(t.npcId)]
 	dial.enabled = dial_on and not busy
+	offer_panel.visible = dial_on
 	chips.get_parent().visible = dial_on
 	for k in ["line1", "line2", "line3"]:
 		var l: Label = scr[k]
 		if l.text.length() > 21:
 			l.text = l.text.left(20) + "…"
 	dial.queue_redraw()
+
+func _update_offer_value(value: int) -> void:
+	offer_label.text = UIKit.money(value)
+	if is_instance_valid(offer_button):
+		offer_button.text = "出价 " + UIKit.money(value)
+	var t = Game.state.trade
+	if t != null:
+		var drafts: Dictionary = Game.get_meta("counter_offer_drafts", {})
+		drafts[t.id] = value
+		Game.set_meta("counter_offer_drafts", drafts)
 
 func _offer() -> void:
 	var a := {"type": "OFFER", "price": dial.value}
@@ -334,12 +540,13 @@ func _pick_goods() -> void:
 # ---------------------------------------------------------------- bubble
 
 func _build_bubble() -> void:
-	bubble = UIKit.plate(UIKit.paper_style(16))
-	bubble.custom_minimum_size = Vector2(470, 0)
+	bubble = UIKit.plate(UIKit.box(Color("232e2e"), Color("52635d"), 2, 1, 14, 0))
+	bubble.custom_minimum_size = Vector2(500, 100)
 	bubble.modulate.a = 0.0
 	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bubble)
-	bubble_label = UIKit.label("", 25, UIKit.INK, false, true)
+	bubble_label = UIKit.label("", 22, UIKit.TEXT, false, true)
+	bubble_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bubble.add_child(bubble_label)
 
 func _say(text: String, type := true, mood := "") -> void:
@@ -348,7 +555,6 @@ func _say(text: String, type := true, mood := "") -> void:
 	if mood != "":
 		customer.set_mood(mood)
 	bubble_label.text = text
-	bubble.reset_size()
 	var dur := text.length() * 0.035
 	customer.say(dur + 0.2)
 	bubble.modulate.a = 1.0
@@ -361,7 +567,10 @@ func _say(text: String, type := true, mood := "") -> void:
 		bubble_label.visible_ratio = 1.0
 
 func _hide_bubble() -> void:
-	create_tween().tween_property(bubble, "modulate:a", 0.0, 0.2)
+	if Game.prefs.reduced_motion:
+		bubble.modulate.a = 0.0
+	else:
+		create_tween().tween_property(bubble, "modulate:a", 0.0, 0.2)
 
 # ---------------------------------------------------------------- flow
 
@@ -593,21 +802,29 @@ func _over_customer(p: Vector2) -> bool:
 	return absf(local.x) < customer.size.x * 0.4 and local.y < -customer.size.y * 0.4 and local.y > -customer.size.y
 
 func _process(_delta: float) -> void:
+	_align_stage()
 	var p: Vector2 = shell.world_mouse()
 	if mat_item != null and is_instance_valid(mat_item):
 		if mat_item.dragging:
 			mat_item.drag_to(p)
 		mat_item.hover = lerpf(mat_item.hover, 1.0 if mat_item.contains(p) or mat_item.dragging else 0.0, 0.2)
-	for s in shelf:
-		if is_instance_valid(s):
-			var over: bool = s.contains(p)
-			s.hover = lerpf(s.hover, 1.0 if over else 0.0, 0.2)
-			s.lift = lerpf(s.lift, 8.0 if over else 0.0, 0.2)
 	if customer != null and is_instance_valid(customer):
 		customer.look = clampf((p.x - customer.global_position.x) / 700.0, -1.0, 1.0)
-		var mouth: Vector2 = shell.world_to_ui(customer.mouth())
-		var r: Rect2 = shell.content_rect()
-		var want := mouth + Vector2(50, -bubble.size.y - 10)
-		want.x = minf(want.x, r.end.x - 480 - bubble.size.x - 20)
-		want.y = maxf(want.y, r.position.y)
-		bubble.position = bubble.position.lerp(want, 0.25)
+
+
+class WorkSurface extends Node2D:
+	var area := Rect2()
+	var stage := Rect2()
+	func _draw() -> void:
+		draw_style_box(UIKit.box(Color("10191c"), Color("7e8a80"), 3, 2, 0, 0), area.grow(8))
+		draw_rect(stage, Color("1c2b2e"))
+		draw_rect(Rect2(stage.position, Vector2(stage.size.x, 94)), Color("263537"))
+		draw_rect(Rect2(stage.position + Vector2(16, 98), Vector2(stage.size.x - 32, 164)), Color("132022"))
+		var mat := Rect2(stage.position + Vector2(18, 354), Vector2(stage.size.x - 36, maxf(80, stage.size.y - 374)))
+		draw_rect(mat, Color("223c3e"))
+		draw_rect(mat.grow(-5), Color("3d5552"), false, 1)
+		for x in range(int(mat.position.x + 28), int(mat.end.x - 10), 40):
+			for y in range(int(mat.position.y + 28), int(mat.end.y - 10), 40):
+				draw_circle(Vector2(x,y), 1, Color(0.5,0.7,0.66,0.1))
+		for corner in [area.position, Vector2(area.end.x, area.position.y), area.end, Vector2(area.position.x, area.end.y)]:
+			draw_circle(corner, 3, Color("9caa9d"))

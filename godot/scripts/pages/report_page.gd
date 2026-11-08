@@ -3,6 +3,7 @@ extends Page
 ## upgrade from day 3, the next day, and the 21-day outcome.
 
 var body: VBoxContainer
+var sheet: PanelContainer
 
 func scene_name() -> String:
 	return "counter"
@@ -15,18 +16,33 @@ func hint_text() -> String:
 		return "日结完成：选择升级（第 3 天起），然后迎接明天。"
 	return "经营结束。可以回看账目，或新开一家店。"
 
-func enter() -> void:
+func toast_rect() -> Rect2:
 	var r: Rect2 = shell.content_rect()
-	var center := CenterContainer.new()
-	center.position = r.position
-	center.size = r.size
-	add_child(center)
-	var p := UIKit.plate()
-	p.custom_minimum_size = Vector2(1100, 0)
-	center.add_child(p)
-	body = UIKit.vbox(14)
-	p.add_child(body)
+	return Rect2(r.position.x, r.end.y - 160.0, 640, 140)
+
+func enter() -> void:
+	sheet = UIKit.plate()
+	add_child(sheet)
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sheet.add_child(sc)
+	body = UIKit.vbox(12)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(body)
 	_refresh()
+	relayout()
+	call_deferred("relayout")
+
+## Keep the ledger usable when a shorter window cannot show every upgrade.
+func relayout() -> void:
+	if not is_instance_valid(sheet):
+		return
+	var r: Rect2 = shell.content_rect()
+	var width := minf(1100.0, r.size.x)
+	var max_height := minf(760.0, r.size.y)
+	var height := minf(max_height, maxf(360.0, body.get_combined_minimum_size().y + 40.0))
+	sheet.position = Vector2(r.position.x + (r.size.x - width) * 0.5, r.position.y)
+	sheet.size = Vector2(width, height)
 
 func _row(g: GridContainer, k: String, v: String, color := UIKit.TEXT) -> void:
 	g.add_child(UIKit.label(k, 20, UIKit.MUTED))
@@ -58,17 +74,22 @@ func _refresh() -> void:
 			shell.shutter(1))
 		body.add_child(again)
 		return
-	body.add_child(UIKit.label("第 %d 天 · %s" % [day, "日结报告" if s.phase == "report" else "营业中"], 32, UIKit.AMBER))
+	var heading := UIKit.hbox(12)
+	heading.add_child(UIKit.label("第 %d 天 · %s" % [day, "日结报告" if s.phase == "report" else "营业中"], 28, UIKit.AMBER))
+	heading.add_child(UIKit.spacer(false))
+	heading.add_child(UIKit.label("DAILY LEDGER  /  营业账目", 15, UIKit.MUTED, true))
+	body.add_child(heading)
+	body.add_child(UIKit.rule())
 	var today := []
 	for r in s.ledger:
 		if r.day == s.day:
 			today.append(r)
-	var cols := UIKit.hbox(24)
+	var cols := UIKit.hbox(16)
 	var left := UIKit.vbox(8)
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	left.add_child(UIKit.label("今日流水", 20, UIKit.MUTED))
 	var sc := ScrollContainer.new()
-	sc.custom_minimum_size = Vector2(0, 300)
+	sc.custom_minimum_size = Vector2(0, 250)
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var lv := UIKit.vbox(4)
 	lv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -86,7 +107,7 @@ func _refresh() -> void:
 	left.add_child(sc)
 	cols.add_child(left)
 	var right := UIKit.vbox(10)
-	right.custom_minimum_size = Vector2(440, 0)
+	right.custom_minimum_size = Vector2(390, 0)
 	var g := UIKit.grid(2, 8)
 	var due := Model.rent_due(s.day)
 	if s.phase == "report" and s.report != null:
@@ -138,3 +159,4 @@ func _refresh() -> void:
 
 func on_changed(_p: Dictionary, _n: Dictionary, _a: Dictionary) -> void:
 	_refresh()
+	call_deferred("relayout")

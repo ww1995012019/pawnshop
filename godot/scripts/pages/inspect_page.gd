@@ -18,6 +18,10 @@ var ports: Array = []
 var arc: Line2D
 var drag_probe := -1
 var tool_buttons := {}
+var instrument_panel: PanelContainer
+var instrument_header: VBoxContainer
+var instrument_list: VBoxContainer
+var detail_panel: PanelContainer
 var info: VBoxContainer
 var bench: PanelContainer
 var bench_body: VBoxContainer
@@ -40,6 +44,7 @@ func hint_text() -> String:
 func enter() -> void:
 	_build_panels()
 	_load_item()
+	call_deferred("relayout")
 
 func _hash01(tag: String) -> float:
 	return Model.fnv("%s/%s/%s" % [Game.state.seed, it_uid, tag]) / 4294967296.0
@@ -50,21 +55,35 @@ func _spot(tag: String) -> Vector2:
 # ---------------------------------------------------------------- UI
 
 func _build_panels() -> void:
-	var left := left_panel(300)
+	instrument_panel = left_panel(300)
+	var left := instrument_panel
 	var lv := UIKit.vbox(10)
 	left.add_child(lv)
-	lv.add_child(UIKit.label("鉴定仪器", 22, UIKit.MUTED))
+	instrument_header = UIKit.vbox(10)
+	instrument_header.add_child(UIKit.label("鉴定仪器", 24, UIKit.AMBER))
+	instrument_header.add_child(UIKit.label("选择工具，逐项记录物证", 16, UIKit.MUTED))
+	instrument_header.add_child(UIKit.rule())
+	lv.add_child(instrument_header)
+	var tool_scroll := ScrollContainer.new()
+	tool_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tool_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	tool_scroll.follow_focus = true
+	instrument_list = UIKit.vbox(10)
+	instrument_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tool_scroll.add_child(instrument_list)
+	lv.add_child(tool_scroll)
 	for t in GameData.tools:
-		var b := UIKit.button("", "secondary", Vector2(0, 92), 21)
+		var b := UIKit.button(t.name, "secondary", Vector2(0, 72), 19)
 		b.icon = UIKit.tool_icon(t.id)
 		b.expand_icon = true
-		b.add_theme_constant_override("icon_max_width", 76)
+		b.add_theme_constant_override("icon_max_width", 54)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		var id: String = t.id
 		b.pressed.connect(func(): _set_tool("" if tool == id else id))
-		lv.add_child(b)
+		instrument_list.add_child(b)
 		tool_buttons[id] = b
-	var right := side_panel(470)
+	detail_panel = side_panel(470)
+	var right := detail_panel
 	var rv := UIKit.vbox(12)
 	right.add_child(rv)
 	picker = OptionButton.new()
@@ -107,6 +126,22 @@ func _build_panels() -> void:
 	add_child(bench)
 	bench_body = UIKit.vbox(10)
 	bench.add_child(bench_body)
+
+## Keep the tool rack just tall enough for its contents, with scrolling when
+## the available height is smaller. Resize without rebuilding the tool state.
+func relayout() -> void:
+	if not is_instance_valid(instrument_panel) or not is_instance_valid(instrument_list):
+		return
+	var r: Rect2 = shell.content_rect()
+	var style: StyleBox = instrument_panel.get_theme_stylebox("panel")
+	var padding := style.get_content_margin(SIDE_TOP) + style.get_content_margin(SIDE_BOTTOM)
+	var desired_height := padding + instrument_header.get_combined_minimum_size().y + 10.0 + instrument_list.get_combined_minimum_size().y
+	instrument_panel.position = r.position
+	instrument_panel.size = Vector2(300, minf(r.size.y, desired_height))
+	detail_panel.position = Vector2(r.end.x - 470, r.position.y)
+	detail_panel.size = Vector2(470, r.size.y)
+	bench.position = Vector2(r.position.x + 320, r.end.y - 220)
+	bench.size = Vector2(r.size.x - 810, 220)
 
 func _fill_picker() -> void:
 	picker.clear()
@@ -157,6 +192,7 @@ func _refresh_info() -> void:
 		var done: bool = it.evidence.has(k)
 		var relevant: bool = def.tools.has(k)
 		b.text = "%s%s\n%s" % [GameData.tool(k).name, "  ✓" if done else "", "已取证" if done else ("型号相关" if relevant else "可取证")]
+		b.tooltip_text = GameData.tool(k).instruction if GameData.tool(k).has("instruction") else ""
 		b.add_theme_stylebox_override("normal", UIKit.key_style("primary" if k == tool else ("good" if done else "secondary"), "normal"))
 
 # ---------------------------------------------------------------- item
@@ -189,8 +225,17 @@ func _load_item() -> void:
 		item.land(80.0)
 
 func _home() -> void:
+	if Game.prefs.reduced_motion:
+		item.position = ITEM_POS
+		return
 	var tw := create_tween()
 	tw.tween_property(item, "position", ITEM_POS, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _return_probe(probe: Probe) -> void:
+	if Game.prefs.reduced_motion:
+		probe.position = probe.home
+	else:
+		create_tween().tween_property(probe, "position", probe.home, 0.25).set_trans(Tween.TRANS_BACK)
 
 # ---------------------------------------------------------------- instruments
 
@@ -412,7 +457,8 @@ func _record() -> void:
 	var after = Game.item(it_uid)
 	if after != null and after.evidence.size() > before:
 		shell.sound("check", -2)
-		shell.shake = 0.2
+		if not Game.prefs.reduced_motion:
+			shell.shake = 0.2
 		if tool == "TOL-001":
 			item.mat.set_shader_parameter("found_seam", 1.0)
 	_refresh_info()
@@ -451,7 +497,7 @@ func _unhandled_input(e: InputEvent) -> void:
 						shell.sound("click", -4, 0.7)
 				if not snapped:
 					pr.attached = false
-					create_tween().tween_property(pr, "position", pr.home, 0.25).set_trans(Tween.TRANS_BACK)
+					_return_probe(pr)
 				drag_probe = -1
 		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
 			item.flip()
@@ -512,7 +558,8 @@ func _process(delta: float) -> void:
 				var pts := PackedVector2Array()
 				for k in 12:
 					var f := k / 11.0
-					pts.append(a.lerp(b, f) + Vector2(randf_range(-8, 8), randf_range(-8, 8)) * sin(f * PI))
+					var jitter := Vector2.ZERO if Game.prefs.reduced_motion else Vector2(randf_range(-8, 8), randf_range(-8, 8))
+					pts.append(a.lerp(b, f) + jitter * sin(f * PI))
 				arc.points = pts
 				hold += delta
 				if hold > 0.9:
@@ -566,7 +613,8 @@ class Port extends Node2D:
 		queue_redraw()
 	func _draw() -> void:
 		var t := Time.get_ticks_msec() / 1000.0
-		draw_circle(Vector2.ZERO, 16 + sin(t * 5.0) * 3.0, Color(1.0, 0.7, 0.3, 0.25))
+		var pulse := 0.0 if Game.prefs.reduced_motion else sin(t * 5.0) * 3.0
+		draw_circle(Vector2.ZERO, 16 + pulse, Color(1.0, 0.7, 0.3, 0.25))
 		draw_arc(Vector2.ZERO, 12, 0, TAU, 24, Color(1.0, 0.75, 0.35), 3.0)
 		draw_circle(Vector2.ZERO, 4, Color(1.0, 0.85, 0.5))
 
@@ -632,7 +680,7 @@ class Scope extends Control:
 		queue_redraw()
 	func _draw() -> void:
 		draw_rect(Rect2(Vector2.ZERO, size), Color("041010"))
-		var t := Time.get_ticks_msec() / 1000.0
+		var t := 0.0 if Game.prefs.reduced_motion else Time.get_ticks_msec() / 1000.0
 		var pts := PackedVector2Array()
 		for k in 160:
 			var x := k / 159.0

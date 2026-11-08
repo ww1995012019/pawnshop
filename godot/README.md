@@ -10,7 +10,7 @@
 
 | 页面 | 交互 |
 |---|---|
-| 柜台 | 按服务铃，客人从右侧走到柜台后面，把货递到工作垫上。拖动实物（拿起、倾斜、落下扬尘），右键或 `F` 翻面。右侧 CRT 终端转旋钮出价、援引物证，客人会点头、摇头、前倾、后仰、换表情；成交时钞票一张张飞过去、打印收据盖章。卖货时从库存挑一件合格的推荐给客人。陈列中的货物摆在后面的货架上。 |
+| 柜台 | 连续工作台：顶部站内消息、左侧库存、中间来客对白与可拖动物件、右侧交易终端。按铃接客，旋钮报价与按钮金额同步；去鉴定再回来会保留待报价。接受报价后，再确认交割。 |
 | 鉴定 | 六种仪器各是一个小操作：放大镜（镜片实时放大画面，停在接缝上）、紫外灯（店里变暗，扫出暗纹）、光谱台（拖三根滑杆对齐参考谱）、万用探针（把红黑探针拖到发光接口上，看示波器）、力秤（先校零，再配砝码让指针归零）、负载夹（转旋钮把输出稳在绿区）。读数来自物件真实状态：故障件在负载下会掉电，复制品谱线和质量都偏移。 |
 | 维修 | 三道工序都是手上的活：在实物上来回擦掉污垢、把新零件拖进发光槽位、按住负载复测在绿区松开。最后确认时才扣材料和 AP。也可以组装维护套组、拆解回收、采购耗材。 |
 | 仓储 | 10×6 占格后仓，拖动换位、拖动时右键旋转，非法位置会标红。陈列架、隔离柜、抵押柜，扫描、登记、隔离、归还、赎回、救济清仓。 |
@@ -42,10 +42,14 @@ node godot/tools/export_data.mjs           # 从 TS 源导出游戏数据
 node godot/tools/trace.mjs 16 400          # 用 TS 规则录制随机对局轨迹
 node godot/tools/trace.mjs 10 1400 0.1 long
 godot --headless --path godot --script res://tests/replay.gd   # 逐步比对 GDScript 规则
-godot --path godot -- --inputtest          # 真实鼠标事件：按铃、拖动
-godot --path godot -- --capture=/tmp/shots # 自动走完各页面并截图
+XDG_DATA_HOME=/tmp/pawnshop-input-test godot --path godot -- --inputtest # 真实输入：接客、拖动、报价、导航、锁价、交割
+XDG_DATA_HOME=/tmp/pawnshop-capture godot --path godot -- --capture=/tmp/shots # 页面截图
+XDG_DATA_HOME=/tmp/pawnshop-ui-test godot --headless --path godot --script res://tests/ui_regression.gd
+XDG_DATA_HOME=/tmp/pawnshop-orders-test godot --headless --path godot --script res://tests/orders_ui_test.gd
 godot --headless --path godot --export-release "Web" build/web/index.html
 ```
+
+输入测试失败会以非零状态退出。截图和输入测试会创建新游戏，请始终使用独立的 `XDG_DATA_HOME`，避免覆盖日常存档。工作台保持 16:9 构图，其他窗口比例会留边以保留全部操作区域。
 
 当前轨迹比对：26 局、17,364 步，与 TypeScript 规则逐字段一致（含金额、文案和存档结构）。
 

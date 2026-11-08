@@ -130,65 +130,27 @@ func set_scene(name: String) -> void:
 			n.queue_free()
 	scene_nodes.clear()
 	flickers.clear()
+	# The counter is a mostly opaque operating desk. Keep the room as a static
+	# border instead of rendering hidden normal maps, lights and particles.
+	if name == "counter":
+		bg.texture = UIKit.tex("res://assets/scene/counter_bg.png")
+		bg.material = Util.unshaded()
+		bg.self_modulate = Color(0.58, 0.62, 0.65)
+		var front := Sprite2D.new()
+		front.texture = UIKit.tex("res://assets/scene/counter_fg.png")
+		front.material = Util.unshaded()
+		front.self_modulate = Color(0.58, 0.62, 0.65)
+		front.position = CENTER
+		front.scale = Vector2.ONE * K / 1.5
+		_scene_node(front, layers.fg)
+		layers.fg.move_child(front, 0)
+		return
+	bg.material = null
+	bg.self_modulate = Color.WHITE
 	bg.texture = Util.lit("res://assets/scene/%s_bg.png" % name, "res://assets/scene/%s_bg_n.png" % name, 0.25, 0.4)
 	var warm := Color(1.0, 0.74, 0.45)
 	var teal := Color(0.45, 0.95, 1.0)
 	match name:
-		"counter":
-			var fg := Sprite2D.new()
-			fg.texture = Util.lit("res://assets/scene/counter_fg.png", "res://assets/scene/counter_fg_n.png", 0.5, 0.75)
-			fg.position = CENTER
-			fg.scale = Vector2.ONE * K / 1.5
-			_scene_node(fg, layers.fg)
-			layers.fg.move_child(fg, 0)
-			_light(art(218, 352), warm, 1.35, 3.4, 70, 0.55, 0.75, "lamp")
-			_light(art(780, 250), Color(0.45, 0.62, 1.0), 0.6, 7.0, 260)
-			_light(art(880, 520), Color(1.0, 0.86, 0.72), 0.32, 8.0, 380)
-			_light(art(740, 58), Color(0.6, 0.95, 1.0), 0.55, 3.2, 120, 0.35, 1.3, "tube")
-			_light(art(1000, 98), Color(0.6, 0.95, 1.0), 0.45, 2.8, 120, 0.3, 1.1, "tube")
-			_light(art(1420, 290), teal, 0.7, 3.4, 90, 0.0, 1.0, "tube")
-			_light(art(1200, 290), Color(0.75, 0.42, 1.0), 0.9, 2.2, 60, 0.4, 0.9, "pulse")
-			_light(art(1605, 560), Color(0.35, 1.0, 0.85), 0.6, 1.6, 50, 0.35, 0.6, "pulse")
-			_light(art(1195, 36), warm, 0.7, 2.0, 60, 0.5, 0.45)
-			_light(art(1600, 26), warm, 0.6, 2.0, 60, 0.45, 0.42)
-			_light(art(355, 280), warm, 0.45, 1.2, 40, 0.4, 0.25, "beacon")
-			var glass := Polygon2D.new()
-			var pts := PackedVector2Array()
-			for p in [Vector2(470, 132), Vector2(560, 118), Vector2(905, 118), Vector2(1072, 140), Vector2(1090, 175), Vector2(1062, 352), Vector2(470, 352)]:
-				pts.append(art(p.x, p.y))
-			glass.polygon = pts
-			glass.clip_children = CanvasItem.CLIP_CHILDREN_ONLY
-			_scene_node(glass, layers.bg)
-			var sky := Traffic.new()
-			sky.area = Rect2(art(470, 118), art(1090, 352) - art(470, 118))
-			glass.add_child(sky)
-			var bub := _particles(layers.bg, art(1200, 318), 26, 1.8, Color(0.85, 0.72, 1.0, 0.8))
-			bub.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-			bub.emission_rect_extents = Vector2(16, 6)
-			bub.direction = Vector2(0, -1)
-			bub.spread = 6
-			bub.initial_velocity_min = 30
-			bub.initial_velocity_max = 55
-			bub.scale_amount_min = 0.05
-			bub.scale_amount_max = 0.11
-			var steam := _particles(layers.fg, art(166, 534), 16, 2.8, Color.WHITE)
-			steam.direction = Vector2(0, -1)
-			steam.spread = 10
-			steam.gravity = Vector2(6, -14)
-			steam.initial_velocity_min = 16
-			steam.initial_velocity_max = 28
-			steam.scale_amount_min = 0.25
-			steam.scale_amount_max = 0.4
-			var grow := Curve.new()
-			grow.add_point(Vector2(0, 0.35))
-			grow.add_point(Vector2(1, 1.0))
-			steam.scale_amount_curve = grow
-			var fade := Gradient.new()
-			fade.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
-			fade.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 0.16), Color(1, 1, 1, 0)])
-			steam.color_ramp = fade
-			steam.material = Util.unshaded()
-			steam.preprocess = 3
 		"workbench":
 			_light(art(482, 30), teal, 0.6, 3.6, 120, 0.3, 1.2, "tube")
 			_light(art(1245, 30), teal, 0.55, 3.2, 120, 0.3, 1.1, "tube")
@@ -315,20 +277,20 @@ func _build_ui() -> void:
 	root_ui.add_child(modal_layer)
 
 func _build_hud() -> void:
-	hud = UIKit.hbox(16)
-	hud.position = Vector2(24, 18)
+	hud = UIKit.hbox(10)
+	hud.position = Vector2(20, 14)
 	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root_ui.add_child(hud)
 	var name_plate := UIKit.plate()
 	name_plate.add_theme_stylebox_override("panel", _hud_style())
 	var nv := UIKit.vbox(0)
-	nv.add_child(UIKit.label("轨道旧货局", 28, Color("f6ebd4")))
-	nv.add_child(UIKit.label("回环九号 · 下层旧港", 15, UIKit.MUTED))
+	nv.add_child(UIKit.label("轨道旧货局", 22, Color("f6ebd4")))
+	nv.add_child(UIKit.label("回环九号 · 下层旧港", 13, UIKit.MUTED))
 	name_plate.add_child(nv)
 	hud.add_child(name_plate)
 	var g := UIKit.plate()
 	g.add_theme_stylebox_override("panel", _hud_style())
-	var row := UIKit.hbox(28)
+	var row := UIKit.hbox(18)
 	g.add_child(row)
 	gauges.day = _gauge(row, "day", "营业日")
 	gauges.ap = _gauge(row, "energy", "行动点")
@@ -336,14 +298,14 @@ func _build_hud() -> void:
 	gauges.risk = _gauge(row, "alert", "站务关注")
 	hud.add_child(g)
 	hud.add_child(UIKit.spacer(false))
-	var keys := UIKit.hbox(10)
+	var keys := UIKit.hbox(6)
 	var ev := _hud_key("speech", "每日站内消息", func(): open_events())
 	event_badge = UIKit.label("!", 16, Color("1a1006"))
 	var bs := UIKit.box(UIKit.AMBER, Color.TRANSPARENT, 10, 0, 4, 0)
 	var badge := PanelContainer.new()
 	badge.add_theme_stylebox_override("panel", bs)
 	badge.add_child(event_badge)
-	badge.position = Vector2(48, -6)
+	badge.position = Vector2(39, -6)
 	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ev.add_child(badge)
 	event_badge.set_meta("panel", badge)
@@ -361,34 +323,34 @@ func _build_hud() -> void:
 
 func _hud_style() -> StyleBoxFlat:
 	var s := UIKit.plate_style()
-	s.content_margin_top = 10
-	s.content_margin_bottom = 10
-	s.content_margin_left = 18
-	s.content_margin_right = 18
+	s.content_margin_top = 7
+	s.content_margin_bottom = 7
+	s.content_margin_left = 12
+	s.content_margin_right = 12
 	return s
 
 func _gauge(row: HBoxContainer, icon: String, caption: String) -> Label:
-	var h := UIKit.hbox(10)
+	var h := UIKit.hbox(6)
 	var ic := TextureRect.new()
 	ic.texture = UIKit.icon(icon)
-	ic.custom_minimum_size = Vector2(42, 42)
+	ic.custom_minimum_size = Vector2(32, 32)
 	ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	h.add_child(ic)
 	var v := UIKit.vbox(0)
-	v.add_child(UIKit.label(caption, 14, UIKit.MUTED))
-	var val := UIKit.label("", 28, UIKit.AMBER, true)
+	v.add_child(UIKit.label(caption, 12, UIKit.MUTED))
+	var val := UIKit.label("", 22, UIKit.AMBER, true)
 	v.add_child(val)
 	h.add_child(v)
 	row.add_child(h)
 	return val
 
 func _hud_key(icon: String, tip: String, fn: Callable) -> Button:
-	var b := UIKit.button("", "secondary", Vector2(66, 66), 18)
+	var b := UIKit.button("", "secondary", Vector2(52, 52), 18)
 	b.icon = UIKit.icon(icon)
 	b.expand_icon = true
 	b.tooltip_text = tip
-	b.add_theme_constant_override("icon_max_width", 40)
+	b.add_theme_constant_override("icon_max_width", 32)
 	b.pressed.connect(func():
 		sound("click", -6)
 		fn.call())
@@ -397,15 +359,15 @@ func _hud_key(icon: String, tip: String, fn: Callable) -> Button:
 func _build_nav() -> void:
 	nav = UIKit.plate()
 	var s := UIKit.plate_style()
-	s.content_margin_top = 10
-	s.content_margin_bottom = 10
-	s.content_margin_left = 12
-	s.content_margin_right = 12
+	s.content_margin_top = 6
+	s.content_margin_bottom = 6
+	s.content_margin_left = 8
+	s.content_margin_right = 8
 	nav.add_theme_stylebox_override("panel", s)
-	var row := UIKit.hbox(10)
+	var row := UIKit.hbox(6)
 	nav.add_child(row)
 	for spec in NAV:
-		var b := UIKit.button(spec[1], "secondary", Vector2(150, 64), 22, spec[2])
+		var b := UIKit.button(spec[1], "secondary", Vector2(128, 50), 19, spec[2])
 		var id: String = spec[0]
 		b.pressed.connect(func():
 			sound("page", -8)
@@ -417,11 +379,13 @@ func _build_nav() -> void:
 func _fit() -> void:
 	var vis := get_viewport().get_visible_rect().size
 	zoom_base = maxf(1.0, maxf(vis.x / 1960.0, vis.y / 1100.0))
-	hud.size.x = vis.x - 48
+	hud.size.x = vis.x - 40
 	nav.reset_size()
 	nav.position = Vector2((vis.x - nav.size.x) * 0.5, vis.y - nav.size.y - 14)
 	hint_label.size = Vector2(1200, 30)
 	hint_label.position = Vector2(vis.x * 0.5 - 600, nav.position.y - 40)
+	if page != null and page.has_method("relayout"):
+		page.call("relayout")
 	_place_toasts()
 
 ## Each page names a free spot for notices so they never cover its controls.
@@ -440,7 +404,7 @@ func _place_toasts() -> void:
 ## Content area between HUD and dock, in UI coordinates.
 func content_rect() -> Rect2:
 	var vis := get_viewport().get_visible_rect().size
-	return Rect2(24, 116, vis.x - 48, nav.position.y - 116 - 50)
+	return Rect2(20, 90, vis.x - 40, nav.position.y - 90 - 42)
 
 # ---------------------------------------------------------------- pages
 
@@ -456,13 +420,17 @@ func go(name: String, focus_uid := "") -> void:
 	page.shell = self
 	page_host.add_child(page)
 	set_scene(page.scene_name())
-	ambient_target = ambient_base
+	ambient_target = Color.WHITE if name == "counter" else ambient_base
 	focus = 0.0
 	page.enter()
 	_place_toasts()
 	if not Game.prefs.reduced_motion:
 		page.modulate.a = 0.0
-		create_tween().tween_property(page, "modulate:a", 1.0, 0.2)
+		var final_position := page.position
+		page.position.y += 12.0
+		var transition := create_tween().set_parallel(true)
+		transition.tween_property(page, "position", final_position, 0.24).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		transition.tween_property(page, "modulate:a", 1.0, 0.2)
 	for k in nav_buttons:
 		var b: Button = nav_buttons[k]
 		b.add_theme_stylebox_override("normal", UIKit.key_style("primary" if k == name else "secondary", "normal"))
@@ -471,6 +439,7 @@ func go(name: String, focus_uid := "") -> void:
 
 func _on_changed(prev: Dictionary, next: Dictionary, action: Dictionary) -> void:
 	if action.type == "NEW_GAME":
+		Game.set_meta("counter_offer_drafts", {})
 		go("counter")
 		_refresh_hud()
 		return
@@ -502,6 +471,9 @@ func hint(text: String) -> void:
 	if hint_label.text == text:
 		return
 	hint_label.text = text
+	if Game.prefs.reduced_motion:
+		hint_label.modulate.a = 1.0
+		return
 	hint_label.modulate.a = 0.0
 	create_tween().tween_property(hint_label, "modulate:a", 1.0, 0.3)
 
@@ -517,6 +489,11 @@ func toast(text: String, tone := "info") -> void:
 		var old := toast_box.get_child(0)
 		toast_box.remove_child(old)
 		old.queue_free()
+	if Game.prefs.reduced_motion:
+		get_tree().create_timer(4.0).timeout.connect(func():
+			if is_instance_valid(p):
+				p.queue_free())
+		return
 	p.modulate.a = 0.0
 	var tw := create_tween()
 	tw.tween_property(p, "modulate:a", 1.0, 0.18)
@@ -530,6 +507,11 @@ func float_text(text: String, at: Vector2, color := UIKit.AMBER) -> void:
 	l.add_theme_constant_override("outline_size", 6)
 	fx.add_child(l)
 	l.position = at - Vector2(40, 0)
+	if Game.prefs.reduced_motion:
+		get_tree().create_timer(1.2).timeout.connect(func():
+			if is_instance_valid(l):
+				l.queue_free())
+		return
 	var tw := create_tween()
 	tw.tween_property(l, "position:y", at.y - 50, 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(l, "modulate:a", 0.0, 0.9).set_delay(0.3)
@@ -592,17 +574,39 @@ func modal(title_text: String, width := 900.0) -> Array:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.add_child(center)
 	var sheet := UIKit.plate()
-	sheet.custom_minimum_size = Vector2(width, 0)
+	sheet.custom_minimum_size = Vector2(minf(width, get_viewport().get_visible_rect().size.x - 48.0), 0)
 	center.add_child(sheet)
-	var v := UIKit.vbox(16)
+	var v := UIKit.vbox(12)
 	sheet.add_child(v)
+	var status_line := HBoxContainer.new()
+	status_line.add_theme_constant_override("separation", 4)
+	status_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for i in 18:
+		var segment := ColorRect.new()
+		segment.color = UIKit.AMBER_DEEP if i % 2 == 0 else UIKit.INSET
+		segment.custom_minimum_size = Vector2(0, 4)
+		segment.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		status_line.add_child(segment)
+	v.add_child(status_line)
 	var head := UIKit.hbox()
 	var t := UIKit.label(title_text, 30, UIKit.AMBER)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(t)
 	var close := func():
-		if is_instance_valid(dim):
+		if not is_instance_valid(dim) or dim.has_meta("closing"):
+			return
+		dim.set_meta("closing", true)
+		if dim.has_meta("opening_tween"):
+			var opening: Tween = dim.get_meta("opening_tween")
+			if opening.is_valid():
+				opening.kill()
+		if Game.prefs.reduced_motion:
 			dim.queue_free()
+			return
+		var tw := dim.create_tween().set_parallel(true)
+		tw.tween_property(sheet, "scale", Vector2(0.98, 0.98), 0.14).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		tw.tween_property(dim, "modulate:a", 0.0, 0.14)
+		tw.chain().tween_callback(dim.queue_free)
 	var x := UIKit.button("", "secondary", Vector2(52, 52))
 	x.icon = UIKit.icon("close")
 	x.expand_icon = true
@@ -613,12 +617,13 @@ func modal(title_text: String, width := 900.0) -> Array:
 	var body := UIKit.vbox(14)
 	v.add_child(body)
 	if not Game.prefs.reduced_motion:
-		sheet.pivot_offset = Vector2(width * 0.5, 200)
-		sheet.scale = Vector2(0.96, 0.96)
-		sheet.modulate.a = 0.0
-		var tw := create_tween()
-		tw.tween_property(sheet, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tw.parallel().tween_property(sheet, "modulate:a", 1.0, 0.15)
+		sheet.pivot_offset = Vector2(sheet.custom_minimum_size.x * 0.5, 200)
+		sheet.scale = Vector2(0.98, 0.98)
+		dim.modulate.a = 0.0
+		var tw := dim.create_tween().set_parallel(true)
+		dim.set_meta("opening_tween", tw)
+		tw.tween_property(sheet, "scale", Vector2.ONE, 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(dim, "modulate:a", 1.0, 0.16)
 	return [body, close]
 
 func modal_open() -> bool:
@@ -743,54 +748,68 @@ func open_settings() -> void:
 
 # ---------------------------------------------------------------- title & shutter
 
+func _close_title() -> void:
+	if is_instance_valid(title):
+		title.queue_free()
+	for control in [page_host, hud, nav, hint_label]:
+		control.show()
+
 func _show_title() -> void:
+	for control in [page_host, hud, nav, hint_label]:
+		control.hide()
 	title = Control.new()
 	title.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title.mouse_filter = Control.MOUSE_FILTER_STOP
 	root_ui.add_child(title)
+	# Help and settings must appear above the opening screen too.
+	root_ui.move_child(modal_layer, -1)
 	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.03, 0.05, 0.55)
+	dim.color = Color(0.02, 0.03, 0.04, 0.83)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title.add_child(dim)
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title.add_child(center)
-	var v := UIKit.vbox(18)
-	v.alignment = BoxContainer.ALIGNMENT_CENTER
-	center.add_child(v)
-	var t := UIKit.label("轨道旧货局", 96, Color("f6ebd4"))
+	var panel := UIKit.plate()
+	panel.custom_minimum_size = Vector2(620, 0)
+	center.add_child(panel)
+	var v := UIKit.vbox(20)
+	panel.add_child(v)
+	var station := UIKit.label("回环九号  /  下层旧港", 19, UIKit.MUTED)
+	station.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(station)
+	v.add_child(UIKit.rule())
+	var t := UIKit.label("轨道旧货局", 64, UIKit.TEXT)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	t.add_theme_constant_override("outline_size", 12)
 	v.add_child(t)
-	var sub := UIKit.label("每件旧物，都有下一程。", 30, UIKit.AMBER)
+	var sub := UIKit.label("每件旧物，都有下一程。", 24, UIKit.AMBER)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(sub)
-	v.add_child(UIKit.spacer())
-	var cont := UIKit.button("继续营业 · 第 %d 天" % int(Game.state.day) if Game.has_save else "开门营业", "primary", Vector2(420, 72), 28)
+	var intro := UIKit.label("鉴定旧物 · 商议价格 · 经营你的柜台", 19, UIKit.MUTED)
+	intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(intro)
+	v.add_child(UIKit.rule())
+	var cont := UIKit.button("继续营业 · 第 %d 天" % int(Game.state.day) if Game.has_save else "开门营业", "primary", Vector2(0, 66), 26)
 	cont.pressed.connect(func():
 		sound("open")
-		title.queue_free()
+		_close_title()
 		shutter(int(Game.state.day)))
 	v.add_child(cont)
 	if Game.has_save:
-		var fresh := UIKit.button("新开一家店", "secondary", Vector2(420, 60), 22)
+		var fresh := UIKit.button("新开一家店", "secondary", Vector2(0, 52), 21)
 		fresh.pressed.connect(func():
-			title.queue_free()
+			_close_title()
 			Game.new_game()
 			shutter(1))
 		v.add_child(fresh)
 	var hb := UIKit.hbox(12)
-	var help := UIKit.button("玩法说明", "secondary", Vector2(204, 56), 20)
-	help.pressed.connect(open_help)
-	hb.add_child(help)
-	var st := UIKit.button("设置", "secondary", Vector2(204, 56), 20)
-	st.pressed.connect(open_settings)
-	hb.add_child(st)
+	for spec in [["玩法说明", open_help], ["设置", open_settings]]:
+		var button := UIKit.button(spec[0], "secondary", Vector2(0, 50), 20)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.pressed.connect(spec[1])
+		hb.add_child(button)
 	v.add_child(hb)
-	var note := UIKit.label("Godot 4 版 · 完整 Cocos 旧版在网站 /play/", 16, UIKit.MUTED)
-	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(note)
+	cont.call_deferred("grab_focus")
 
 ## Metal shutter that rolls down, shows the day plate, and rolls back up.
 func shutter(day: int) -> void:
@@ -849,43 +868,6 @@ func _process(delta: float) -> void:
 	if absf(shown_cash - Game.state.cash) < 0.5:
 		shown_cash = Game.state.cash
 	gauges.cash.text = Model.jnum(snappedf(shown_cash, 0.01)) if shown_cash != floor(shown_cash) else "%d" % int(shown_cash)
-
-
-class Traffic extends Node2D:
-	var area := Rect2()
-	var ships: Array = []
-	var stars: Array = []
-	var next := 1.5
-	func _ready() -> void:
-		for i in 40:
-			stars.append([Vector2(randf(), randf() * 0.45), randf_range(0.6, 2.2), randf() * 6.0])
-		material = Util.unshaded()
-	func _process(delta: float) -> void:
-		next -= delta
-		if next <= 0.0:
-			next = randf_range(5.0, 11.0)
-			ships.append({"p": 0.0, "dir": 1.0 if randf() < 0.5 else -1.0, "y": randf_range(0.25, 0.75), "s": randf_range(0.8, 1.6), "v": randf_range(0.05, 0.09)})
-		for s in ships:
-			s.p += s.v * delta
-		ships = ships.filter(func(s): return s.p < 1.0)
-		queue_redraw()
-	func _draw() -> void:
-		var t := Time.get_ticks_msec() / 1000.0
-		for st in stars:
-			var a: float = 0.25 + 0.75 * maxf(0.0, sin(t * st[1] + st[2]))
-			draw_circle(area.position + st[0] * area.size, 1.6, Color(0.9, 0.95, 1.0, a))
-		for s in ships:
-			var x: float = area.position.x + (s.p if s.dir > 0 else 1.0 - s.p) * area.size.x
-			var y: float = area.position.y + s.y * area.size.y
-			var k: float = s.s
-			var d: float = s.dir
-			draw_line(Vector2(x - d * 18 * k, y), Vector2(x - d * 90 * k, y - 3 * k), Color(0.5, 0.85, 1.0, 0.3), 3.0 * k)
-			draw_circle(Vector2(x - d * 18 * k, y), 6.0 * k, Color(0.6, 0.9, 1.0, 0.7))
-			var hull := PackedVector2Array([Vector2(x - 20 * k, y - 4 * k), Vector2(x + 20 * k, y - 5 * k), Vector2(x + 26 * k, y), Vector2(x + 20 * k, y + 5 * k), Vector2(x - 20 * k, y + 4 * k)])
-			draw_colored_polygon(hull, Color(0.32, 0.37, 0.43))
-			draw_rect(Rect2(x - 8 * k, y - 9 * k, 16 * k, 5 * k), Color(0.42, 0.47, 0.53))
-			for i in 3:
-				draw_circle(Vector2(x - 8 * k + i * 8 * k, y), 1.3 * k, Color(1.0, 0.84, 0.6))
 
 
 class ShutterDoor extends Control:
