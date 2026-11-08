@@ -19,12 +19,11 @@ var sfx_pool: Array[AudioStreamPlayer] = []
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# The buses are declared in default_bus_layout.tres. Adding them at run
+	# time left the Web build silent: its WebAudio sample playback only knows
+	# the layout it started with.
 	for b in ["Music", "SFX"]:
-		if AudioServer.get_bus_index(b) < 0:
-			AudioServer.add_bus()
-			AudioServer.set_bus_name(AudioServer.bus_count - 1, b)
-			AudioServer.set_bus_send(AudioServer.bus_count - 1, "Master")
-		buses[b] = AudioServer.get_bus_index(b)
+		buses[b] = maxi(0, AudioServer.get_bus_index(b))
 	music_a = _player("Music")
 	music_b = _player("Music")
 	stinger = _player("Music")
