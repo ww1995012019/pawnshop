@@ -549,6 +549,7 @@ func _layout_workspace() -> void:
 	workspace_frame.position = ((get_viewport().get_visible_rect().size - workspace_frame.size) * 0.5).floor()
 
 func _workspace_heading(name: String) -> void:
+	Audio.music_for(name)
 	if is_instance_valid(workspace_title):
 		workspace_title.text = WORKSPACE_LABELS.get(name, "店内设备")
 
@@ -567,6 +568,7 @@ func close_workspace() -> void:
 	workspace_suspended_focus.clear()
 	if page.has_method("workspace_state_changed"):
 		page.workspace_state_changed(false)
+	Audio.music_for("report" if Game.state.phase != "open" else "counter")
 	if is_instance_valid(workspace_origin) and workspace_origin.is_visible_in_tree():
 		workspace_origin.grab_focus()
 	sound("page", -12, 0.85)
@@ -665,31 +667,15 @@ func float_text(text: String, at: Vector2, color := UIKit.AMBER) -> void:
 	tw.tween_callback(l.queue_free)
 
 func sound(k: String, db := 0.0, pitch := 1.0) -> void:
-	var p: AudioStreamPlayer = sounds.get(k)
-	if p and Game.prefs.sound:
-		p.volume_db = db
-		p.pitch_scale = pitch
-		p.play()
+	Audio.sfx(k, db, pitch)
 
+## Mixer, music and ambience live in the Audio autoload (shared by the
+## embedded workspace shell); the shell only tells it where the player is.
 func _build_audio() -> void:
-	for k in ["click", "coin", "check", "page", "drop", "open", "reject", "ambient_loop"]:
-		var p := AudioStreamPlayer.new()
-		p.stream = load("res://assets/audio/%s.wav" % k)
-		add_child(p)
-		sounds[k] = p
-	var amb: AudioStreamPlayer = sounds.ambient_loop
-	amb.volume_db = -18.0
-	amb.finished.connect(func():
-		if Game.prefs.sound and not workspace_mode:
-			amb.play())
-	_apply_sound()
+	pass
 
 func _apply_sound() -> void:
-	var amb: AudioStreamPlayer = sounds.ambient_loop
-	if Game.prefs.sound and not workspace_mode and not amb.playing:
-		amb.play()
-	elif not Game.prefs.sound or workspace_mode:
-		amb.stop()
+	Audio.apply_prefs()
 	_refresh_hud()
 
 var last_screen := Vector2(960, 540)
@@ -1099,6 +1085,37 @@ func open_help() -> void:
 	var text := "• 柜台：按服务铃请客人进来。收购时先鉴定再出价；销售时从仓储挑选合格的自有货。客人有 3 轮耐心，接受报价只锁价，确认交割才付钱拿货（1 AP）。\n• 鉴定：六种仪器各取一条物证，首次鉴定一件物品消耗 1 AP。两条独立物证后估值收窄。\n• 维修：清洁排故、换件连接、负载复测三道工序，最后确认时才扣材料与 AP。\n• 仓储：10×6 占格后仓，拖动摆放、右键旋转。上架需要两条物证和已核验来源；来源不明的货物要扫描、登记或隔离。\n• 订单：接单后交付合格原物，委修单必须交还顾客原物。\n• 日结：每日维护 20 Cr，第 7/14/21 天交租金。第 3 天起可选一项设备升级。撑满 21 天即可。"
 	body.add_child(UIKit.label(text, 21, UIKit.TEXT, false, true))
 
+## One mixer channel: name, slider and percentage; saves when released.
+func _volume_row(text: String, key: String, fallback: float) -> Control:
+	var row := UIKit.hbox(14)
+	row.custom_minimum_size = Vector2(0, 46)
+	var caption := UIKit.label(text, 20, UIKit.TEXT)
+	caption.custom_minimum_size.x = 110
+	row.add_child(caption)
+	var slider := HSlider.new()
+	slider.min_value = 0
+	slider.max_value = 100
+	slider.step = 5
+	slider.value = roundf(float(Game.prefs.get(key, fallback)) * 100.0)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	slider.custom_minimum_size = Vector2(0, 30)
+	slider.focus_mode = Control.FOCUS_ALL
+	row.add_child(slider)
+	var pct := UIKit.label("%d%%" % int(slider.value), 18, UIKit.AMBER, true)
+	pct.custom_minimum_size.x = 64
+	pct.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(pct)
+	slider.value_changed.connect(func(v: float):
+		pct.text = "%d%%" % int(v)
+		Game.prefs[key] = v / 100.0
+		Audio.apply_prefs()
+		if key == "sfx_volume":
+			sound("click", -4))
+	slider.drag_ended.connect(func(_changed: bool): Game.save_prefs())
+	slider.focus_exited.connect(func(): Game.save_prefs())
+	return row
+
 func open_settings() -> void:
 	var m := modal("设置", 640)
 	var body: VBoxContainer = m[0]
@@ -1106,6 +1123,8 @@ func open_settings() -> void:
 		Game.prefs.sound = on
 		Game.save_prefs()
 		_apply_sound()))
+	for spec in [["音乐", "music_volume", 0.6], ["音效", "sfx_volume", 0.8], ["终端语音", "voice_volume", 0.9]]:
+		body.add_child(_volume_row(spec[0], spec[1], spec[2]))
 	body.add_child(UIKit.switch_row("减少动态效果", Game.prefs.reduced_motion, func(on: bool):
 		Game.prefs.reduced_motion = on
 		Game.save_prefs()))
@@ -1136,6 +1155,8 @@ func _close_title() -> void:
 func _show_title() -> void:
 	if is_instance_valid(title):
 		title.queue_free()
+	if not workspace_mode:
+		Audio.music_for("title")
 	for control in [page_host, hud, nav, hint_label]:
 		control.hide()
 	title = Control.new()
@@ -1195,6 +1216,9 @@ func _show_title() -> void:
 
 ## Metal shutter that rolls down, shows the day plate, and rolls back up.
 func shutter(day: int) -> void:
+	if not workspace_mode:
+		Audio.music_for("counter")
+		Audio.day_opened(day)
 	var door := Control.new()
 	door.set_anchors_preset(Control.PRESET_FULL_RECT)
 	door.mouse_filter = Control.MOUSE_FILTER_STOP

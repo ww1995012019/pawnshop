@@ -9,7 +9,7 @@ const SAVE_PATH := "user://orbital-save-v3.json"
 const PREFS_PATH := "user://orbital-prefs.json"
 
 var state: Dictionary = {}
-var prefs := {"sound": true, "reduced_motion": false}
+var prefs := {"sound": true, "reduced_motion": false, "music_volume": 0.6, "sfx_volume": 0.8, "voice_volume": 0.9}
 var focus_uid := ""          # object on the workbench / selected in storage
 var has_save := false
 
