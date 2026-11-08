@@ -1,5 +1,5 @@
 import {
-  assetManager, BlockInputEvents, Button, Color, EventTouch, Font, Graphics,
+  assetManager, BlockInputEvents, Button, Color, director, EventTouch, Font, gfx, Graphics,
   ImageAsset, Label, Mask, Node, Rect, resources, Size, Sprite, SpriteFrame, Texture2D,
   Tween, tween, UIOpacity, UITransform, Vec2, Vec3,
 } from 'cc';
@@ -692,7 +692,7 @@ export class OrbitalUI extends GameUI {
       if(bundled)return bundled;
     }
     const image=await new Promise<ImageAsset>((resolve,reject)=>assetManager.loadRemote<ImageAsset>(`${this.orbitalRemoteRoot}/art/${key}.${this.orbitalExt}`,(error,value)=>error?reject(new Error(`无法加载轨道旧货局素材 ${key}: ${error.message}`)):resolve(value)));
-    const texture=new Texture2D();texture.image=image;return makeFrame(texture,{x:0,y:0,w:image.width,h:image.height});
+    return makeFrame(smoothTexture(image),{x:0,y:0,w:image.width,h:image.height});
   }
 }
 type OrbitalFrameKind=OrbitalSurface;
@@ -711,6 +711,20 @@ function color(value:UIColour):Color{return typeof value==='string'?new Color().
 function alpha(node:Node,value?:number):void{if(value!==undefined)(node.getComponent<UIOpacity>(UIOpacity)??node.addComponent<UIOpacity>(UIOpacity)).opacity=Math.round(value<=1?value*255:value);}
 function polygon(g:Graphics,x:number,y:number,w:number,h:number,cut:number):void{
   g.moveTo(x+cut,y);g.lineTo(x+w-cut,y);g.lineTo(x+w,y-cut);g.lineTo(x+w,y-h+cut);g.lineTo(x+w-cut,y-h);g.lineTo(x+cut,y-h);g.lineTo(x,y-h+cut);g.lineTo(x,y-cut);g.close();
+}
+/**
+ * Large paintings are drawn well below their source size (atlas cells, phone layouts) and
+ * the backgrounds fill any window. Trilinear mipmaps keep minified art from aliasing.
+ * WebGL1 cannot sample incomplete NPOT mip chains, so it keeps plain bilinear filtering.
+ */
+function smoothTexture(image:ImageAsset):Texture2D {
+  const texture=new Texture2D();
+  texture.setFilters(Texture2D.Filter.LINEAR,Texture2D.Filter.LINEAR);
+  const device=director.root?.device;
+  const pot=(n:number)=>n>0&&(n&(n-1))===0;
+  if(device&&(device.gfxAPI!==gfx.API.WEBGL||(pot(image.width)&&pot(image.height))))texture.setMipFilter(Texture2D.Filter.LINEAR);
+  texture.image=image;
+  return texture;
 }
 function makeFrame(texture:SpriteFrame['texture'],rect:{x:number;y:number;w:number;h:number}):SpriteFrame{
   const frame=new SpriteFrame();frame.texture=texture;frame.rect=new Rect(rect.x,rect.y,rect.w,rect.h);frame.originalSize=new Size(rect.w,rect.h);frame.offset=new Vec2(0,0);frame.rotated=false;frame.packable=false;return frame;

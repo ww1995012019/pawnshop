@@ -1,4 +1,4 @@
-import {Color,EventTouch,Graphics,Input,Label,Node,UIOpacity,UITransform,Vec2,Vec3,tween} from 'cc';
+import {Color,EventTouch,Graphics,Input,Label,Node,Tween,UIOpacity,UITransform,Vec2,Vec3,tween} from 'cc';
 import type {OrbitalHost} from './ui-types';
 import type {OrbitalItem} from './types';
 import {counterGoods,canHandleItem,isPrototype,prototypeReading} from './PropMechanics';
@@ -25,6 +25,14 @@ export class CounterScene {
   if(item){this.workbench(parent,item);return true;}
   if(!focusOnly)this.rack(parent);return false;
  }
+ /** Goods currently standing in the cabinet page; the painted shelf shows the rest. */
+ rackUids():string[]{
+  if(this.h.state.trade||this.held)return [];
+  const items=counterGoods(this.h.state),offset=Math.min(this.offset,Math.max(0,Math.floor((items.length-1)/3)*3));
+  return items.slice(offset,offset+3).map(i=>i.uid);
+ }
+ /** Take an original from the back shelf onto the work mat. */
+ take(uid:string):void{this.pick(uid);}
  private pick(uid:string):void {if(!this.available(uid))return;this.held=uid;this.h.selected=uid;this.sound('drop');this.h.render();}
  private rack(p:Node):void {
   const ui=this.h.ui,phone=ui.phone,items=counterGoods(this.h.state),left=phone?32:250,top=phone?168:176,width=phone?716:880,floor=phone?420:482;
@@ -41,10 +49,18 @@ export class CounterScene {
    const node=ui.container(p,x,y,size,size,`scene-display-${item.uid}`);
    const view=this.props.create(node,item,0,0,size);if(!view)ui.object(node,item.defId,0,0,size,size,{repaired:item.repaired});
    ui.bindDraggable(node,()=>this.available(item.uid));
+   // Hover lifts the original off the shelf a little, pivoting on its foot.
+   const lift=(on:boolean)=>{
+    if(this.drag?.node===node||this.h.prefs.reducedMotion)return;
+    const k=on?1.05:1;Tween.stopAllByTarget(node);
+    tween<Node>(node).to(on?.14:.18,{scale:new Vec3(k,k,1),position:new Vec3(x-(k-1)*size/2,-(y-(k-1)*size-(on?8:0)),0)},{easing:on?'backOut':'quadOut'}).start();
+   };
+   node.on(Node.EventType.MOUSE_ENTER,()=>{if(this.available(item.uid))lift(true);});
+   node.on(Node.EventType.MOUSE_LEAVE,()=>lift(false));
    Object.assign(node,{__action:()=>this.pick(item.uid),__enabled:true});
    ui.label(p,getDef(item.defId).name,left+i*step+6,floor+36,step-12,42,{size:phone?27:23,color:'#F3E1C3',align:'center',verticalAlign:'center',wrap:false});
    const value=estimate(item);ui.label(p,`估值 ${value.low}–${value.high} Cr`,left+i*step+6,floor+78,step-12,32,{size:phone?23:17,color:'#AEBBB4',align:'center',verticalAlign:'center',wrap:false});
-   node.on(Node.EventType.TOUCH_START,(e:EventTouch)=>{if(this.drag||!this.available(item.uid))return;e.propagationStopped=true;this.drag={node,ghost:null,id:e.getID(),origin:e.getUILocation().clone(),slot:{x,y,size},dx:0,dy:0,moved:false,uid:item.uid};});
+   node.on(Node.EventType.TOUCH_START,(e:EventTouch)=>{if(this.drag||!this.available(item.uid))return;e.propagationStopped=true;Tween.stopAllByTarget(node);node.setScale(1,1,1);this.drag={node,ghost:null,id:e.getID(),origin:e.getUILocation().clone(),slot:{x,y,size},dx:0,dy:0,moved:false,uid:item.uid};});
    node.on(Node.EventType.TOUCH_MOVE,(e:EventTouch)=>{
     const d=this.drag;if(!d||d.node!==node||d.id!==e.getID())return;e.propagationStopped=true;if(!this.available(item.uid)){this.cancelDrag();return;}
     const point=e.getUILocation();d.dx=point.x-d.origin.x;d.dy=d.origin.y-point.y;
@@ -98,7 +114,7 @@ export class CounterScene {
  }
  cancelDrag():void {
   const d=this.drag;this.drag=null;if(!d)return;
-  if(d.node.isValid){d.node.setPosition(d.slot.x,-d.slot.y);d.node.angle=0;const opacity=d.node.getComponent<UIOpacity>(UIOpacity);if(opacity)opacity.opacity=255;}
+  if(d.node.isValid){Tween.stopAllByTarget(d.node);d.node.setScale(1,1,1);d.node.setPosition(d.slot.x,-d.slot.y);d.node.angle=0;const opacity=d.node.getComponent<UIOpacity>(UIOpacity);if(opacity)opacity.opacity=255;}
   if(d.ghost?.isValid){d.ghost.removeFromParent();d.ghost.destroy();}
  }
 }

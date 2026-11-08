@@ -592,8 +592,10 @@ export class OrbitalMotion {
     if(this.ambientParent&&!this.attached(this.ambientParent)){this.clearAmbient();return;}
     if(this.actor&&this.attached(this.actor)&&!this.moving.has(this.actor)){
       const breath=this.reducedMotion?0:Math.sin(this.clock*1.55);
-      this.actor.setPosition(this.actorBase.x+(this.reducedMotion?0:Math.sin(this.clock*.53)*.22),this.actorBase.y+breath*.55,this.actorBase.z);
-      this.actor.setScale(this.actorScale.x,this.actorScale.y*(1+breath*.0012),this.actorScale.z);this.actor.angle=this.actorAngle;
+      // Visible but calm idle: chest rise, a slow weight shift and a slight lean.
+      const sway=this.reducedMotion?0:Math.sin(this.clock*.53);
+      this.actor.setPosition(this.actorBase.x+sway*2.2,this.actorBase.y+breath*1.8,this.actorBase.z);
+      this.actor.setScale(this.actorScale.x*(1-breath*.0015),this.actorScale.y*(1+breath*.005),this.actorScale.z);this.actor.angle=this.actorAngle+sway*.35;
     }
     const g=this.ambientInk;if(!g?.node.isValid)return;g.clear();if(this.reducedMotion)return;
     const ox=this.ambientArea.x,oy=this.ambientArea.y;

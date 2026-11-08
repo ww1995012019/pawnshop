@@ -24,7 +24,8 @@ import {openStationEvents} from './StationEventUI';
 import {configureViewport,viewportBounds,bindResponsiveViewport,toggleBrowserFullscreen} from './ResponsiveViewport';
 import {InteractiveProps,type LivePropView} from './InteractiveProps';
 import {CounterScene} from './CounterScene';
-import {isPrototype} from './PropMechanics';
+import {isPrototype,counterGoods} from './PropMechanics';
+import {SceneLife,type ShelfGood} from './SceneLife';
 
 const INSPECTION_AREA:InspectionRect={x:212,y:200,width:1008,height:440};
 const INSPECTION_LOCAL:InspectionRect={x:-202,y:-202,width:404,height:404};
@@ -48,6 +49,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
   private panels!:OrbitalPanels;
   private props!:InteractiveProps;
   private counterScene!:CounterScene;
+  private life!:SceneLife;
   private liveInspection:LivePropView|null=null;
   private viewportCleanup:(()=>void)|null=null;
   private page:PageId='counter';
@@ -229,6 +231,8 @@ export class OrbitalMain extends Component implements OrbitalHost {
     const loading=document.getElementById('load-status');if(loading)loading.textContent='正在搬入货物与人物…';
     await this.ui.preload();if(this.disposed)return;
     this.props=new InteractiveProps(this.ui,()=>this.prefs.reducedMotion);this.counterScene=new CounterScene(this,this.props,key=>this.sound(key));
+    this.life=new SceneLife({ui:this.ui,reducedMotion:()=>this.prefs.reducedMotion,sound:key=>this.sound(key),bell:()=>this.ringBell(),
+      blocked:()=>this.busy||!!this.titleScreen?.isValid||!!this.coach?.active||this.ui.root.children.some(n=>n.name==='modal-overlay'&&n.activeInHierarchy)});
     this.motion=new OrbitalMotion(this.ui,root);this.motion.setRegions({contentArea:{x:24,y:108,width:1552,height:700},inspectionArea:this.inspectionArea});this.panels=new OrbitalPanels(this);
     this.coach=new Coach({ui:this.ui,state:()=>this.state,page:()=>this.page,busy:()=>this.busy,reducedMotion:()=>this.prefs.reducedMotion,
       blocked:()=>!!this.titleScreen?.isValid||this.ui.root.children.some(n=>n.name==='modal-overlay'&&n.activeInHierarchy),
@@ -238,7 +242,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     input.on(Input.EventType.KEY_DOWN,this.onKey,this);void this.loadAudio();
     this.pointerCanvas=game.canvas;this.pointerCanvas?.addEventListener('pointerleave',this.cancelPointer);this.pointerCanvas?.addEventListener('mouseleave',this.cancelPointer);
     window.addEventListener('blur',this.cancelPointer);window.addEventListener('pointercancel',this.cancelPointer);window.addEventListener('resize',this.cancelPointer);
-    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v17',start:()=>this.startFromTitle(false),title:()=>!!this.titleScreen?.isValid,snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({coach:this.coach?.active?this.coachStep():null,page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,viewport:viewportBounds(),props:this.props.snapshot(),counterFocus:this.counterScene.focused,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>{this.dismissTitle();this.dispatch(a);},open:(p:PageId,uid?:string)=>{this.dismissTitle();this.navigate(p,uid);},reset:(seed='ORBITAL-TUTORIAL')=>{this.dismissTitle();this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.props.reset();this.counterScene.reset();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
+    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v18',start:()=>this.startFromTitle(false),title:()=>!!this.titleScreen?.isValid,snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({coach:this.coach?.active?this.coachStep():null,page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,viewport:viewportBounds(),props:this.props.snapshot(),counterFocus:this.counterScene.focused,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>{this.dismissTitle();this.dispatch(a);},open:(p:PageId,uid?:string)=>{this.dismissTitle();this.navigate(p,uid);},reset:(seed='ORBITAL-TUTORIAL')=>{this.dismissTitle();this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.props.reset();this.counterScene.reset();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
     (window as unknown as {__ORBITAL__:typeof debug;__GREYLINE__:typeof debug}).__ORBITAL__=debug;(window as unknown as {__GREYLINE__:typeof debug}).__GREYLINE__=debug;
     document.dispatchEvent(new CustomEvent('greyline-ready'));
     this.showTitle();
@@ -389,6 +393,9 @@ export class OrbitalMain extends Component implements OrbitalHost {
     if(!this.prefs.sound)this.ambience?.stop();
     const image=this.page==='inspect'||this.page==='repair'?'orbital-workbench':this.page==='warehouse'?'orbital-warehouse':'orbital-counter';
     const screen=viewportBounds();this.ui.image(this.shell,image,screen.x,screen.y,screen.width,screen.height,{fit:'cover',name:'full-viewport-scene'});
+    // Light, steam and touchable fixtures live between the painting and the page UI.
+    const desk=!this.ui.phone&&(this.page==='counter'||this.page==='trade')&&this.state.phase!=='ending'&&(!!this.state.trade||!this.counterScene.focused);
+    this.life.bind(this.shell,image==='orbital-workbench'?'workbench':image==='orbital-warehouse'?'warehouse':'counter',{hotspots:desk,bell:desk&&!this.state.trade,shelf:desk?this.shelfGoods():[]});
     if(this.page!=='counter'&&this.page!=='trade')this.ui.panel(this.shell,0,106,W,692,{fill:'#07101940',lineWidth:0,radius:0});
     this.content=this.ui.container(this.shell,0,0,W,H,`page-${this.page}`);this.panels.setPage(this.page);
     if(this.state.phase==='ending'&&this.page!=='settings')this.ending();
@@ -508,6 +515,20 @@ export class OrbitalMain extends Component implements OrbitalHost {
       if(page==='orders'&&active>0)this.ui.badge(control,String(active),124,6);
     });
     if(this.saveFailed){const warn=this.ui.texturePanel(this.content,24,826,300,52,{skin:'strip',name:'save-warning'});this.ui.hudIcon(warn,'alert',14,10,32,32);this.row(warn,'存档空间不足，请导出档案',54,0,236,52,15,C.orange);}
+  }
+  /** Stock not shown in the cabinet page stands on the painted back shelf. */
+  private shelfGoods():ShelfGood[]{
+    const s=this.state,rack=new Set(this.counterScene.rackUids());
+    return counterGoods(s).filter(i=>!rack.has(i.uid)).slice(0,7).map(i=>({uid:i.uid,defId:i.defId,name:getDef(i.defId).name,repaired:i.repaired,take:s.trade?null:()=>this.counterScene.take(i.uid)}));
+  }
+  /** The counter bell is a second way to call the next visitor; it obeys the same limits. */
+  private ringBell():string|null{
+    const s=this.state;
+    if(s.trade)return '客人已经在柜台前了。';
+    if(s.phase!=='open')return '现在不是营业时间。';
+    if(s.cursor>=dailyVisitLimit(s))return '今天的六位预约都接待完了。';
+    if(s.ap<1)return '行动点不够了，今天先歇歇。';
+    this.dispatch({type:'ARRIVE'});return null;
   }
   private currentItem():OrbitalItem|undefined{return findItem(this.state,this.selected)||this.state.trade?.item||this.state.inventory[0];}
   private counter():void{
@@ -1003,6 +1024,6 @@ export class OrbitalMain extends Component implements OrbitalHost {
       this.hudCash=this.prefs.reducedMotion||Math.abs(step)>=Math.abs(diff)?this.state.cash:Math.round(this.hudCash+step);
       if(this.hudCashLabel?.isValid){this.hudCashLabel.string=this.ui.phone?`${this.hudCash.toLocaleString()} Cr`:this.hudCash.toFixed(this.hudCash%1?2:0);this.hudCashLabel.color=new Color(this.hudCash===this.state.cash?'#FFCB8E':diff>0?'#C8FFB0':'#FF9A7A');}
     }
-    this.counterScene?.update();this.props?.update(dt);this.motion?.update(dt);this.coach?.update(dt);this.coach?.animate(dt);this.panels?.update(dt);this.presentation.update(dt);this.updateInspectionFeedback(dt);}
+    this.counterScene?.update();this.life?.update(dt);this.props?.update(dt);this.motion?.update(dt);this.coach?.update(dt);this.coach?.animate(dt);this.panels?.update(dt);this.presentation.update(dt);this.updateInspectionFeedback(dt);}
   onDestroy():void{this.cancelPointer();this.viewportCleanup?.();this.props?.dispose();this.pointerCanvas?.removeEventListener('pointerleave',this.cancelPointer);this.pointerCanvas?.removeEventListener('mouseleave',this.cancelPointer);window.removeEventListener('blur',this.cancelPointer);window.removeEventListener('pointercancel',this.cancelPointer);window.removeEventListener('resize',this.cancelPointer);this.disposed=true;this.ambience?.stop();this.presentation.dispose();this.disposeInspectionFeedback();this.motion?.dispose();this.panels?.dispose();input.off(Input.EventType.KEY_DOWN,this.onKey,this);}
 }
