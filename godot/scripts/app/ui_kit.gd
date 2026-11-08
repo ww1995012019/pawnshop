@@ -53,37 +53,63 @@ static func box(fill: Color, edge := Color.TRANSPARENT, radius := 8, border := 2
 	s.anti_aliasing = true
 	return s
 
-static func plate_style() -> StyleBoxFlat:
-	var s := box(PLATE, PLATE_EDGE, 2, 2, PAD, 8)
-	# A small bevel reads as a painted metal rim without increasing the panel's
-	# padding or obscuring its content.
-	s.border_blend = true
+# ---------------------------------------------------------------- skin
+# Painted nine-patch surfaces (tools/make_ui_skin.py): riveted metal plates,
+# a copper key, a heavy socket frame, thermal paper and a CRT glass.
+
+const SKIN_SCALE := {"lg": 0.45, "sm": 0.2, "xs": 0.13}
+## Rim (texture margin) and transparent outer edge of each 512 px source cell.
+const SKIN_CAP := {"glass": 84, "strip": 70, "amber": 84, "graphite": 84, "socket": 96, "rail": 70, "paper": 40, "screen": 76}
+const SKIN_EDGE := {"glass": 22, "strip": 22, "amber": 22, "graphite": 22, "socket": 22, "rail": 22, "paper": 8, "screen": 6}
+
+static func skin(name: String, size := "lg", pad := -1.0, tint := Color.WHITE) -> StyleBoxTexture:
+	var s := StyleBoxTexture.new()
+	s.texture = tex("res://assets/ui/skin/%s_%s.png" % [name, size])
+	var k: float = SKIN_SCALE[size]
+	s.set_texture_margin_all(roundf(SKIN_CAP[name] * k))
+	# The painted rim starts inside a transparent border; pull it out to the
+	# control's edge so frames line up with their hit area.
+	s.set_expand_margin_all(roundf(SKIN_EDGE[name] * k))
+	var p := pad if pad >= 0.0 else roundf((SKIN_CAP[name] - SKIN_EDGE[name]) * k) + 6.0
+	s.set_content_margin_all(p)
+	s.modulate_color = tint
 	return s
 
-static func inset_style(pad := 14) -> StyleBoxFlat:
-	return box(INSET, Color("394443"), 2, 1, pad, 0)
+static func plate_style() -> StyleBox:
+	return skin("rail", "lg", PAD + 6)
 
-static func paper_style(pad := 18) -> StyleBoxFlat:
-	return box(PAPER, Color("a8987a"), 4, 1, pad, 8)
+static func inset_style(pad := 14) -> StyleBox:
+	return skin("socket", "xs", pad)
 
-static func key_style(kind: String, state: String) -> StyleBoxFlat:
-	var fill := {"primary": AMBER_DEEP, "secondary": Color("1f2a30"), "danger": Color("3d2a28"), "good": Color("1f3a33"), "chip": Color("16201f")}.get(kind, Color("1f2a30")) as Color
-	var edge := {"primary": Color("f0b56a"), "secondary": Color("66777a"), "danger": Color("b47a6c"), "good": Color("6fc0a6"), "chip": Color("3d4c4b")}.get(kind, Color("66777a")) as Color
+static func paper_style(pad := 18) -> StyleBox:
+	return skin("paper", "sm", pad)
+
+static func screen_style(pad := 10) -> StyleBox:
+	return skin("screen", "sm", pad)
+
+const KEY_SKIN := {"primary": "amber", "secondary": "graphite", "danger": "graphite", "good": "glass", "chip": "socket"}
+const KEY_TINT := {"primary": Color(1, 1, 1), "secondary": Color(0.92, 0.95, 1.0), "danger": Color(1.25, 0.72, 0.66), "good": Color(0.8, 1.2, 0.95), "chip": Color(1, 1, 1)}
+
+static func key_style(kind: String, state: String) -> StyleBox:
+	var tint: Color = KEY_TINT.get(kind, Color.WHITE)
 	match state:
 		"hover":
-			fill = fill.lightened(0.13)
-			edge = edge.lightened(0.2)
+			tint = tint * Color(1.18, 1.18, 1.18)
 		"pressed":
-			fill = fill.darkened(0.25)
+			tint = tint * Color(0.78, 0.78, 0.78)
 		"disabled":
-			fill = Color("12181b")
-			edge = Color("2c3537")
-	var s := box(fill, edge, 2, 1, 0, 3 if state != "pressed" else 1)
-	s.border_width_bottom = 1 if state == "pressed" else 3
-	s.content_margin_left = 12
-	s.content_margin_right = 12
-	s.content_margin_top = 6 + (1 if state == "pressed" else 0)
-	s.content_margin_bottom = 6
+			tint = Color(0.42, 0.44, 0.46, 0.85)
+	var s := skin(KEY_SKIN.get(kind, "graphite"), "xs" if kind == "chip" else "sm", 0.0, tint)
+	s.content_margin_left = 16
+	s.content_margin_right = 16
+	s.content_margin_top = 6 + (2 if state == "pressed" else 0)
+	s.content_margin_bottom = 6 - (2 if state == "pressed" else 0)
+	return s
+
+static func focus_style() -> StyleBoxFlat:
+	var s := box(Color.TRANSPARENT, AMBER, 4, 2, 0, 0)
+	s.draw_center = false
+	s.set_expand_margin_all(3)
 	return s
 
 static func build_theme() -> Theme:
@@ -94,14 +120,9 @@ static func build_theme() -> Theme:
 	t.set_color("font_color", "Label", TEXT)
 	t.set_stylebox("panel", "PanelContainer", plate_style())
 	t.set_stylebox("panel", "Panel", plate_style())
-	for st in ["normal", "hover", "pressed", "disabled", "focus"]:
-		var s := key_style("secondary", st if st != "focus" else "hover")
-		if st == "focus":
-			s.draw_center = false
-			s.border_color = AMBER
-			s.set_border_width_all(2)
-			s.set_expand_margin_all(3)
-		t.set_stylebox(st, "Button", s)
+	for st in ["normal", "hover", "pressed", "disabled"]:
+		t.set_stylebox(st, "Button", key_style("secondary", st))
+	t.set_stylebox("focus", "Button", focus_style())
 	t.set_color("font_color", "Button", TEXT)
 	t.set_color("font_hover_color", "Button", Color.WHITE)
 	t.set_color("font_pressed_color", "Button", AMBER)
@@ -150,7 +171,15 @@ static func button(text: String, kind := "secondary", min_size := Vector2(0, 58)
 	for st in ["normal", "hover", "pressed", "disabled"]:
 		b.add_theme_stylebox_override(st, key_style(kind, st))
 	if kind == "primary":
-		b.add_theme_color_override("font_color", Color("fff1dc"))
+		# Cream lettering with a burnt outline stays legible on the copper key.
+		for c in ["font_color", "font_hover_color", "font_focus_color"]:
+			b.add_theme_color_override(c, Color("fff3df"))
+		b.add_theme_color_override("font_pressed_color", Color("ffe2b8"))
+		b.add_theme_color_override("font_outline_color", Color(0.22, 0.08, 0.0, 0.9))
+		b.add_theme_constant_override("outline_size", 5)
+	else:
+		b.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
+		b.add_theme_constant_override("outline_size", 3)
 	if icon_name != "":
 		b.icon = icon(icon_name)
 		b.expand_icon = true
@@ -184,7 +213,7 @@ static func _button_feedback(b: Button, target_scale: Vector2, target_color: Col
 	tw.tween_property(b, "modulate", target_color, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 static func plate(style: StyleBox = null) -> PanelContainer:
-	var p: PanelContainer = IndustrialPlate.new() if style == null else PanelContainer.new()
+	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", style if style != null else plate_style())
 	return p
 

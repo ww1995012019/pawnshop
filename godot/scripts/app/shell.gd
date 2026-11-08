@@ -326,8 +326,8 @@ func _build_hud() -> void:
 	keys.add_child(_hud_key("settings", "设置", func(): open_settings()))
 	hud.add_child(keys)
 
-func _hud_style() -> StyleBoxFlat:
-	var s := UIKit.plate_style()
+func _hud_style() -> StyleBox:
+	var s := UIKit.skin("graphite", "sm", 12.0)
 	s.content_margin_top = 7
 	s.content_margin_bottom = 7
 	s.content_margin_left = 12
@@ -363,7 +363,7 @@ func _hud_key(icon: String, tip: String, fn: Callable) -> Button:
 
 func _build_nav() -> void:
 	nav = UIKit.plate()
-	var s := UIKit.plate_style()
+	var s := UIKit.skin("rail", "sm", 8.0)
 	s.content_margin_top = 6
 	s.content_margin_bottom = 6
 	s.content_margin_left = 8

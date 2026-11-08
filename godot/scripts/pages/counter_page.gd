@@ -165,7 +165,7 @@ func _spawn_mat_item(it: Dictionary, animate: bool, from := Vector2.ZERO) -> voi
 
 ## A small metal sign: what happens today, and when rent falls due.
 func _build_board() -> void:
-	board = UIKit.plate(_fixture_style(Color("15100b"), Color("a8763e")))
+	board = UIKit.plate(UIKit.skin("glass", "lg", 22.0))
 	board.mouse_filter = Control.MOUSE_FILTER_STOP
 	board.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	board.tooltip_text = "打开今日站内消息"
@@ -195,10 +195,6 @@ func _build_board() -> void:
 	for c in [title, board_day, board_title, board_state, board_rent]:
 		(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func _fixture_style(fill: Color, edge: Color, pad := 16) -> StyleBoxFlat:
-	var s := UIKit.box(fill, edge, 3, 2, pad, 10)
-	s.bg_color.a = 0.94
-	return s
 
 ## A paper tag laid on the counter next to the lot.
 func _build_tag() -> void:
@@ -229,7 +225,7 @@ func _build_strip() -> void:
 
 ## The stock crate: what the shop holds. During a sale, a click recommends.
 func _build_crate() -> void:
-	crate = UIKit.plate(_fixture_style(Color("10181a"), Color("5d6b66"), 12))
+	crate = UIKit.plate(UIKit.skin("socket", "lg", 18.0))
 	add_child(crate)
 	var v := UIKit.vbox(8)
 	crate.add_child(v)
@@ -253,7 +249,7 @@ func _build_crate() -> void:
 
 ## The archive box: the shop's paperwork, one drawer each.
 func _build_archive() -> void:
-	archive = UIKit.plate(_fixture_style(Color("161310"), Color("7a6650"), 12))
+	archive = UIKit.plate(UIKit.skin("graphite", "lg", 18.0))
 	add_child(archive)
 	var v := UIKit.vbox(8)
 	archive.add_child(v)
@@ -428,7 +424,7 @@ func _stock_clicked(uid: String, picking: bool, why) -> void:
 # ---------------------------------------------------------------- terminal
 
 func _build_terminal() -> void:
-	terminal = UIKit.plate(_fixture_style(Color("141c1e"), Color("65716b")))
+	terminal = UIKit.plate(UIKit.skin("strip", "lg", 20.0))
 	add_child(terminal)
 	var v := UIKit.vbox(10)
 	terminal.add_child(v)
@@ -672,7 +668,7 @@ func _pick_goods() -> void:
 # ---------------------------------------------------------------- bubble
 
 func _build_bubble() -> void:
-	bubble = UIKit.plate(UIKit.box(Color(0.93, 0.9, 0.82, 0.97), Color("8c7a5c"), 10, 2, 16, 10))
+	bubble = UIKit.plate(UIKit.paper_style(18))
 	bubble.modulate.a = 0.0
 	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bubble)
@@ -856,42 +852,101 @@ func _bill(from: Vector2, to: Vector2, i: int) -> void:
 		shell.sound("coin", -5.0, randf_range(0.95, 1.15))
 		b.queue_free())
 
+## A thermal-paper slip prints out of the till, gets stamped and is torn
+## off. It belongs to this page, so leaving the counter takes it away too.
 func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> void:
-	var paper := UIKit.plate(UIKit.paper_style(18))
-	paper.custom_minimum_size = Vector2(340, 0)
-	var v := UIKit.vbox(4)
+	var kind := "抵押凭据" if pawn else ("收购凭据" if t.kind == "buy" else "销售凭据")
+	var paper := UIKit.plate(UIKit.paper_style(20))
+	paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var v := UIKit.vbox(6)
+	v.custom_minimum_size.x = 300
 	paper.add_child(v)
-	v.add_child(UIKit.label("回环九号 · 轨道旧货局", 18, UIKit.INK))
-	v.add_child(UIKit.label(("抵押凭据" if pawn else ("收购凭据" if t.kind == "buy" else "销售凭据")) + "  No.%04d" % Game.state.completedTrades.size(), 18, UIKit.INK))
-	v.add_child(UIKit.label("———————————————", 16, Color("8c7a5c")))
-	v.add_child(UIKit.label(item_name, 22, UIKit.INK))
-	v.add_child(UIKit.label(("本金 " if pawn else "成交 ") + UIKit.money(price), 24, UIKit.RUST, true))
-	v.add_child(UIKit.label("来客  " + GameData.npc(t.npcId).name, 18, UIKit.INK))
-	shell.fx.add_child(paper)
+	var head := UIKit.hbox(8)
+	head.add_child(UIKit.label("轨道旧货局", 20, UIKit.INK))
+	head.add_child(UIKit.spacer(false))
+	head.add_child(UIKit.label("No.%04d" % Game.state.completedTrades.size(), 16, Color("6b5a40"), true))
+	v.add_child(head)
+	v.add_child(UIKit.label("回环九号 · 下层旧港 · %s" % kind, 14, Color("6b5a40")))
+	v.add_child(_dashes())
+	var item_label := UIKit.label(item_name, 22, UIKit.INK, false, true)
+	item_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	item_label.custom_minimum_size.x = 300
+	v.add_child(item_label)
+	var row := UIKit.hbox(8)
+	row.add_child(UIKit.label("本金" if pawn else "成交", 18, Color("6b5a40")))
+	row.add_child(UIKit.spacer(false))
+	row.add_child(UIKit.label(UIKit.money(price), 30, UIKit.RUST, true))
+	v.add_child(row)
+	v.add_child(_dashes())
+	v.add_child(UIKit.label("来客  %s · 第 %d 天" % [GameData.npc(t.npcId).name, int(Game.state.day)], 15, Color("6b5a40")))
+	# Room for the stamp so it never lands on the text.
+	var stamp_room := Control.new()
+	stamp_room.custom_minimum_size = Vector2(0, 54)
+	v.add_child(stamp_room)
+	paper.set_meta("stamp_room", stamp_room)
+	for c in v.find_children("*", "Control", true, false):
+		(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(paper)
 	paper.reset_size()
-	paper.position = Vector2(terminal.position.x - paper.size.x - 24, 300)
-	paper.rotation = -0.03
-	paper.modulate.a = 0.0
+	# Prints below the till, clear of the visitor's speech.
+	var final_pos := Vector2(terminal.position.x + (terminal.size.x - paper.size.x) * 0.5, terminal.position.y + terminal.size.y + 14)
+	paper.pivot_offset = Vector2(paper.size.x * 0.5, 0)
+	if Game.prefs.reduced_motion:
+		paper.position = final_pos
+		_stamp(paper, pawn, t, false)
+		get_tree().create_timer(3.2).timeout.connect(func():
+			if is_instance_valid(paper):
+				paper.queue_free())
+		return
+	# Print: the slip feeds out of the till edge, line by line.
+	paper.position = final_pos + Vector2(40, -20)
+	paper.rotation = 0.06
+	paper.scale = Vector2(1, 0.05)
+	shell.sound("click", -12, 2.4)
 	var tw := create_tween()
-	tw.tween_property(paper, "modulate:a", 1.0, 0.15)
-	tw.parallel().tween_property(paper, "position:y", paper.position.y + 30, 0.6).set_trans(Tween.TRANS_SINE)
-	tw.tween_callback(func():
-		var stamp := UIKit.label("已抵押" if pawn else ("已收购" if t.kind == "buy" else "已售出"), 52, Color(0.75, 0.12, 0.1, 0.85))
-		stamp.position = Vector2(150, 120)
-		stamp.pivot_offset = Vector2(80, 30)
-		stamp.rotation = -0.22
-		stamp.scale = Vector2.ONE * 2.4
-		stamp.modulate.a = 0.0
-		paper.add_child(stamp)
-		var st := create_tween()
-		st.tween_property(stamp, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		st.parallel().tween_property(stamp, "modulate:a", 1.0, 0.08)
-		st.tween_callback(func():
-			shell.shake = 0.5
-			shell.sound("drop", 0.0, 0.7)))
-	tw.tween_interval(2.6)
-	tw.tween_property(paper, "modulate:a", 0.0, 0.5)
+	tw.tween_property(paper, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(paper, "position", final_pos, 0.45).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(paper, "rotation", -0.035, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(func(): _stamp(paper, pawn, t, true))
+	tw.tween_interval(2.4)
+	# Torn off and filed: slide down toward the crate and fade.
+	tw.tween_property(paper, "position", final_pos + Vector2(-60, 140), 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(paper, "rotation", -0.18, 0.45)
+	tw.parallel().tween_property(paper, "modulate:a", 0.0, 0.45)
 	tw.tween_callback(paper.queue_free)
+
+func _dashes() -> Control:
+	var l := UIKit.label("- ".repeat(60), 14, Color("a8987a"))
+	l.clip_text = true
+	return l
+
+func _stamp(paper: Control, pawn: bool, t: Dictionary, animate: bool) -> void:
+	if not is_instance_valid(paper):
+		return
+	var text := "已抵押" if pawn else ("已收购" if t.kind == "buy" else "已售出")
+	var stamp := PanelContainer.new()
+	stamp.add_theme_stylebox_override("panel", UIKit.box(Color(0, 0, 0, 0), Color(0.72, 0.13, 0.1, 0.85), 6, 3, 8, 0))
+	var l := UIKit.label(text, 30, Color(0.72, 0.13, 0.1, 0.9))
+	stamp.add_child(l)
+	stamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# A plain Control does not lay out its children, so the stamp keeps the
+	# spot reserved for it at the slip's bottom-right corner.
+	var room: Control = paper.get_meta("stamp_room")
+	room.add_child(stamp)
+	stamp.reset_size()
+	stamp.position = Vector2(room.size.x - stamp.size.x - 4, room.size.y - stamp.size.y + 6)
+	stamp.pivot_offset = stamp.size * 0.5
+	stamp.rotation = -0.2
+	if not animate:
+		return
+	stamp.scale = Vector2.ONE * 2.2
+	stamp.modulate.a = 0.0
+	var st := create_tween()
+	st.tween_property(stamp, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	st.parallel().tween_property(stamp, "modulate:a", 1.0, 0.08)
+	st.tween_callback(func():
+		shell.shake = 0.35
+		shell.sound("drop", 0.0, 0.7))
 
 # ---------------------------------------------------------------- input & frame
 

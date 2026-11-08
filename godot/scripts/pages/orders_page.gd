@@ -95,29 +95,73 @@ func _empty_state(key: String) -> void:
 	content.add_child(next)
 	cols[key].add_child(panel)
 
+const FACTION := {"station": ["站务", Color("2f5f74")], "salvage": ["拾荒", Color("7a4a1e")], "merchant": ["商会", Color("5b3d6e")]}
+const INK_SOFT := Color("6b5a40")
+
+## Each commission is a pinned paper work ticket in dark ink.
 func _card(def: Dictionary) -> VBoxContainer:
-	var card := UIKit.plate(UIKit.box(Color("202b30"), Color("556461"), 2, 1, 20, 0))
+	var card := UIKit.plate(UIKit.paper_style(22))
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var v := UIKit.vbox(12)
+	# A slight, stable tilt per ticket so the board reads as pinned paper.
+	card.pivot_offset = Vector2(300, 20)
+	card.rotation = (Model.fnv(String(def.id)) % 7 - 3) * 0.0016
+	var pin := Pin.new()
+	pin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var v := UIKit.vbox(10)
 	card.add_child(v)
-	var head := UIKit.hbox(10)
+	var strip := UIKit.hbox(8)
+	var fac: Array = FACTION.get(def.faction, ["委托", INK_SOFT])
+	var badge := PanelContainer.new()
+	badge.add_theme_stylebox_override("panel", UIKit.box(fac[1], Color.TRANSPARENT, 3, 0, 4, 0))
+	var bl := UIKit.label(" %s委托 " % fac[0], 15, Color("f3e8d2"))
+	badge.add_child(bl)
+	strip.add_child(badge)
+	strip.add_child(UIKit.spacer(false))
+	strip.add_child(UIKit.label("No.%s" % String(def.id).get_slice("-", 1), 15, INK_SOFT, true))
+	v.add_child(strip)
+	var head := UIKit.hbox(14)
+	var frame := UIKit.plate(UIKit.skin("socket", "xs", 6.0))
 	var pic := TextureRect.new()
 	pic.texture = UIKit.item_icon(def.itemId)
-	pic.custom_minimum_size = Vector2(92, 92)
+	pic.custom_minimum_size = Vector2(84, 84)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	head.add_child(pic)
-	var hv := UIKit.vbox(2)
+	frame.add_child(pic)
+	head.add_child(frame)
+	var hv := UIKit.vbox(4)
 	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hv.add_child(UIKit.label(def.name, 26, UIKit.TEXT, false, true))
-	hv.add_child(UIKit.label("报酬 %s · 第 %s 天前 · %s" % [UIKit.money(def.reward), Model.jnum(def.dueDay), {"station": "站务", "salvage": "拾荒", "merchant": "商会"}[def.faction]], 20, UIKit.AMBER, false, true))
+	hv.add_child(UIKit.label(def.name, 26, UIKit.INK, false, true))
+	var meta := UIKit.hbox(14)
+	meta.add_child(UIKit.label("报酬 " + UIKit.money(def.reward), 22, UIKit.RUST, true))
+	meta.add_child(UIKit.label("第 %s 天前交付" % Model.jnum(def.dueDay), 18, INK_SOFT))
+	hv.add_child(meta)
 	head.add_child(hv)
 	v.add_child(head)
-	v.add_child(UIKit.label(_readable(String(def.description)), 21, UIKit.TEXT, false, true))
+	v.add_child(_dashes())
+	var brief := UIKit.label(_readable(String(def.description)), 19, UIKit.INK, false, true)
+	brief.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(brief)
 	var req := "需要：%s · 品相≥%s%s%s" % [GameData.def(def.itemId).name, UIKit.pct(def.minCondition), " · 须修复" if def.needsRepair else "", " · 顾客原物" if def.get("customerOwned", false) else ""]
-	v.add_child(UIKit.label(req, 19, UIKit.MUTED, false, true))
+	v.add_child(UIKit.label(req, 17, INK_SOFT, false, true))
+	card.add_child(pin)
 	card.set_meta("v", v)
 	return v
+
+func _dashes() -> Label:
+	var l := UIKit.label("- ".repeat(90), 13, Color("b3a283"))
+	l.clip_text = true
+	return l
+
+## A brass pin at the ticket's top centre (drawn, so it ignores layout).
+class Pin extends Control:
+	func _ready() -> void:
+		set_anchors_preset(Control.PRESET_FULL_RECT)
+	func _draw() -> void:
+		var c := Vector2(size.x * 0.5, -4)
+		draw_circle(c + Vector2(2, 3), 9, Color(0, 0, 0, 0.35))
+		draw_circle(c, 9, Color("8a5a2b"))
+		draw_circle(c, 6, Color("d39a55"))
+		draw_circle(c + Vector2(-2, -2), 2.5, Color("ffe1b0"))
 
 ## Order briefs reference recipes by internal id (REC-001); show their names.
 func _readable(text: String) -> String:
@@ -161,7 +205,7 @@ func _refresh() -> void:
 				if cands[i].uid == o.get("uid", ""):
 					opt.select(i)
 					break
-			var why := UIKit.label("", 19, UIKit.AMBER, false, true)
+			var why := UIKit.label("", 18, UIKit.RUST, false, true)
 			var b := UIKit.button("交付（1 AP）", "good", Vector2(0, 56), 22)
 			var check := func():
 				if opt.item_count == 0:
@@ -171,6 +215,7 @@ func _refresh() -> void:
 				var it = Game.item(opt.get_item_metadata(opt.selected))
 				var bad = Model.order_item_valid(s, def.id, it)
 				why.text = bad if bad != null else "可以交付。"
+				why.add_theme_color_override("font_color", UIKit.RUST if bad != null else Color("2f6b3a"))
 				b.disabled = bad != null
 			opt.item_selected.connect(func(_i): check.call())
 			check.call()
@@ -186,7 +231,14 @@ func _refresh() -> void:
 			cols.active.add_child(v.get_parent())
 		elif o.status == "done" or o.status == "failed":
 			var v := _card(def)
-			v.add_child(UIKit.label("✓ 已交付" if o.status == "done" else "✗ 已过期/失败", 18, UIKit.GOOD if o.status == "done" else UIKit.DANGER))
+			var done: bool = o.status == "done"
+			var stamp := PanelContainer.new()
+			stamp.size_flags_horizontal = Control.SIZE_SHRINK_END
+			var ink := Color(0.18, 0.45, 0.25, 0.9) if done else Color(0.72, 0.13, 0.1, 0.9)
+			stamp.add_theme_stylebox_override("panel", UIKit.box(Color.TRANSPARENT, ink, 5, 3, 8, 0))
+			stamp.add_child(UIKit.label("已交付" if done else "已失效", 26, ink))
+			stamp.rotation = -0.12
+			v.add_child(stamp)
 			cols.closed.add_child(v.get_parent())
 	for k in cols:
 		counts[k] = cols[k].get_child_count()
