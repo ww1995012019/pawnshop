@@ -53,12 +53,14 @@ var bubble_rect := Rect2(1040, 190, 275, 245)
 ## behind all goods and controls, with stepped highlights like the painted desk.
 class CounterExtension extends Node2D:
 	func _draw() -> void:
-		var shape := PackedVector2Array([Vector2(568,490), Vector2(1552,490), Vector2(1820,590), Vector2(210,590)])
+		var shape := PackedVector2Array([Vector2(620,490), Vector2(1552,490), Vector2(1820,590), Vector2(210,590), Vector2(280,565), Vector2(610,565)])
 		draw_colored_polygon(shape, Color("889374"))
-		draw_colored_polygon(PackedVector2Array([Vector2(568,490),Vector2(680,490),Vector2(500,590),Vector2(210,590)]), Color("869171"))
+		draw_colored_polygon(PackedVector2Array([Vector2(620,490),Vector2(680,490),Vector2(610,565)]), Color("869171"))
 		draw_colored_polygon(PackedVector2Array([Vector2(1444,490),Vector2(1552,490),Vector2(1820,590),Vector2(1700,590)]), Color("8a9576"))
-		draw_line(Vector2(568,491), Vector2(1552,491), Color("a1ab8c"), 3)
-		draw_line(Vector2(568,491), Vector2(210,590), Color("7a8068"), 3)
+		draw_line(Vector2(620,491), Vector2(1552,491), Color("a1ab8c"), 3)
+		draw_line(Vector2(620,491), Vector2(610,565), Color("7a8068"), 3)
+		draw_line(Vector2(610,565), Vector2(280,565), Color("7a8068"), 3)
+		draw_line(Vector2(280,565), Vector2(210,590), Color("7a8068"), 3)
 		draw_line(Vector2(1552,491), Vector2(1820,590), Color("77826b"), 3)
 		# Sparse horizontal pixel wear, kept behind the working surface.
 		var random := RandomNumberGenerator.new()
@@ -419,8 +421,9 @@ func relayout() -> void:
 	if not is_instance_valid(terminal) or not is_instance_valid(crate):
 		return
 	_align_stage()
-	terminal.position = Vector2(1310, 414)
+	terminal.position = Vector2(1385, 420)
 	terminal.size = Vector2(580, 336)
+	terminal.scale = Vector2(0.84, 0.84)
 	crate.position = Vector2(604, 759)
 	crate.size = Vector2(672, 224)
 	actions.position = Vector2(54, 237)
@@ -564,10 +567,10 @@ func _build_terminal() -> void:
 	housing.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	content.add_child(housing)
 	# Live readouts sit in the painted LCD, not on an extra rectangular plate.
-	scr.head = _terminal_label(content, Vector2(107, 48), Vector2(238, 23), 15, Color("a7cbbb"))
+	scr.head = _terminal_label(content, Vector2(107, 48), Vector2(238, 23), 18, Color("a7cbbb"))
 	scr.price = _terminal_label(content, Vector2(350, 43), Vector2(128, 33), 25, Color("e1c487"), true)
-	scr.line1 = _terminal_label(content, Vector2(107, 75), Vector2(371, 22), 16, Color("d0d4b6"))
-	scr.line2 = _terminal_label(content, Vector2(107, 98), Vector2(371, 20), 14, Color("9bb8a8"))
+	scr.line1 = _terminal_label(content, Vector2(107, 75), Vector2(371, 22), 18, Color("d0d4b6"))
+	scr.line2 = _terminal_label(content, Vector2(107, 98), Vector2(371, 20), 16, Color("9bb8a8"))
 	scr.line3 = _terminal_label(content, Vector2.ZERO, Vector2.ZERO, 14, UIKit.MUTED)
 	scr.line3.visible = false
 	offer_panel = UIKit.plate(_flat(Color.TRANSPARENT))
@@ -603,7 +606,7 @@ func _build_terminal() -> void:
 	var nudges := UIKit.hbox(4)
 	nudges.position = Vector2(252, 10)
 	for d in [-10, -1, 1, 10]:
-		var k := UIKit.button(("+%d" % d) if d > 0 else ("−%d" % -d), "chip", Vector2(46, 30), 16)
+		var k := UIKit.button(("+%d" % d) if d > 0 else ("−%d" % -d), "chip", Vector2(46, 30), 18)
 		_till_key(k, "secondary")
 		var step: int = d
 		k.pressed.connect(func():
@@ -660,7 +663,7 @@ func _terminal_label(parent: Control, pos: Vector2, extent: Vector2, font_size: 
 
 func _act(text: String, kind: String, fn: Callable, enabled := true, _wide := false, tip := "") -> Button:
 	var caption := "抵押合同" if text.begins_with("抵押（") or text == "签抵押合同" else text
-	var b := UIKit.button(caption, kind, Vector2(70, 42), 17)
+	var b := UIKit.button(caption, kind, Vector2(70, 42), 19)
 	_till_key(b, kind)
 	b.disabled = not enabled or busy
 	b.tooltip_text = tip
@@ -736,7 +739,7 @@ func _refresh() -> void:
 			for e in it.evidence:
 				if not GameData.def(it.defId).tools.has(e):
 					continue
-				var chip := UIKit.button(GameData.tool(e).short, "primary" if chosen_evidence == e else "chip", Vector2(0, 26), 15)
+				var chip := UIKit.button(GameData.tool(e).short, "primary" if chosen_evidence == e else "chip", Vector2(0, 26), 17)
 				var eid: String = e
 				_till_key(chip, "primary" if chosen_evidence == e else "secondary")
 				chip.pressed.connect(func():
