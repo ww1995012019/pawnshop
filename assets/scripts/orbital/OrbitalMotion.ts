@@ -169,13 +169,14 @@ export class OrbitalMotion {
     if(this.disposed)return Promise.resolve();
     this.top();
     // The transient exit lives above the scene, so keep the same worktop occlusion as the resident customer.
-    const region=this.intersect(this.contentArea,{x:330,y:108,width:720,height:457});
+    const region=this.intersect(this.contentArea,this.ui.phone?{x:20,y:122,width:728,height:443}:{x:330,y:108,width:720,height:457});
     const aperture=this.own(this.ui.container(this.layer,region.x,region.y,region.width,region.height,'customer-exit-aperture'));
     aperture.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
-    const actor=this.ui.customer(aperture,npcId,445-region.x,138-region.y,460,440);this.track(actor,'npc-walk-out');
+    const home=this.ui.phone?50:445;
+    const actor=this.ui.customer(aperture,npcId,home-region.x,138-region.y,this.ui.phone?620:460,440);this.track(actor,'npc-walk-out');
     return this.run('npc-exit',.42,()=>this.attached(actor),p=>{
       const turn=clamp(p/.16),walk=clamp((p-.14)/.86),e=smooth(walk);
-      actor.setPosition(445-region.x-150*e,-138+region.y-4*e+Math.sin(walk*Math.PI*4)*.7*(1-walk));
+      actor.setPosition(home-region.x-150*e,-138+region.y-4*e+Math.sin(walk*Math.PI*4)*.7*(1-walk));
       actor.setScale(1-.025*e,1-.025*e,1);actor.angle=-.2*Math.sin(turn*Math.PI)*(1-walk);
       this.opacity(actor).opacity=Math.round(255*(1-clamp((p-.58)/.42)));
     },()=>this.drop(aperture));
@@ -184,9 +185,9 @@ export class OrbitalMotion {
   handoff(itemId:string,from:OrbitalPoint,to:OrbitalPoint,onPlaced?:()=>void,targetSize=316):Promise<void>{
     if(this.disposed){onPlaced?.();return Promise.resolve();}
     this.top();const size=targetSize,arriving=from.y<500&&to.y>from.y,departing=to.y<500&&to.y<from.y;
-    const start={x:from.x,y:arriving?to.y-18:from.y},end={x:to.x,y:departing?from.y-18:to.y};
+    const start={x:from.x,y:this.ui.phone?from.y:arriving?to.y-18:from.y},end={x:to.x,y:this.ui.phone?to.y:departing?from.y-18:to.y};
     const startScale=arriving?.91:1,endScale=departing?.91:1,direction=end.x>=start.x?1:-1;
-    const safe=this.intersect(this.contentArea,{x:310,y:108,width:930,height:700});
+    const safe=this.intersect(this.contentArea,this.ui.phone?{x:20,y:122,width:728,height:446}:{x:310,y:108,width:930,height:700});
     const window=this.own(this.ui.container(this.layer,safe.x,safe.y,safe.width,safe.height,'counter-transfer-window'));
     window.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
     const stage=this.ui.container(window,-safe.x,-safe.y,1600,900,'counter-transfer-screen-space');
@@ -221,16 +222,16 @@ export class OrbitalMotion {
   async deal(amount:number,itemId?:string,origin?:{x:number;y:number;size:number}):Promise<void>{
     if(this.disposed)return;
     // Credits stay on the counter terminal. The HUD already contains the committed balance.
-    this.top();const wallet={x:1065,y:656},counter={x:origin?.x??900,y:origin?.y??556};const from=amount>=0?counter:wallet,to=amount>=0?wallet:counter;
+    this.top();const phone=this.ui.phone,wallet=phone?{x:1210,y:296}:{x:1065,y:656},counter={x:origin?.x??(phone?380:900),y:origin?.y??(phone?410:556)};const from=amount>=0?counter:wallet,to=amount>=0?wallet:counter;
     const tokens:Node[]=[];
     for(let i=0;i<3;i++){const n=this.own(this.token(from.x,from.y));tokens.push(n);this.track(n,'credit-token');}
-    const value=this.own(this.ui.label(this.layer,`${amount>0?'+':''}${amount.toFixed(amount%1?2:0)} Cr`,925,687,230,34,{size:24,color:C.white,align:'center',bold:true}));this.track(value,'cash-value');
+    const value=this.own(this.ui.label(this.layer,`${amount>0?'+':''}${amount.toFixed(amount%1?2:0)} Cr`,phone?920:925,phone?644:687,phone?500:230,phone?76:34,{size:phone?46:24,color:C.white,align:'center',bold:true}));this.track(value,'cash-value');
     const cash=this.run('credit-transfer',.94,()=>this.attached(value),p=>{
       tokens.forEach((n,i)=>{const t=clamp((p-i*.045)/.76),e=smooth(t);n.setPosition(from.x+(to.x-from.x)*e+Math.sin(t*Math.PI)*(i-1)*10,-from.y-(to.y-from.y)*e+Math.sin(t*Math.PI)*22);n.angle=t*30;this.opacity(n).opacity=Math.round(220*(1-Math.max(0,t-.8)/.2));});
-      value.setPosition(925,-687+ease(p)*10);this.opacity(value).opacity=Math.round(255*Math.min(1,p*6)*(1-Math.max(0,p-.72)/.28));
+      value.setPosition(phone?920:925,-(phone?644:687)+ease(p)*10);this.opacity(value).opacity=Math.round(255*Math.min(1,p*6)*(1-Math.max(0,p-.72)/.28));
     },()=>{tokens.forEach(n=>this.drop(n));this.drop(value);});
     const jobs=[cash,this.receipt(amount),this.coins(amount,from)];
-    if(itemId)jobs.push(this.handoff(itemId,counter,amount>=0?{x:675,y:450}:{x:1120,y:635},undefined,origin?.size??316));
+    if(itemId)jobs.push(this.handoff(itemId,counter,phone?(amount>=0?{x:350,y:392}:{x:630,y:410}):amount>=0?{x:675,y:450}:{x:1120,y:635},undefined,origin?.size??316));
     await Promise.all(jobs);
   }
 
@@ -239,12 +240,12 @@ export class OrbitalMotion {
    * object's on-screen box, so instruments are drawn whole around the item instead of
    * being clipped to the item's own bounds. `label` prints on stamps.
    */
-  effect(kind:string,parent:Node,rect?:OrbitalRect,focus?:OrbitalRect,label?:string):Promise<void>{
+  effect(kind:string,parent:Node,rect?:OrbitalRect,focus?:OrbitalRect,label?:string,local=false):Promise<void>{
     if(this.disposed||!this.attached(parent))return Promise.resolve();
     const compact=kind==='stamp'||kind==='upgrade';
     const defaults:Bounds=kind==='stamp'?{x:700,y:556,width:180,height:120}:compact?{x:600,y:334,width:360,height:116}:this.inspectionArea;
-    let area=this.intersect(this.bounds(rect,defaults),this.contentArea);
-    if(parent.name==='page-inspect')area=this.intersect(area,this.inspectionArea);
+    let area=local?this.bounds(rect,defaults):this.intersect(this.bounds(rect,defaults),this.contentArea);
+    if(!local&&parent.name==='page-inspect')area=this.intersect(area,this.inspectionArea);
     if(area.width<8||area.height<8)return Promise.resolve();
     const width=area.width,height=area.height;
     const clip=this.own(this.ui.container(parent,area.x,area.y,width,height,`effect-${kind}-clip`));
@@ -298,13 +299,15 @@ export class OrbitalMotion {
   }
 
   /** Coins fly from a point to the HUD cash meter (or back), with a floating amount. */
-  coins(amount:number,from:OrbitalPoint,to:OrbitalPoint={x:1080,y:58}):Promise<void>{
+  coins(amount:number,from:OrbitalPoint,to?:OrbitalPoint):Promise<void>{
     if(this.disposed||amount===0)return Promise.resolve();
+    to??=this.ui.phone?{x:774,y:62}:{x:1080,y:58};
     const layer=this.own(this.ui.container(this.root,0,0,1600,900,'coin-flight'));layer.setSiblingIndex(this.root.children.length-1);
     const a=amount>0?from:to,b=amount>0?to:from,count=Math.min(9,3+Math.floor(Math.abs(amount)/40));
     const tokens:Node[]=[];
     for(let i=0;i<count;i++){const n=this.coin(layer,a.x,a.y);tokens.push(n);}
-    const tag=this.ui.label(layer,`${amount>0?'+':'−'}${Math.abs(amount)} Cr`,b.x-110,b.y+30,220,36,{size:26,bold:true,color:amount>0?'#FFD08A':'#FF9A7A',align:'center',verticalAlign:'center',wrap:false});
+    const tagWidth=this.ui.phone?400:220,tagHeight=this.ui.phone?60:36;
+    const tag=this.ui.label(layer,`${amount>0?'+':'−'}${Math.abs(amount)} Cr`,b.x-tagWidth/2,b.y+30,tagWidth,tagHeight,{size:this.ui.phone?40:26,bold:true,color:amount>0?'#FFD08A':'#FF9A7A',align:'center',verticalAlign:'center',wrap:false});
     this.track(tag,'coin-tag');
     return this.run('coin-flight',1.05,()=>this.attached(layer),p=>{
       tokens.forEach((n,i)=>{
@@ -315,7 +318,7 @@ export class OrbitalMotion {
         this.opacity(n).opacity=t<=0?0:t>=1?0:255;
       });
       const q=clamp((p-.55)/.45);
-      tag.setPosition(b.x-110,-(b.y+34)-24*ease(q));this.opacity(tag).opacity=Math.round(255*clamp(q*5)*(1-clamp((q-.7)/.3)));
+      tag.setPosition(b.x-tagWidth/2,-(b.y+34)-24*ease(q));this.opacity(tag).opacity=Math.round(255*clamp(q*5)*(1-clamp((q-.7)/.3)));
     },()=>this.drop(layer));
   }
 
@@ -323,8 +326,9 @@ export class OrbitalMotion {
   float(text:string,at:OrbitalPoint,color='#8BEDE6'):Promise<void>{
     if(this.disposed||!this.root.isValid)return Promise.resolve();
     const layer=this.own(this.ui.container(this.root,0,0,1600,900,'float-tag'));layer.setSiblingIndex(this.root.children.length-1);
-    const n=this.ui.label(layer,text,at.x-90,at.y,180,30,{size:20,bold:true,color,align:'center',verticalAlign:'center',wrap:false,outline:'#05080B',outlineWidth:2});
-    return this.run('float-tag',.9,()=>this.attached(n),p=>{n.setPosition(at.x-90,-at.y-28*ease(p));this.opacity(n).opacity=Math.round(255*clamp(p*6)*(1-clamp((p-.6)/.4)));},()=>this.drop(layer));
+    const half=this.ui.phone?150:90;
+    const n=this.ui.label(layer,text,at.x-half,at.y,half*2,this.ui.phone?54:30,{size:this.ui.phone?34:20,bold:true,color,align:'center',verticalAlign:'center',wrap:false,outline:'#05080B',outlineWidth:2});
+    return this.run('float-tag',.9,()=>this.attached(n),p=>{n.setPosition(at.x-half,-at.y-28*ease(p));this.opacity(n).opacity=Math.round(255*clamp(p*6)*(1-clamp((p-.6)/.4)));},()=>this.drop(layer));
   }
 
   private drawMagnify(g:Graphics,fx:number,fy:number,fw:number,fh:number,w:number,h:number,p:number):void {
@@ -510,12 +514,13 @@ export class OrbitalMotion {
   }
 
   private receipt(amount:number):Promise<void>{
-    const n=this.own(this.ui.panel(this.layer,395,638,245,86,{fill:'#202A2EE8',stroke:'#807A6660',radius:3,name:'orbital-transaction-receipt'}));
-    this.ui.label(n,'交易回执  /  已结算',13,10,219,21,{size:13,color:C.muted,align:'center'});
-    this.ui.label(n,`${amount>=0?'入账':'支出'}  ${amount>0?'+':''}${amount.toFixed(amount%1?2:0)} Cr`,13,38,219,33,{size:23,color:C.white,align:'center'});
+    const phone=this.ui.phone,x=phone?80:395,y=phone?574:638,w=phone?620:245,h=phone?154:86;
+    const n=this.own(this.ui.paperSlip(this.layer,x,y,w,h,{name:'orbital-transaction-receipt',torn:true}));
+    this.ui.label(n,'交易回执 · 已结算',20,12,w-40,phone?48:21,{size:phone?30:13,color:'#67553F',align:'center'});
+    this.ui.label(n,`${amount>=0?'入账':'支出'}  ${amount>0?'+':''}${amount.toFixed(amount%1?2:0)} Cr`,20,phone?68:38,w-40,phone?64:33,{size:phone?44:23,color:'#2A241C',align:'center'});
     this.track(n,'receipt-print');
     return this.run('receipt-print',1.04,()=>this.attached(n),p=>{
-      n.setPosition(395,-638-10*(1-ease(clamp(p/.3))));this.opacity(n).opacity=Math.round(235*Math.min(1,p*6)*(1-Math.max(0,p-.78)/.22));
+      n.setPosition(x,-y-10*(1-ease(clamp(p/.3))));this.opacity(n).opacity=Math.round(235*Math.min(1,p*6)*(1-Math.max(0,p-.78)/.22));
     },()=>this.drop(n));
   }
   private token(x:number,y:number):Node {

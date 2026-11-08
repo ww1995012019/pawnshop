@@ -24,16 +24,17 @@ export class InspectionFeedback {
   private lift=0;
   private releaseTime=1;
   private clock=0;
+  private area={x:212,y:200,width:1008,height:440};
   reducedMotion=false;
 
   constructor(private readonly ui:OrbitalUI){}
 
-  bind(parent:Node,visual:Node,shadow:Node|null):void {
-    this.clear();this.parent=parent;this.visual=visual;this.visualBase=visual.position.clone();this.shadow=shadow;
+  bind(parent:Node,visual:Node,shadow:Node|null,area={x:212,y:200,width:1008,height:440}):void {
+    this.clear();this.area={...area};this.parent=parent;this.visual=visual;this.visualBase=visual.position.clone();this.shadow=shadow;
     this.wires=this.ui.container(parent,0,0,1600,900,'inspection-live-cables');
     this.layer=this.ui.container(parent,0,0,1600,900,'inspection-contact-feedback');
     // Only contact flashes are clipped; real cable paths bridge the widget and item.
-    const clip=this.ui.container(this.layer,212,200,1008,440,'inspection-contact-clip');
+    const clip=this.ui.container(this.layer,area.x,area.y,area.width,area.height,'inspection-contact-clip');
     clip.addComponent<Mask>(Mask).type=Mask.Type.GRAPHICS_RECT;
   }
 
@@ -57,7 +58,7 @@ export class InspectionFeedback {
     // Evidence must finish above the book it flies into; this layer has no input.
     this.layer.setSiblingIndex(this.parent!.children.length-1);
     const clip=this.layer.children[0];
-    const node=this.ui.container(clip,at.x-212,at.y-200,1,1,'inspection-contact-spark');
+    const node=this.ui.container(clip,at.x-this.area.x,at.y-this.area.y,1,1,'inspection-contact-spark');
     const ink=node.addComponent<Graphics>(Graphics);
     this.flashes.push({node,ink,at,elapsed:0,duration:.36,color});
     this.paintFlash(this.flashes[this.flashes.length-1],this.reducedMotion ? .7 : 0);

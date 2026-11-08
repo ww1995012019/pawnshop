@@ -41,9 +41,9 @@ export class PhonePanels {
   }
   private summary(p:Node,it:OrbitalItem,detail:string):void {
     const panel=this.ui.panel(p,512,132,1064,250);
-    this.h.ui.object(panel,it.defId,818,14,220,220,{repaired:it.repaired,damaged:!it.working});
-    this.ui.row(panel,getDef(it.defId).name,24,8,776,72,44);
-    this.ui.text(panel,detail,24,90,776,144,32);
+    const item=this.h.ui.object(panel,it.defId,724,14,330,220,{repaired:it.repaired,damaged:!it.working});item.name='phone-selected-item';
+    this.ui.row(panel,getDef(it.defId).name,24,8,680,72,42);
+    this.ui.text(panel,detail,24,90,680,150,30);
   }
   private warehouse(p:Node):void {
     this.inventory(p);const it=this.item();if(!it)return;
@@ -173,8 +173,10 @@ export class PhonePanels {
   private delivery(order:OrderDef,item:OrbitalItem):void {
     const companion=order.id==='ORD-004'?this.rules.companion():undefined;
     this.ui.confirm('确认交付原物',`${getDef(item.defId).name}${companion?` + ${getDef(companion.defId).name}`:''}\n${order.name} · 报酬 ${order.reward} Cr · 1 AP\n确认后移交所选原物，报酬同时入账。`,()=>{
+      const previous={group:this.group,order:this.order,offset:this.orderOffset,staged:this.staged};
+      this.group='history';this.order=order.id;this.orderOffset=0;this.staged='';
       this.h.dispatch({type:'DELIVER_ORDER',id:order.id,uid:item.uid});
-      if(this.h.state.orders.find(o=>o.id===order.id)?.status==='done'){this.group='history';this.order=order.id;this.orderOffset=0;this.staged='';this.h.render();}
+      if(this.h.state.orders.find(o=>o.id===order.id)?.status!=='done'){this.group=previous.group;this.order=previous.order;this.orderOffset=previous.offset;this.staged=previous.staged;this.h.render();}
     });
   }
   private report(p:Node):void {

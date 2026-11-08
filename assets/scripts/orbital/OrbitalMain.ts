@@ -1,4 +1,4 @@
-import {tween,Component,Node,BlockInputEvents,Canvas,Camera,UITransform,Layers,Color,Vec2,Vec3,Rect,Size,SpriteFrame,Graphics,Mask,Label,EditBox,UIOpacity,EventTouch,EventMouse,game,input,Input,EventKeyboard,KeyCode,view,ResolutionPolicy,sys,AudioSource,AudioClip,assetManager,resources} from 'cc';
+import {tween,Tween,Component,Node,BlockInputEvents,Canvas,Camera,UITransform,Layers,Color,Vec2,Vec3,Rect,Size,SpriteFrame,Graphics,Mask,Label,EditBox,UIOpacity,EventTouch,EventMouse,game,input,Input,EventKeyboard,KeyCode,view,ResolutionPolicy,sys,AudioSource,AudioClip,assetManager,resources} from 'cc';
 import type {ButtonOptions} from '../ui/GameUI';
 import {OrbitalUI,ORBITAL_PALETTE as C,PAPER_INK as INK,type HudIcon} from './OrbitalUI';
 import {OrbitalMotion} from './OrbitalMotion';
@@ -132,9 +132,9 @@ export class OrbitalMain extends Component implements OrbitalHost {
     u.button(p,'工具操作',1060,552,508,()=>this.phoneTool(it,d),{tone:'gold',name:'phone-tool-actions'});
     this.zoomOut=u.button(p,'−',244,660,108,()=>this.changeZoom(-.1),{name:'phone-zoom-out'});
     this.zoomIn=u.button(p,'＋',370,660,108,()=>this.changeZoom(.1),{name:'phone-zoom-in'});
-    u.button(p,'旋转',496,660,248,()=>{this.pose.angle+=30;this.applyInspectionPose();},{name:'button-旋转 R'});
-    u.button(p,this.back?'翻回正面':'翻到背面',762,660,346,()=>{this.back=!this.back;this.render();},{name:this.back?'button-翻回正面 F':'button-翻到背面 F'});
-    u.button(p,'实物归位',1126,660,442,()=>{this.resetInspection(it.uid);this.render();},{name:'button-实物归位'});
+    u.button(p,'旋转',496,660,248,()=>{this.pose.angle+=30;this.applyInspectionPose();this.animatePhoneItem('rotate');},{name:'button-旋转 R'});
+    u.button(p,this.back?'翻回正面':'翻到背面',762,660,346,()=>{this.back=!this.back;this.render();this.animatePhoneItem('flip');},{name:this.back?'button-翻回正面 F':'button-翻到背面 F'});
+    u.button(p,'实物归位',1126,660,442,()=>{this.resetInspection(it.uid);this.render();this.animatePhoneItem('place');},{name:'button-实物归位'});
     this.updateZoomControls();
   }
   private phoneEvidence(it:OrbitalItem):void{
@@ -153,47 +153,60 @@ export class OrbitalMain extends Component implements OrbitalHost {
   }
   private phoneTool(it:OrbitalItem,d:Draft):void{
     const u=this.phoneUI,tool=this.tool,m=u.sheet(getTool(tool).name),already=it.evidence.includes(tool);
+    const kind=['magnify','uv','spectrum','probe','scale','pulse'][tools.findIndex(t=>t.id===tool)];
     const commit=()=>{m.close();if(already)this.toolEffect(tool,this.content);else this.finishTool(it);};
-    const draw=()=>{
+    const draw=(feedback=false)=>{
       this.ui.clear(m.body);
-      const button=(text:string,x:number,y:number,w:number,fn:()=>void,name:string,selected=false)=>u.button(m.body,text,x,y,w,fn,{name,selected});
-      let ready=false,status='';
-      if(already){u.text(m.body,`证据已经保存。\n${getItemClue(it,tool)}\n本次复测不消耗行动点。`,20,20,1400,420,38);ready=true;}
-      else if(tool==='TOL-001'){
-        status=`逐一观察三处接缝疑点 · ${d.marks.size}/3`;
-        [0,1,2].forEach(i=>button(`${d.marks.has(i)?'✓ ':''}观察接缝 ${i+1}`,20+i*476,160,452,()=>{d.marks.add(i);draw();},`phone-mark-${i}`,d.marks.has(i)));ready=d.marks.size===3;
+      const preview=u.panel(m.body,20,0,520,508,'phone-instrument-preview');
+      this.ui.toolIcon(preview,tool,20,12,76,76);u.row(preview,getTool(tool).short,112,12,388,76,34,C.cyan);
+      this.ui.object(preview,it.defId,44,108,432,320,{back:this.back,repaired:it.repaired,damaged:!it.working});
+      let ready=false,status='',reading='';
+      const button=(text:string,x:number,y:number,w:number,fn:()=>void,name:string,selected=false)=>u.button(m.body,text,x,y,w,()=>{fn();draw(true);},{name,selected});
+      if(already){
+        u.text(m.body,`证据已经保存。\n${getItemClue(it,tool)}\n本次复测不消耗行动点。`,568,18,856,450,34);ready=true;reading='物证已存档 · 免费复测';
+      }else if(tool==='TOL-001'){
+        status='观察三处接缝疑点';reading=`已定位 ${d.marks.size} / 3 处痕迹`;
+        [0,1,2].forEach(i=>button(`${d.marks.has(i)?'✓ ':''}观察接缝 ${i+1}`,568,104+i*126,856,()=>d.marks.add(i),`phone-mark-${i}`,d.marks.has(i)));ready=d.marks.size===3;
       }else if(tool==='TOL-002'){
-        status=`${this.back?'背面旧编号':'先翻到背面，再扫描旧编号'} · 扫描 ${Math.round(d.uv*100)}%`;
-        button('翻到背面',20,160,688,()=>{this.back=true;this.render();draw();},'phone-uv-back',this.back);
-        u.button(m.body,'推进扫描',736,160,688,()=>{d.uv=Math.min(1,d.uv+.34);draw();},{disabled:!this.back,name:'phone-uv-scan'});ready=this.back&&d.uv>.85;
+        status='背面旧编号 · 紫外扫描';reading=`${this.back?'背面':'请翻到背面'} · 扫描 ${Math.round(d.uv*100)}%`;
+        button('翻到背面',568,130,400,()=>{this.back=true;this.render();},'phone-uv-back',this.back);
+        u.button(m.body,'推进扫描',996,130,428,()=>{d.uv=Math.min(1,d.uv+.34);draw(true);},{disabled:!this.back,name:'phone-uv-scan'});
+        u.text(m.body,'紫外光掠过旧编号，观察封签下的荧光痕迹。',568,286,856,160,34,C.muted);ready=this.back&&d.uv>.85;
       }else if(tool==='TOL-003'){
-        const targets=[.25,.55,.75];status='调整三条读数，使白色谱峰与参考值对齐。';
+        const targets=[.25,.55,.75];status='对齐白色谱峰与参考值';reading=d.peaks.map(n=>n.toFixed(1)).join('  /  ');
         targets.forEach((target,i)=>{
-          const y=102+i*130;u.row(m.body,`${['青峰','橙峰','紫峰'][i]} · 参考 ${target}`,20,y,660,108,36);
-          button('−',736,y,128,()=>{d.peaks[i]=Math.max(0,d.peaks[i]-.1);draw();},`spectrum-${i}-minus`);
-          u.row(m.body,d.peaks[i].toFixed(1),900,y,280,108,44,C.orange);
-          button('＋',1296,y,128,()=>{d.peaks[i]=Math.min(1,d.peaks[i]+.1);draw();},`spectrum-${i}-plus`);
+          const y=104+i*132;u.row(m.body,`${['青峰','橙峰','紫峰'][i]} · 参考 ${target}`,568,y,324,108,32);
+          button('−',910,y,128,()=>{d.peaks[i]=Math.max(0,d.peaks[i]-.1);},`spectrum-${i}-minus`);
+          u.row(m.body,d.peaks[i].toFixed(1),1050,y,224,108,44,C.orange);
+          button('＋',1296,y,128,()=>{d.peaks[i]=Math.min(1,d.peaks[i]+.1);},`spectrum-${i}-plus`);
         });ready=targets.every((n,i)=>Math.abs(d.peaks[i]-n)<.07);
       }else if(tool==='TOL-004'){
-        status='触屏接线：先接正极，再接负极，然后读取回路。';
-        [0,1].forEach(i=>button(`${d.probe&(1<<i)?'✓ 已连接':'连接'}${i===0?'正极 ＋':'负极 −'}`,20+i*716,160,688,()=>{d.probe|=1<<i;draw();},`phone-probe-${i}`,!!(d.probe&(1<<i))));ready=d.probe===3;
+        status='接入双探针 · 读取回路';reading=`正极 ${d.probe&1?'接通':'待接'} · 负极 ${d.probe&2?'接通':'待接'}`;
+        [0,1].forEach(i=>button(`${d.probe&(1<<i)?'✓ 已连接':'连接'}${i===0?'正极 ＋':'负极 −'}`,568,130+i*146,856,()=>{d.probe|=1<<i;},`phone-probe-${i}`,!!(d.probe&(1<<i))));ready=d.probe===3;
       }else if(tool==='TOL-005'){
-        const target=[30,60,70][getDef(it.defId).sprite%3],sum=[...d.weights].reduce((a,n)=>a+n,0);status=`参考质量 ${target}g · 砝码合计 ${sum}g`;
-        if(!d.tared)button('空秤校零',20,160,1404,()=>{d.tared=true;draw();},'phone-tare');
-        else [10,20,50].forEach((n,i)=>button(`${d.weights.has(n)?'✓ ':''}${n}g`,20+i*476,160,452,()=>{if(d.weights.has(n))d.weights.delete(n);else d.weights.add(n);draw();},`phone-weight-${n}`,d.weights.has(n)));
-        ready=d.tared&&sum===target;
+        const target=[30,60,70][getDef(it.defId).sprite%3],sum=[...d.weights].reduce((a,n)=>a+n,0);status=`参考质量 ${target}g · 先空秤校零`;reading=`${d.tared?'已校零':'等待校零'} · 砝码 ${sum}g`;
+        if(!d.tared)button('空秤校零',568,160,856,()=>{d.tared=true;},'phone-tare');
+        else [10,20,50].forEach((n,i)=>button(`${d.weights.has(n)?'✓ ':''}${n}g`,568+i*294,160,268,()=>{if(d.weights.has(n))d.weights.delete(n);else d.weights.add(n);},`phone-weight-${n}`,d.weights.has(n)));
+        u.text(m.body,'砝码落盘后，比较天平指针与参考质量。',568,324,856,120,34,C.muted);ready=d.tared&&sum===target;
       }else{
-        status=`负载 ${Math.round(d.load*100)}% · 安全采样区 65–85%`;
-        button('减载 15%',20,160,688,()=>{d.load=Math.max(0,d.load-.15);draw();},'phone-load-minus');
-        button('增载 15%',736,160,688,()=>{d.load=Math.min(1,d.load+.15);draw();},'phone-load-plus');ready=d.load>=.65&&d.load<=.85;
+        status='脉冲负载 · 安全区 65–85%';reading=`当前负载 ${Math.round(d.load*100)}%`;
+        button('减载 15%',568,160,400,()=>{d.load=Math.max(0,d.load-.15);},'phone-load-minus');
+        button('增载 15%',996,160,428,()=>{d.load=Math.min(1,d.load+.15);},'phone-load-plus');
+        u.text(m.body,'逐级增载，观察夹具脉冲与负载波形。',568,324,856,120,34,C.muted);ready=d.load>=.65&&d.load<=.85;
       }
-      if(!already){u.row(m.body,status,20,0,1404,86,34,C.cyan);if(tool!=='TOL-003')u.text(m.body,'完成上面的操作后，点击「记录证据」。\n关闭面板会保留本件实物的操作进度。',20,324,1404,168,34,C.muted);}
+      if(!already)u.row(m.body,status,568,0,856,86,32,C.cyan);
+      u.row(preview,reading,20,434,480,60,28,ready?C.cyan:C.orange);
+      if(!already&&(tool==='TOL-002'||tool==='TOL-006')){
+        const value=tool==='TOL-002'?d.uv:d.load,g=this.ui.container(preview,24,494,472,6,'instrument-progress').addComponent<Graphics>(Graphics);
+        g.fillColor=new Color('#0B1215');g.rect(0,-6,472,6);g.fill();g.fillColor=new Color(tool==='TOL-002'?C.purple:C.orange);g.rect(0,-6,472*value,6);g.fill();
+      }
       u.button(m.body,'返回工作台',20,536,688,()=>m.close(),{name:'phone-tool-return'});
       u.button(m.body,already?'复测读数':'记录证据',736,536,688,commit,{tone:'gold',disabled:!ready,name:'phone-tool-record'});
+      if(feedback)void this.motion.effect(kind,preview,{x:8,y:96,width:504,height:338},{x:44,y:108,width:432,height:320},undefined,true);
     };draw();
   }
 
-  start():void{void this.boot().catch(error=>{console.error('Orbital game initialization failed',error);const el=document.getElementById('load-status');if(el)el.textContent='空间站载入失败，请刷新重试。';});}
+  start():void{void this.boot().catch(error=>{console.error('Orbital game initialization failed',error);const el=document.getElementById('load-status');if(el)el.textContent='空间站载入失败，请重新打开。';(window as unknown as {__ORBITAL_LOADING_FAILED__?:(text:string)=>void}).__ORBITAL_LOADING_FAILED__?.('空间站载入失败，请检查网络后重新打开。');});}
   private async boot():Promise<void>{
     view.setDesignResolutionSize(W,H,ResolutionPolicy.SHOW_ALL);
     const canvasNode=new Node('OrbitalCanvas');canvasNode.layer=Layers.Enum.UI_2D;this.node.addChild(canvasNode);
@@ -204,8 +217,9 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.ui=new OrbitalUI(root);this.shell=this.ui.container(root,0,0,W,H,'OrbitalView');this.audio=this.node.addComponent<AudioSource>(AudioSource);
     try{this.state=parseOrbital(sys.localStorage.getItem(SAVE))||createOrbital();this.prefs={...this.prefs,...JSON.parse(sys.localStorage.getItem(PREFS)||'{}')};}catch{this.state=createOrbital();}
     this.selected=this.state.inventory[0]?.uid||'';
+    const loading=document.getElementById('load-status');if(loading)loading.textContent='正在搬入货物与人物…';
     await this.ui.preload();if(this.disposed)return;
-    this.motion=new OrbitalMotion(this.ui,root);this.motion.setRegions({contentArea:{x:24,y:108,width:1552,height:700},inspectionArea:INSPECTION_AREA});this.panels=new OrbitalPanels(this);
+    this.motion=new OrbitalMotion(this.ui,root);this.motion.setRegions({contentArea:{x:24,y:108,width:1552,height:700},inspectionArea:this.inspectionArea});this.panels=new OrbitalPanels(this);
     this.coach=new Coach({ui:this.ui,state:()=>this.state,page:()=>this.page,busy:()=>this.busy,reducedMotion:()=>this.prefs.reducedMotion,
       blocked:()=>!!this.titleScreen?.isValid||this.ui.root.children.some(n=>n.name==='modal-overlay'&&n.activeInHierarchy),
       button:(parent,text,x,y,w,h,fn,options)=>this.button(parent,text,x,y,w,h,fn,options)});
@@ -213,7 +227,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     input.on(Input.EventType.KEY_DOWN,this.onKey,this);void this.loadAudio();
     this.pointerCanvas=game.canvas;this.pointerCanvas?.addEventListener('pointerleave',this.cancelPointer);this.pointerCanvas?.addEventListener('mouseleave',this.cancelPointer);
     window.addEventListener('blur',this.cancelPointer);window.addEventListener('pointercancel',this.cancelPointer);window.addEventListener('resize',this.cancelPointer);
-    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v15',start:()=>this.startFromTitle(false),title:()=>!!this.titleScreen?.isValid,snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({coach:this.coach?.active?this.coachStep():null,page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>{this.dismissTitle();this.dispatch(a);},open:(p:PageId,uid?:string)=>{this.dismissTitle();this.navigate(p,uid);},reset:(seed='ORBITAL-TUTORIAL')=>{this.dismissTitle();this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
+    const debug={engine:'Cocos Creator 3.8.8',version:'orbital-p0-v16',start:()=>this.startFromTitle(false),title:()=>!!this.titleScreen?.isValid,snapshot:()=>JSON.parse(JSON.stringify(this.state)),controls:()=>this.controls(),diagnostics:()=>({coach:this.coach?.active?this.coachStep():null,page:this.page,busy:this.busy,tool:this.tool,back:this.back,zoom:this.zoom,selected:this.selected,motion:this.motion.snapshot(),moods:this.ui.getMoodDiagnostics(),object:this.object?{x:this.pose.x,y:this.pose.y,angle:this.object.angle,scale:this.object.scale.x,bounds:this.inspectionEffectRect()}:null}),dispatch:(a:OrbitalAction)=>{this.dismissTitle();this.dispatch(a);},open:(p:PageId,uid?:string)=>{this.dismissTitle();this.navigate(p,uid);},reset:(seed='ORBITAL-TUTORIAL')=>{this.dismissTitle();this.skip();this.state=createOrbital(seed);this.selected=this.state.inventory[0]?.uid||'';this.page='counter';this.resetInspection(this.selected);this.drafts.clear();this.save();this.render();},click:(name:string)=>{const n=this.all(this.ui.root).find(x=>x.name===name);const fn=(n as unknown as {__action?:()=>void})?.__action;if(fn){fn();return true;}return false;}};
     (window as unknown as {__ORBITAL__:typeof debug;__GREYLINE__:typeof debug}).__ORBITAL__=debug;(window as unknown as {__GREYLINE__:typeof debug}).__GREYLINE__=debug;
     document.dispatchEvent(new CustomEvent('greyline-ready'));
     this.showTitle();
@@ -297,8 +311,8 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.render();
     const after=this.state;
     if(action.type==='ARRIVE'&&after.trade&&!before.trade){
-      const actor=this.actor,it=after.trade.item;this.setCounterVisible(false);
-      void this.play(async active=>{if(actor)await this.motion.enter(actor);if(active()&&it)await this.motion.handoff(it.defId,{x:675,y:450},{x:900,y:556},()=>{if(active()){this.setCounterVisible(true);this.sound('drop');}},316);if(active())this.setCounterVisible(true);});
+      const actor=this.actor,it=after.trade.item,placement=this.ui.phone?{x:380,y:410}:{x:900,y:556},source=this.ui.phone?{x:210,y:392}:{x:675,y:450};this.setCounterVisible(false);
+      void this.play(async active=>{if(actor)await this.motion.enter(actor);if(active()&&it)await this.motion.handoff(it.defId,source,placement,()=>{if(active()){this.setCounterVisible(true);this.sound('drop');}},316);if(active())this.setCounterVisible(true);});
     }else if(action.type==='DELIVER'&&before.trade&&!after.trade&&after.completedTrades.includes(before.trade.id)){
       void this.play(async active=>{await this.motion.deal(after.cash-before.cash,oldItem?.defId,counterOrigin);if(active())await this.motion.exit(before.trade!.npcId);});
     }else if(action.type==='OFFER'&&after.trade&&before.trade&&after.trade.rounds>before.trade.rounds&&this.actor){
@@ -306,9 +320,12 @@ export class OrbitalMain extends Component implements OrbitalHost {
     }else if((action.type==='REFUSE'||action.type==='OFFER')&&before.trade&&!after.trade){this.ui.setMood(before.trade.npcId,'reject');this.sound('reject');void this.play(()=>this.motion.exit(before.trade!.npcId));}
     else if(action.type==='CHECK'&&after.ap<=before.ap&&findItem(after,action.uid)?.evidence.includes(action.tool)){
       this.toolEffect(action.tool,this.content);
-    }else if(action.type==='REPAIR'&&findItem(after,action.uid)?.repaired&&!findItem(before,action.uid)?.repaired){this.effect('repair',this.content,{x:480,y:260,width:500,height:350});setTimeout(()=>{if(!this.disposed&&this.page==='repair')this.effect('shine',this.content,{x:440,y:200,width:580,height:400},{x:470,y:240,width:520,height:340});},850);}
-    else if(action.type==='CRAFT'&&after.inventory.length!==before.inventory.length)this.effect('assemble',this.content,{x:470,y:250,width:500,height:350});
-    else if(action.type==='SCAN'&&after.scanned.length>before.scanned.length)this.effect('scan',this.content,{x:792,y:286,width:265,height:268});
+    }else if(action.type==='REPAIR_STEP'&&this.ui.phone&&(after.repairProgress[action.uid]||0)>(before.repairProgress[action.uid]||0)){
+      const kind=['magnify','assemble','probe'][before.repairProgress[action.uid]||0];
+      if(this.page==='repair'&&kind)this.effect(kind,this.content,this.phoneWorkpieceRect());
+    }else if(action.type==='REPAIR'&&findItem(after,action.uid)?.repaired&&!findItem(before,action.uid)?.repaired){this.effect('repair',this.content,this.ui.phone?this.phoneWorkpieceRect():{x:480,y:260,width:500,height:350});setTimeout(()=>{if(!this.disposed&&this.page==='repair'&&this.selected===action.uid){const target=this.ui.phone?this.phoneWorkpieceRect():{x:440,y:200,width:580,height:400};this.effect('shine',this.content,target,this.ui.phone?target:{x:470,y:240,width:520,height:340});};},850);}
+    else if(action.type==='CRAFT'&&after.inventory.length!==before.inventory.length)this.effect('assemble',this.content,this.ui.phone?this.phoneWorkpieceRect():{x:470,y:250,width:500,height:350});
+    else if(action.type==='SCAN'&&after.scanned.length>before.scanned.length)this.effect('scan',this.content,this.ui.phone?this.phoneWorkpieceRect():{x:792,y:286,width:265,height:268});
     else if(action.type==='SETTLE'&&after.phase==='report'&&before.phase!=='report')this.effect('stamp',this.content,{x:740,y:600,width:190,height:150},undefined,'已结算');
     else if(action.type==='NEXT'&&after.day!==before.day)void this.play(()=>this.motion.dayTransition(after.day,after.day%7===0?'今天是租金日 · 留足现金':'回环九号 · 舱门开启'));
     else if(action.type==='UPGRADE'&&!before.upgrades[action.id]&&after.upgrades[action.id])this.effect('upgrade',this.content);
@@ -334,7 +351,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
   private async play(run:(active:()=>boolean)=>Promise<void>):Promise<void>{
     const epoch=++this.epoch;this.busy=true;this.ui.pointer.refresh();this.motion.configure({reducedMotion:this.prefs.reducedMotion});
     this.skipNode?.destroy();
-    if(this.ui.phone){this.skipNode=this.ui.button(this.ui.root,'跳过动画',32,132,716,108,()=>this.skip(),{size:34,name:'skip-animation'});Object.assign(this.skipNode,{__action:()=>this.skip(),__enabled:true});}
+    if(this.ui.phone){this.skipNode=this.ui.button(this.ui.root,'跳过动画',1012,8,264,108,()=>this.skip(),{size:34,name:'skip-animation'});Object.assign(this.skipNode,{__action:()=>this.skip(),__enabled:true});}
     else{this.skipNode=this.ui.container(this.ui.root,1250,770,320,26,'skip-animation');this.row(this.skipNode,'空格 · 跳过动画',0,0,320,26,14,C.text,'right');this.skipNode.on(Node.EventType.TOUCH_END,()=>this.skip());}
     try{await run(()=>epoch===this.epoch);}finally{if(epoch===this.epoch){this.busy=false;this.ui.pointer.refresh();this.skipNode?.removeFromParent();this.skipNode?.destroy();this.skipNode=null;this.setCounterVisible(true);}}
   }
@@ -355,7 +372,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     if(this.busy)this.skip();
     if(this.chrome?.isValid){this.chrome.removeFromParent();this.chrome.destroy();}this.chrome=null;this.dialogueNodes=[];
         this.cancelPointer();this.ui.clear(this.shell);this.objectDragging=false;this.object=null;this.inspectionShadow=null;this.scaleLabel=null;this.zoomIn=null;this.zoomOut=null;this.actor=null;this.counterObject=null;this.counterShadow=null;this.counterTags=[];this.focused=null;
-    this.ui.reducedMotion=this.prefs.reducedMotion;
+    this.ui.reducedMotion=this.prefs.reducedMotion;this.motion.configure({reducedMotion:this.prefs.reducedMotion});
     this.presentation.reducedMotion=this.prefs.reducedMotion;
     if(!this.prefs.sound)this.ambience?.stop();
     const image=this.page==='inspect'||this.page==='repair'?'orbital-workbench':this.page==='warehouse'?'orbital-warehouse':'orbital-counter';
@@ -366,8 +383,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     else if(this.page==='counter'||this.page==='trade')this.counter();
     else if(this.page==='inspect')this.inspection();
     else this.panels.draw(this.page,this.content);
-    if(this.hudAp!==null&&this.state.ap<this.hudAp&&!this.titleScreen)void this.motion.float(`−${this.hudAp-this.state.ap} AP`,{x:930,y:92});
-    this.hudAp=this.state.ap;
+    const spentAp=this.hudAp===null?0:Math.max(0,this.hudAp-this.state.ap);this.hudAp=this.state.ap;
     const pageContent=this.content;this.chrome=this.ui.container(this.ui.root,0,0,W,H,'persistent-chrome');this.content=this.chrome;this.header();this.footer();for(const n of [...this.dialogueNodes,...this.counterTags])if(n.isValid)n.setParent(this.chrome);this.content=pageContent;
     // The title shows only the painted shop; page UI and HUD return when play starts.
     if(this.titleScreen?.isValid){this.titleScreen.setSiblingIndex(this.ui.root.children.length-1);this.chrome.active=false;pageContent.active=false;}
@@ -375,6 +391,8 @@ export class OrbitalMain extends Component implements OrbitalHost {
     // Those sheets must keep swallowing header/footer input after the chrome is rebuilt.
     for(const overlay of this.ui.root.children.filter(n=>n.name==='modal-overlay'&&n.activeInHierarchy))overlay.setSiblingIndex(this.ui.root.children.length-1);
     this.motion.bindAmbient({parent:this.content,actor:this.actor||undefined,area:{x:310,y:160,width:860,height:500}});
+    // Rebinding clears the previous workspace's effects; add new feedback afterwards.
+    if(spentAp>0&&!this.titleScreen)void this.motion.float(`−${spentAp} AP`,this.ui.phone?{x:390,y:98}:{x:930,y:92});
     // Page change: the new workspace rises in; the HUD and dock stay put.
     if(this.lastPage!==null&&this.lastPage!==this.page&&!this.prefs.reducedMotion&&!this.titleScreen){
       const node=pageContent,o=node.getComponent<UIOpacity>(UIOpacity)||node.addComponent<UIOpacity>(UIOpacity);
@@ -395,8 +413,8 @@ export class OrbitalMain extends Component implements OrbitalHost {
       const ui=this.phoneUI,g=ui.panel(p,24,8,968,108,'player-resource-hud');
       ui.row(g,`第 ${s.day} 天`,24,0,224,108,36);
       ui.row(g,`行动 ${s.ap}/12`,252,0,284,108,36,C.cyan);
-      this.hudCash=s.cash;this.hudCashLabel=null;
-      ui.row(g,`${s.cash.toLocaleString()} Cr`,552,0,396,108,40,C.orange);
+      if(this.hudCash===null)this.hudCash=s.cash;
+      this.hudCashLabel=ui.row(g,`${this.hudCash.toLocaleString()} Cr`,552,0,396,108,40,C.orange).getComponent<Label>(Label);
       ui.button(p,'玩法说明',1012,8,264,()=>this.openHelp(),{name:'button-帮助'});
       ui.button(p,'菜单',1296,8,280,()=>this.phoneMenu(),{name:'button-菜单'});return;
     }
@@ -542,7 +560,8 @@ export class OrbitalMain extends Component implements OrbitalHost {
       if(this.ui.phone){
         const dialogue=this.button(p,'',32,536,716,228,()=>t?openPeople(this,npc.id,line):openStationEvents(this),{tone:'quiet',name:'phone-dialogue'});
         this.phoneUI.row(dialogue,t?npc.name:'营业广播',24,8,668,54,32,C.orange);
-        this.phoneUI.text(dialogue,`${line.slice(0,64)}${line.length>64?'…':''}`,24,66,668,120,28);
+        const excerpt=`${line.slice(0,64)}${line.length>64?'…':''}`,speech=this.phoneUI.text(dialogue,excerpt,24,66,668,120,28).getComponent<Label>(Label)!;
+        this.presentation.speak(speech,excerpt,`${t?.id||`broadcast-${s.day}-${s.cursor}`}:${line}`);
         this.phoneUI.row(dialogue,t?'点按阅读全文与人物档案':'点按查看每日站内消息',24,188,668,32,22,C.muted);
         return;
       }
@@ -712,7 +731,8 @@ export class OrbitalMain extends Component implements OrbitalHost {
     this.inspectionShadow=this.ui.container(viewport,0,0,1,1,'inspection-object-shadow');this.inspectionShadow.addComponent<Graphics>(Graphics);
     const obj=this.ui.container(viewport,this.pose.x-area.x,this.pose.y-area.y,404,404,'InspectionObject');
     obj.getComponent<UITransform>(UITransform)!.setAnchorPoint(.5,.5);this.object=obj;
-    const inspectionArt=this.ui.object(obj,it.defId,-202,-202,404,404,{back:this.back,damaged:it.condition<.75&&!it.repaired,repaired:it.repaired});inspectionArt.name='inspection-item-art';
+    const turntable=this.ui.container(obj,0,0,404,404,'inspection-turntable');turntable.getComponent<UITransform>(UITransform)!.setAnchorPoint(.5,.5);
+    const inspectionArt=this.ui.object(turntable,it.defId,-202,-202,404,404,{back:this.back,damaged:it.condition<.75&&!it.repaired,repaired:it.repaired});inspectionArt.name='inspection-item-art';
     const hit=getItemHitBounds(it.defId,this.back,404),transform=obj.getComponent<UITransform>(UITransform)!;
     transform.setContentSize(hit.width,hit.height);transform.setAnchorPoint(-hit.x/hit.width,1+hit.y/hit.height);
     this.ui.bindDraggable(obj,()=>!this.busy);
@@ -731,7 +751,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     obj.on(Node.EventType.TOUCH_END,releaseObject);obj.on(Node.EventType.TOUCH_CANCEL,releaseObject);
     obj.on(Node.EventType.MOUSE_WHEEL,(e:EventMouse)=>{const delta=e.getScrollY();if(!this.busy&&delta!==0)this.changeZoom(delta>0?.08:-.08);});
     this.applyInspectionPose();
-    this.inspectionFx??=new InspectionFeedback(this.ui);this.inspectionFx.reducedMotion=this.prefs.reducedMotion;this.inspectionFx.bind(p,inspectionArt,this.inspectionShadow);
+    this.inspectionFx??=new InspectionFeedback(this.ui);this.inspectionFx.reducedMotion=this.prefs.reducedMotion;this.inspectionFx.bind(p,turntable,this.inspectionShadow,this.inspectionArea);
     if(phone){this.phoneInspection(p,it,draft);return;}
     this.zoomOut=this.button(p,'−',420,654,48,40,()=>this.changeZoom(-.1),{tone:'quiet'});
     this.zoomIn=this.button(p,'＋',476,654,48,40,()=>this.changeZoom(.1),{tone:'quiet'});
@@ -793,10 +813,21 @@ export class OrbitalMain extends Component implements OrbitalHost {
     if(this.scaleLabel?.isValid)this.scaleLabel.string=`${this.zoom.toFixed(1)}×`;
   }
   private changeZoom(n:number):void{this.zoom=Math.max(.45,Math.min(1.35,this.zoom+n));this.applyInspectionPose();}
+  private animatePhoneItem(kind:'flip'|'rotate'|'place'):void{
+    const art=this.object?.getChildByName('inspection-turntable');if(!art?.isValid||!this.ui.phone||this.prefs.reducedMotion)return;
+    Tween.stopAllByTarget(art);art.setScale(1,1,1);art.angle=0;
+    if(kind==='rotate'){art.angle=-30;tween<Node>(art).to(.24,{angle:0},{easing:'quadOut'}).start();}
+    else{art.setScale(kind==='flip'?.08:.92,kind==='flip'?1:.92,1);tween<Node>(art).to(.28,{scale:new Vec3(1,1,1)},{easing:'cubicOut'}).start();}
+  }
+  private phoneWorkpieceRect():{x:number;y:number;width:number;height:number}{
+    const node=this.all(this.content).find(n=>n.name==='phone-selected-item'),t=node?.getComponent<UITransform>(UITransform),root=this.content.getComponent<UITransform>(UITransform)!;
+    if(node&&t){const world=t.convertToWorldSpaceAR(new Vec3(-t.anchorX*t.width,(1-t.anchorY)*t.height,0)),point=root.convertToNodeSpaceAR(world);return{x:point.x-10,y:-point.y-10,width:t.width+20,height:t.height+20};}
+    return{x:1230,y:136,width:340,height:240};
+  }
   private finishTool(it:OrbitalItem):void{
     const tool=this.tool,point=this.object&&this.inspectionFx?this.inspectionFx.point(this.object):{x:this.pose.x,y:this.pose.y},had=it.evidence.includes(tool);
     this.dispatch({type:'CHECK',uid:it.uid,tool});
-    if(!had&&findItem(this.state,it.uid)?.evidence.includes(tool))this.inspectionFx?.contact(point,C.cyan,{x:1295+tools.findIndex(t=>t.id===tool)*46,y:305});
+    if(!had&&findItem(this.state,it.uid)?.evidence.includes(tool))this.inspectionFx?.contact(point,C.cyan,this.ui.phone?{x:1404,y:182}:{x:1295+tools.findIndex(t=>t.id===tool)*46,y:305});
   }
   private toolInteraction(p:Node,it:OrbitalItem,d:Draft):void{
     const already=it.evidence.includes(this.tool),tool=getTool(this.tool);
@@ -953,7 +984,7 @@ export class OrbitalMain extends Component implements OrbitalHost {
     if(this.hudCash!==null&&this.hudCash!==this.state.cash){
       const diff=this.state.cash-this.hudCash,step=Math.sign(diff)*Math.max(1,Math.abs(diff)*Math.min(1,dt*6));
       this.hudCash=this.prefs.reducedMotion||Math.abs(step)>=Math.abs(diff)?this.state.cash:Math.round(this.hudCash+step);
-      if(this.hudCashLabel?.isValid){this.hudCashLabel.string=this.hudCash.toFixed(this.hudCash%1?2:0);this.hudCashLabel.color=new Color(this.hudCash===this.state.cash?'#FFCB8E':diff>0?'#C8FFB0':'#FF9A7A');}
+      if(this.hudCashLabel?.isValid){this.hudCashLabel.string=this.ui.phone?`${this.hudCash.toLocaleString()} Cr`:this.hudCash.toFixed(this.hudCash%1?2:0);this.hudCashLabel.color=new Color(this.hudCash===this.state.cash?'#FFCB8E':diff>0?'#C8FFB0':'#FF9A7A');}
     }
     this.motion?.update(dt);this.coach?.update(dt);this.coach?.animate(dt);this.panels?.update(dt);this.presentation.update(dt);this.updateInspectionFeedback(dt);}
   onDestroy():void{this.cancelPointer();this.pointerCanvas?.removeEventListener('pointerleave',this.cancelPointer);this.pointerCanvas?.removeEventListener('mouseleave',this.cancelPointer);window.removeEventListener('blur',this.cancelPointer);window.removeEventListener('pointercancel',this.cancelPointer);window.removeEventListener('resize',this.cancelPointer);this.disposed=true;this.ambience?.stop();this.presentation.dispose();this.disposeInspectionFeedback();this.motion?.dispose();this.panels?.dispose();input.off(Input.EventType.KEY_DOWN,this.onKey,this);}
