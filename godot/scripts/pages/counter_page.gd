@@ -165,7 +165,7 @@ func _spawn_mat_item(it: Dictionary, animate: bool, from := Vector2.ZERO) -> voi
 
 ## A small metal sign: what happens today, and when rent falls due.
 func _build_board() -> void:
-	board = UIKit.plate(UIKit.skin("glass", "lg", 22.0))
+	board = UIKit.plate(UIKit.skin("glass", "sm", 20.0))
 	board.mouse_filter = Control.MOUSE_FILTER_STOP
 	board.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	board.tooltip_text = "打开今日站内消息"
@@ -225,7 +225,7 @@ func _build_strip() -> void:
 
 ## The stock crate: what the shop holds. During a sale, a click recommends.
 func _build_crate() -> void:
-	crate = UIKit.plate(UIKit.skin("socket", "lg", 18.0))
+	crate = UIKit.plate(UIKit.skin("socket", "sm", 16.0))
 	add_child(crate)
 	var v := UIKit.vbox(8)
 	crate.add_child(v)
@@ -249,7 +249,7 @@ func _build_crate() -> void:
 
 ## The archive box: the shop's paperwork, one drawer each.
 func _build_archive() -> void:
-	archive = UIKit.plate(UIKit.skin("graphite", "lg", 18.0))
+	archive = UIKit.plate(UIKit.skin("graphite", "sm", 16.0))
 	add_child(archive)
 	var v := UIKit.vbox(8)
 	archive.add_child(v)
@@ -257,9 +257,10 @@ func _build_archive() -> void:
 	var row := UIKit.hbox(8)
 	v.add_child(row)
 	for spec in [["订单委托", "orders"], ["人物档案", "handbook"], ["经营手册", "help"], ["今日账本", "report"], ["站内消息", "speech"]]:
-		var b := UIKit.button(spec[0], "secondary", Vector2(78, 0), 14, spec[1])
+		var b := UIKit.button(spec[0], "secondary", Vector2(76, 92), 14, spec[1])
+		UIKit.compact(b)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.add_theme_constant_override("icon_max_width", 34)
@@ -269,6 +270,7 @@ func _build_archive() -> void:
 		if spec[1] == "orders":
 			orders_tile = b
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
 
 func _open_drawer(drawer: String) -> void:
 	shell.sound("page", -8)
@@ -424,7 +426,7 @@ func _stock_clicked(uid: String, picking: bool, why) -> void:
 # ---------------------------------------------------------------- terminal
 
 func _build_terminal() -> void:
-	terminal = UIKit.plate(UIKit.skin("strip", "lg", 20.0))
+	terminal = UIKit.plate(UIKit.skin("strip", "sm", 20.0))
 	add_child(terminal)
 	var v := UIKit.vbox(10)
 	terminal.add_child(v)

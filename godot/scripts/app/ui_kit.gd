@@ -67,10 +67,12 @@ static func skin(name: String, size := "lg", pad := -1.0, tint := Color.WHITE) -
 	s.texture = tex("res://assets/ui/skin/%s_%s.png" % [name, size])
 	var k: float = SKIN_SCALE[size]
 	s.set_texture_margin_all(roundf(SKIN_CAP[name] * k))
-	# The painted rim starts inside a transparent border; pull it out to the
-	# control's edge so frames line up with their hit area.
-	s.set_expand_margin_all(roundf(SKIN_EDGE[name] * k))
-	var p := pad if pad >= 0.0 else roundf((SKIN_CAP[name] - SKIN_EDGE[name]) * k) + 6.0
+	# Never draw outside the control: frames pushed past their box got cut
+	# at the screen edge and overlapped neighbours. The thin transparent
+	# border of the source cell is simply part of the inset.
+	# Content always clears the painted rim (keys override this afterwards).
+	var rim := roundf(SKIN_CAP[name] * k) - 4.0
+	var p := maxf(pad, rim) if pad >= 0.0 else rim + 6.0
 	s.set_content_margin_all(p)
 	s.modulate_color = tint
 	return s
@@ -90,7 +92,9 @@ static func screen_style(pad := 10) -> StyleBox:
 const KEY_SKIN := {"primary": "amber", "secondary": "graphite", "danger": "graphite", "good": "glass", "chip": "socket"}
 const KEY_TINT := {"primary": Color(1, 1, 1), "secondary": Color(0.92, 0.95, 1.0), "danger": Color(1.25, 0.72, 0.66), "good": Color(0.8, 1.2, 0.95), "chip": Color(1, 1, 1)}
 
-static func key_style(kind: String, state: String) -> StyleBox:
+## compact: icon-only keys and small tiles use the thin xs rim and tight
+## padding, so the icon or label fills the key instead of a heavy frame.
+static func key_style(kind: String, state: String, compact := false) -> StyleBox:
 	var tint: Color = KEY_TINT.get(kind, Color.WHITE)
 	match state:
 		"hover":
@@ -99,9 +103,9 @@ static func key_style(kind: String, state: String) -> StyleBox:
 			tint = tint * Color(0.78, 0.78, 0.78)
 		"disabled":
 			tint = Color(0.42, 0.44, 0.46, 0.85)
-	var s := skin(KEY_SKIN.get(kind, "graphite"), "xs" if kind == "chip" else "sm", 0.0, tint)
-	s.content_margin_left = 16
-	s.content_margin_right = 16
+	var s := skin(KEY_SKIN.get(kind, "graphite"), "xs" if kind == "chip" or compact else "sm", 0.0, tint)
+	s.content_margin_left = 6 if compact else 16
+	s.content_margin_right = 6 if compact else 16
 	s.content_margin_top = 6 + (2 if state == "pressed" else 0)
 	s.content_margin_bottom = 6 - (2 if state == "pressed" else 0)
 	return s
@@ -168,8 +172,9 @@ static func button(text: String, kind := "secondary", min_size := Vector2(0, 58)
 	b.focus_mode = Control.FOCUS_ALL
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	b.add_theme_font_size_override("font_size", size)
+	var compact := text == ""
 	for st in ["normal", "hover", "pressed", "disabled"]:
-		b.add_theme_stylebox_override(st, key_style(kind, st))
+		b.add_theme_stylebox_override(st, key_style(kind, st, compact))
 	if kind == "primary":
 		# Cream lettering with a burnt outline stays legible on the copper key.
 		for c in ["font_color", "font_hover_color", "font_focus_color"]:
@@ -211,6 +216,11 @@ static func _button_feedback(b: Button, target_scale: Vector2, target_color: Col
 	b.set_meta("feedback_tween", tw)
 	tw.tween_property(b, "scale", target_scale, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tw.tween_property(b, "modulate", target_color, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+## Re-skin an existing key as compact (thin rim, tight padding).
+static func compact(b: Button, kind := "secondary") -> void:
+	for st in ["normal", "hover", "pressed", "disabled"]:
+		b.add_theme_stylebox_override(st, key_style(kind, st, true))
 
 static func plate(style: StyleBox = null) -> PanelContainer:
 	var p := PanelContainer.new()
