@@ -37,5 +37,7 @@ func run() -> void:
 		check(load(path) != null, "Missing room/UI: " + path)
 	check(not ResourceLoader.exists("res://assets/scene/counter_bg.png"), "Legacy counter art should not ship")
 	check(not ResourceLoader.exists("res://assets/atlas/orbital-characters.png"), "Unused legacy residents should not ship")
+	for theme in ["shop", "workbench", "storeroom", "ledger"]:
+		check(not ResourceLoader.exists("res://assets/music/%s.ogg" % theme), "Room theme must load outside the initial pack: " + theme)
 	print("EXPORTED ASSETS: ", GameData.items.size(), " items, ", GameData.people().size(), " residents, ", GameData.tools.size(), " instruments; failures=", failures)
 	quit(1 if failures else 0)

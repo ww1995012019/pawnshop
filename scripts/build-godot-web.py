@@ -38,6 +38,23 @@ def package_web(pack, runtime, output):
         assets[engine + path.name[len("index"):]] = path.read_bytes()
     if (runtime / "LICENSE.txt").is_file():
         assets["godot-license.txt"] = (runtime / "LICENSE.txt").read_bytes()
+    music = {}
+    for theme in ("shop", "workbench", "storeroom", "ledger"):
+        data = (ROOT / "godot/assets/music" / (theme + ".ogg")).read_bytes()
+        name = "music-" + digest(data)[:16] + ".ogg"
+        assets[name] = data
+        music[theme] = name
+    loader = (ROOT / "godot/web/asset-loader.js").read_bytes()
+    loader_name = "assets-" + digest(loader)[:16] + ".js"
+    assets[loader_name] = loader
+    transport = {}
+    for name in (pack_name, engine + ".wasm", *music.values()):
+        data = assets[name]
+        compressed = name.endswith((".pck", ".wasm"))
+        transport[name] = {"sha256": digest(data), "bytes": len(data),
+                           "type": "application/wasm" if name.endswith(".wasm") else "audio/ogg" if name.endswith(".ogg") else "application/octet-stream",
+                           "gzip": name + ".gz" if compressed else None,
+                           "gzipBytes": len(gzip.compress(data, compresslevel=9, mtime=0)) if compressed else len(data)}
     for name in ("web-ui.js", "web-ui.css"):
         data = (ROOT / "godot/web" / name).read_bytes()
         assets["touch-" + digest(data)[:16] + Path(name).suffix] = data
@@ -50,10 +67,13 @@ def package_web(pack, runtime, output):
     css_data = assets.pop(css_name).replace(b"loading-shop.png", loading_name.encode())
     css_name = "touch-" + digest(css_data)[:16] + ".css"
     assets[css_name] = css_data
+    previous_assets = old.get("previous_assets", []) if transport == old.get("transport") else list(old.get("transport", {}))
     config = {"args": [], "canvasResizePolicy": 0, "executable": engine,
               "mainPack": pack_name, "fileSizes": {pack_name: len(pack_data),
               engine + ".wasm": len(assets[engine + ".wasm"])}, "focusCanvas": True,
-              "gdextensionLibs": [], "ensureCrossOriginIsolationHeaders": False}
+              "gdextensionLibs": [], "ensureCrossOriginIsolationHeaders": False,
+              "transport": transport, "music": music,
+              "previousAssets": previous_assets}
     html = (ROOT / "godot/web/shell.html").read_text()
     head = f'<link rel="icon" href="{engine}.icon.png">' if (runtime / "index.icon.png").exists() else ""
     for placeholder, value in {"$GODOT_CONFIG": json.dumps(config, separators=(",", ":")),
@@ -62,6 +82,7 @@ def package_web(pack, runtime, output):
         html = html.replace(placeholder, value)
     html = html.replace('"web-ui.js"', f'"{js_name}"').replace('"web-ui.css"', f'"{css_name}"')
     html = html.replace("loading-shop.png", loading_name)
+    html = html.replace("asset-loader.js", loader_name)
     assets["index.html"] = html.encode()
     assets[".nojekyll"] = b""
     for name, data in list(assets.items()):
@@ -81,12 +102,12 @@ def package_web(pack, runtime, output):
     previous = [name for name in previous if Path(name).name == name and name not in assets and (output / name).is_file()]
     retained = set(assets) | set(previous)
     for name in old.get("files", {}):
-        if Path(name).name == name and name not in retained and re.match(r"^(workbench|engine|touch|loading-shop)-[0-9a-f]+\.", name):
+        if Path(name).name == name and name not in retained and re.match(r"^(workbench|engine|touch|loading-shop|assets|music)-[0-9a-f]+\.", name):
             (output / name).unlink(missing_ok=True)
     files = {name: {"bytes": (output / name).stat().st_size,
                     "sha256": digest((output / name).read_bytes())} for name in sorted(retained)}
     result = {"release_id": release_id, "pack": pack_name, "engine": engine, "current_files": sorted(assets),
-              "previous_files": sorted(previous), "files": files,
+              "previous_files": sorted(previous), "files": files, "transport": transport, "music": music, "previous_assets": previous_assets,
               "initial_raw_bytes": len(pack_data) + len(assets[engine + ".wasm"]),
               "initial_gzip_bytes": len(assets[pack_name + ".gz"]) + len(assets[engine + ".wasm.gz"])}
     (output / "release.json").write_text(json.dumps(result, indent=2) + "\n")
@@ -112,6 +133,7 @@ def main():
         build = ROOT / "build/godot"
         build.mkdir(parents=True, exist_ok=True)
         pack = build / "game.pck"
+        subprocess.run(["python3", str(ROOT / "scripts/subset-game-font.py")], check=True)
         for extra in (["--editor", "--import"], ["--export-pack", "Web", str(pack)]):
             subprocess.run([args.godot, "--headless", "--path", str(ROOT / "godot"), *extra], check=True)
     result = package_web(pack, runtime, args.output)

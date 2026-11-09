@@ -44,6 +44,19 @@ class PackagingTests(unittest.TestCase):
         for name in manifest["files"]:
             self.assertTrue((self.out / name).is_file(), name)
 
+    def test_explicit_compressed_transport_has_integrity_and_deferred_music(self):
+        result = self.build.package_web(self.pack, self.runtime, self.out)
+        transport = result["transport"]
+        for name in (result["pack"], result["engine"] + ".wasm"):
+            self.assertEqual(transport[name]["sha256"], self.build.digest((self.out / name).read_bytes()))
+            self.assertEqual(transport[name]["gzip"], name + ".gz")
+        self.assertEqual(set(result["music"]), {"shop", "workbench", "storeroom", "ledger"})
+        for name in result["music"].values():
+            self.assertTrue((self.out / name).is_file())
+        html = (self.out / "index.html").read_text()
+        self.assertIn("OrbitalAssets.install", html)
+        self.assertTrue(any(name.startswith("assets-") and name.endswith(".js") for name in result["current_files"]))
+
     def test_compressed_files_round_trip_and_have_small_transfer_size(self):
         result = self.build.package_web(self.pack, self.runtime, self.out)
         for name in (result["pack"], result["engine"] + ".wasm"):
@@ -62,6 +75,14 @@ class PackagingTests(unittest.TestCase):
         self.assertTrue((self.out / second["pack"]).exists())
         self.assertTrue((self.out / third["pack"]).exists())
         self.assertEqual((self.out / "notes.txt").read_text(), "keep this")
+
+    def test_identical_restage_keeps_previous_release_and_release_id(self):
+        first = self.build.package_web(self.pack, self.runtime, self.out)
+        self.pack.write_bytes(b"next game")
+        second = self.build.package_web(self.pack, self.runtime, self.out)
+        repeated = self.build.package_web(self.pack, self.runtime, self.out)
+        self.assertEqual(second["release_id"], repeated["release_id"])
+        self.assertTrue((self.out / first["pack"]).exists())
 
     def test_engine_update_retains_previous_engine_even_when_pack_is_unchanged(self):
         first = self.build.package_web(self.pack, self.runtime, self.out)

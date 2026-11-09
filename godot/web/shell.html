@@ -94,11 +94,13 @@ h1 { margin: 0; color: var(--paper); font-size: clamp(24px, 4.5vw, 31px); letter
 		</div>
 	</div>
 
+	<script src="asset-loader.js"></script>
 	<script src="web-ui.js"></script>
 	<script src="$GODOT_URL"></script>
 	<script>
 const GODOT_CONFIG = $GODOT_CONFIG;
 const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
+window.OrbitalAssets.install(GODOT_CONFIG);
 const engine = new Engine(GODOT_CONFIG);
 
 (function () {
@@ -112,7 +114,7 @@ const engine = new Engine(GODOT_CONFIG);
 	const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 	const TIPS = [
-		'先鉴定再出价：两条独立物证会让估值收窄，议价时还能援引。',
+		'放大镜看标识，紫外线读编号，称重核对配置；对照说明书再出价。',
 		'接受报价只是锁价，确认交割才真正付钱拿货，花 1 点行动。',
 		'来源不明的货要先扫描、登记，或者放进隔离柜。',
 		'维修的三道工序做完后才扣材料与行动点，中途离开不吃亏。',
@@ -166,23 +168,24 @@ const engine = new Engine(GODOT_CONFIG);
 		return;
 	}
 
-	window.OrbitalTouch.whenLandscape().then(() => engine.startGame({
+	let downloaded = false;
+	window.OrbitalAssets.onProgress = (current, total) => {
+		const p = Math.min(100, Math.floor(current / total * 100));
+		fill.style.width = p + '%'; pct.textContent = p + '%';
+		track.setAttribute('aria-valuenow', String(p));
+		bytes.textContent = mb(current) + ' / ' + mb(total) + ' MB';
+		downloaded = current >= total;
+		stage.textContent = downloaded ? '正在通电、点亮柜台…' : '正在读取压缩货架与库存…';
+	};
+	window.OrbitalTouch.whenLandscape().then(() => Promise.all([
+		// Observe the public load Promise too: vendor init does not forward WASM failures.
+		Engine.load(GODOT_CONFIG.executable, GODOT_CONFIG.fileSizes[GODOT_CONFIG.executable + '.wasm']),
+		engine.startGame({
 		'onProgress': function (current, total) {
 			if (finished) return;
-			if (current > 0 && total > 0) {
-				track.classList.remove('indeterminate');
-				const p = Math.min(100, Math.floor(current / total * 100));
-				fill.style.width = p + '%';
-				pct.textContent = p + '%';
-				track.setAttribute('aria-valuenow', String(p));
-				bytes.textContent = mb(current) + ' / ' + mb(total) + ' MB';
-				stage.textContent = p < 100 ? '正在搬运货架与库存…' : '正在通电、点亮柜台…';
-			} else {
-				track.classList.add('indeterminate');
-				stage.textContent = '正在通电、点亮柜台…';
-			}
+			if (downloaded) stage.textContent = '正在通电、点亮柜台…';
 		},
-	})).then(open, fail);
+	})])).then(open, fail);
 }());
 	</script>
 </body>

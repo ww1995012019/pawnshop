@@ -12,6 +12,10 @@ var buses := {}
 var music_a: AudioStreamPlayer
 var music_b: AudioStreamPlayer
 var current_music := ""
+var music_streams := {}
+var music_requests := {}
+var music_tween: Tween
+var active_music: AudioStreamPlayer
 var stinger: AudioStreamPlayer
 var ambience: AudioStreamPlayer
 var sfx_streams := {}
@@ -72,24 +76,64 @@ func music_for(page: String) -> void:
 
 func play_music(name: String) -> void:
 	if name == current_music:
+		if OS.has_feature("web") and not music_streams.has(name) and not music_requests.has(name):
+			_request_music(name)
+		return
+	if OS.has_feature("web"):
+		current_music = name
+		if music_streams.has(name):
+			_play_stream(music_streams[name])
+		elif not music_requests.has(name):
+			_request_music(name)
 		return
 	var path := "res://assets/music/%s.ogg" % name
 	if not ResourceLoader.exists(path):
 		return
-	var stream: AudioStream = load(path)
+	current_music = name
+	_play_stream(load(path))
+
+func _request_music(name: String) -> void:
+	# The Web release moves room themes outside the initial PCK. Requests
+	# never block entry, and late responses may only play in their own room.
+	var expression := "window.OrbitalAssets?.music[%s] ? new URL(window.OrbitalAssets.music[%s], document.baseURI).href : ''" % [JSON.stringify(name), JSON.stringify(name)]
+	var url = JavaScriptBridge.eval(expression)
+	if url == null or String(url).is_empty():
+		return
+	var request := HTTPRequest.new()
+	request.timeout = 20.0
+	add_child(request)
+	music_requests[name] = request
+	request.request_completed.connect(func(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray):
+		music_requests.erase(name)
+		request.queue_free()
+		if result != HTTPRequest.RESULT_SUCCESS or code != 200:
+			return
+		var stream := AudioStreamOggVorbis.load_from_buffer(body)
+		if stream == null:
+			return
+		music_streams[name] = stream
+		if current_music == name:
+			_play_stream(stream))
+	if request.request(String(url)) != OK:
+		music_requests.erase(name)
+		request.queue_free()
+
+func _play_stream(stream: AudioStream) -> void:
 	if stream is AudioStreamOggVorbis:
 		(stream as AudioStreamOggVorbis).loop = true
-	current_music = name
-	var incoming := music_b if music_a.playing else music_a
-	var outgoing := music_a if incoming == music_b else music_b
+	if music_tween != null and music_tween.is_valid():
+		music_tween.kill()
+	var incoming := music_b if active_music == music_a else music_a
+	var outgoing := active_music
+	active_music = incoming
 	incoming.stream = stream
 	incoming.volume_db = -40.0
 	incoming.play()
-	var tw := create_tween().set_parallel(true)
-	tw.tween_property(incoming, "volume_db", 0.0, FADE).set_trans(Tween.TRANS_SINE)
-	if outgoing.playing:
-		tw.tween_property(outgoing, "volume_db", -40.0, FADE).set_trans(Tween.TRANS_SINE)
-		tw.chain().tween_callback(outgoing.stop)
+	music_tween = create_tween().set_parallel(true)
+	music_tween.tween_property(incoming, "volume_db", 0.0, FADE).set_trans(Tween.TRANS_SINE)
+	if outgoing != null and outgoing.playing:
+		music_tween.tween_property(outgoing, "volume_db", -40.0, FADE).set_trans(Tween.TRANS_SINE)
+		music_tween.chain().tween_callback(outgoing.stop)
 
 func sting(name: String) -> void:
 	var path := "res://assets/music/sting_%s.ogg" % name

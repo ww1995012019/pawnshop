@@ -84,6 +84,13 @@ def main():
             page.touchscreen.tap(116, 126)
             wait(page, "!!s.forge_uid", 10000)
             before_ap = state(page, 'ap')
+            # The printed custody card makes the action list scroll on phones.
+            # Locate reports geometry even for a control clipped by its scroller.
+            page.mouse.move(690, 250)
+            page.mouse.wheel(0, 900)
+            page.wait_for_timeout(400)
+            forge_target = locate(page, '伪装造假')
+            assert 60 < forge_target['y'] < 330, 'Forgery control must be reachable by scrolling'
             tap(page, '伪装造假')
             page.wait_for_timeout(400)
             tap(page, '确认伪装')

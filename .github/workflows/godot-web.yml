@@ -30,6 +30,8 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Import and run native regressions
         run: |
+          python scripts/subset-game-font.py
+          python scripts/test-game-font.py
           godot --headless --editor --path godot --import
           python scripts/test-godot-native.py
           python scripts/test-godot-packaging.py
@@ -44,6 +46,7 @@ jobs:
           python scripts/serve-godot-web.py --port 4174 > work/web-server.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
+          python scripts/test-godot-loading.py
           python scripts/test-godot-web.py http://127.0.0.1:4174/
           python scripts/test-godot-phone.py http://127.0.0.1:4174/
           python scripts/test-merchant-phone.py http://127.0.0.1:4174/
