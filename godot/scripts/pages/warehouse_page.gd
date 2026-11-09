@@ -25,7 +25,7 @@ func hint_text() -> String:
 	if Game.state.day >= 3 and Game.state.inspection == "pending":
 		return "饶静预约核验：来源待核的货要扫描并登记，或放进隔离柜。"
 	if shell._landscape_phone():
-		return "拖动货物换格位；点选后用下方「旋转」调整方向。"
+		return "拖动货物换格位；点选后在右侧详情里点「旋转方向」。"
 	return "拖动货物换格位，拖动时右键旋转；点选查看详情与操作。"
 
 ## Notices drop in at the bottom of the room, under the storage plates
@@ -206,11 +206,12 @@ func _act(g: GridContainer, text: String, kind: String, a, enabled := true, tip 
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.disabled = not enabled
 	b.tooltip_text = tip
+	# Deferred: the action rebuilds this panel, freeing the pressed button.
 	b.pressed.connect(func():
 		if a is Callable:
-			a.call()
+			a.call_deferred()
 		else:
-			Game.dispatch(a))
+			Game.dispatch.call_deferred(a))
 	g.add_child(b)
 
 func _detail() -> void:
@@ -265,6 +266,8 @@ func _detail() -> void:
 	var price_ok: bool = it.owner == "shop" and not it.has("orderId") and not reserved
 	_act(g, "挂牌 −10", "chip", {"type": "PRICE", "uid": it.uid, "price": maxf(1, it.listPrice - 10)}, price_ok and it.listPrice > 1)
 	_act(g, "挂牌 +10", "chip", {"type": "PRICE", "uid": it.uid, "price": it.listPrice + 10}, price_ok)
+	# Touch screens have no right-click while dragging, so rotation also needs a button.
+	_act(g, "旋转方向", "chip", func(): rotate_selected(), can_rotate_selected(), "" if can_rotate_selected() else "需要后仓里有能容纳旋转后形状的空位")
 	_act(g, "已扫描 · 复查" if s.scanned.has(it.uid) else "安检扫描", "secondary", {"type": "SCAN", "uid": it.uid})
 	var reg_why := ""
 	if it.get("stolen", false):

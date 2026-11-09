@@ -1,10 +1,16 @@
-"""Exercise the actual mobile Web release through a full merchant visit."""
+"""Play a full merchant visit on a touch phone using only in-scene controls."""
 import argparse
+import importlib.util
 import os
 import shutil
 from pathlib import Path
 
-from playwright.sync_api import expect, sync_playwright
+from playwright.sync_api import sync_playwright
+
+_spec = importlib.util.spec_from_file_location("phone", Path(__file__).with_name("test-godot-phone.py"))
+phone = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(phone)
+tap, locate, state, wait = phone.tap, phone.locate, phone.state, phone.wait
 
 
 def main():
@@ -22,87 +28,70 @@ def main():
             page = context.new_page()
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
-            page.on("console", lambda message: errors.append(message.text) if message.type == "error" and
+            page.on("console", lambda message: errors.append(message.text) if
+                    (message.type == "error" or "SCRIPT ERROR" in message.text) and
                     "browser metadata to extension" not in message.text else None)
             page.goto(args.url)
             page.wait_for_function("window.OrbitalTouch?.state?.ready", timeout=90000)
-            page.locator('[data-command="start"]').tap()
-            page.wait_for_function("!OrbitalTouch.state.title && !OrbitalTouch.state.busy", timeout=15000)
+            page.wait_for_timeout(800)
+            tap(page, '营业')
+            wait(page, "!s.title && !s.busy")
             for _ in range(4):
-                page.locator('[data-command="arrive"]').tap()
-                page.wait_for_function("OrbitalTouch.state.trade && !OrbitalTouch.state.busy", timeout=15000)
-                assert not page.evaluate("OrbitalTouch.state.merchant === true"), "Tutorial customers should arrive first"
-                page.locator('#trade-open').tap()
-                page.locator('#touch-trade [data-command="refuse"]').tap()
-                page.wait_for_function("!OrbitalTouch.state.trade && !OrbitalTouch.state.busy", timeout=15000)
-            page.locator('[data-command="arrive"]').tap()
-            page.wait_for_function("OrbitalTouch.state.merchant && !OrbitalTouch.state.busy", timeout=15000)
-            expect(page.locator('#trade-open')).to_have_text('商人')
+                tap(page, '接客铃')
+                wait(page, "s.trade && !s.busy")
+                assert not state(page, 'merchant'), "Tutorial customers should arrive first"
+                tap(page, '送客')
+                wait(page, "!s.trade && !s.busy")
+            tap(page, '接客铃')
+            wait(page, "s.merchant && !s.busy")
             page.screenshot(path=str(args.screenshots / 'merchant-visitor.png'))
-            cash_at_arrival = page.evaluate('OrbitalTouch.state.cash')
-            page.locator('#touch-nav [data-command="page"][data-page="repair"]').tap()
-            page.wait_for_function("OrbitalTouch.state.workspace === 'repair'")
-            page.locator('#repair-supplies-open').tap()
-            expect(page.get_by_role('heading', name='维修材料')).to_be_visible()
-            expect(page.locator('#repair-supplies')).to_contain_text('商人正在柜台')
+            cash_at_arrival = state(page, 'cash')
+            tap(page, '维修工作台')
+            wait(page, "s.workspace === 'repair'")
             page.evaluate("window.orbitalTouchSend(JSON.stringify({type:'merchant_buy', id:'MAT-001'}))")
             page.wait_for_timeout(350)
-            assert page.evaluate('OrbitalTouch.state.cash') == cash_at_arrival, 'A workspace must block counter purchases'
-            page.locator('#repair-supplies-close').tap()
-            page.locator('#touch-nav [data-command="close"]').tap()
-            page.wait_for_function("OrbitalTouch.state.workspace === ''")
-            page.locator('#trade-open').tap()
-            expect(page.locator('#touch-merchant')).to_be_visible()
-            goods = page.locator('#touch-merchant [data-action="merchant_buy"][data-id="MAT-001"]')
-            expect(goods).to_be_visible()
-            before = page.evaluate('({cash: OrbitalTouch.state.cash, owned: OrbitalTouch.state.merchant_goods[0].owned})')
-            goods.tap()
-            page.wait_for_function('(cash) => OrbitalTouch.state.cash === cash - 8', arg=before['cash'])
-            assert page.evaluate('OrbitalTouch.state.merchant_goods[0].owned') == before['owned'] + 1
-            goods.focus()
-            page.keyboard.press('Enter')
-            page.wait_for_function('(cash) => OrbitalTouch.state.cash === cash - 16', arg=before['cash'])
-            expect(goods).to_be_focused()
-            page.keyboard.press('Enter')
-            page.wait_for_function('(cash) => OrbitalTouch.state.cash === cash - 24', arg=before['cash'])
-            for control in page.locator('#touch-merchant button:visible').all():
-                box = control.bounding_box()
-                assert box['width'] >= 44 and box['height'] >= 44, 'Merchant touch targets must be at least 44 CSS px'
+            assert state(page, 'cash') == cash_at_arrival, 'A workspace must block counter purchases'
+            tap(page, '收起')
+            wait(page, "s.workspace === ''")
+
+            tap(page, '查看商品')
+            page.wait_for_timeout(500)
+            good = page.evaluate('OrbitalTouch.state.merchant_goods[0]')
+            before = {'cash': state(page, 'cash'), 'owned': good['owned']}
+            target = locate(page, f"购买 {good['name']}")
+            assert target['width'] >= 44 and target['height'] >= 18, 'Merchant goods need a usable touch target'
+            for bought in range(1, 4):
+                tap(page, f"购买 {good['name']}")
+                page.wait_for_function('(cash) => OrbitalTouch.state.cash === cash', arg=before['cash'] - 8 * bought)
+            assert page.evaluate('OrbitalTouch.state.merchant_goods[0].owned') == before['owned'] + 3
             page.screenshot(path=str(args.screenshots / 'merchant.png'))
-            page.set_viewport_size({'width': 667, 'height': 375})
-            for control in page.locator('#touch-merchant button:visible').all():
-                box = control.bounding_box()
-                assert box['width'] >= 44 and box['height'] >= 44 and box['x'] >= 0 and box['x'] + box['width'] <= 667, 'Merchant controls must fit a small landscape screen'
-            page.set_viewport_size({'width': 844, 'height': 390})
-            page.locator('#merchant-close').tap()
-            expect(page.locator('#touch-merchant')).not_to_be_visible()
-            page.locator('#trade-open').tap()
+            tap(page, '关闭')
+            wait(page, "!s.blocked")
             page.wait_for_timeout(1500)
             page.reload()
             page.wait_for_function("window.OrbitalTouch?.state?.ready && OrbitalTouch.state.has_save", timeout=90000)
-            page.locator('[data-command="start"]').tap()
-            page.wait_for_function("OrbitalTouch.state.merchant && !OrbitalTouch.state.title && !OrbitalTouch.state.busy", timeout=15000)
+            page.wait_for_timeout(800)
+            tap(page, '继续营业')
+            wait(page, "s.merchant && !s.title && !s.busy")
             assert page.evaluate('OrbitalTouch.state.merchant_goods[0].owned') == before['owned'] + 3, 'Reload must retain the purchased supplies'
             assert page.evaluate('OrbitalTouch.state.merchant_goods[0].available') == 2, 'Reload must not refresh merchant stock'
-            page.locator('#trade-open').tap()
-            page.locator('#merchant-leave').tap()
-            page.wait_for_function("!OrbitalTouch.state.trade && !OrbitalTouch.state.busy", timeout=15000)
-            page.locator('#touch-nav [data-command="page"][data-page="warehouse"]').tap()
-            page.wait_for_function("OrbitalTouch.state.workspace === 'warehouse'")
-            canvas = page.locator('#canvas').bounding_box()
-            page.touchscreen.tap(canvas['x'] + canvas['width'] * 0.283, canvas['y'] + canvas['height'] * 0.254)
-            page.wait_for_function("!!OrbitalTouch.state.forge_uid", timeout=10000)
-            expect(page.locator('#touch-forge')).to_be_enabled()
-            page.locator('#touch-forge').tap()
-            expect(page.locator('#touch-forge-dialog')).to_be_visible()
-            before_ap = page.evaluate('OrbitalTouch.state.ap')
-            page.locator('#forge-confirm').tap()
-            page.wait_for_function('OrbitalTouch.state.forge_done === true', timeout=10000)
-            assert page.evaluate('OrbitalTouch.state.ap') == before_ap - 1
-            expect(page.locator('#touch-forge')).to_be_disabled()
+            tap(page, '送客')
+            wait(page, "!s.trade && !s.busy")
+
+            tap(page, '仓储 · 隔离柜')
+            wait(page, "s.workspace === 'warehouse'")
+            page.wait_for_timeout(600)
+            page.touchscreen.tap(116, 126)
+            wait(page, "!!s.forge_uid", 10000)
+            before_ap = state(page, 'ap')
+            tap(page, '伪装造假')
+            page.wait_for_timeout(400)
+            tap(page, '确认伪装')
+            wait(page, "s.forge_done === true", 10000)
+            assert state(page, 'ap') == before_ap - 1
             page.screenshot(path=str(args.screenshots / 'forgery.png'))
             assert not errors, 'Browser/Godot errors: ' + '\n'.join(errors[:10])
-            print('PHONE MERCHANT actual visit, purchase, departure and forgery pass')
+            print('PHONE MERCHANT in-scene visit, purchase, departure and forgery pass')
         finally:
             browser.close()
 

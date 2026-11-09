@@ -163,6 +163,9 @@ func command(data: Dictionary) -> void:
 	var kind = data.get("type", "")
 	if not kind is String:
 		return
+	if kind == "locate":
+		_locate(str(data.get("text", "")))
+		return
 	var status := snapshot()
 	if kind == "close":
 		var active = shell.active_shell()
@@ -264,3 +267,26 @@ func command(data: Dictionary) -> void:
 			var uid = data.get("uid", null)
 			if trade != null and trade.kind == "merchant" and uid is String:
 				Game.dispatch({"type": "SELL_MERCHANT_ITEM", "uid": uid})
+
+## Report where an on-screen button is, in CSS pixels, so browser checks can tap
+## the real in-scene control instead of a separate Web overlay.
+func _locate(text: String) -> void:
+	var found: Button = null
+	var stack: Array[Node] = [shell]
+	while not stack.is_empty():
+		var node: Node = stack.pop_front()
+		for child in node.get_children():
+			stack.append(child)
+		if node is Button and text != "" and (node as Button).is_visible_in_tree():
+			var b := node as Button
+			if b.text == text or (found == null or found.text != text) and (b.text.contains(text) or b.tooltip_text.contains(text)):
+				found = b
+	var result := {"found": found != null, "text": text}
+	if found != null:
+		var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1", true))
+		var xf := found.get_viewport().get_screen_transform() * found.get_global_transform_with_canvas()
+		var center: Vector2 = xf * (found.size * 0.5)
+		var corner: Vector2 = xf * found.size - xf * Vector2.ZERO
+		result.merge({"x": center.x / ratio, "y": center.y / ratio, "width": absf(corner.x) / ratio,
+			"height": absf(corner.y) / ratio, "disabled": found.disabled, "label": found.text})
+	JavaScriptBridge.eval("window.__orbitalLocated = %s;" % JSON.stringify(result))

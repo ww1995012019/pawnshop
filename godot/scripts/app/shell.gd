@@ -937,7 +937,10 @@ func modal(title_text: String, width := 900.0) -> Array:
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	modal_layer.add_child(dim)
-	dim.tree_exited.connect(func(): focus_host.call_deferred("_restore_keyboard_focus", previous_focus))
+	# The opener may be rebuilt while the sheet is open (e.g. after a purchase),
+	# so hold it weakly; a freed opener falls back to the first control.
+	var previous_ref: WeakRef = weakref(previous_focus) if previous_focus != null else null
+	dim.tree_exited.connect(func(): focus_host.call_deferred("_restore_keyboard_focus", previous_ref.get_ref() if previous_ref != null else null))
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.add_child(center)
@@ -978,6 +981,7 @@ func modal(title_text: String, width := 900.0) -> Array:
 	var x := UIKit.button("", "secondary", Vector2(52, 52))
 	x.icon = UIKit.icon("close")
 	x.expand_icon = true
+	x.tooltip_text = "关闭"
 	x.pressed.connect(close)
 	head.add_child(x)
 	focus_host.call_deferred("_restore_keyboard_focus", x)

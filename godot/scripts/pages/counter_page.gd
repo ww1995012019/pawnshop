@@ -725,7 +725,9 @@ func _act(text: String, kind: String, fn: Callable, enabled := true, _wide := fa
 		if _scene_blocked():
 			return
 		shell.sound("click", -6)
-		fn.call())
+		# Deferred: most actions refresh the console, which frees this button
+		# while it is still emitting its pressed signal.
+		fn.call_deferred())
 	actions.add_child(b)
 	return b
 
