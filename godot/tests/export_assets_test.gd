@@ -12,9 +12,9 @@ func run() -> void:
 	# registered. Resolve the UI script after the deferred run has begun.
 	var kit = load("res://scripts/app/ui_kit.gd")
 	kit.ensure()
-	check(GameData.items.size() == 15, "Export contains exactly fifteen watch models")
+	check(GameData.items.size() == 33, "Export contains exactly thirty-three watch models")
 	check(GameData.tool_ids == ["TOL-001", "TOL-002", "TOL-005"], "Export contains exactly three watch tools")
-	for index in 15:
+	for index in 33:
 		var id := "WCH-%03d" % (index + 1)
 		check(GameData.items.has(id) and GameData.def(id).category == "watch", "Missing exported watch: " + id)
 		for back in [false, true]:

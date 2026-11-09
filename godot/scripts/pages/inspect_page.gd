@@ -133,6 +133,7 @@ func _refresh_info() -> void:
 		return
 	var def := GameData.def(it.defId)
 	info.add_child(UIKit.module_header(def.name, String(def.description).split("。")[0] + "。", "实物档案"))
+	info.add_child(UIKit.label("型号档次：%s" % GameData.tier_label(it.defId), 17, UIKit.RUST))
 	info.add_child(UIKit.label("观察记录 · %d / %d" % [it.evidence.size(), TOOL_IDS.size()], 17, UIKit.AMBER))
 	var pending: Array[String] = []
 	for index in TOOL_IDS.size():

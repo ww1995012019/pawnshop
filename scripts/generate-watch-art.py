@@ -10,10 +10,32 @@ FACES=['#ddd9bc','#c7ceca','#273841','#274e68','#1e394b','#253e40','#ddd0aa','#2
 STRAPS=['leather','metal','cloth','metal','rubber','cloth','leather','leather','metal','cloth','metal','rubber','leather','leather','metal']
 STRAPCOL=['#76543f','#9eabad','#5e695b','#a6b7bb','#273236','#737856','#735244','#513f3a','#9baba9','#77705a','#879496','#3d5150','#66493b','#78513b','#a4aa9c']
 
+# Each additional model keeps its own palette and silhouette; old 15 cells stay unchanged.
+NEW_TEMPLATES=[0,6,2,9,1,3,6,3,7,10,11,8,12,14,7,13,10,8]
+NEW_FACES=['#eee0c0','#d7d5b9','#8eaaa4','#d4c3a4','#bacbd0','#7e9288',
+           '#d0d9d3','#304c62','#bfc7df','#486d68','#b4c3b1','#435064',
+           '#e4dec9','#263c58','#b9b5d3','#d1b86c','#304840','#bcb09a']
+NEW_STRAPCOL=['#8b694b','#655442','#737b63','#827c60','#a7b2af','#9eaaa6',
+              '#585060','#a4b4bf','#48536c','#96a9a0','#465d53','#a6a8b6',
+              '#54463e','#c4b87e','#473a57','#6b4939','#b4bba7','#c3b591']
+
 def glyph(i,v=0):
     im=Image.new('1',(24,16)); d=ImageDraw.Draw(im)
     def line(p,w=1): d.line(p,fill=1,width=w)
-    if i<3:
+    if i>=15:
+        family=(i-15)//6; marks=(i-15)%6+1
+        if family==0:
+            d.arc((3,1,15,13),180,360,fill=1)
+            line([(2,8),(16,8)])
+            line([(9,0),(9,2)])
+        elif family==1:
+            for y in [4,10]: line([(2,y+1),(5,y-1),(9,y+1),(12,y-1),(16,y+1)])
+        else:
+            line([(2,5),(5,8),(9,1),(13,8),(16,5),(14,12),(4,12),(2,5)])
+            line([(4,14),(14,14)])
+        for mark in range(marks-(1 if v else 0)):
+            line([(20,1+mark*2),(22,1+mark*2)])
+    elif i<3:
         if i==2: d.ellipse((3,0,20,15),outline=1)
         pts=[]
         for k in range(10):
@@ -56,10 +78,16 @@ def glyph(i,v=0):
     return [[x,y] for y in range(16) for x in range(24) if im.getpixel((x,y))]
 
 def watch(i,back=False):
+    model_index=i
+    if i>=15:
+        extra=i-15; i=NEW_TEMPLATES[extra]
+        face=NEW_FACES[extra]; col=NEW_STRAPCOL[extra]
+    else:
+        face=FACES[i]; col=STRAPCOL[i]
     im=Image.new('RGBA',(128,128)); d=ImageDraw.Draw(im)
     def rect(box,c,outline=None,w=1): d.rectangle(box,fill=c,outline=outline,width=w)
     def ellipse(box,c,outline=None,w=1): d.ellipse(box,fill=c,outline=outline,width=w)
-    st=STRAPS[i]; col=STRAPCOL[i]; gold=i==13; case='#bda064' if gold else STEEL
+    st=STRAPS[i]; gold=i==13 or model_index>=27; case='#bda064' if gold else STEEL
     left,right=(48,80) if i not in [4,10,14] else (45,83)
     rect((left,9,right,119),INK); rect((left+2,10,right-2,117),col)
     rect((left+3,11,left+5,116),'#c0b697' if st=='leather' else '#697673')
@@ -99,14 +127,14 @@ def watch(i,back=False):
         else:
             for y in [64,68,78]: rect((49,y,79-(i%3)*3,y),SHADE)
             # Model-specific manufacture marks, engraved and never UV serial text.
-            for n in range(i+1): rect((49+n%8*4,83+n//8*4,50+n%8*4,84+n//8*4),SHADE)
+            for n in range(model_index+1): rect((49+n%8*4,83+n//8*4,50+n%8*4,84+n//8*4),SHADE)
         for a in [45,135,225,315]:
             x=round(64+math.cos(math.radians(a))*(r-6)); y=round(64+math.sin(math.radians(a))*(r-6))
             ellipse((x-2,y-2,x+2,y+2),INK); d.line((x-1,y,x+1,y),fill=LIGHT)
         logo_col=INK
     else:
         dial=r-7
-        drawshape((64-dial,64-dial,64+dial,64+dial),FACES[i],INK)
+        drawshape((64-dial,64-dial,64+dial,64+dial),face,INK)
         tick=LIGHT if i in [2,3,4,5,7,8,9,10,14] else SHADE
         for h in range(12):
             a=h*math.pi/6; rr=dial-3
@@ -127,10 +155,10 @@ def watch(i,back=False):
         ellipse((62,65,66,69),'#b19b66',INK)
         logo_col=LIGHT if i in [2,3,4,5,7,8,9,10,14] else INK
     # Exact pixel glyph shared with runtime and manual. Clean solid field behind it.
-    bg='#a1aaa0' if back else FACES[i]
+    bg='#a1aaa0' if back else face
     rect((52,44,75,59),bg)
-    for x,y in glyph(i): d.point((52+x,44+y),fill=logo_col)
-    if i==1 and not back:
+    for x,y in glyph(model_index): d.point((52+x,44+y),fill=logo_col)
+    if model_index==1 and not back:
         # Tiny but real model lettering immediately above the calendar aperture.
         for n,bits in enumerate(['101111111101101','111101101101111','111001111100111']):
             for pos,bit in enumerate(bits):
@@ -139,11 +167,13 @@ def watch(i,back=False):
 
 def main():
     OUT.mkdir(parents=True,exist_ok=True)
+    definitions=json.loads((ROOT/'godot/data/game_data.json').read_text())['itemDefs']
+    count=len(definitions); rows=math.ceil(count/5)
     for side in ['front','back']:
-        atlas=Image.new('RGBA',(1280,768))
-        for i in range(15): atlas.paste(watch(i,side=='back'),(i%5*256,i//5*256))
+        atlas=Image.new('RGBA',(1280,rows*256))
+        for i in range(count): atlas.paste(watch(i,side=='back'),(i%5*256,i//5*256))
         atlas.save(OUT/f'watches-{side}.png')
         normal=Image.new('RGBA',atlas.size,(128,128,255,0)); normal.putalpha(atlas.getchannel('A'));normal.save(OUT/f'watches-{side}_n.png')
-    payload={f'WCH-{i+1:03}':{'face':FACES[i],'ink':('#e2e5d9' if i in [2,3,4,5,7,8,9,10,14] else INK),'pixels':[glyph(i),glyph(i,1)]} for i in range(15)}
+    payload={f'WCH-{i+1:03}':{'face':(FACES[i] if i<15 else NEW_FACES[i-15]),'ink':('#e2e5d9' if (i if i<15 else NEW_TEMPLATES[i-15]) in [2,3,4,5,7,8,9,10,14] else INK),'pixels':[glyph(i),glyph(i,1)]} for i in range(count)}
     (ROOT/'godot/data/watch_art.json').write_text(json.dumps(payload,separators=(',',':'))+'\n')
 if __name__=='__main__': main()

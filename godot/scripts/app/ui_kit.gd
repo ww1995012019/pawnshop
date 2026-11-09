@@ -389,8 +389,8 @@ static func icon(name: String) -> AtlasTexture:
 
 ## Atlas key and pixel region of an item face.
 static func item_cell(def_id: String, back := false) -> Dictionary:
-	var index := clampi(int(def_id.trim_prefix("WCH-")) - 1, 0, 14)
-	var art := {"front": "watches-front", "back": "watches-back", "index": index, "columns": 5, "rows": 3, "inset": 0.035}
+	GameData.ensure()
+	var art: Dictionary = GameData.art.get(def_id, GameData.art["WCH-001"])
 	var key: String = art.back if back else art.front
 	var img := tex("res://assets/atlas/%s.png" % key)
 	var cw := img.get_width() / float(art.columns)
@@ -431,9 +431,13 @@ static func watch_variant_texture(def_id: String) -> CanvasTexture:
 	var key := "watch-variant:" + def_id
 	if _cache.has(key):
 		return _cache[key]
-	var index := clampi(int(def_id.trim_prefix("WCH-")) - 1, 0, 14)
-	var source_rect := Rect2i(index % 5 * 256, index / 5 * 256, 256, 256)
-	var image := tex("res://assets/atlas/watches-front.png").get_image().get_region(source_rect)
+	GameData.ensure()
+	var art: Dictionary = GameData.art.get(def_id, GameData.art["WCH-001"])
+	var atlas: Image = tex("res://assets/atlas/%s.png" % art.front).get_image()
+	var cell_size := Vector2i(atlas.get_width() / int(art.columns), atlas.get_height() / int(art.rows))
+	var index := int(art.index)
+	var source_rect := Rect2i(Vector2i(index % int(art.columns), index / int(art.columns)) * cell_size, cell_size)
+	var image := atlas.get_region(source_rect)
 	var background := image.get_pixel(104, 88)
 	var first: Array = WatchLogo.pixels(def_id, 0)[0]
 	var ink := image.get_pixel(104 + int(first[0]) * 2, 88 + int(first[1]) * 2)
@@ -442,7 +446,7 @@ static func watch_variant_texture(def_id: String) -> CanvasTexture:
 		image.fill_rect(Rect2i(104 + int(pixel[0]) * 2, 88 + int(pixel[1]) * 2, 2, 2), ink)
 	var canvas := CanvasTexture.new()
 	canvas.diffuse_texture = ImageTexture.create_from_image(image)
-	var normal := tex("res://assets/atlas/watches-front_n.png").get_image().get_region(source_rect)
+	var normal := tex("res://assets/atlas/%s_n.png" % art.front).get_image().get_region(source_rect)
 	canvas.normal_texture = ImageTexture.create_from_image(normal)
 	canvas.specular_color = Color(0.05, 0.05, 0.05)
 	canvas.specular_shininess = 0.1
