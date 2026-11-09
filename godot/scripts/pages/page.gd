@@ -61,6 +61,14 @@ func fit_workbench_item(item: ItemSprite, mat: Rect2) -> Vector2:
 	var height := minf(360.0, minf(mat.size.y - 100.0, (mat.size.x - 144.0) * footprint.y / footprint.x))
 	var scale := height / footprint.y
 	if not is_equal_approx(item.display_scale, scale):
+		# A landing tween captures its original scale. Stop it before fitting a
+		# resized workbench so it cannot grow the item back beyond the mat.
+		if item.land_tween != null and item.land_tween.is_valid():
+			item.land_tween.kill()
+			item.lift = 0.0
+			item.lift_target = 0.0
+			item.body.position = Vector2.ZERO
+			item.body.scale = Vector2.ONE * item.display_scale
 		item.body.scale *= scale / item.display_scale
 		item.display_scale = scale
 	var half := footprint * scale * 0.5 + Vector2(32, 36)

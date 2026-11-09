@@ -129,5 +129,47 @@ func run() -> void:
 		await check_modal(shell, "resident " + npc.id)
 	shell.queue_free()
 	await settle()
+	# Exercise the same wide, short logical viewport used by landscape phones.
+	root.size = Vector2i(2730, 1080)
+	root.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+	root.content_scale_size = Vector2i(1920, 1080)
+	var phone_script := GDScript.new()
+	phone_script.source_code = 'extends "res://scripts/app/shell.gd"\nfunc _landscape_phone() -> bool:\n\treturn true\n'
+	phone_script.reload()
+	shell = load("res://main.tscn").instantiate()
+	shell.set_script(phone_script)
+	root.add_child(shell)
+	await settle()
+	shell._close_title()
+	game.new_game("ORBITAL-P0")
+	game.prefs.reduced_motion = false
+	game.state.inventory[0].defId = "ITM-002"
+	shell.go("inspect")
+	await settle()
+	for tool in [""] + GameData.applicable_tools("ITM-002"):
+		var inspection = shell.active_shell().page
+		inspection._set_tool(tool)
+		await settle()
+		await create_timer(0.7).timeout
+		await settle()
+		check_workbench(inspection, "landscape inspection " + tool)
+	shell.go("repair")
+	await settle()
+	for stage in 4:
+		var repair = shell.active_shell().page
+		game.state.repairProgress[repair.it_uid] = stage
+		repair._stage_ui()
+		await settle()
+		await create_timer(0.7).timeout
+		await settle()
+		check_workbench(repair, "landscape repair stage %d" % stage)
+	shell.go("warehouse")
+	await settle()
+	var phone_warehouse = shell.active_shell().page
+	check(shell.active_shell().content_rect().encloses(phone_warehouse.holder.get_rect()), "landscape warehouse fits inside the drawer and keeps stock lists reachable")
+	check(shell.active_shell().content_rect().encloses(phone_warehouse.detail_panel.get_rect()), "landscape warehouse details fit inside the drawer")
+	shell.queue_free()
+	await settle()
 	print("LAYOUT failures=", failures)
 	quit(1 if failures else 0)

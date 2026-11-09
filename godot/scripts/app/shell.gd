@@ -62,6 +62,7 @@ var workspace_title: Label
 var workspace_close: Button
 var workspace_origin: Control
 var workspace_suspended_focus: Array = []
+var workspace_logical_size := Vector2(1600, 900)
 const WORKSPACE_LABELS := {"inspect": "鉴定台", "repair": "维修工作台", "warehouse": "货物抽屉", "orders": "委托终端", "report": "营业账本"}
 const WORKSPACE_SIZE := Vector2(1600, 900)
 
@@ -581,10 +582,31 @@ func _suspend_home_focus() -> void:
 			control.focus_mode = Control.FOCUS_NONE
 
 func _layout_workspace() -> void:
+	var visible := get_viewport().get_visible_rect().size
+	var phone := _landscape_phone()
+	var target := WORKSPACE_SIZE
+	if phone:
+		# A phone is much wider than the desktop drawer after the touch bar is
+		# reserved. Use that width instead of shrinking a 16:9 sheet into it.
+		var desired_height := (WORKSPACE_SIZE.x + 32.0) * visible.y / maxf(visible.x, 1.0) - 110.0
+		target.y = clampf(desired_height, 600.0, WORKSPACE_SIZE.y)
+	workspace_logical_size = target.round()
+	workspace_host.custom_minimum_size = workspace_logical_size
+	var viewport := workspace_container.get_child(0) as SubViewport
+	viewport.size_2d_override = Vector2i(workspace_logical_size)
 	workspace_frame.reset_size()
-	workspace_frame.position = ((get_viewport().get_visible_rect().size - workspace_frame.size) * 0.5).floor()
+	var frame_size := workspace_frame.get_combined_minimum_size()
+	workspace_frame.size = frame_size
+	var fit := minf((visible.x - 20.0) / frame_size.x, (visible.y - 20.0) / frame_size.y) if phone else 1.0
+	workspace_frame.scale = Vector2.ONE * fit
+	workspace_frame.position = ((visible - frame_size * fit) * 0.5).floor()
 	var output_scale := get_viewport().get_final_transform().get_scale()
-	_set_workspace_render_scale(maxf(absf(output_scale.x), absf(output_scale.y)))
+	_set_workspace_render_scale(maxf(absf(output_scale.x), absf(output_scale.y)) * fit)
+
+func _landscape_phone() -> bool:
+	if not OS.has_feature("web"):
+		return false
+	return bool(JavaScriptBridge.eval("matchMedia('(any-pointer: coarse)').matches && Math.min(innerWidth, innerHeight) <= 600 && innerWidth > innerHeight", true))
 
 func _set_workspace_render_scale(output_scale: float) -> void:
 	if not is_instance_valid(workspace_container):
@@ -592,9 +614,9 @@ func _set_workspace_render_scale(output_scale: float) -> void:
 	# Keep the render target within common WebGL texture limits on very large
 	# displays; the container scale keeps its visible size and input unchanged.
 	var factor := clampf(output_scale, 0.5, 2.0)
-	var pixels := (WORKSPACE_SIZE * factor).round()
+	var pixels := (workspace_logical_size * factor).round()
 	workspace_container.size = pixels
-	workspace_container.scale = WORKSPACE_SIZE / pixels
+	workspace_container.scale = workspace_logical_size / pixels
 
 func _workspace_heading(name: String) -> void:
 	Audio.music_for(name)

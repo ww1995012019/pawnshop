@@ -46,6 +46,44 @@ func audit() -> void:
 	await frame()
 	shell._close_title()
 	game.new_game("ORBITAL-P0")
+	var repair_uid: String = game.state.inventory[2].uid
+	game.focus_uid = repair_uid
+	shell.go("repair", repair_uid)
+	await frame()
+	var repair_page = shell.active_shell().page
+	check(repair_page.it_uid == repair_uid, "Repair opens with the requested repairable item selected")
+	var repair_labels := ""
+	for label in repair_page.info.find_children("*", "Label", true, false):
+		repair_labels += label.text + "\n"
+	check(repair_labels.contains("待鉴定") and not repair_labels.contains(Model.fault_label(game.item(repair_uid))), "Repair does not show a hidden functional result before inspection")
+	var to_inspect: Button = null
+	for control in repair_page.info.find_children("*", "Button", true, false):
+		if control.text == "去鉴定":
+			to_inspect = control
+			break
+	check(to_inspect != null and not to_inspect.disabled, "Repair offers a usable route to inspect the selected item")
+	if to_inspect != null:
+		var before_ap: float = game.state.ap
+		to_inspect.pressed.emit()
+		await frame()
+		check(shell.active_shell().page_name == "inspect" and shell.active_shell().page.it_uid == repair_uid, "Going to inspection preserves the selected physical item")
+		check(game.state.ap == before_ap and game.item(repair_uid).evidence.is_empty(), "Changing benches does not spend AP or create evidence")
+	var assembly_uid: String = game.state.inventory[3].uid
+	shell.go("repair", assembly_uid)
+	await frame()
+	var assembly_page = shell.active_shell().page
+	var assembly_inspect: Button = null
+	for control in assembly_page.info.find_children("*", "Button", true, false):
+		if control.text == "去鉴定":
+			assembly_inspect = control
+			break
+	check(assembly_page.it_uid == assembly_uid and assembly_inspect != null, "Assembly-only items also offer a route to inspection")
+	if assembly_inspect != null:
+		assembly_inspect.pressed.emit()
+		await frame()
+		check(shell.active_shell().page_name == "inspect" and shell.active_shell().page.it_uid == assembly_uid, "Assembly item stays selected when going to inspection")
+	shell.go("counter")
+	await frame()
 	game.state = Model.reduce(game.state, {"type":"ARRIVE"})
 	shell.go("counter")
 	await frame()

@@ -61,12 +61,22 @@ func snapshot() -> Dictionary:
 		var current = Game.item(active.page.it_uid)
 		if current != null:
 			var profile := GameData.inspection_profile(current.defId)
+			var definition := GameData.def(current.defId)
+			var description: String = profile.get("description", definition.description)
+			if description.contains("→"):
+				description = description.split("。")[0] + "。"
+			var estimate := Model.estimate(current)
+			var details := ["品相 %s · 物证 %d 条" % [UIKit.pct(current.condition), Model.evidence_count(current)], description,
+				"参考估值：%s" % (UIKit.money(estimate.low) if estimate.exact else "%s–%s Cr" % [Model.jnum(estimate.low), Model.jnum(estimate.high)])]
+			for evidence in current.evidence:
+				details.append("%s：%s" % [Model.evidence_caption(current, evidence), Model.displayed_clue(current, evidence)])
 			var step: int = active.page.specific_step
 			var steps: Array = profile.get("steps", [])
 			var can_pay: bool = current.inspectedPaid or state.upgrades.lamp or Model.has_ap(state, 1.0)
 			var needs_ap: bool = step == steps.size() - 1 and not can_pay
 			var status_text: String = active.page.specific_status.text if is_instance_valid(active.page.specific_status) else ""
-			result.merge({"inspection_tools": GameData.applicable_tools(current.defId),
+			result.merge({"detail_title": definition.name, "detail_lines": details,
+				"inspection_tools": GameData.applicable_tools(current.defId),
 				"inspection_title": profile.get("title", "专属检测"),
 				"inspection_current": active.page.tool,
 				"inspection_busy": is_instance_valid(active.page.item) and active.page.item.busy,
@@ -75,6 +85,44 @@ func snapshot() -> Dictionary:
 				"specific_reason": "行动点不足" if needs_ap else "",
 				"specific_feedback": status_text,
 				"specific_next": steps[step] if active.page.tool == "SPEC" and step < steps.size() else ""})
+	elif active.page_name == "repair":
+		var materials := []
+		for material in GameData.materials:
+			materials.append({"id": material.id, "name": material.name, "price": material.price,
+				"quantity": state.materials.get(material.id, 0), "available": state.phase == "open" and state.cash >= material.price})
+		var current = Game.item(active.page.it_uid)
+		var title := "维修工作台"
+		var details := ["请选择一件待修物品。"]
+		var can_finish := false
+		if current != null:
+			title = GameData.def(current.defId).name
+			details = [active.page.repair_status(current)]
+			var recipe: Dictionary = active.page._recipe(current)
+			if not recipe.is_empty():
+				var progress := int(state.repairProgress.get(current.uid, 0))
+				if current.repaired:
+					details.append("修复完成，可重新鉴定。")
+				else:
+					var reason: String = active.page._repair_block(current, recipe)
+					if reason != "":
+						details.append(reason)
+					can_finish = progress == 3 and reason == ""
+				details.append(recipe.name)
+				for i in 3:
+					details.append(("✓ " if i < progress else "· ") + String(recipe.steps[i]))
+				if not current.repaired:
+					var needed := []
+					for id in recipe.materials:
+						needed.append("%s ×%s（有 %s）" % [GameData.material(id).name, Model.jnum(recipe.materials[id]), Model.jnum(state.materials.get(id, 0))])
+					details.append("材料：" + "、".join(needed))
+					details.append("确认时消耗 %s AP" % Model.jnum(recipe.ap))
+		result.merge({"detail_title": title, "detail_lines": details, "repair_can_finish": can_finish,
+			"repair_uid": active.page.it_uid, "repair_materials": materials})
+	elif active.page_name == "warehouse":
+		result.merge({"warehouse_uid": active.page.selected,
+			"warehouse_rotated": active.page.selected_rotation(),
+			"warehouse_rotation_pending": active.page.grid.prepared_uid == active.page.selected and active.page.selected != "",
+			"warehouse_can_rotate": active.page.can_rotate_selected()})
 	if trade != null:
 		var buy: bool = trade.kind == "buy"
 		result.merge({"price": trade.price, "buy": buy, "locked": trade.locked,
@@ -133,6 +181,23 @@ func command(data: Dictionary) -> void:
 		var index = data.get("index", null)
 		if active.page_name == "inspect" and active.page.tool == "SPEC" and data.get("uid", "") == active.page.it_uid and (index is int or index is float) and is_finite(float(index)) and float(index) == floor(float(index)):
 			active.page._advance_specific(int(index))
+		return
+	if kind == "buy_repair_material":
+		var active = shell.active_shell()
+		var id = data.get("id", "")
+		if active.page_name == "repair" and data.get("uid", "") == active.page.it_uid and id is String and not GameData.material(id).is_empty():
+			if Game.dispatch({"type": "BUY_MATERIAL", "id": id, "qty": 1}):
+				active.sound("coin", -8)
+		return
+	if kind == "finish_repair":
+		var active = shell.active_shell()
+		if active.page_name == "repair" and data.get("uid", "") == active.page.it_uid:
+			active.page.confirm_repair()
+		return
+	if kind == "rotate_warehouse":
+		var active = shell.active_shell()
+		if active.page_name == "warehouse" and data.get("uid", "") == active.page.selected:
+			active.page.rotate_selected()
 		return
 	if kind == "flip":
 		var active = shell.active_shell()

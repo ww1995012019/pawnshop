@@ -34,7 +34,7 @@ func hint_text() -> String:
 	if stage < 0:
 		return "这件暂时不能开工：原因写在工作台上，或在左侧换一件。" if it_uid != "" else "没有可修的物件。收购故障货或接委修订单后再来。"
 	match stage:
-		0: return "按住鼠标在实物上来回擦，清掉污垢与氧化层。"
+		0: return "按住实物来回擦，清掉污垢与氧化层。"
 		1: return "把工作台右侧的新零件拖进实物上发光的槽位。"
 		2: return "按住「负载复测」，指针进入绿区时松开。"
 		3: return "三道工序完成：确认修复后才扣材料与行动点。"
@@ -139,7 +139,7 @@ func _fill_list() -> void:
 		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		var p: int = int(Game.state.repairProgress.get(it.uid, 0))
 		var why := _blocked(it)
-		row.text = "%s%s\n%s" % [GameData.def(it.defId).name, " · 顾客委修" if it.owner == "customer" else "", why if why != "" else "工序 %d/3 · %s" % [p, "正常" if it.working else "故障"]]
+		row.text = "%s%s\n%s" % [GameData.def(it.defId).name, " · 顾客委修" if it.owner == "customer" else "", why if why != "" else "工序 %d/3 · %s" % [p, "有物证" if Model.evidence_count(it) > 0 else "待鉴定"]]
 		var uid: String = it.uid
 		# Selecting a lot rebuilds this list, so keep the pressed row alive
 		# until Godot has finished dispatching the pointer event.
@@ -178,6 +178,17 @@ func _select(uid: String) -> void:
 	_refresh_info()
 	_stage_ui()
 
+func repair_status(it: Dictionary) -> String:
+	var prefix := "品相 %s · " % UIKit.pct(it.condition)
+	if it.evidence.is_empty():
+		return prefix + "功能状态待鉴定"
+	var tool: String = it.evidence[0]
+	for candidate in ["SPEC", "TOL-004", "TOL-006"]:
+		if it.evidence.has(candidate):
+			tool = candidate
+			break
+	return prefix + Model.evidence_caption(it, tool) + "：" + Model.displayed_clue(it, tool)
+
 func _refresh_info() -> void:
 	UIKit.clear(info)
 	var it = Game.item(it_uid)
@@ -187,7 +198,7 @@ func _refresh_info() -> void:
 		return
 	var r := _recipe(it)
 	info.add_child(UIKit.label(GameData.def(it.defId).name, 28, Color("f3e6cc")))
-	info.add_child(UIKit.label("品相 %s · %s" % [UIKit.pct(it.condition), Model.fault_label(it)], 17, UIKit.TEXT, false, true))
+	info.add_child(UIKit.label(repair_status(it), 17, UIKit.TEXT, false, true))
 	if not r.is_empty():
 		var card := UIKit.plate(UIKit.inset_style(12))
 		var cv := UIKit.vbox(6)
@@ -202,13 +213,15 @@ func _refresh_info() -> void:
 		cv.add_child(UIKit.label("材料：" + "、".join(mats), 16, UIKit.CYAN, false, true))
 		cv.add_child(UIKit.label("确认时消耗 %s AP" % Model.jnum(r.ap), 16, UIKit.MUTED))
 		var why := _repair_block(it, r)
+		var actions := UIKit.hbox(8)
 		var go := UIKit.button("确认修复", "primary", Vector2(0, 56), 21)
+		go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		go.disabled = p != 3 or it.repaired or why != ""
 		go.tooltip_text = why
-		go.pressed.connect(func():
-			if Game.dispatch({"type": "REPAIR", "uid": it_uid, "recipeId": r.id}) and Game.item(it_uid) != null and Game.item(it_uid).repaired:
-				_celebrate())
-		cv.add_child(go)
+		go.pressed.connect(confirm_repair)
+		actions.add_child(go)
+		actions.add_child(_inspect_button(it.uid))
+		cv.add_child(actions)
 		if why != "" and not it.repaired:
 			cv.add_child(UIKit.label(why, 16, UIKit.DANGER, false, true))
 		info.add_child(card)
@@ -223,6 +236,8 @@ func _refresh_info() -> void:
 		b.pressed.connect(func(): Game.dispatch({"type": "CRAFT", "recipeId": craft.id}))
 		ccv.add_child(b)
 		info.add_child(cc)
+	if r.is_empty():
+		info.add_child(_inspect_button(it.uid))
 	var dis := UIKit.button("拆解回收（不可逆，1 AP）", "danger", Vector2(0, 52), 19)
 	var dis_why := _dismantle_block(it)
 	dis.disabled = dis_why != ""
@@ -234,8 +249,26 @@ func _refresh_info() -> void:
 	info.add_child(dis)
 	_materials()
 
+func _inspect_button(uid: String) -> Button:
+	var button := UIKit.button("去鉴定", "secondary", Vector2(0, 56), 20, "inspect")
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.pressed.connect(func(): shell.go("inspect", uid))
+	return button
+
+func confirm_repair() -> void:
+	var it = Game.item(it_uid)
+	if it == null:
+		return
+	var recipe := _recipe(it)
+	if recipe.is_empty() or it.repaired or int(Game.state.repairProgress.get(it.uid, 0)) != 3 or _repair_block(it, recipe) != "":
+		return
+	if Game.dispatch({"type": "REPAIR", "uid": it_uid, "recipeId": recipe.id}) and Game.item(it_uid) != null and Game.item(it_uid).repaired:
+		_celebrate()
+
 ## Mirrors the REPAIR rule so the button explains itself instead of failing.
 func _repair_block(it: Dictionary, r: Dictionary) -> String:
+	if Game.state.phase != "open":
+		return "当前未营业，明天可继续维修"
 	var why := _blocked(it)
 	if why != "" and why != "已经修复":
 		return why
@@ -250,6 +283,8 @@ func _repair_block(it: Dictionary, r: Dictionary) -> String:
 
 ## Mirrors the DISMANTLE rule.
 func _dismantle_block(it: Dictionary) -> String:
+	if Game.state.phase != "open":
+		return "当前未营业，明天可继续拆解"
 	if Model.trade_reserved(Game.state, it):
 		return "正在柜台交易中"
 	if it.owner != "shop" or it.has("orderId"):
@@ -269,6 +304,7 @@ func _materials() -> void:
 	for m in GameData.materials:
 		var b := UIKit.button("%s ×%s\n+1 · %s" % [m.name, Model.jnum(Game.state.materials.get(m.id, 0)), UIKit.money(m.price)], "chip", Vector2(0, 62), 16)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.disabled = Game.state.phase != "open" or Game.state.cash < m.price
 		b.tooltip_text = m.description
 		var id: String = m.id
 		b.pressed.connect(func():

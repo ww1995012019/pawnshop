@@ -50,6 +50,8 @@ func scene_name() -> String:
 
 func hint_text() -> String:
 	if tool == "":
+		if shell._landscape_phone():
+			return "在下方选择仪器；拖动实物摆位，可用「翻面」查看背面。"
 		return "选左侧仪器开始取证；拖动实物摆位，右键或 F 翻面。"
 	if tool == "SPEC":
 		return "按顺序操作物品，完成专属检测后记录物证。"
@@ -208,10 +210,7 @@ func _refresh_info() -> void:
 	for t in it.evidence:
 		var card := UIKit.plate(UIKit.paper_style(12))
 		var cv := UIKit.vbox(2)
-		var caption := GameData.evidence_name(it.defId, t)
-		var recorded = it.get("specificResult", null)
-		if t == "SPEC" and recorded is Dictionary and it.repaired and not recorded.get("repaired", false):
-			caption += " · 维修前记录"
+		var caption := Model.evidence_caption(it, t)
 		cv.add_child(UIKit.label(caption, 18, UIKit.RUST))
 		cv.add_child(UIKit.label(Model.displayed_clue(it, t), 16, UIKit.INK, false, true))
 		card.add_child(cv)

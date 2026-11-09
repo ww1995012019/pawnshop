@@ -396,6 +396,13 @@ static func displayed_clue(it: Dictionary, tool: String) -> String:
 		return "旧版检测记录：保留此前的物证，可用于估值与议价。" if GameData.relevant_tool(it.defId, tool) else "旧版检测记录：保留此前的辅助物证。"
 	return item_clue(it, tool)
 
+static func evidence_caption(it: Dictionary, tool: String) -> String:
+	var caption := GameData.evidence_name(it.defId, tool)
+	var recorded = it.get("specificResult", null)
+	if tool == "SPEC" and it.repaired and recorded is Dictionary and not recorded.get("repaired", false):
+		caption += " · 维修前记录"
+	return caption
+
 static func npc_dialogue(s: Dictionary, npc_id: String, stage: String, fallback: String, price := 0.0) -> String:
 	var voice = GameData.npc(npc_id).get("voice", null)
 	if voice == null or not voice.has(stage) or voice[stage].is_empty():

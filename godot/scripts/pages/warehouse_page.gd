@@ -11,6 +11,7 @@ var lists: VBoxContainer
 var detail: VBoxContainer
 var selected := ""
 var holder: PanelContainer
+var holder_contents: VBoxContainer
 var detail_panel: PanelContainer
 
 func scene_name() -> String:
@@ -22,6 +23,8 @@ func hint_text() -> String:
 		return "顾客在柜台等货：选中一件合格自有货，点「推荐给顾客」。"
 	if Game.state.day >= 3 and Game.state.inspection == "pending":
 		return "饶静预约核验：来源待核的货要扫描并登记，或放进隔离柜。"
+	if shell._landscape_phone():
+		return "拖动货物换格位；点选后用下方「旋转」调整方向。"
 	return "拖动货物换格位，拖动时右键旋转；点选查看详情与操作。"
 
 ## Notices drop in at the bottom of the room, under the storage plates
@@ -33,15 +36,26 @@ func toast_rect() -> Rect2:
 func enter() -> void:
 	holder = UIKit.plate()
 	add_child(holder)
+	var holder_scroll := ScrollContainer.new()
+	holder_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	holder_scroll.follow_focus = true
+	holder_scroll.custom_minimum_size.x = CELL * 10
+	holder.add_child(holder_scroll)
 	var v := UIKit.vbox(10)
-	holder.add_child(v)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	holder_contents = v
+	holder_scroll.add_child(v)
 	var head := UIKit.hbox()
 	head.add_child(UIKit.label("货物保管区", 24, UIKit.AMBER))
 	head.add_child(UIKit.spacer(false))
-	head.add_child(UIKit.label("10 × 6  /  拖动换位 · 右键旋转", 16, UIKit.MUTED))
+	var grid_hint := "10 × 6  /  拖动换位 · 点选后旋转" if shell._landscape_phone() else "10 × 6  /  拖动换位 · 右键旋转"
+	head.add_child(UIKit.label(grid_hint, 16, UIKit.MUTED))
 	v.add_child(head)
 	grid = StorageGrid.new()
 	grid.page = self
+	# Empty cells must let touch drags reach the enclosing scroll container;
+	# dragging an occupied cell is still handled by the grid itself.
+	grid.mouse_filter = Control.MOUSE_FILTER_PASS
 	grid.custom_minimum_size = Vector2(CELL * 10, CELL * 6)
 	v.add_child(grid)
 	lists = UIKit.vbox(7)
@@ -83,10 +97,13 @@ func relayout() -> void:
 func _resize_panels() -> void:
 	if not is_instance_valid(holder) or not is_instance_valid(detail_panel):
 		return
-	# Shrink-wrap to the contents, padding included, so the plate's bottom
-	# bar never covers the last row.
-	holder.reset_size()
 	var available: float = shell.content_rect().size.y
+	# On a short landscape screen the grid and location lists must scroll
+	# together rather than extend under the drawer's bottom edge.
+	var holder_style: StyleBox = holder.get_theme_stylebox("panel")
+	var holder_pad := holder_style.get_content_margin(SIDE_TOP) + holder_style.get_content_margin(SIDE_BOTTOM)
+	var holder_height := minf(available, holder_contents.get_combined_minimum_size().y + holder_pad + 4.0)
+	holder.size = Vector2(holder.get_combined_minimum_size().x, holder_height)
 	var style: StyleBox = detail_panel.get_theme_stylebox("panel")
 	var pad := style.get_content_margin(SIDE_TOP) + style.get_content_margin(SIDE_BOTTOM)
 	var detail_height := clampf(detail.get_combined_minimum_size().y + pad + 4.0, 240.0, minf(700.0, available))
@@ -121,6 +138,11 @@ func _lists() -> void:
 		lists.add_child(row)
 
 func select(uid: String) -> void:
+	if selected != uid:
+		var was_prepared := grid.prepared_uid != ""
+		grid.prepared_uid = ""
+		if was_prepared:
+			shell.hint(hint_text())
 	selected = uid
 	Game.focus_uid = uid
 	shell.sound("click", -10, 1.2)
@@ -128,6 +150,55 @@ func select(uid: String) -> void:
 	_lists()
 	_detail()
 	call_deferred("_resize_panels")
+
+func selected_rotation() -> bool:
+	var it = Model.find_inventory(Game.state, selected)
+	if it == null:
+		return false
+	if grid.drag_uid == selected:
+		return grid.drag_rot
+	if grid.prepared_uid == selected:
+		return grid.prepared_rot
+	return it.rotated
+
+func can_rotate_selected() -> bool:
+	var it = Model.find_inventory(Game.state, selected)
+	if Game.state.phase != "open" or it == null or it.location != "warehouse" or it.owner == "pawn" or it.sealed or Model.trade_reserved(Game.state, it):
+		return false
+	var next := not selected_rotation()
+	if Model.can_place(Game.state, it.uid, it.x, it.y, next):
+		return true
+	for y in 6:
+		for x in 10:
+			if Model.can_place(Game.state, it.uid, x, y, next):
+				return true
+	return false
+
+func rotate_selected() -> void:
+	if not can_rotate_selected():
+		return
+	var it = Model.find_inventory(Game.state, selected)
+	var next := not selected_rotation()
+	if grid.drag_uid == selected:
+		grid.drag_rot = next
+		grid.prepared_uid = selected if next != it.rotated else ""
+		grid.prepared_rot = next
+		grid.queue_redraw()
+	elif next == it.rotated:
+		grid.prepared_uid = ""
+		grid.queue_redraw()
+		shell.hint(hint_text())
+	elif Model.can_place(Game.state, it.uid, it.x, it.y, next):
+		grid.prepared_uid = ""
+		Game.dispatch({"type": "MOVE", "uid": it.uid, "x": it.x, "y": it.y, "rotated": next})
+	else:
+		# The new shape need not fit at the old position; carry it to a free
+		# space and submit the rotation and move together on drop.
+		grid.prepared_uid = selected
+		grid.prepared_rot = next
+		grid.queue_redraw()
+		shell.hint("方向已切换，拖到可容纳的空位后放开。")
+	shell.sound("click", -8)
 
 func _act(g: GridContainer, text: String, kind: String, a, enabled := true, tip := "") -> void:
 	var b := UIKit.button(text, kind, Vector2(0, 54), 19)
@@ -250,6 +321,9 @@ func _stock_summary() -> void:
 func on_changed(_p: Dictionary, _n: Dictionary, _a: Dictionary) -> void:
 	if Game.item(selected) == null:
 		selected = ""
+	var prepared = Game.item(grid.prepared_uid) if grid.prepared_uid != "" else null
+	if prepared == null or prepared.location != "warehouse" or prepared.rotated == grid.prepared_rot:
+		grid.prepared_uid = ""
 	_refresh()
 
 
@@ -258,10 +332,14 @@ class StorageGrid extends Control:
 	var tiles := {}
 	var drag_uid := ""
 	var drag_rot := false
+	var prepared_uid := ""
+	var prepared_rot := false
 	var drag_offset := Vector2.ZERO
 	var press_pos := Vector2.ZERO
 	var moved := false
 	var ghost: TextureRect
+	var scroll_touch := -1
+	var scroll_touch_y := 0.0
 
 	func cursor_at(at_position: Vector2) -> int:
 		if drag_uid != "":
@@ -302,18 +380,42 @@ class StorageGrid extends Control:
 		return ""
 
 	func _gui_input(e: InputEvent) -> void:
+		if e is InputEventScreenTouch:
+			var touch := e as InputEventScreenTouch
+			if touch.pressed and scroll_touch < 0 and _uid_at(touch.position) == "":
+				scroll_touch = touch.index
+				scroll_touch_y = (get_global_transform_with_canvas() * touch.position).y
+				accept_event()
+			elif not touch.pressed and touch.index == scroll_touch:
+				scroll_touch = -1
+				accept_event()
+			return
+		if e is InputEventScreenDrag and (e as InputEventScreenDrag).index == scroll_touch:
+			var drag := e as InputEventScreenDrag
+			var current_y := (get_global_transform_with_canvas() * drag.position).y
+			var scroller := page.holder.get_child(0) as ScrollContainer
+			scroller.scroll_vertical -= roundi(current_y - scroll_touch_y)
+			scroll_touch_y = current_y
+			accept_event()
+			return
 		if e is InputEventMouseButton:
 			var mb := e as InputEventMouseButton
+			var handled := false
 			if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
 				var uid := _uid_at(mb.position)
 				if uid != "":
+					handled = true
 					drag_uid = uid
 					var it = Game.item(uid)
-					drag_rot = it.rotated
+					if prepared_uid != "" and prepared_uid != uid:
+						prepared_uid = ""
+						page.shell.hint(page.hint_text())
+					drag_rot = prepared_rot if prepared_uid == uid else it.rotated
 					press_pos = mb.position
 					drag_offset = mb.position - Vector2(it.x, it.y) * page.CELL
 					moved = false
 			elif mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed and drag_uid != "":
+				handled = true
 				var uid := drag_uid
 				drag_uid = ""
 				if ghost:
@@ -326,17 +428,22 @@ class StorageGrid extends Control:
 				else:
 					var tl: Vector2 = ((mb.position - drag_offset) / page.CELL).round()
 					var it = Game.item(uid)
-					if not Game.dispatch({"type": "MOVE", "uid": uid, "x": int(tl.x), "y": int(tl.y), "rotated": drag_rot}):
+					Game.dispatch({"type": "MOVE", "uid": uid, "x": int(tl.x), "y": int(tl.y), "rotated": drag_rot})
+					var placed = Game.item(uid)
+					if placed == null or placed.x != int(tl.x) or placed.y != int(tl.y) or placed.rotated != drag_rot:
 						page.shell.toast("放置会重叠或越界，货物已回到原位。")
 					else:
+						prepared_uid = ""
 						page.shell.sound("drop", -6, 1.1)
 					var _u = it
 				queue_redraw()
 			elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed and drag_uid != "":
+				handled = true
 				drag_rot = not drag_rot
 				page.shell.sound("click", -8)
 				_update_ghost(mb.position)
-			accept_event()
+			if handled:
+				accept_event()
 		elif e is InputEventMouseMotion and drag_uid != "":
 			var mm := e as InputEventMouseMotion
 			if not moved and mm.position.distance_to(press_pos) > 6:
@@ -353,6 +460,7 @@ class StorageGrid extends Control:
 			if moved:
 				_update_ghost(mm.position)
 			queue_redraw()
+			accept_event()
 		if e is InputEventMouse:
 			mouse_default_cursor_shape = cursor_at((e as InputEventMouse).position)
 
