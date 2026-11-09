@@ -19,7 +19,7 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "assets/resources"
+SRC = ROOT / "art-source/shared"
 OUT = ROOT / "godot/assets"
 SCALE = 1.5  # painted scenes are pre-scaled with Lanczos for high-DPI screens
 COUNTER_EDGE = 590  # source y where the floor meets the counter top
@@ -137,12 +137,6 @@ def copy_shared() -> None:
     (OUT / "ui").mkdir(parents=True, exist_ok=True)
     for name in ("orbital-ui-surfaces.png", "orbital-ui-kit.png", "orbital-hud.png"):
         shutil.copy(SRC / "art" / name, OUT / "ui" / name)
-    (OUT / "fonts").mkdir(parents=True, exist_ok=True)
-    for name in ("orbital-sans.ttf", "orbital-mono.ttf", "orbital-sans-LICENSE.txt", "orbital-mono-LICENSE.txt"):
-        shutil.copy(SRC / "fonts" / name, OUT / "fonts" / name)
-    (OUT / "audio").mkdir(parents=True, exist_ok=True)
-    for wav in (SRC / "audio").glob("*.wav"):
-        shutil.copy(wav, OUT / "audio" / wav.name)
 
 
 def other_scenes() -> None:

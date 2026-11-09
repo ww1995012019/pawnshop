@@ -1,5 +1,5 @@
 class_name GameData
-## Read-only game content exported from the TypeScript sources (tools/export_data.mjs).
+## Read-only game content loaded from data/game_data.json.
 
 static var raw: Dictionary = {}
 static var items := {}

@@ -1,10 +1,10 @@
 name: Godot Web checks
 on:
   pull_request:
-    paths: ['godot/**', 'scripts/*godot*', 'scripts/requirements-web-test.txt', 'vendor/godot-web/**', '.github/workflows/godot-web.yml']
+    paths: ['godot/**', 'scripts/**', 'art-source/**', 'package.json', 'package-lock.json', 'vendor/godot-web/**', '.github/workflows/godot-web.yml']
   push:
     branches: [main]
-    paths: ['godot/**', 'scripts/*godot*', 'scripts/requirements-web-test.txt', 'vendor/godot-web/**', '.github/workflows/godot-web.yml']
+    paths: ['godot/**', 'scripts/**', 'art-source/**', 'package.json', 'package-lock.json', 'vendor/godot-web/**', '.github/workflows/godot-web.yml']
   workflow_dispatch:
 permissions:
   contents: read

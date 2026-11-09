@@ -1,9 +1,6 @@
 class_name Model
-## Faithful GDScript port of assets/scripts/orbital/{model,Negotiation,Market,
-## ItemReadings,NpcConversation,StationEvents}.ts. State is a JSON-shaped
-## Dictionary so traces can be diffed against the TypeScript reducer
-## (tools/trace.mjs + tests/replay.gd). Keep ordinary legacy actions in
-## lock-step; live Godot-only commerce is layered in commerce.gd.
+## Base gameplay rules. State is a JSON-shaped Dictionary.
+## Live commerce and crime events are layered in commerce.gd and crime_events.gd.
 
 const MASK := 0xFFFFFFFF
 const FACTIONS := ["station", "salvage", "merchant"]

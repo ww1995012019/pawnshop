@@ -1,8 +1,8 @@
 # 轨道旧货局 · Godot 4 版
 
-用 **Godot 4.6（GL Compatibility 渲染）** 重做的完整游戏。基础经营规则从早期版本移植，并保留轨迹比对测试；Godot 版在此基础上扩展流动商人、新人物和伪装交易。界面采用正面像素店铺：点击店内设备打开操作抽屉，顾客、实物和待报价始终留在原柜台。
+用 **Godot 4.6（GL Compatibility 渲染）** 重做的完整游戏。包含基础经营、流动商人、新人物和伪装交易。界面采用正面像素店铺：点击店内设备打开操作抽屉，顾客、实物和待报价始终留在原柜台。
 
-网页版在仓库根目录的 `play-godot/`，也部署在网站首页；原 Cocos 版在网站的 `/play/`。
+网页版生成在仓库根目录的 `play-godot/`，根目录首页跳转到此入口。
 
 ## 能玩到的内容
 
@@ -30,15 +30,15 @@
 ```
 godot/
   project.godot  main.tscn  export_presets.cfg
-  data/game_data.json          由 tools/export_data.mjs 从 TS 源数据导出
-  data/extra_residents.json    Godot 版新增人物，独立于旧数据导出
+  data/game_data.json          基础游戏数据，直接维护此 JSON
+  data/extra_residents.json    新增人物数据
   scripts/model/               model.gd（基础规则）、commerce.gd（商人和伪装）、crime_events.gd（失窃和赃物）、game_data.gd
   scripts/app/                 game.gd（全局状态与存档）、shell.gd（主店面/设备抽屉/弹窗）、ui_kit.gd、capture.gd
   scripts/pages/               counter / inspect / repair / warehouse / orders / report
   scripts/world/item_sprite.gd 实物；scripts/customer.gd 人物网格变形
   shaders/                     customer / item / reveal / lens / crt / post
-  tests/                       replay.gd（规则比对）、input_test.gd（真实输入）
-  tools/                       prepare_assets.py、export_data.mjs、trace.mjs
+  tests/                       规则、界面、真实输入和资源回归
+  tools/                       美术生成与导入脚本
 ```
 
 ## 网页构建、预览与检查
@@ -70,16 +70,14 @@ npm run test:godot:web     # 先启动预览；桌面、真实音频输出与手
 按 `Accept-Encoding` 提供 gzip 并设置 `Vary`、`ETag`。静态/CDN 托管需要配置相同的
 `Content-Encoding` 和缓存规则；仅上传 `.gz` 文件不代表服务器会自动使用它。
 
+基础数据直接编辑 `godot/data/game_data.json`；美术生成工具所需的共享原画位于 `art-source/shared/`，字体和音效直接保存在 `godot/assets/`。
+
 ## 其他开发命令
 
 ```bash
 python3 godot/tools/prepare_assets.py      # 生成场景并重建物品图集
 python3 godot/tools/prepare_item_art.py    # 单独重建新物品图集（Pillow / NumPy / SciPy）
 python3 godot/tools/prepare_shop_art.py    # 原创店铺、九位居民、设备与界面图标
-node godot/tools/export_data.mjs           # 从 TS 源导出游戏数据
-node godot/tools/trace.mjs 16 400          # 用 TS 规则录制随机对局轨迹
-node godot/tools/trace.mjs 10 1400 0.1 long
-godot --headless --path godot --script res://tests/replay.gd   # 逐步比对 GDScript 规则
 XDG_DATA_HOME=/tmp/pawnshop-input-test godot --path godot -- --inputtest # 真实输入：接客、拖动、报价、店内设备、锁价、交割
 XDG_DATA_HOME=/tmp/pawnshop-capture godot --path godot -- --capture=/tmp/shots # 页面截图
 XDG_DATA_HOME=/tmp/pawnshop-art-test godot --headless --path godot --script res://tests/item_art_test.gd # 57件物品、114张正反面
@@ -93,11 +91,8 @@ godot --headless --path godot --export-release "Web" build/web/index.html
 
 输入测试失败会以非零状态退出。截图和输入测试会创建新游戏，请始终使用独立的 `XDG_DATA_HOME`，避免覆盖日常存档。店铺保持原始比例，窗口比例不同时延展周围场景来铺满画面；柜台工作面已加深，实物可在更大的二维范围内拖动。当前交易规则仍一次处理一件货物。
 
-本次轨迹比对：16 局、6,394 步，与 TypeScript 规则逐字段一致（含金额、文案和存档结构）。
-
 ## 已知限制
 
 - 物品使用新的像素精灵集：56 类货物和独立组装套组都有正反面；原始画稿保存在 `art-source/items-v2/`，导入工具生成固定像素密度的运行图集。主店面、十三位人物、28 个界面图标、六种仪器使用统一像素风；原始画稿保存在 `art-source/shop-v3/`。人物采用半身像及轻量动作，尚未拆分独立手臂。
 - 网页引擎与游戏包原始约 45.6 MB，其中数据包约 7.9 MB；相同 gzip 条件下合计约 17.0 MB。实际传输量取决于服务器的压缩与缓存配置。
 - 手机横屏入口与店内触控操作已通过 Chromium 触控模拟；六种实物仪器仍使用原有画布交互，尚未完成手机真机测试。
-- Cocos 版存档不会自动迁移到 Godot 版（两边存储位置不同）。
