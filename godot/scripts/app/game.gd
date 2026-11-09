@@ -5,6 +5,7 @@ extends Node
 signal changed(prev: Dictionary, next: Dictionary, action: Dictionary)
 signal prefs_changed
 
+const Commerce = preload("res://scripts/model/commerce.gd")
 const SAVE_PATH := "user://orbital-save-v3.json"
 const PREFS_PATH := "user://orbital-prefs.json"
 
@@ -37,7 +38,7 @@ func new_game(seed := "") -> void:
 ## Apply an action. Returns true when the state actually changed.
 func dispatch(a: Dictionary) -> bool:
 	var prev := state
-	var next := Model.reduce(state, a)
+	var next := Commerce.reduce(state, a)
 	if is_same(next, prev):
 		return false
 	state = next

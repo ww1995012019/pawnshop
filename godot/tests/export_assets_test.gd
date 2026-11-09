@@ -20,13 +20,15 @@ func run() -> void:
 			check(icon != null and icon.atlas != null, "Missing exported item face: " + id)
 			var cell = kit.item_cell(id, back)
 			check(kit.lit_atlas(cell.key).normal_texture != null, "Missing item normal: " + cell.key)
-	for npc in GameData.npcs:
+	for npc in GameData.people():
 		check(kit.npc_portrait(npc.id).atlas != null, "Missing resident: " + npc.id)
+		var cell = kit.npc_cell(npc.id)
+		check(kit.lit_atlas(cell.key).normal_texture != null, "Missing resident normal: " + npc.id)
 	for tool in GameData.tools:
 		check(kit.tool_icon(tool.id).atlas != null, "Missing instrument: " + tool.id)
 	for path in ["res://assets/scene/shop_pixel.png", "res://assets/scene/shop_side_wall.png", "res://assets/ui/quotation-console.png"]:
 		check(load(path) != null, "Missing room/UI: " + path)
 	check(not ResourceLoader.exists("res://assets/scene/counter_bg.png"), "Legacy counter art should not ship")
 	check(not ResourceLoader.exists("res://assets/atlas/orbital-characters.png"), "Unused legacy residents should not ship")
-	print("EXPORTED ASSETS: ", GameData.items.size(), " items, ", GameData.npcs.size(), " residents, ", GameData.tools.size(), " instruments; failures=", failures)
+	print("EXPORTED ASSETS: ", GameData.items.size(), " items, ", GameData.people().size(), " residents, ", GameData.tools.size(), " instruments; failures=", failures)
 	quit(1 if failures else 0)

@@ -133,15 +133,12 @@ def main():
             page.locator('[data-command="page"][data-page="repair"]').tap()
             page.wait_for_function("window.OrbitalTouch.state.workspace === 'repair'")
             page.wait_for_timeout(700)
-            canvas = page.locator('#canvas').bounding_box()
-            scale = min(canvas['width'] / 1920, canvas['height'] / 1080)
-            x = (1402 + (canvas['width'] / scale - 1920) / 2) * scale
-            y = (740.4 + (canvas['height'] / scale - 1080) / 2) * scale
             cash = page.evaluate('window.OrbitalTouch.state.cash')
             ap = page.evaluate('window.OrbitalTouch.state.ap')
-            page.touchscreen.tap(x, y)  # The first material purchase on the repair bench.
-            page.wait_for_function('(cash) => window.OrbitalTouch.state.cash === cash - 8', arg=cash)
-            assert page.evaluate('window.OrbitalTouch.state.ap') == ap, 'Buying supplies must not consume AP'
+            page.evaluate("window.orbitalTouchSend(JSON.stringify({type:'merchant_buy', id:'MAT-001'}))")
+            page.wait_for_timeout(350)
+            assert page.evaluate('window.OrbitalTouch.state.cash') == cash, 'Materials cannot be purchased without the merchant'
+            assert page.evaluate('window.OrbitalTouch.state.ap') == ap, 'Blocked purchases must not consume AP'
             page.locator('[data-command="close"]').tap()
             page.wait_for_function("window.OrbitalTouch.state.workspace === ''")
             assert page.evaluate("window.OrbitalTouch.state.offer") == 1, "Drawer must preserve draft"

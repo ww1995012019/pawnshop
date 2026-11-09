@@ -44,6 +44,7 @@ jobs:
           trap 'kill "$SERVER_PID"' EXIT
           python scripts/test-godot-web.py http://127.0.0.1:4174/
           python scripts/test-godot-phone.py http://127.0.0.1:4174/
+          python scripts/test-merchant-phone.py http://127.0.0.1:4174/
       - uses: actions/upload-artifact@v4
         if: always()
         with:

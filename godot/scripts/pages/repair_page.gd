@@ -243,7 +243,7 @@ func _repair_block(it: Dictionary, r: Dictionary) -> String:
 		return "先去鉴定台取得至少一条故障诊断物证"
 	for id in r.materials:
 		if Game.state.materials.get(id, 0) < r.materials[id]:
-			return "%s不足，先在下方采购" % GameData.material(id).name
+			return "%s不足，请等商人上门采购" % GameData.material(id).name
 	if Game.state.ap < r.ap:
 		return "行动点不足（需 %s AP）" % Model.jnum(r.ap)
 	return ""
@@ -264,17 +264,12 @@ func _dismantle_block(it: Dictionary) -> String:
 
 func _materials() -> void:
 	info.add_child(UIKit.rule())
-	info.add_child(UIKit.label("物资采购（不耗 AP）", 18, UIKit.MUTED))
+	info.add_child(UIKit.label("维修材料库存", 18, UIKit.MUTED))
+	var visiting: bool = Game.state.trade != null and Game.state.trade.kind == "merchant"
+	info.add_child(UIKit.label("商人正在柜台，可回柜台购买。" if visiting else "商人上门时才能购买维修材料。", 16, UIKit.AMBER, false, true))
 	var g := UIKit.grid(2, 8)
 	for m in GameData.materials:
-		var b := UIKit.button("%s ×%s\n+1 · %s" % [m.name, Model.jnum(Game.state.materials.get(m.id, 0)), UIKit.money(m.price)], "chip", Vector2(0, 62), 16)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.tooltip_text = m.description
-		var id: String = m.id
-		b.pressed.connect(func():
-			if Game.dispatch({"type": "BUY_MATERIAL", "id": id, "qty": 1}):
-				shell.sound("coin", -8))
-		g.add_child(b)
+		g.add_child(UIKit.label("%s ×%s" % [m.name, Model.jnum(Game.state.materials.get(m.id, 0))], 16, UIKit.TEXT))
 	info.add_child(g)
 
 # ---------------------------------------------------------------- stages

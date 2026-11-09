@@ -124,7 +124,7 @@ func run() -> void:
 	for method in ["open_events", "open_help", "open_settings"]:
 		shell.call(method)
 		await check_modal(shell, method)
-	for npc in GameData.npcs:
+	for npc in GameData.people():
 		shell.open_people(npc.id)
 		await check_modal(shell, "resident " + npc.id)
 	shell.queue_free()

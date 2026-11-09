@@ -5,6 +5,7 @@ extends Page
 const CELL := 72.0
 const DETAIL_WIDTH := 520.0
 const PANEL_GAP := 18.0
+const Commerce = preload("res://scripts/model/commerce.gd")
 
 var grid: StorageGrid
 var lists: VBoxContainer
@@ -175,6 +176,8 @@ func _detail() -> void:
 	var e := Model.estimate(it)
 	detail.add_child(UIKit.label("估值 %s · 成本 %s" % [UIKit.money(e.low) if e.exact else "%s–%s Cr" % [Model.jnum(e.low), Model.jnum(e.high)], UIKit.money(it.cost)], 18, UIKit.AMBER))
 	detail.add_child(UIKit.label(("来源已核验" if it.sourceVerified else "来源待核") + " · " + String(it.source), 16, UIKit.GOOD if it.sourceVerified else UIKit.DANGER, false, true))
+	if it.has("forgery"):
+		detail.add_child(UIKit.label("伪装已被识破" if it.forgery.get("exposed", false) else "已做伪装 · 顾客可能识破", 17, UIKit.DANGER, false, true))
 	if it.owner == "pawn":
 		detail.add_child(UIKit.label("本金 %s · 第 %s 天抵押，赎期至第 %s 天（含宽限）" % [UIKit.money(it.pawnPrincipal), Model.jnum(it.pawnDay), Model.jnum(it.pawnDay + 4)], 16, UIKit.CYAN, false, true))
 	var g := UIKit.grid(2, 10)
@@ -201,6 +204,13 @@ func _detail() -> void:
 	_act(g, "解除隔离" if it.location == "isolation" else "放入隔离柜", "secondary", {"type": "ISOLATE", "uid": it.uid}, it.owner != "pawn" and not reserved, "正在柜台交易中" if reserved else "")
 	_act(g, "去鉴定", "secondary", func(): shell.go("inspect", it.uid))
 	_act(g, "去维修", "secondary", func(): shell.go("repair", it.uid))
+	if it.owner == "shop":
+		var forge_why := Commerce.forgery_problem(s, it)
+		var forge_uid: String = it.uid
+		var forge_name: String = def.name
+		_act(g, "伪装造假", "danger", func():
+			shell.confirm("伪装造假", "对「%s」做伪装，消耗导电纤维×1、合规封签×1和1 AP。真实状态不会改变；顾客可能识破，导致关系下降、风险上升。" % forge_name, "确认伪装", func():
+				Game.dispatch({"type": "FORGE", "uid": forge_uid})), forge_why == "", forge_why)
 	if it.owner == "pawn":
 		_act(g, "客人赎回", "good", {"type": "REDEEM", "uid": it.uid})
 	var relief := false

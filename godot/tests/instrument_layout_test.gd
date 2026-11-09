@@ -101,16 +101,24 @@ func run():
 	# grime already removed from the item.
 	page.mask.set_pixel(32, 32, Color.BLACK)
 	page.dirty = 0.5
+	var old_trade = game.state.trade
+	var old_cursor: int = game.state.cursor
+	game.state.trade = null
+	game.state.cursor = 4
+	var commerce = load("res://scripts/model/commerce.gd")
+	game.state = commerce.reduce(game.state, {"type": "ARRIVE"})
 	var materials_before: int = int(game.state.materials.get("MAT-001", 0))
 	game.dispatch({"type": "BUY_MATERIAL", "id": "MAT-001", "qty": 1})
 	await process_frame
 	await process_frame
 	check(page.mask.get_pixel(32, 32).r < 0.1 and is_equal_approx(page.dirty, 0.5), "buying supplies preserves cleaning progress")
 	var updated_quantity := false
-	for control in page.info.find_children("*", "Button", true, false):
+	for control in page.info.find_children("*", "Label", true, false):
 		if control.text.begins_with("导电纤维 ×%d" % (materials_before + 1)):
 			updated_quantity = true
 	check(updated_quantity, "supply count refreshes after purchase")
+	game.state.trade = old_trade
+	game.state.cursor = old_cursor
 	game.state.repairProgress[page.it_uid] = 1
 	page._stage_ui()
 	await create_timer(0.2).timeout
