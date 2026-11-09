@@ -25,6 +25,9 @@ func run() -> void:
 		cells.append("%s:%s" % [cell.key, cell.region])
 	check(names.size() == 4 and Model.uniq(names).size() == 4 and not names.has(""),
 		"four additional residents have distinct names and profiles")
+	var supplier := GameData.npc("CHR-010")
+	check(not supplier.is_empty() and Model.customer_need("CHR-010") == supplier.get("desire", ""),
+		"the merchant's dossier describes her actual supply and recovery services")
 	check(Model.uniq(cells).size() == 4 and not cells[0].begins_with("shop-residents:"),
 		"all four residents use their own portraits")
 	var commerce = load("res://scripts/model/commerce.gd")

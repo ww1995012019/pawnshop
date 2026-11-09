@@ -47,6 +47,12 @@ def main():
             goods.tap()
             page.wait_for_function('(cash) => OrbitalTouch.state.cash === cash - 8', arg=before['cash'])
             assert page.evaluate('OrbitalTouch.state.merchant_goods[0].owned') == before['owned'] + 1
+            goods.focus()
+            page.keyboard.press('Enter')
+            page.wait_for_function('(cash) => OrbitalTouch.state.cash === cash - 16', arg=before['cash'])
+            expect(goods).to_be_focused()
+            page.keyboard.press('Enter')
+            page.wait_for_function('(cash) => OrbitalTouch.state.cash === cash - 24', arg=before['cash'])
             for control in page.locator('#touch-merchant button:visible').all():
                 box = control.bounding_box()
                 assert box['width'] >= 44 and box['height'] >= 44, 'Merchant touch targets must be at least 44 CSS px'
@@ -64,8 +70,8 @@ def main():
             page.wait_for_function("window.OrbitalTouch?.state?.ready && OrbitalTouch.state.has_save", timeout=90000)
             page.locator('[data-command="start"]').tap()
             page.wait_for_function("OrbitalTouch.state.merchant && !OrbitalTouch.state.title && !OrbitalTouch.state.busy", timeout=15000)
-            assert page.evaluate('OrbitalTouch.state.merchant_goods[0].owned') == before['owned'] + 1, 'Reload must retain the purchased supplies'
-            assert page.evaluate('OrbitalTouch.state.merchant_goods[0].available') == 4, 'Reload must not refresh merchant stock'
+            assert page.evaluate('OrbitalTouch.state.merchant_goods[0].owned') == before['owned'] + 3, 'Reload must retain the purchased supplies'
+            assert page.evaluate('OrbitalTouch.state.merchant_goods[0].available') == 2, 'Reload must not refresh merchant stock'
             page.locator('#trade-open').tap()
             page.locator('#merchant-leave').tap()
             page.wait_for_function("!OrbitalTouch.state.trade && !OrbitalTouch.state.busy", timeout=15000)

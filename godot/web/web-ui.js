@@ -107,6 +107,8 @@
   function renderMerchant(unavailable) {
     const list = document.getElementById('merchant-goods');
     const scroll = merchant.scrollTop;
+    const focused = list.contains(document.activeElement) && document.activeElement.matches('button[data-action]')
+      ? {...document.activeElement.dataset} : null;
     list.replaceChildren();
     const label = (text, tag = 'p') => { const node = document.createElement(tag); node.textContent = text; return node; };
     const action = (text, type, data, disabled = false) => {
@@ -139,6 +141,13 @@
     document.getElementById('merchant-note').textContent = state.notice || '';
     document.getElementById('merchant-leave').disabled = unavailable;
     merchant.scrollTop = scroll;
+    if (focused) {
+      const buttons = [...list.querySelectorAll('button[data-action]')];
+      const same = buttons.find(button => !button.disabled && button.dataset.action === focused.action &&
+        button.dataset.id === focused.id && button.dataset.uid === focused.uid);
+      const target = same || buttons.find(button => !button.disabled) || document.getElementById('merchant-close');
+      target.focus({preventScroll: !!same});
+    }
   }
   function render() {
     const vertical = portrait();

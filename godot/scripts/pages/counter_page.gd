@@ -865,6 +865,11 @@ func _merchant_transaction(action: Dictionary, contents: VBoxContainer) -> void:
 func _populate_merchant(contents: VBoxContainer) -> void:
 	if not is_instance_valid(contents) or contents.is_queued_for_deletion():
 		return
+	var current_focus := get_viewport().gui_get_focus_owner()
+	var focus_key := ""
+	if is_instance_valid(current_focus) and contents.is_ancestor_of(current_focus):
+		focus_key = String(current_focus.get_meta("merchant_focus", ""))
+	var focus_targets := {}
 	UIKit.clear(contents)
 	var s := Game.state
 	var t = s.trade
@@ -883,11 +888,15 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 		description.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(description)
 		var buy := UIKit.button("购买 %s · %s" % [name, UIKit.money(material.price)], "primary", Vector2(220, 50), 17)
+		buy.set_meta("merchant_focus", "buy:" + id)
+		focus_targets["buy:" + id] = buy
 		buy.disabled = available < 1 or s.cash < material.price
 		buy.pressed.connect(func(): _merchant_transaction({"type": "BUY_MATERIAL", "id": id, "qty": 1}, contents))
 		row.add_child(buy)
 		var sell_price := maxi(1, floori(float(material.price) * 0.5))
 		var sell := UIKit.button("出售 · %s" % UIKit.money(sell_price), "secondary", Vector2(135, 50), 17)
+		sell.set_meta("merchant_focus", "sell:" + id)
+		focus_targets["sell:" + id] = sell
 		sell.disabled = owned < 1
 		sell.pressed.connect(func(): _merchant_transaction({"type": "SELL_MATERIAL", "id": id, "qty": 1}, contents))
 		row.add_child(sell)
@@ -901,6 +910,8 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		rare_row.add_child(label)
 		var buy_rare := UIKit.button("购买稀有货 · %s · 1 AP" % UIKit.money(rare.price), "good", Vector2(270, 50), 17)
+		buy_rare.set_meta("merchant_focus", "rare")
+		focus_targets["rare"] = buy_rare
 		buy_rare.disabled = s.cash < rare.price or s.ap < 1
 		buy_rare.pressed.connect(func(): _merchant_transaction({"type": "BUY_RARE_ITEM"}, contents))
 		rare_row.add_child(buy_rare)
@@ -917,11 +928,22 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 		var uid: String = item.uid
 		var price := maxf(1, floor(Model.item_value(item) * 0.6))
 		var sell_item := UIKit.button("出售旧物 %s · 收 %s" % [GameData.def(item.defId).name, UIKit.money(price)], "secondary", Vector2(0, 50), 17)
+		sell_item.set_meta("merchant_focus", "item:" + uid)
+		focus_targets["item:" + uid] = sell_item
 		sell_item.disabled = s.ap < 1
 		sell_item.pressed.connect(func(): _merchant_transaction({"type": "SELL_MERCHANT_ITEM", "uid": uid}, contents))
 		contents.add_child(sell_item)
 	if eligible == 0:
 		contents.add_child(UIKit.label("没有可回收的自有货物。", 18, UIKit.MUTED))
+	if focus_key != "":
+		var target = focus_targets.get(focus_key, null)
+		if target == null or target.disabled:
+			for candidate in focus_targets.values():
+				if not candidate.disabled:
+					target = candidate
+					break
+		if target != null and not target.disabled:
+			target.call_deferred("grab_focus")
 
 func _update_offer_value(value: int) -> void:
 	_last_offer_value = value

@@ -50,10 +50,14 @@ func run() -> void:
 		if buy != null:
 			var before_cash: float = game.state.cash
 			var before_stock: float = game.state.materials["MAT-001"]
+			buy.grab_focus()
+			check(buy.has_focus(), "the merchant purchase control accepts keyboard focus")
 			buy.pressed.emit()
 			await frame()
 			check(game.state.cash == before_cash - 8 and game.state.materials["MAT-001"] == before_stock + 1,
 				"the merchant panel performs the real material transaction")
+			var refreshed := button_with_text(shell.modal_layer, "购买 导电纤维")
+			check(refreshed != null and refreshed.has_focus(), "merchant purchase retains keyboard focus after the panel updates")
 		shell.close_top_modal()
 		await frame()
 	game.dispatch({"type": "REFUSE"})

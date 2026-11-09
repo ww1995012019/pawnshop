@@ -221,7 +221,7 @@ static func relevant_evidence(it: Dictionary, used: Array) -> Array:
 
 static func customer_need(npc_id: String) -> String:
 	var p := GameData.npc(npc_id)
-	if p.has("purchase") and p.has("desire"):
+	if p.has("desire") and (p.has("purchase") or p.get("role", "") == "supplier"):
 		return p.desire
 	if npc_id == "CHR-002" or npc_id == "CHR-004":
 		return "回收零件与旧设备，可收故障品；来源必须清楚"
