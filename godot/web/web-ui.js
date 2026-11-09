@@ -126,6 +126,9 @@
   });
   document.querySelectorAll('[data-command]').forEach(button => button.addEventListener('click', () => {
     if (button.dataset.command === 'page' && trade.open) trade.close();
+    // Browser chrome takes about a third of a landscape phone's height. Opening
+    // the shop is a user gesture, so it may also request fullscreen.
+    if (button.dataset.command === 'start' && phone()) fullscreen();
     send({type: button.dataset.command, page: button.dataset.page});
   }));
   // Resize the actual render buffer as well as its CSS box. Godot's full-window
