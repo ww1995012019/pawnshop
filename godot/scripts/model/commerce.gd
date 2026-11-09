@@ -3,6 +3,7 @@ extends RefCounted
 ## its TypeScript replay contract. Everything returned here is JSON-saveable.
 
 const MERCHANT_ID := "CHR-010"
+const CrimeEvents = preload("res://scripts/model/crime_events.gd")
 const RARE_ITEMS := ["ITM-056", "ITM-055", "ITM-072", "ITM-099"]
 
 static func merchant_slot(s: Dictionary) -> int:
@@ -75,6 +76,21 @@ static func forgery_problem(s: Dictionary, item) -> String:
 static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 	GameData.ensure()
 	var kind: String = action.get("type", "")
+	if kind == "CHOOSE_EVENT" and CrimeEvents.is_crime(CrimeEvents.event_for_day(previous)):
+		return CrimeEvents.reduce(previous, action)
+	if kind == "REGISTER":
+		var candidate = Model.find_inventory(previous, action.get("uid", ""))
+		if candidate != null and candidate.get("stolen", false):
+			return _message(previous, "疑似赃物不能登记为合法货物，请移交站务。")
+	if kind == "REPORT_STOLEN":
+		var candidate = Model.find_inventory(previous, action.get("uid", ""))
+		if previous.phase != "open" or candidate == null or not candidate.get("stolen", false) or Model.trade_reserved(previous, candidate):
+			return previous
+		var s: Dictionary = previous.duplicate(true)
+		Model._remove_item(s, candidate.uid)
+		s.risk = Model.clampn(s.risk - 6)
+		s.relations.station = Model.clampn(s.relations.station + 3)
+		return Model.notice(s, "疑似赃物已移交站务，风险下降。")
 	if kind == "FORGE":
 		var item = Model.find_inventory(previous, action.get("uid", ""))
 		var problem := forgery_problem(previous, item)

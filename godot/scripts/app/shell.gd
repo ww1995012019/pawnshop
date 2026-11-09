@@ -3,6 +3,7 @@ extends Node2D
 ## navigation dock, notices, modals, title and the day shutter.
 
 const K := 1920.0 / 1672.0 * 1.04
+const CrimeEvents = preload("res://scripts/model/crime_events.gd")
 const CENTER := Vector2(960, 540)
 const PAGES := {
 	"counter": "res://scripts/pages/counter_page.gd",
@@ -1066,7 +1067,7 @@ func open_events() -> void:
 		cv.add_child(UIKit.label("消耗：" + c.costText, 18, UIKit.DANGER, false, true))
 		cv.add_child(UIKit.label("得到：" + c.rewardText, 18, UIKit.GOOD, false, true))
 		cv.add_child(UIKit.spacer())
-		var why = Model.event_availability(Game.state, c)
+		var why = CrimeEvents.availability(Game.state, c)
 		var b := UIKit.button("已选择" if chosen == c.id else "选择这项", "primary" if chosen == c.id else "secondary", Vector2(0, 52), 20)
 		b.disabled = done or why != null
 		if why != null and not done:
