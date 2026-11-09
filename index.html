@@ -94,11 +94,13 @@ h1 { margin: 0; color: var(--paper); font-size: clamp(24px, 4.5vw, 31px); letter
 		</div>
 	</div>
 
+	<script src="assets-533fed85b3ac376a.js"></script>
 	<script src="touch-87ebe53bccd8d159.js"></script>
 	<script src="engine-309843874cfdebe8.js"></script>
 	<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":0,"executable":"engine-309843874cfdebe8","mainPack":"workbench-89cd3117a018d511.pck","fileSizes":{"workbench-89cd3117a018d511.pck":6270764,"engine-309843874cfdebe8.wasm":37700666},"focusCanvas":true,"gdextensionLibs":[],"ensureCrossOriginIsolationHeaders":false};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":0,"executable":"engine-309843874cfdebe8","mainPack":"workbench-6b7b3665727477d4.pck","fileSizes":{"workbench-6b7b3665727477d4.pck":2147120,"engine-309843874cfdebe8.wasm":37700666},"focusCanvas":true,"gdextensionLibs":[],"ensureCrossOriginIsolationHeaders":false,"transport":{"workbench-6b7b3665727477d4.pck":{"sha256":"6b7b3665727477d4c7be29b1b9f9d14a3d2b747d9a954046e0be1f4ba07653af","bytes":2147120,"type":"application/octet-stream","gzip":"workbench-6b7b3665727477d4.pck.gz","gzipBytes":1978201},"engine-309843874cfdebe8.wasm":{"sha256":"26b61ce95247012ab3dca3ff51e96d1cdbff44ee91a8c20a83e150afca83f1b6","bytes":37700666,"type":"application/wasm","gzip":"engine-309843874cfdebe8.wasm.gz","gzipBytes":9382282},"music-8ad9f8f323428f98.ogg":{"sha256":"8ad9f8f323428f98804c867c2ca5c00c4e16885b804aa64650471b6b6d005b9c","bytes":846727,"type":"audio/ogg","gzip":null,"gzipBytes":846727},"music-73c915ee8894b734.ogg":{"sha256":"73c915ee8894b734dc255384aaf0c1ae2834b3d1fee00a62025bb5954849d7f3","bytes":654520,"type":"audio/ogg","gzip":null,"gzipBytes":654520},"music-f06ef4243f86b03f.ogg":{"sha256":"f06ef4243f86b03f6f7ed0719e450a193c826c1d94988d9eb357f73a6c296570","bytes":809644,"type":"audio/ogg","gzip":null,"gzipBytes":809644},"music-30ff78a0e0f53f91.ogg":{"sha256":"30ff78a0e0f53f91658c4ebd0a6c827c92dffdc59803f270ed0689288766778d","bytes":397829,"type":"audio/ogg","gzip":null,"gzipBytes":397829}},"music":{"shop":"music-8ad9f8f323428f98.ogg","workbench":"music-73c915ee8894b734.ogg","storeroom":"music-f06ef4243f86b03f.ogg","ledger":"music-30ff78a0e0f53f91.ogg"},"previousAssets":[]};
 const GODOT_THREADS_ENABLED = false;
+window.OrbitalAssets.install(GODOT_CONFIG);
 const engine = new Engine(GODOT_CONFIG);
 
 (function () {
@@ -112,7 +114,7 @@ const engine = new Engine(GODOT_CONFIG);
 	const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 	const TIPS = [
-		'先鉴定再出价：两条独立物证会让估值收窄，议价时还能援引。',
+		'放大镜看标识，紫外线读编号，称重核对配置；对照说明书再出价。',
 		'接受报价只是锁价，确认交割才真正付钱拿货，花 1 点行动。',
 		'来源不明的货要先扫描、登记，或者放进隔离柜。',
 		'维修的三道工序做完后才扣材料与行动点，中途离开不吃亏。',
@@ -166,23 +168,24 @@ const engine = new Engine(GODOT_CONFIG);
 		return;
 	}
 
-	window.OrbitalTouch.whenLandscape().then(() => engine.startGame({
+	let downloaded = false;
+	window.OrbitalAssets.onProgress = (current, total) => {
+		const p = Math.min(100, Math.floor(current / total * 100));
+		fill.style.width = p + '%'; pct.textContent = p + '%';
+		track.setAttribute('aria-valuenow', String(p));
+		bytes.textContent = mb(current) + ' / ' + mb(total) + ' MB';
+		downloaded = current >= total;
+		stage.textContent = downloaded ? '正在通电、点亮柜台…' : '正在读取压缩货架与库存…';
+	};
+	window.OrbitalTouch.whenLandscape().then(() => Promise.all([
+		// Observe the public load Promise too: vendor init does not forward WASM failures.
+		Engine.load(GODOT_CONFIG.executable, GODOT_CONFIG.fileSizes[GODOT_CONFIG.executable + '.wasm']),
+		engine.startGame({
 		'onProgress': function (current, total) {
 			if (finished) return;
-			if (current > 0 && total > 0) {
-				track.classList.remove('indeterminate');
-				const p = Math.min(100, Math.floor(current / total * 100));
-				fill.style.width = p + '%';
-				pct.textContent = p + '%';
-				track.setAttribute('aria-valuenow', String(p));
-				bytes.textContent = mb(current) + ' / ' + mb(total) + ' MB';
-				stage.textContent = p < 100 ? '正在搬运货架与库存…' : '正在通电、点亮柜台…';
-			} else {
-				track.classList.add('indeterminate');
-				stage.textContent = '正在通电、点亮柜台…';
-			}
+			if (downloaded) stage.textContent = '正在通电、点亮柜台…';
 		},
-	})).then(open, fail);
+	})])).then(open, fail);
 }());
 	</script>
 </body>
