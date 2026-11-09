@@ -1089,9 +1089,13 @@ func open_people(npc_id := "") -> void:
 	var body: VBoxContainer = m[0]
 	var row := UIKit.hbox(20)
 	body.add_child(row)
+	var roster_scroll := ScrollContainer.new()
+	roster_scroll.custom_minimum_size = Vector2(420, 600)
+	roster_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	row.add_child(roster_scroll)
 	var roster := UIKit.grid(3, 10)
 	roster.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	row.add_child(roster)
+	roster_scroll.add_child(roster)
 	var file := UIKit.plate(UIKit.inset_style(20))
 	file.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	file.custom_minimum_size = Vector2(0, 600)
@@ -1134,7 +1138,7 @@ func open_people(npc_id := "") -> void:
 		detail.add_child(v)
 		for k in keys:
 			UIKit.compact(keys[k], "primary" if k == id else "secondary")
-	for n in GameData.npcs:
+	for n in GameData.people():
 		var b := UIKit.button("", "secondary", Vector2(120, 150), 15)
 		b.icon = UIKit.npc_icon(n.id)
 		b.expand_icon = true
@@ -1155,7 +1159,7 @@ func open_people(npc_id := "") -> void:
 func open_help() -> void:
 	var m := modal("经营手册", 1000)
 	var body: VBoxContainer = m[0]
-	var text := "• 柜台：按服务铃请客人进来。收购时先鉴定再出价；销售时从仓储挑选合格的自有货。客人有 3 轮耐心，接受报价只锁价，确认交割才付钱拿货（1 AP）。\n• 鉴定：根据物品选择适用仪器，也可以完成该物品的专属检测。首次记录本件物证消耗 1 AP，取得两条相关的独立物证后可精确估值。\n• 维修：清洁排故、换件连接、负载复测三道工序，最后确认时才扣材料与 AP。\n• 仓储：10×6 占格后仓，拖动摆放、右键旋转。上架需要两条物证和已核验来源；来源不明的货物要扫描、登记或隔离。\n• 订单：接单后交付合格原物，委修单必须交还顾客原物。\n• 日结：每日维护 20 Cr，第 7/14/21 天交租金。第 3 天起可选一项设备升级。撑满 21 天即可。"
+	var text := "• 柜台：按服务铃请客人进来。收购时先鉴定再出价；销售时从仓储挑选合格的自有货。客人有 3 轮耐心，接受报价只锁价，确认交割才付钱拿货（1 AP）。\n• 鉴定：根据物品选择适用仪器，也可以完成该物品的专属检测。首次记录本件物证消耗 1 AP，取得两条相关的独立物证后可精确估值。\n• 维修：清洁排故、换件连接、负载复测三道工序，最后确认时才扣材料与 AP。材料须等流动商人上门购买。\n• 仓储：10×6 占格后仓，拖动摆放、右键旋转。上架需要两条物证和已核验来源；来源不明的货物要扫描、登记或隔离。自有货可以伪装，但有被识破的风险。\n• 订单：接单后交付合格原物，委修单必须交还顾客原物。\n• 日结：每日维护 20 Cr，第 7/14/21 天交租金。第 3 天起可选一项设备升级。撑满 21 天即可。"
 	body.add_child(UIKit.label(text, 21, UIKit.TEXT, false, true))
 
 ## One mixer channel: name, slider and percentage; saves when released.

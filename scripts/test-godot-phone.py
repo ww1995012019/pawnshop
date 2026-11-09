@@ -216,13 +216,15 @@ def main():
             cash = page.evaluate('window.OrbitalTouch.state.cash')
             ap = page.evaluate('window.OrbitalTouch.state.ap')
             page.locator('#repair-supplies-open').tap(timeout=5000)
-            expect(page.get_by_role('heading', name='物资采购')).to_be_visible()
-            buy = page.locator('#repair-supplies [data-material="MAT-001"]')
-            box = buy.bounding_box()
-            assert box['width'] >= 44 and box['height'] >= 44, 'Material purchase needs a usable touch target'
-            buy.tap()
-            page.wait_for_function('(cash) => window.OrbitalTouch.state.cash === cash - 8', arg=cash)
-            assert page.evaluate('window.OrbitalTouch.state.ap') == ap, 'Buying supplies must not consume AP'
+            expect(page.get_by_role('heading', name='维修材料')).to_be_visible()
+            expect(page.locator('#repair-supplies')).to_contain_text('商人上门时才能购买')
+            expect(page.locator('#repair-supplies [data-material="MAT-001"]')).to_contain_text('×')
+            assert page.locator('#repair-supplies-list button').count() == 0, 'Repair inventory must not offer direct purchases'
+            page.evaluate("window.orbitalTouchSend(JSON.stringify({type:'merchant_buy', id:'MAT-001'}))")
+            page.evaluate("(uid) => window.orbitalTouchSend(JSON.stringify({type:'buy_repair_material', uid, id:'MAT-001'}))", repair_uid)
+            page.wait_for_timeout(350)
+            assert page.evaluate('window.OrbitalTouch.state.cash') == cash, 'Materials cannot be purchased without the merchant'
+            assert page.evaluate('window.OrbitalTouch.state.ap') == ap, 'Blocked purchases must not consume AP'
             page.locator('#repair-supplies-close').tap()
             page.locator('#touch-detail-open').tap()
             expect(page.locator('#detail-repair')).to_be_disabled()
@@ -234,7 +236,7 @@ def main():
             page.screenshot(path=str(args.screenshots / '05-repair-details.png'))
             page.set_viewport_size({'width': 844, 'height': 390})
             page.locator('#detail-supplies').tap()
-            expect(page.get_by_role('heading', name='物资采购')).to_be_visible()
+            expect(page.get_by_role('heading', name='维修材料')).to_be_visible()
             page.locator('#repair-supplies-close').tap()
             page.locator('#touch-detail-open').tap()
             page.locator('#detail-inspect').tap()

@@ -382,7 +382,7 @@ static func lit_atlas(key: String) -> CanvasTexture:
 	var c := CanvasTexture.new()
 	c.diffuse_texture = tex("res://assets/atlas/%s.png" % key)
 	c.normal_texture = tex("res://assets/atlas/%s_n.png" % key)
-	var pixel_item := key == "shop-residents" or key.begins_with("orbital-items-") or key.begins_with("orbital-expansion-") or key.begins_with("orbital-annex-")
+	var pixel_item := key.begins_with("shop-residents") or key.begins_with("orbital-items-") or key.begins_with("orbital-expansion-") or key.begins_with("orbital-annex-")
 	c.specular_color = Color(0.05, 0.05, 0.05) if pixel_item else Color(0.45, 0.45, 0.45)
 	c.specular_shininess = 0.1 if pixel_item else 0.6
 	_cache[k] = c
@@ -390,7 +390,11 @@ static func lit_atlas(key: String) -> CanvasTexture:
 
 ## Portrait cell for an NPC and mood; moods exist for the first five residents.
 static func npc_cell(npc_id: String, _mood := "neutral") -> Dictionary:
-	var index := clampi(int(npc_id.trim_prefix("CHR-")) - 1, 0, 8)
+	var index := maxi(int(npc_id.trim_prefix("CHR-")) - 1, 0)
+	if index >= 9 and index < 13:
+		index -= 9
+		return {"key": "shop-residents-extra", "region": Rect2((index % 2) * 256, (index / 2) * 256, 256, 256)}
+	index = mini(index, 8)
 	return {"key": "shop-residents", "region": Rect2((index % 3) * 256, (index / 3) * 256, 256, 256)}
 
 ## Square headshot from the top of the portrait (always drawn square, so

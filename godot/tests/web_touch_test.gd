@@ -127,28 +127,29 @@ func run() -> void:
 	var quantity_before: float = game.state.materials.get("MAT-001", 0)
 	bridge.command({"type":"buy_repair_material", "uid":"stale-item", "id":"MAT-001"})
 	bridge.command({"type":"buy_repair_material", "uid":repair_uid, "id":"not-a-material"})
-	check(game.state.cash == cash_before and game.state.materials.get("MAT-001", 0) == quantity_before, "stale and invalid repair purchases do nothing")
 	bridge.command({"type":"buy_repair_material", "uid":repair_uid, "id":"MAT-001"})
-	check(game.state.cash == cash_before - 8 and game.state.ap == ap_before and game.state.materials.get("MAT-001", 0) == quantity_before + 1, "phone purchase uses the normal material reducer without spending AP")
+	check(game.state.cash == cash_before and game.state.ap == ap_before and game.state.materials.get("MAT-001", 0) == quantity_before, "repair shortcuts cannot buy supplies without a visiting merchant")
+	check(repair_state.repair_materials[0].quantity == quantity_before and not repair_state.repair_materials[0].has("available"), "repair shows inventory without a purchase action")
 	game.state.cash = 0
-	var no_cash: Dictionary = bridge.snapshot()
-	check(not no_cash.repair_materials[0].available, "phone disables material purchases when cash is insufficient")
 	bridge.command({"type":"buy_repair_material", "uid":repair_uid, "id":"MAT-001"})
-	check(game.state.cash == 0 and game.state.materials.get("MAT-001", 0) == quantity_before + 1, "a direct phone purchase cannot bypass the reducer's cash check")
+	check(game.state.cash == 0 and game.state.materials.get("MAT-001", 0) == quantity_before, "a direct repair shortcut cannot add supplies")
 	game.state.cash = 100
 	var repair_modal: Array = shell.active_shell().modal("确认操作", 420)
 	await frame()
-	bridge.command({"type":"buy_repair_material", "uid":repair_uid, "id":"MAT-001"})
-	check(game.state.cash == 100 and game.state.materials.get("MAT-001", 0) == quantity_before + 1, "native modal blocks phone purchases")
+	bridge.command({"type":"finish_repair", "uid":repair_uid})
+	check(not game.item(repair_uid).repaired, "native modal blocks phone repair actions")
 	repair_modal[1].call()
 	await frame()
 	game.item(repair_uid).evidence.append("TOL-001")
 	game.state.repairProgress[repair_uid] = 3
+	var recipe: Dictionary = shell.active_shell().page._recipe(game.item(repair_uid))
+	for id in recipe.materials:
+		game.state.materials[id] = maxi(game.state.materials.get(id, 0), int(recipe.materials[id]))
 	var visual_only := "\n".join(bridge.snapshot().get("detail_lines", []))
 	check(visual_only.contains(Model.displayed_clue(game.item(repair_uid), "TOL-001")) and not visual_only.contains(Model.fault_label(game.item(repair_uid))), "repair shows only the recorded visual evidence, without revealing an untested fault")
 	game.state.phase = "report"
 	var closed_state: Dictionary = bridge.snapshot()
-	check(not closed_state.get("repair_can_finish", true) and not closed_state.repair_materials[0].available, "phone disables repair and material purchases outside business hours")
+	check(not closed_state.get("repair_can_finish", true), "phone disables repair outside business hours")
 	bridge.command({"type":"finish_repair", "uid":repair_uid})
 	check(not game.item(repair_uid).repaired, "phone cannot repair after business closes")
 	game.state.phase = "open"

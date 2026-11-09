@@ -1,5 +1,6 @@
 extends Node
 ## Accessible Web controls delegate to the desk and reducer; no second ruleset.
+const Commerce = preload("res://scripts/model/commerce.gd")
 var shell
 var callback: JavaScriptObject
 var window: JavaScriptObject
@@ -55,7 +56,7 @@ func snapshot() -> Dictionary:
 		"busy": busy, "workspace": active.page_name if shell.workspace_open() else "",
 		"trade": trade != null, "notice": state.get("notice", ""), "locked": false,
 		"can_arrive": not title_open and not blocked and not busy and trade == null and
-			state.phase == "open" and state.cursor < Model.daily_visit_limit() and state.ap >= 1,
+			state.phase == "open" and state.cursor < Model.daily_visit_limit() and (state.ap >= 1 or Commerce.merchant_due(state)),
 		"offer": shell.page.dial.value, "min": shell.page.dial.min_value, "max": shell.page.dial.max_value}
 	if active.page_name == "inspect":
 		var current = Game.item(active.page.it_uid)
@@ -88,8 +89,8 @@ func snapshot() -> Dictionary:
 	elif active.page_name == "repair":
 		var materials := []
 		for material in GameData.materials:
-			materials.append({"id": material.id, "name": material.name, "price": material.price,
-				"quantity": state.materials.get(material.id, 0), "available": state.phase == "open" and state.cash >= material.price})
+			materials.append({"id": material.id, "name": material.name,
+				"quantity": state.materials.get(material.id, 0)})
 		var current = Game.item(active.page.it_uid)
 		var title := "维修工作台"
 		var details := ["请选择一件待修物品。"]
@@ -123,14 +124,37 @@ func snapshot() -> Dictionary:
 			"warehouse_rotated": active.page.selected_rotation(),
 			"warehouse_rotation_pending": active.page.grid.prepared_uid == active.page.selected and active.page.selected != "",
 			"warehouse_can_rotate": active.page.can_rotate_selected()})
+	if active.page_name == "warehouse":
+		var uid: String = active.page.selected
+		var selected = Model.find_inventory(state, uid)
+		if selected != null and selected.owner == "shop":
+			result.merge({"forge_uid": uid, "forge_name": GameData.def(selected.defId).name,
+				"forge_reason": Commerce.forgery_problem(state, selected), "forge_done": selected.has("forgery")})
 	if trade != null:
 		var buy: bool = trade.kind == "buy"
+		var merchant: bool = trade.kind == "merchant"
 		result.merge({"price": trade.price, "buy": buy, "locked": trade.locked,
 			"item": GameData.def(lot.defId).name if lot != null else "请先在仓储选货",
 			"visitor": GameData.npc(trade.npcId).name, "has_item": lot != null,
+			"merchant": merchant,
 			"projected_cash": state.cash + (-float(trade.price) if buy else float(trade.price)),
 			"can_accept": lot != null and not trade.locked and state.ap >= 1 and (not buy or state.cash >= trade.price),
 			"can_deliver": trade.locked and state.ap >= 1 and (not buy or state.cash >= trade.price)})
+		if merchant:
+			var goods := []
+			for material in GameData.materials:
+				goods.append({"id": material.id, "name": material.name, "price": material.price,
+					"available": trade.stock.get(material.id, 0), "owned": state.materials.get(material.id, 0),
+					"sellPrice": maxi(1, floori(float(material.price) * 0.5))})
+			result.merchant_goods = goods
+			var rare = trade.get("rare", null)
+			result.merchant_rare = {"name": GameData.def(rare.defId).name, "price": rare.price} if rare is Dictionary and rare.get("available", false) else null
+			var sellable := []
+			for item in state.inventory:
+				if item.owner == "shop" and not item.has("orderId") and not item.sealed and item.location != "isolation" and item.sourceVerified:
+					sellable.append({"uid": item.uid, "name": GameData.def(item.defId).name,
+						"price": maxf(1, floor(Model.item_value(item) * 0.6))})
+			result.merchant_items = sellable
 	return result
 
 func command(data: Dictionary) -> void:
@@ -182,13 +206,6 @@ func command(data: Dictionary) -> void:
 		if active.page_name == "inspect" and active.page.tool == "SPEC" and data.get("uid", "") == active.page.it_uid and (index is int or index is float) and is_finite(float(index)) and float(index) == floor(float(index)):
 			active.page._advance_specific(int(index))
 		return
-	if kind == "buy_repair_material":
-		var active = shell.active_shell()
-		var id = data.get("id", "")
-		if active.page_name == "repair" and data.get("uid", "") == active.page.it_uid and id is String and not GameData.material(id).is_empty():
-			if Game.dispatch({"type": "BUY_MATERIAL", "id": id, "qty": 1}):
-				active.sound("coin", -8)
-		return
 	if kind == "finish_repair":
 		var active = shell.active_shell()
 		if active.page_name == "repair" and data.get("uid", "") == active.page.it_uid:
@@ -205,6 +222,12 @@ func command(data: Dictionary) -> void:
 			active.page.flip_item()
 		elif not shell.workspace_open() and shell.page.mat_item != null:
 			shell.page.mat_item.flip()
+		return
+	if kind == "forge":
+		var active = shell.active_shell()
+		var uid = data.get("uid", null)
+		if active.page_name == "warehouse" and uid is String and uid == active.page.selected:
+			Game.dispatch({"type": "FORGE", "uid": uid})
 		return
 	# Native workspace and modal input boundaries apply to every trade command.
 	if shell.workspace_open() or shell.page._scene_blocked():
@@ -230,3 +253,14 @@ func command(data: Dictionary) -> void:
 		"refuse":
 			if trade != null:
 				Game.dispatch({"type": "REFUSE"})
+		"merchant_buy", "merchant_sell":
+			var id = data.get("id", null)
+			if trade != null and trade.kind == "merchant" and id is String:
+				Game.dispatch({"type": "BUY_MATERIAL" if kind == "merchant_buy" else "SELL_MATERIAL", "id": id, "qty": 1})
+		"merchant_rare":
+			if trade != null and trade.kind == "merchant":
+				Game.dispatch({"type": "BUY_RARE_ITEM"})
+		"merchant_item":
+			var uid = data.get("uid", null)
+			if trade != null and trade.kind == "merchant" and uid is String:
+				Game.dispatch({"type": "SELL_MERCHANT_ITEM", "uid": uid})

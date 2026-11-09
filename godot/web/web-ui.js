@@ -13,7 +13,7 @@
   document.body.append(guide);
   const nav = document.createElement('nav');
   nav.id = 'touch-nav'; nav.hidden = true; nav.setAttribute('aria-label', '店铺快捷操作');
-  nav.innerHTML = `<button type="button" data-command="start">开门营业</button><button type="button" data-command="arrive" data-playing>接客</button><button type="button" id="trade-open" data-playing>交易</button><button type="button" data-command="page" data-page="inspect" data-playing>鉴定</button><button type="button" data-command="page" data-page="repair" data-playing>维修</button><button type="button" data-command="page" data-page="warehouse" data-playing>仓储</button><button type="button" data-command="page" data-page="orders" data-playing>订单</button><button type="button" data-command="page" data-page="report" data-playing>日结</button><button type="button" id="touch-detail-open" data-playing hidden>详情</button><button type="button" id="repair-supplies-open" data-playing hidden>采购</button><button type="button" id="touch-rotate" data-playing hidden>旋转</button><button type="button" data-command="close" data-playing>收起</button><button type="button" id="touch-fullscreen">全屏</button>`;
+  nav.innerHTML = `<button type="button" data-command="start">开门营业</button><button type="button" data-command="arrive" data-playing>接客</button><button type="button" id="trade-open" data-playing>交易</button><button type="button" data-command="page" data-page="inspect" data-playing>鉴定</button><button type="button" data-command="page" data-page="repair" data-playing>维修</button><button type="button" data-command="page" data-page="warehouse" data-playing>仓储</button><button type="button" id="touch-forge" data-playing hidden>伪装</button><button type="button" data-command="page" data-page="orders" data-playing>订单</button><button type="button" data-command="page" data-page="report" data-playing>日结</button><button type="button" id="touch-detail-open" data-playing hidden>详情</button><button type="button" id="repair-supplies-open" data-playing hidden>材料</button><button type="button" id="touch-rotate" data-playing hidden>旋转</button><button type="button" data-command="close" data-playing>收起</button><button type="button" id="touch-fullscreen">全屏</button>`;
   document.body.append(nav);
   const tools = document.createElement('div');
   tools.id = 'touch-tools'; tools.hidden = true;
@@ -25,20 +25,28 @@
   document.body.append(trade);
   const supplies = document.createElement('dialog');
   supplies.id = 'repair-supplies'; supplies.setAttribute('aria-labelledby', 'repair-supplies-title');
-  supplies.innerHTML = `<div class="trade-header"><h2 id="repair-supplies-title">物资采购</h2><button type="button" id="repair-supplies-close" class="touch-button">收起</button></div><p>采购不消耗行动点</p><div id="repair-supplies-list"></div>`;
+  supplies.innerHTML = `<div class="trade-header"><h2 id="repair-supplies-title">维修材料</h2><button type="button" id="repair-supplies-close" class="touch-button">收起</button></div><p id="repair-supplies-note"></p><div id="repair-supplies-list"></div>`;
   document.body.append(supplies);
   const detail = document.createElement('dialog');
   detail.id = 'touch-detail'; detail.setAttribute('aria-labelledby', 'touch-detail-title');
-  detail.innerHTML = `<div class="trade-header"><h2 id="touch-detail-title">物品详情</h2><button type="button" id="touch-detail-close" class="touch-button">收起</button></div><div id="touch-detail-lines"></div><div id="touch-detail-actions"><button type="button" class="touch-button" id="detail-inspect">去鉴定</button><button type="button" class="touch-button" id="detail-supplies">采购</button><button type="button" class="touch-button primary" id="detail-repair">确认修复</button></div>`;
+  detail.innerHTML = `<div class="trade-header"><h2 id="touch-detail-title">物品详情</h2><button type="button" id="touch-detail-close" class="touch-button">收起</button></div><div id="touch-detail-lines"></div><div id="touch-detail-actions"><button type="button" class="touch-button" id="detail-inspect">去鉴定</button><button type="button" class="touch-button" id="detail-supplies">材料</button><button type="button" class="touch-button primary" id="detail-repair">确认修复</button></div>`;
   document.body.append(detail);
-  const materialButtons = new Map();
+  const materialRows = new Map();
+  const merchant = document.createElement('dialog');
+  merchant.id = 'touch-merchant'; merchant.setAttribute('aria-labelledby', 'merchant-heading');
+  merchant.innerHTML = `<div class="trade-header"><h2 id="merchant-heading">流动商人的补给</h2><button type="button" id="merchant-close">收起</button></div><p id="merchant-summary"></p><div id="merchant-goods"></div><p id="merchant-note" role="status" aria-live="polite"></p><button type="button" id="merchant-leave">送客</button>`;
+  document.body.append(merchant);
+  const forge = document.createElement('dialog');
+  forge.id = 'touch-forge-dialog'; forge.setAttribute('aria-labelledby', 'forge-heading');
+  forge.innerHTML = `<h2 id="forge-heading">伪装造假</h2><p id="forge-description"></p><div class="forge-actions"><button type="button" id="forge-cancel">取消</button><button type="button" id="forge-confirm" class="primary">确认伪装</button></div>`;
+  document.body.append(forge);
   const input = document.getElementById('trade-offer-input');
   let state = {ready: false};
   let pendingSpecific = null;
-  let pendingMaterial = null;
   let pendingRotation = null;
   let pendingRepair = null;
   let detailKey = '';
+  let pendingForge = null;
   const send = data => {
     if (typeof window.orbitalTouchSend === 'function') window.orbitalTouchSend(JSON.stringify(data));
   };
@@ -60,7 +68,10 @@
   }
   document.getElementById('phone-fullscreen').addEventListener('click', fullscreen);
   document.getElementById('touch-fullscreen').addEventListener('click', fullscreen);
-  document.getElementById('trade-open').addEventListener('click', () => { if (!trade.open) trade.showModal(); });
+  document.getElementById('trade-open').addEventListener('click', () => {
+    const target = state.merchant ? merchant : trade;
+    if (!target.open) target.showModal();
+  });
   document.getElementById('trade-close').addEventListener('click', () => trade.close());
   document.getElementById('repair-supplies-open').addEventListener('click', () => { if (!supplies.open) supplies.showModal(); });
   document.getElementById('repair-supplies-close').addEventListener('click', () => supplies.close());
@@ -85,6 +96,24 @@
     pendingRotation = {uid: state.warehouse_uid, rotated: state.warehouse_rotated};
     event.currentTarget.disabled = true;
     send({type: 'rotate_warehouse', uid: state.warehouse_uid});
+  });
+  document.getElementById('merchant-close').addEventListener('click', () => merchant.close());
+  document.getElementById('merchant-leave').addEventListener('click', () => { merchant.close(); send({type: 'refuse'}); });
+  merchant.addEventListener('click', event => {
+    const button = event.target.closest('[data-action]');
+    if (!button || button.disabled) return;
+    send({type: button.dataset.action, id: button.dataset.id, uid: button.dataset.uid});
+  });
+  document.getElementById('touch-forge').addEventListener('click', () => {
+    if (!state.forge_uid || state.forge_reason) return;
+    pendingForge = state.forge_uid;
+    document.getElementById('forge-description').textContent = `对「${state.forge_name}」做伪装，消耗导电纤维×1、合规封签×1和1 AP。真实状态不会改变；顾客可能识破，导致关系下降、风险上升。`;
+    if (!forge.open) forge.showModal();
+  });
+  document.getElementById('forge-cancel').addEventListener('click', () => forge.close());
+  document.getElementById('forge-confirm').addEventListener('click', () => {
+    if (pendingForge && pendingForge === state.forge_uid) send({type: 'forge', uid: pendingForge});
+    pendingForge = null; forge.close();
   });
   input.addEventListener('change', () => setDraft(input.value));
   document.querySelectorAll('[data-nudge]').forEach(button => button.addEventListener('click', () => setDraft(Number(input.value) + Number(button.dataset.nudge))));
@@ -111,6 +140,51 @@
     canvas.style.width = `${innerWidth}px`;
     canvas.style.height = `${height}px`;
   }
+  function renderMerchant(unavailable) {
+    const list = document.getElementById('merchant-goods');
+    const scroll = merchant.scrollTop;
+    const focused = list.contains(document.activeElement) && document.activeElement.matches('button[data-action]')
+      ? {...document.activeElement.dataset} : null;
+    list.replaceChildren();
+    const label = (text, tag = 'p') => { const node = document.createElement(tag); node.textContent = text; return node; };
+    const action = (text, type, data, disabled = false) => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.textContent = text; button.dataset.action = type;
+      if (data.id) button.dataset.id = data.id;
+      if (data.uid) button.dataset.uid = data.uid;
+      button.disabled = unavailable || disabled;
+      return button;
+    };
+    list.append(label('常用维修材料 · 买卖不消耗 AP', 'h3'));
+    for (const good of state.merchant_goods || []) {
+      const row = document.createElement('div'); row.className = 'merchant-row';
+      row.append(label(`${good.name} · 商人 ${good.available} / 持有 ${good.owned}`));
+      row.append(action(`购买 ${money(good.price)}`, 'merchant_buy', {id: good.id}, good.available < 1 || state.cash < good.price));
+      row.append(action(`出售 ${money(good.sellPrice)}`, 'merchant_sell', {id: good.id}, good.owned < 1));
+      list.append(row);
+    }
+    list.append(label('稀有货物', 'h3'));
+    if (state.merchant_rare) {
+      const rare = state.merchant_rare;
+      list.append(action(`购买 ${rare.name} · ${money(rare.price)} · 1 AP`, 'merchant_rare', {}, state.cash < rare.price || state.ap < 1));
+    } else list.append(label('本次没有可购买的稀有货。'));
+    list.append(label('出售旧物 · 按真实估值回收，每件消耗 1 AP', 'h3'));
+    for (const item of state.merchant_items || []) {
+      list.append(action(`出售 ${item.name} · 收 ${money(item.price)}`, 'merchant_item', {uid: item.uid}, state.ap < 1));
+    }
+    if (!(state.merchant_items || []).length) list.append(label('没有可回收的自有货物。'));
+    document.getElementById('merchant-summary').textContent = `${state.visitor} · 现金 ${money(state.cash)} · ${state.ap} AP`;
+    document.getElementById('merchant-note').textContent = state.notice || '';
+    document.getElementById('merchant-leave').disabled = unavailable;
+    merchant.scrollTop = scroll;
+    if (focused) {
+      const buttons = [...list.querySelectorAll('button[data-action]')];
+      const same = buttons.find(button => !button.disabled && button.dataset.action === focused.action &&
+        button.dataset.id === focused.id && button.dataset.uid === focused.uid);
+      const target = same || buttons.find(button => !button.disabled) || document.getElementById('merchant-close');
+      target.focus({preventScroll: !!same});
+    }
+  }
   function render() {
     const vertical = portrait();
     guide.hidden = !vertical;
@@ -136,6 +210,8 @@
     if (vertical && trade.open) trade.close();
     if ((vertical || state.workspace !== 'repair') && supplies.open) supplies.close();
     if ((vertical || !['inspect', 'repair'].includes(state.workspace)) && detail.open) detail.close();
+    if ((vertical || !state.merchant) && merchant.open) merchant.close();
+    if ((vertical || state.workspace !== 'warehouse' || state.forge_uid !== pendingForge) && forge.open) forge.close();
     nav.querySelector('[data-command=start]').hidden = !state.title;
     nav.querySelector('[data-command=start]').textContent = state.has_save ? `继续营业 · 第 ${state.day} 天` : '开门营业';
     nav.querySelectorAll('[data-playing]').forEach(button => { button.hidden = !!state.title; });
@@ -149,8 +225,13 @@
     nav.querySelector('[data-command=arrive]').disabled = !state.can_arrive;
     nav.querySelector('[data-command=arrive]').hidden = !!state.title || !!state.trade || !!state.workspace;
     document.getElementById('trade-open').hidden = !!state.title || !state.trade || !!state.workspace;
-    document.getElementById('trade-open').textContent = state.has_item ? '交易' : '选货';
+    document.getElementById('trade-open').textContent = state.merchant ? '商人' : (state.has_item ? '交易' : '选货');
     document.getElementById('trade-open').disabled = unavailable || !!state.workspace;
+    const forgeButton = document.getElementById('touch-forge');
+    forgeButton.hidden = !!state.title || state.workspace !== 'warehouse' || !state.forge_uid;
+    forgeButton.textContent = state.forge_done ? '已伪装' : '伪装';
+    forgeButton.title = state.forge_reason || '对选中货物做伪装';
+    forgeButton.disabled = unavailable || !!state.forge_reason;
     nav.querySelector('[data-command=close]').hidden = !!state.title || (!state.workspace && !state.blocked);
     const suppliesOpen = document.getElementById('repair-supplies-open');
     suppliesOpen.hidden = !!state.title || state.workspace !== 'repair';
@@ -186,30 +267,25 @@
     rotate.textContent = state.warehouse_rotation_pending ? '已旋转·拖动' : '旋转';
     rotate.title = state.warehouse_rotation_pending ? '拖到可容纳的空位后放开' : (state.warehouse_can_rotate ? '旋转选中的货物' : '先选中可旋转且有空位的货物');
     const materials = state.repair_materials || [];
-    if (pendingMaterial && (unavailable || state.workspace !== 'repair' || state.repair_uid !== pendingMaterial.uid ||
-        state.cash !== pendingMaterial.cash || state.notice !== pendingMaterial.notice ||
-        materials.find(m => m.id === pendingMaterial.id)?.quantity !== pendingMaterial.quantity ||
-        !materials.find(m => m.id === pendingMaterial.id)?.available)) pendingMaterial = null;
+    document.getElementById('repair-supplies-note').textContent = state.merchant
+      ? '商人正在柜台，可回柜台购买。' : '商人上门时才能购买维修材料。';
     for (const material of materials) {
-      let button = materialButtons.get(material.id);
-      if (!button) {
-        button = document.createElement('button');
-        button.type = 'button'; button.className = 'touch-button'; button.dataset.material = material.id;
-        button.addEventListener('click', () => {
-          const current = (state.repair_materials || []).find(m => m.id === button.dataset.material);
-          if (!current || pendingMaterial || !current.available) return;
-          pendingMaterial = {id: current.id, uid: state.repair_uid, cash: state.cash, notice: state.notice, quantity: current.quantity};
-          button.disabled = true;
-          send({type: 'buy_repair_material', uid: state.repair_uid, id: current.id});
-        });
-        materialButtons.set(material.id, button);
-        document.getElementById('repair-supplies-list').append(button);
+      let row = materialRows.get(material.id);
+      if (!row) {
+        row = document.createElement('div');
+        row.dataset.material = material.id;
+        materialRows.set(material.id, row);
+        document.getElementById('repair-supplies-list').append(row);
       }
-      button.textContent = `${material.name} ×${material.quantity}  ·  +1 · ${money(material.price)}`;
-      button.disabled = !!unavailable || !material.available || !!pendingMaterial;
+      row.textContent = `${material.name} ×${material.quantity}`;
     }
     fitCanvas();
     if (!state.trade) { if (trade.open) trade.close(); return; }
+    if (state.merchant) {
+      if (trade.open) trade.close();
+      renderMerchant(unavailable || !!state.workspace);
+      return;
+    }
     trade.querySelectorAll('[data-command], #trade-draft button, #trade-draft input').forEach(control => {
       control.disabled = unavailable || !!state.workspace;
     });

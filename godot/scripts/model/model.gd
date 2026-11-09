@@ -2,7 +2,8 @@ class_name Model
 ## Faithful GDScript port of assets/scripts/orbital/{model,Negotiation,Market,
 ## ItemReadings,NpcConversation,StationEvents}.ts. State is a JSON-shaped
 ## Dictionary so traces can be diffed against the TypeScript reducer
-## (tools/trace.mjs + tests/replay.gd). Keep the two in lock-step.
+## (tools/trace.mjs + tests/replay.gd). Keep ordinary legacy actions in
+## lock-step; live Godot-only commerce is layered in commerce.gd.
 
 const MASK := 0xFFFFFFFF
 const FACTIONS := ["station", "salvage", "merchant"]
@@ -220,7 +221,7 @@ static func relevant_evidence(it: Dictionary, used: Array) -> Array:
 
 static func customer_need(npc_id: String) -> String:
 	var p := GameData.npc(npc_id)
-	if p.has("purchase") and p.has("desire"):
+	if p.has("desire") and (p.has("purchase") or p.get("role", "") == "supplier"):
 		return p.desire
 	if npc_id == "CHR-002" or npc_id == "CHR-004":
 		return "回收零件与旧设备，可收故障品；来源必须清楚"
@@ -228,33 +229,47 @@ static func customer_need(npc_id: String) -> String:
 		return "站务采购：正品、功能正常、品相至少65%"
 	return "整备与收藏：正品、功能正常、品相至少55%"
 
+## Only a buyer's first impression changes; the owned item's true fields and
+## all inspection/order calculations remain untouched.
+static func sale_appearance(it: Dictionary) -> Dictionary:
+	var forged = it.get("forgery", null)
+	if not forged is Dictionary or forged.get("exposed", false):
+		return it
+	var view := it.duplicate(true)
+	view.condition = forged.get("condition", it.condition)
+	view.working = forged.get("working", it.working)
+	view.authentic = forged.get("authentic", it.authentic)
+	return view
+
 static func sale_eligibility(it: Dictionary, npc_id: String):
 	if it.owner != "shop" or it.has("orderId"):
 		return "受托、抵押或订单预留的物品不能出售。"
 	if it.sealed or it.location == "isolation" or not it.sourceVerified:
 		return "先解除封存并核验来源，顾客才会收货。"
+	var apparent := sale_appearance(it)
 	var demand = GameData.npc(npc_id).get("purchase", null)
 	if demand != null:
 		if demand.has("categories") and not demand.categories.has(D(it.defId).category):
 			return "这件货物不在这位顾客的采购范围内，可从人物档案查看需求。"
-		if demand.authentic and not it.authentic:
+		if demand.authentic and not apparent.authentic:
 			return "这位顾客要求正品，请补齐鉴定或选择其他货物。"
-		if demand.working and not it.working:
+		if demand.working and not apparent.working:
 			return "这位顾客需要功能正常的设备，请先维修或换货。"
-		if it.condition < demand.minCondition:
+		if apparent.condition < demand.minCondition:
 			return "这位顾客要求品相至少 %s%%。" % jnum(jround(demand.minCondition * 100))
 	if npc_id == "CHR-003" or npc_id == "CHR-005":
-		if not it.authentic:
+		if not apparent.authentic:
 			return "这位顾客要求正品，无法按此采购。可寻找零件回收客。"
-		if not it.working:
+		if not apparent.working:
 			return "这位顾客要能正常工作的设备，请先维修或换货。"
-		if it.condition < (0.65 if npc_id == "CHR-003" else 0.55):
+		if apparent.condition < (0.65 if npc_id == "CHR-003" else 0.55):
 			return "品相未达到这位顾客的采购要求。"
 	return null
 
 static func trade_terms(s: Dictionary, t: Dictionary, it: Dictionary) -> Dictionary:
 	var def := D(it.defId)
-	var value := maxf(1, jround(def.value * maxf(0.35, minf(1, it.condition)) * (1.0 if it.working else 0.5) * (1.0 if it.authentic else 0.6)))
+	var priced := sale_appearance(it) if t.kind == "sell" else it
+	var value := maxf(1, jround(def.value * maxf(0.35, minf(1, priced.condition)) * (1.0 if priced.working else 0.5) * (1.0 if priced.authentic else 0.6)))
 	var proof := relevant_evidence(it, t.evidenceUsed).size()
 	var faction: String = GameData.npc(t.npcId).faction
 	var relation := maxf(0, minf(100, s.relations[faction]))

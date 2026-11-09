@@ -158,7 +158,7 @@ func run() -> void:
 	var old_texture := sound_icon.texture
 	counter.fixture_buttons.sound.pressed.emit()
 	check(sound_icon.texture != old_texture, "sound toggle updates the centered icon")
-	for npc in GameData.npcs:
+	for npc in GameData.people():
 		game.state.trade.npcId = npc.id
 		counter._refresh()
 		counter._say("今天经过这里。 这次采购：" + Model.customer_need(npc.id), false)

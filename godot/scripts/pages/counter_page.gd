@@ -4,6 +4,7 @@ extends Page
 
 const CUSTOMER_HEIGHT := 320.0
 const CRATE_COLS := 10
+const Commerce = preload("res://scripts/model/commerce.gd")
 var MAT_POS := Vector2(990, 575)
 var STAND := Vector2(880, 490)
 var fixture_buttons: Dictionary = {}
@@ -590,7 +591,7 @@ func _refresh_desk() -> void:
 	if t == null:
 		idle_label.text = "按左侧服务铃 · 接待下一位来客" if s.phase == "open" and s.cursor < Model.daily_visit_limit() else "预约已接待完 · 打开日结账本"
 	else:
-		idle_label.text = "请从陈列柜或下方抽屉选货"
+		idle_label.text = "商人到店 · 在报价台查看商品" if t.kind == "merchant" else "请从陈列柜或下方抽屉选货"
 
 func _stock_clicked(uid: String, picking: bool, why) -> void:
 	if busy or _scene_blocked():
@@ -740,26 +741,39 @@ func _refresh() -> void:
 		var closed: bool = s.cursor >= Model.daily_visit_limit()
 		scr.head.text = "今日营业中" if s.phase == "open" else "已打烊"
 		scr.price.text = "%d/%d" % [mini(int(s.cursor) + 1, Model.daily_visit_limit()), Model.daily_visit_limit()]
-		var nid := Model.market_npc_id(s)
+		var nid := Commerce.next_visitor(s)
 		if closed:
 			scr.line1.text = "六位预约已处理"
 			scr.line2.text = "整理仓储、维修或履约后可以打烊"
 		else:
 			scr.line1.text = "下一位：%s · %s" % [GameData.npc(nid).name, GameData.npc(nid).title]
-			if int(s.cursor) % 2 == 0:
+			if nid == Commerce.MERCHANT_ID:
+				scr.line2.text = "来售：维修材料与补给"
+			elif int(s.cursor) % 2 == 0:
 				var pv := Model.stock_preview(s)
 				scr.line2.text = "来售：%s · 约 %s–%s Cr" % [GameData.def(pv.defId).name, Model.jnum(pv.priceBand[0]), Model.jnum(pv.priceBand[1])]
 			else:
 				scr.line2.text = "来购：" + Model.customer_need(nid).left(22)
 		scr.line3.text = "按服务铃接客 · 每笔交割 1 AP"
 		offer_label.text = "—"
-		_act("接待下一位来客", "primary", func(): _ring(), s.phase == "open" and not closed and s.ap >= 1)
+		_act("接待下一位来客", "primary", func(): _ring(), s.phase == "open" and not closed and (s.ap >= 1 or Commerce.merchant_due(s)))
 		_act("打烊结算", "secondary", func(): shell.go("report"))
 		var shown := 0
 		for i in s.inventory:
 			if i.location == "display":
 				shown += 1
 		footer.text = "陈列架：%d 件 · 可在仓储上架" % shown
+	elif t.kind == "merchant":
+		var npc := GameData.npc(t.npcId)
+		scr.head.text = "流动商人 · " + npc.name
+		scr.price.text = "物资买卖"
+		scr.line1.text = "常用维修材料"
+		scr.line2.text = "稀有货物有概率出现"
+		scr.line3.text = "可买材料，也可出售闲置物资"
+		offer_label.text = "—"
+		_act("查看商品", "primary", _merchant_shop)
+		_act("送客", "secondary", func(): Game.dispatch({"type": "REFUSE"}))
+		footer.text = "商人在店时才能购买维修材料"
 	else:
 		var it = Model.trade_item(s)
 		var npc := GameData.npc(t.npcId)
@@ -829,6 +843,107 @@ func _refresh() -> void:
 		if l.text.length() > 21:
 			l.text = l.text.left(20) + "…"
 	dial.queue_redraw()
+
+func _merchant_shop() -> void:
+	if Game.state.trade == null or Game.state.trade.kind != "merchant":
+		return
+	var panel: Array = shell.modal("流动商人的补给", 1100)
+	var body: VBoxContainer = panel[0]
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(1000, 620)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	body.add_child(scroll)
+	var contents := UIKit.vbox(10)
+	contents.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contents)
+	_populate_merchant(contents)
+
+func _merchant_transaction(action: Dictionary, contents: VBoxContainer) -> void:
+	Game.dispatch(action)
+	call_deferred("_populate_merchant", contents)
+
+func _populate_merchant(contents: VBoxContainer) -> void:
+	if not is_instance_valid(contents) or contents.is_queued_for_deletion():
+		return
+	var current_focus := get_viewport().gui_get_focus_owner()
+	var focus_key := ""
+	if is_instance_valid(current_focus) and contents.is_ancestor_of(current_focus):
+		focus_key = String(current_focus.get_meta("merchant_focus", ""))
+	var focus_targets := {}
+	UIKit.clear(contents)
+	var s := Game.state
+	var t = s.trade
+	if t == null or t.kind != "merchant":
+		contents.add_child(UIKit.label("商人已经离开。", 20, UIKit.MUTED))
+		return
+	contents.add_child(UIKit.label("现金 %s · 维修材料交易不消耗 AP" % UIKit.money(s.cash), 19, UIKit.AMBER))
+	contents.add_child(UIKit.label("常用材料：商人离店后不能购买", 20, UIKit.TEXT))
+	for material in GameData.materials:
+		var row := UIKit.hbox(10)
+		var id: String = material.id
+		var name: String = material.name
+		var available: int = int(t.stock.get(id, 0))
+		var owned: int = int(s.materials.get(id, 0))
+		var description := UIKit.label("%s  ·  商人 %d / 持有 %d" % [name, available, owned], 18, UIKit.TEXT)
+		description.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(description)
+		var buy := UIKit.button("购买 %s · %s" % [name, UIKit.money(material.price)], "primary", Vector2(220, 50), 17)
+		buy.set_meta("merchant_focus", "buy:" + id)
+		focus_targets["buy:" + id] = buy
+		buy.disabled = available < 1 or s.cash < material.price
+		buy.pressed.connect(func(): _merchant_transaction({"type": "BUY_MATERIAL", "id": id, "qty": 1}, contents))
+		row.add_child(buy)
+		var sell_price := maxi(1, floori(float(material.price) * 0.5))
+		var sell := UIKit.button("出售 · %s" % UIKit.money(sell_price), "secondary", Vector2(135, 50), 17)
+		sell.set_meta("merchant_focus", "sell:" + id)
+		focus_targets["sell:" + id] = sell
+		sell.disabled = owned < 1
+		sell.pressed.connect(func(): _merchant_transaction({"type": "SELL_MATERIAL", "id": id, "qty": 1}, contents))
+		row.add_child(sell)
+		contents.add_child(row)
+	contents.add_child(UIKit.rule())
+	var rare = t.get("rare", null)
+	if rare is Dictionary and rare.get("available", false):
+		var rare_row := UIKit.hbox(10)
+		var rare_name: String = GameData.def(rare.defId).name
+		var label := UIKit.label("稀有货：%s · 入后仓" % rare_name, 19, UIKit.AMBER)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rare_row.add_child(label)
+		var buy_rare := UIKit.button("购买稀有货 · %s · 1 AP" % UIKit.money(rare.price), "good", Vector2(270, 50), 17)
+		buy_rare.set_meta("merchant_focus", "rare")
+		focus_targets["rare"] = buy_rare
+		buy_rare.disabled = s.cash < rare.price or s.ap < 1
+		buy_rare.pressed.connect(func(): _merchant_transaction({"type": "BUY_RARE_ITEM"}, contents))
+		rare_row.add_child(buy_rare)
+		contents.add_child(rare_row)
+	else:
+		contents.add_child(UIKit.label("本次没有可购买的稀有货。", 18, UIKit.MUTED))
+	contents.add_child(UIKit.rule())
+	contents.add_child(UIKit.label("出售旧物 · 按真实估值回收，每件消耗 1 AP", 19, UIKit.TEXT))
+	var eligible := 0
+	for item in s.inventory:
+		if item.owner != "shop" or item.has("orderId") or item.sealed or item.location == "isolation" or not item.sourceVerified:
+			continue
+		eligible += 1
+		var uid: String = item.uid
+		var price := maxf(1, floor(Model.item_value(item) * 0.6))
+		var sell_item := UIKit.button("出售旧物 %s · 收 %s" % [GameData.def(item.defId).name, UIKit.money(price)], "secondary", Vector2(0, 50), 17)
+		sell_item.set_meta("merchant_focus", "item:" + uid)
+		focus_targets["item:" + uid] = sell_item
+		sell_item.disabled = s.ap < 1
+		sell_item.pressed.connect(func(): _merchant_transaction({"type": "SELL_MERCHANT_ITEM", "uid": uid}, contents))
+		contents.add_child(sell_item)
+	if eligible == 0:
+		contents.add_child(UIKit.label("没有可回收的自有货物。", 18, UIKit.MUTED))
+	if focus_key != "":
+		var target = focus_targets.get(focus_key, null)
+		if target == null or target.disabled:
+			for candidate in focus_targets.values():
+				if not candidate.disabled:
+					target = candidate
+					break
+		if target != null and not target.disabled:
+			target.call_deferred("grab_focus")
 
 func _update_offer_value(value: int) -> void:
 	_last_offer_value = value
@@ -998,6 +1113,13 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 			if it != null:
 				_spawn_mat_item(it, true, _crate_point())
 				_say(nt.line, true, "focused")
+			elif nt != null and customer != null and String(nt.line).contains("识破"):
+				if is_instance_valid(mat_item):
+					mat_item.queue_free()
+					mat_item = null
+				chosen_evidence = ""
+				customer.shake_head()
+				_say(nt.line, true, "reject")
 		"OFFER":
 			if nt == null:
 				await _leave_with_goods(pt, "reject")
