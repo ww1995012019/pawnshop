@@ -20,6 +20,11 @@ def main():
             context = browser.new_context(viewport={"width":390,"height":844}, device_scale_factor=2, has_touch=True, is_mobile=True)
             page = context.new_page()
             downloads = []
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.on("console", lambda message: errors.append(message.text) if
+                    (message.type == 'error' or 'SCRIPT ERROR' in message.text) and
+                    'browser metadata to extension' not in message.text else None)
             page.on("request", lambda request: downloads.append(request.url) if ".wasm" in request.url or ".pck" in request.url else None)
             page.goto(args.url)
             expect(page.get_by_role("heading", name="横过来，柜台更好操作")).to_be_visible(timeout=4000)
@@ -78,6 +83,18 @@ def main():
                     assert box['width'] >= 44 and box['height'] >= 44, 'Small-phone target is too small'
                 page.screenshot(path=str(args.screenshots / f'05-inspection-{width}.png'))
             page.set_viewport_size({'width': 844, 'height': 390})
+            page.locator('[data-command="page"][data-page="repair"]').tap()
+            page.wait_for_function("window.OrbitalTouch.state.workspace === 'repair'")
+            page.wait_for_timeout(700)
+            canvas = page.locator('#canvas').bounding_box()
+            scale = min(canvas['width'] / 1920, canvas['height'] / 1080)
+            x = (1402 + (canvas['width'] / scale - 1920) / 2) * scale
+            y = (740.4 + (canvas['height'] / scale - 1080) / 2) * scale
+            cash = page.evaluate('window.OrbitalTouch.state.cash')
+            ap = page.evaluate('window.OrbitalTouch.state.ap')
+            page.touchscreen.tap(x, y)  # The first material purchase on the repair bench.
+            page.wait_for_function('(cash) => window.OrbitalTouch.state.cash === cash - 8', arg=cash)
+            assert page.evaluate('window.OrbitalTouch.state.ap') == ap, 'Buying supplies must not consume AP'
             page.locator('[data-command="close"]').tap()
             page.wait_for_function("window.OrbitalTouch.state.workspace === ''")
             assert page.evaluate("window.OrbitalTouch.state.offer") == 1, "Drawer must preserve draft"
@@ -97,6 +114,7 @@ def main():
             expect(page.locator('#trade-offer')).to_be_hidden()
             page.get_by_role('button',name='去仓储选货').tap()
             page.wait_for_function("window.OrbitalTouch.state.workspace === 'warehouse'")
+            assert not errors, 'Browser/Godot errors: ' + '\n'.join(errors[:10])
             print("PHONE orientation, large targets, real trade commands and preserved drawer state pass")
         finally:
             browser.close()

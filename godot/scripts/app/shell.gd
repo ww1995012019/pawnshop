@@ -57,11 +57,13 @@ var workspace_shell: Node
 var workspace_overlay: Control
 var workspace_frame: PanelContainer
 var workspace_container: SubViewportContainer
+var workspace_host: Control
 var workspace_title: Label
 var workspace_close: Button
 var workspace_origin: Control
 var workspace_suspended_focus: Array = []
 const WORKSPACE_LABELS := {"inspect": "鉴定台", "repair": "维修工作台", "warehouse": "货物抽屉", "orders": "委托终端", "report": "营业账本"}
+const WORKSPACE_SIZE := Vector2(1600, 900)
 
 func art(u: float, v: float) -> Vector2:
 	return CENTER + (Vector2(u, v) - Vector2(836, 470.5)) * K
@@ -537,13 +539,21 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	workspace_close.pressed.connect(close_workspace)
 	header.add_child(workspace_close)
 	body.add_child(header)
+	# The drawer's logical size remains fixed. Render its viewport at the
+	# display's pixel scale so text is rasterized at the final resolution.
+	workspace_host = Control.new()
+	workspace_host.custom_minimum_size = WORKSPACE_SIZE
+	workspace_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body.add_child(workspace_host)
 	workspace_container = SubViewportContainer.new()
-	workspace_container.custom_minimum_size = Vector2(1600, 900)
+	workspace_container.size = WORKSPACE_SIZE
 	workspace_container.stretch = true
 	workspace_container.mouse_filter = Control.MOUSE_FILTER_STOP
-	body.add_child(workspace_container)
+	workspace_host.add_child(workspace_container)
 	var viewport := SubViewport.new()
-	viewport.size = Vector2i(1600, 900)
+	viewport.size = Vector2i(WORKSPACE_SIZE)
+	viewport.size_2d_override = Vector2i(WORKSPACE_SIZE)
+	viewport.size_2d_override_stretch = true
 	viewport.world_2d = World2D.new()
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	viewport.handle_input_locally = true
@@ -573,6 +583,18 @@ func _suspend_home_focus() -> void:
 func _layout_workspace() -> void:
 	workspace_frame.reset_size()
 	workspace_frame.position = ((get_viewport().get_visible_rect().size - workspace_frame.size) * 0.5).floor()
+	var output_scale := get_viewport().get_final_transform().get_scale()
+	_set_workspace_render_scale(maxf(absf(output_scale.x), absf(output_scale.y)))
+
+func _set_workspace_render_scale(output_scale: float) -> void:
+	if not is_instance_valid(workspace_container):
+		return
+	# Keep the render target within common WebGL texture limits on very large
+	# displays; the container scale keeps its visible size and input unchanged.
+	var factor := clampf(output_scale, 0.5, 2.0)
+	var pixels := (WORKSPACE_SIZE * factor).round()
+	workspace_container.size = pixels
+	workspace_container.scale = WORKSPACE_SIZE / pixels
 
 func _workspace_heading(name: String) -> void:
 	Audio.music_for(name)

@@ -25,6 +25,14 @@ func button(active, world: Vector2, pressed: bool):
 	Input.parse_input_event(event)
 	await process_frame
 	await process_frame
+func touch(active, world: Vector2, pressed: bool):
+	var event := InputEventScreenTouch.new()
+	event.position = pointer(active, world)
+	event.index = 0
+	event.pressed = pressed
+	Input.parse_input_event(event)
+	await process_frame
+	await process_frame
 func run():
 	DirAccess.make_dir_recursive_absolute("/tmp/pawn-v3-tools")
 	var game = root.get_node("Game")
@@ -74,6 +82,33 @@ func run():
 	active.go("repair")
 	await process_frame
 	page = active.page
+	var candidates: Array = page._candidates()
+	check(candidates.size() >= 2, "repair list has two selectable items")
+	if candidates.size() >= 2:
+		var previous_emulation := Input.emulate_mouse_from_touch
+		Input.emulate_mouse_from_touch = true
+		for index in [1, 0]:
+			var choice: Button = page.list_box.get_child(index)
+			var choice_point: Vector2 = active.ui_to_world(choice.get_global_rect().get_center())
+			await touch(active, choice_point, true)
+			await touch(active, choice_point, false)
+			await process_frame
+			check(page.it_uid == candidates[index].uid, "touch selects repair item %d" % index)
+		Input.emulate_mouse_from_touch = previous_emulation
+	# Buying supplies should not rebuild the active cleaning stage and erase
+	# grime already removed from the item.
+	page.mask.set_pixel(32, 32, Color.BLACK)
+	page.dirty = 0.5
+	var materials_before: int = int(game.state.materials.get("MAT-001", 0))
+	game.dispatch({"type": "BUY_MATERIAL", "id": "MAT-001", "qty": 1})
+	await process_frame
+	await process_frame
+	check(page.mask.get_pixel(32, 32).r < 0.1 and is_equal_approx(page.dirty, 0.5), "buying supplies preserves cleaning progress")
+	var updated_quantity := false
+	for control in page.info.find_children("*", "Button", true, false):
+		if control.text.begins_with("导电纤维 ×%d" % (materials_before + 1)):
+			updated_quantity = true
+	check(updated_quantity, "supply count refreshes after purchase")
 	game.state.repairProgress[page.it_uid] = 1
 	page._stage_ui()
 	await create_timer(0.2).timeout
@@ -85,6 +120,46 @@ func run():
 	await create_timer(0.25).timeout
 	await button(active, target, false)
 	check(int(game.state.repairProgress[page.it_uid]) == 2, "real pointer seats the replacement part inside the repair surface")
+	var load_key: Button
+	for control in page.bench.find_children("*", "Button", true, false):
+		if control.text.contains("负载复测"): load_key = control
+	var load_point: Vector2 = active.ui_to_world(load_key.get_global_rect().get_center())
+	var emulation := Input.emulate_mouse_from_touch
+	Input.emulate_mouse_from_touch = true
+	await touch(active, load_point, true)
+	check(page.test_hold, "touch holds the load-test button")
+	page.test_value = 0.8
+	await touch(active, load_point, false)
+	await process_frame
+	check(int(game.state.repairProgress[page.it_uid]) == 3 and page.stage == 3, "touch release completes the load-test stage")
+	Input.emulate_mouse_from_touch = emulation
+	# A sharper drawer must still route the same real pointer input after the
+	# display resolution changes, without resetting the item or the tool.
+	active.go("inspect")
+	await process_frame
+	page = active.page
+	page._set_tool("TOL-005")
+	await create_timer(0.2).timeout
+	if not shell.has_method("_set_workspace_render_scale"):
+		check(false, "drawer render resolution follows the display")
+	else:
+		var uid: String = page.it_uid
+		for render_scale in [0.75, 1.0, 1.75]:
+			shell._set_workspace_render_scale(render_scale)
+			await create_timer(0.15).timeout
+			var viewport: SubViewport = active.get_viewport()
+			check(viewport.get_visible_rect().size == Vector2(1600, 900), "logical drawer layout remains stable at %s×" % render_scale)
+			check(viewport.size == Vector2i(roundi(1600 * render_scale), roundi(900 * render_scale)), "drawer raster follows %s× display resolution" % render_scale)
+			check(page.it_uid == uid and page.tool == "TOL-005", "resizing preserves the selected lot and instrument")
+			var last_weight: Button
+			for control in page.bench.find_children("*", "Button", true, false):
+				if control.text == "100g": last_weight = control
+			var was_on: bool = page.weights.has(5)
+			var world: Vector2 = active.get_viewport().get_canvas_transform().affine_inverse() * last_weight.get_global_rect().get_center()
+			await move(active, world)
+			await button(active, world, true)
+			await button(active, world, false)
+			check(page.weights.has(5) != was_on, "scale weight stays clickable at %s×" % render_scale)
 	print("GEOMETRY failures=",failures)
 	shell.queue_free()
 	await process_frame

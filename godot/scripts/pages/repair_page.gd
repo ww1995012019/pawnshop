@@ -141,7 +141,9 @@ func _fill_list() -> void:
 		var why := _blocked(it)
 		row.text = "%s%s\n%s" % [GameData.def(it.defId).name, " · 顾客委修" if it.owner == "customer" else "", why if why != "" else "工序 %d/3 · %s" % [p, "正常" if it.working else "故障"]]
 		var uid: String = it.uid
-		row.pressed.connect(func(): _select(uid))
+		# Selecting a lot rebuilds this list, so keep the pressed row alive
+		# until Godot has finished dispatching the pointer event.
+		row.pressed.connect(func(): call_deferred("_select", uid))
 		list_box.add_child(row)
 	if list_box.get_child_count() == 0:
 		list_box.add_child(UIKit.label("没有需要修理的物件。收购故障货或接委修订单后再来。", 18, UIKit.MUTED, false, true))
@@ -392,7 +394,16 @@ func _sparks(at: Vector2) -> void:
 	p.emitting = true
 
 func on_changed(_p: Dictionary, _n: Dictionary, a: Dictionary) -> void:
-	if a.type in ["DISMANTLE", "CRAFT"] and Game.item(it_uid) == null:
+	# Changes can originate from controls in the panels being rebuilt. Let
+	# input propagation finish before removing those controls from the tree.
+	if a.type == "BUY_MATERIAL":
+		# Only the materials/price detail changed; retain any cleaning progress.
+		call_deferred("_refresh_info")
+		return
+	call_deferred("_refresh_after_change", String(a.type))
+
+func _refresh_after_change(action_type: String) -> void:
+	if action_type in ["DISMANTLE", "CRAFT"] and Game.item(it_uid) == null:
 		var c := _candidates()
 		_select(c[0].uid if not c.is_empty() else "")
 		return

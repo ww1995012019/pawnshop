@@ -30,7 +30,8 @@ def main():
                                             env=env, stdout=log, stderr=subprocess.STDOUT, timeout=90)
                 text = path.read_text()
                 bad = result.returncode != 0 or any(marker in text for marker in
-                      ("SCRIPT ERROR:", "Parse Error:", "Failed loading resource:"))
+                      ("SCRIPT ERROR:", "Parse Error:", "Failed loading resource:",
+                       'Condition "!is_inside_tree()"'))
             except subprocess.TimeoutExpired:
                 bad = True
             print(("FAIL " if bad else "PASS ") + name, flush=True)

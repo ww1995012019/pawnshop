@@ -133,7 +133,7 @@ static func build_theme() -> Theme:
 	t.set_color("font_color", "Button", TEXT)
 	t.set_color("font_hover_color", "Button", Color.WHITE)
 	t.set_color("font_pressed_color", "Button", AMBER)
-	t.set_color("font_disabled_color", "Button", Color("5f6766"))
+	t.set_color("font_disabled_color", "Button", Color("b9b0a1"))
 	t.set_font_size("font_size", "Button", 22)
 	t.set_stylebox("panel", "TooltipPanel", box(Color("16110c"), Color("e0a16c"), 6, 1, 10, 4))
 	t.set_color("font_color", "TooltipLabel", Color("f4e7cf"))
