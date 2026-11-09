@@ -3,7 +3,8 @@ extends Page
 ## (CHECK) only when the physical step succeeds; readings reflect the item's
 ## real state, so a faulty object sags under load and a copy reads off-spectrum.
 
-const ITEM_POS := Vector2(900, 500)
+var item_home := Vector2(900, 500)
+var mat_rect := Rect2()
 
 var item: ItemSprite
 var it_uid := ""
@@ -119,32 +120,28 @@ func _build_panels() -> void:
 	row.add_child(fix)
 	rv.add_child(row)
 	# Instrument bench between the side panels.
-	var r: Rect2 = shell.content_rect()
 	bench = UIKit.plate()
-	bench.position = Vector2(r.position.x + 300 + 20, r.end.y - 220)
-	bench.size = Vector2(r.size.x - 300 - 470 - 40, 220)
 	add_child(bench)
 	bench_body = UIKit.vbox(10)
 	bench.add_child(bench_body)
+	bench_body.minimum_size_changed.connect(queue_relayout)
 
-## Keep the tool rack just tall enough for its contents, with scrolling when
-## the available height is smaller. Resize without rebuilding the tool state.
+## Resize the surface and controls together without rebuilding tool state.
 func relayout() -> void:
 	if not is_instance_valid(instrument_panel) or not is_instance_valid(instrument_list):
 		return
-	var r: Rect2 = shell.content_rect()
-	var style: StyleBox = instrument_panel.get_theme_stylebox("panel")
-	var padding := style.get_content_margin(SIDE_TOP) + style.get_content_margin(SIDE_BOTTOM)
-	var desired_height := padding + instrument_header.get_combined_minimum_size().y + 10.0 + instrument_list.get_combined_minimum_size().y
-	instrument_panel.position = r.position
-	instrument_panel.size = Vector2(300, minf(r.size.y, desired_height))
-	detail_panel.position = Vector2(r.end.x - 470, r.position.y)
-	detail_panel.size = Vector2(470, r.size.y)
-	# Grow upward to fit the current instrument, so the scale and load rigs
-	# never spill over the hint line under the bench.
-	var h := maxf(220.0, bench.get_combined_minimum_size().y)
-	bench.position = Vector2(r.position.x + 320, r.end.y - h)
-	bench.size = Vector2(r.size.x - 810, h)
+	mat_rect = layout_workbench(instrument_panel, detail_panel, bench, 300)
+	if is_instance_valid(item):
+		var next_home := fit_workbench_item(item, mat_rect)
+		item.position += next_home - item_home
+		item.target += next_home - item_home
+		item_home = next_home
+		item.position = item.position.clamp(item.bounds.position, item.bounds.end)
+		for i in probes.size():
+			var probe: Probe = probes[i]
+			probe.home = shell.ui_to_world(Vector2(mat_rect.end.x - 120 + i * 60, mat_rect.get_center().y - 45))
+			if not probe.attached and drag_probe != i:
+				probe.position = probe.home
 
 func _fill_picker() -> void:
 	picker.clear()
@@ -213,7 +210,7 @@ func _load_item() -> void:
 		return
 	item = ItemSprite.new()
 	item.setup(it.defId, it.uid, 360.0)
-	item.position = ITEM_POS
+	item.position = item_home
 	item.bounds = Rect2(560, 330, 700, 260)
 	item.dropped.connect(func():
 		shell.sound("drop", -5, randf_range(0.9, 1.1))
@@ -229,10 +226,10 @@ func _load_item() -> void:
 
 func _home() -> void:
 	if Game.prefs.reduced_motion:
-		item.position = ITEM_POS
+		item.position = item_home
 		return
 	var tw := create_tween()
-	tw.tween_property(item, "position", ITEM_POS, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(item, "position", item_home, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _return_probe(probe: Probe) -> void:
 	if Game.prefs.reduced_motion:
@@ -246,6 +243,9 @@ func _set_tool(id: String) -> void:
 	tool = id
 	progress = 0.0
 	hold = 0.0
+	drag_probe = -1
+	if is_instance_valid(item):
+		item.end_drag()
 	for n in [lens, wand, uv_light, arc]:
 		if n != null and is_instance_valid(n):
 			n.queue_free()
@@ -273,8 +273,6 @@ func _set_tool(id: String) -> void:
 		(item.reveal.material as ShaderMaterial).set_shader_parameter("uv_r", 0.0)
 	if id != "":
 		shell.sound("click", -6, 1.2)
-		shell.focus = 1.0
-		shell.focus_point = ITEM_POS + Vector2(0, -40)
 	var title := UIKit.label(GameData.tool(id).name + " · " + GameData.tool(id).instruction if id != "" else "选择一种仪器开始取证", 20, UIKit.AMBER if id != "" else UIKit.MUTED, false, true)
 	bench_body.add_child(title)
 	match id:
@@ -383,7 +381,7 @@ func _circuit() -> void:
 		pr.color = Color("d24a3c") if i == 0 else Color("2b2b2b")
 		# Keep both tips clear of the drawer side panel and bottom instrument
 		# shelf, including the workbench camera's inspection zoom.
-		pr.home = ITEM_POS + Vector2(190 + i * 65, -45)
+		pr.home = item_home + Vector2(190 + i * 65, -45)
 		pr.position = pr.home
 		add_world(pr, "top")
 		probes.append(pr)

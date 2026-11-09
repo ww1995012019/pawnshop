@@ -50,7 +50,7 @@ def package_web(pack, runtime, output):
     css_data = assets.pop(css_name).replace(b"loading-shop.png", loading_name.encode())
     css_name = "touch-" + digest(css_data)[:16] + ".css"
     assets[css_name] = css_data
-    config = {"args": [], "canvasResizePolicy": 2, "executable": engine,
+    config = {"args": [], "canvasResizePolicy": 0, "executable": engine,
               "mainPack": pack_name, "fileSizes": {pack_name: len(pack_data),
               engine + ".wasm": len(assets[engine + ".wasm"])}, "focusCanvas": True,
               "gdextensionLibs": [], "ensureCrossOriginIsolationHeaders": False}

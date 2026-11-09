@@ -44,8 +44,9 @@ func run():
 	for tool in GameData.tools:
 		page._set_tool(tool.id)
 		await create_timer(0.8).timeout
-		await RenderingServer.frame_post_draw
-		root.get_texture().get_image().save_png("/tmp/pawn-v3-tools/"+tool.id+".png")
+		if DisplayServer.get_name() != "headless":
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().save_png("/tmp/pawn-v3-tools/"+tool.id+".png")
 		if tool.id == "TOL-004":
 			for i in page.probes.size():
 				var tip: Vector2 = active.world_to_ui(page.probes[i].tip())
@@ -70,6 +71,20 @@ func run():
 			await button(active,world,true)
 			await button(active,world,false)
 			check(page.weights.get(5,0) == 100,"last scale weight is reachable through the actual drawer")
+	active.go("repair")
+	await process_frame
+	page = active.page
+	game.state.repairProgress[page.it_uid] = 1
+	page._stage_ui()
+	await create_timer(0.2).timeout
+	var from: Vector2 = page.part.position
+	var target: Vector2 = page.slot.position
+	await move(active, from)
+	await button(active, from, true)
+	await move(active, target, true)
+	await create_timer(0.25).timeout
+	await button(active, target, false)
+	check(int(game.state.repairProgress[page.it_uid]) == 2, "real pointer seats the replacement part inside the repair surface")
 	print("GEOMETRY failures=",failures)
 	shell.queue_free()
 	await process_frame

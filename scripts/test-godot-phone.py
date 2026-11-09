@@ -17,7 +17,7 @@ def main():
         browser = p.chromium.launch(executable_path=os.environ.get("CHROMIUM_EXECUTABLE") or shutil.which("chromium"), args=[
             "--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
         try:
-            context = browser.new_context(viewport={"width":390,"height":844}, has_touch=True, is_mobile=True)
+            context = browser.new_context(viewport={"width":390,"height":844}, device_scale_factor=2, has_touch=True, is_mobile=True)
             page = context.new_page()
             downloads = []
             page.on("request", lambda request: downloads.append(request.url) if ".wasm" in request.url or ".pck" in request.url else None)
@@ -56,6 +56,28 @@ def main():
             page.locator('#trade-close').tap()
             page.locator('[data-command="page"][data-page="inspect"]').tap()
             page.wait_for_function("window.OrbitalTouch.state.workspace === 'inspect'")
+            page.wait_for_timeout(300)
+            canvas = page.locator('#canvas').bounding_box()
+            toolbar = page.locator('#touch-nav').bounding_box()
+            tools = page.locator('#touch-tools').bounding_box()
+            assert canvas['y'] + canvas['height'] <= toolbar['y'] + 1, 'Phone toolbar covers the instrument controls'
+            assert tools['y'] >= toolbar['y'], 'Instrument picker must share the reserved toolbar area'
+            pixels = page.evaluate('({width:canvas.width,height:canvas.height,ratio:devicePixelRatio})')
+            assert abs(pixels['width'] - canvas['width'] * pixels['ratio']) <= 1, 'Canvas pixel width does not match the display'
+            assert abs(pixels['height'] - canvas['height'] * pixels['ratio']) <= 1, 'Canvas pixel height does not match the display'
+            page.screenshot(path=str(args.screenshots / '04-unobstructed-inspection.png'))
+            for width, height in [(740, 360), (667, 375)]:
+                page.set_viewport_size({'width': width, 'height': height})
+                page.wait_for_timeout(350)
+                canvas = page.locator('#canvas').bounding_box()
+                toolbar = page.locator('#touch-nav').bounding_box()
+                assert canvas['y'] + canvas['height'] <= toolbar['y'] + 1, 'Small-phone toolbar covers the game'
+                for control in page.locator('#touch-nav button:visible, #touch-nav select:visible').all():
+                    box = control.bounding_box()
+                    assert box['x'] >= 0 and box['x'] + box['width'] <= width, 'Phone control extends outside the screen'
+                    assert box['width'] >= 44 and box['height'] >= 44, 'Small-phone target is too small'
+                page.screenshot(path=str(args.screenshots / f'05-inspection-{width}.png'))
+            page.set_viewport_size({'width': 844, 'height': 390})
             page.locator('[data-command="close"]').tap()
             page.wait_for_function("window.OrbitalTouch.state.workspace === ''")
             assert page.evaluate("window.OrbitalTouch.state.offer") == 1, "Drawer must preserve draft"

@@ -22,6 +22,7 @@ var layers := {}
 var scene_nodes: Array[Node] = []
 var flickers: Array = []
 var bg: Sprite2D
+var work_surface
 var scene := ""
 var ui: CanvasLayer
 var fx: CanvasLayer
@@ -150,6 +151,7 @@ func set_scene(name: String) -> void:
 			n.queue_free()
 	scene_nodes.clear()
 	flickers.clear()
+	work_surface = null
 	# The counter page plays inside the painted room: the visitor stands
 	# behind the counter front (fg), fixtures sit on the walls and counter.
 	if name == "counter" and not workspace_mode:
@@ -163,9 +165,9 @@ func set_scene(name: String) -> void:
 		layers.bg.move_child(edges, 0)
 		return
 	bg.hide()
-	var surface := preload("res://scripts/ui/workspace_surface.gd").new()
-	surface.material = Util.unshaded()
-	_scene_node(surface, layers.bg)
+	work_surface = preload("res://scripts/ui/workspace_surface.gd").new()
+	work_surface.material = Util.unshaded()
+	_scene_node(work_surface, layers.bg)
 	var warm := Color(1.0, 0.74, 0.45)
 	var teal := Color(0.45, 0.95, 1.0)
 	match name:
@@ -402,6 +404,9 @@ func counter_offset() -> Vector2:
 
 func _fit() -> void:
 	var vis := get_viewport().get_visible_rect().size
+	if workspace_mode:
+		cam.position = vis * 0.5
+		cam.force_update_scroll()
 	var pad := counter_offset()
 	page_host.offset_left = pad.x
 	page_host.offset_right = -pad.x
@@ -470,6 +475,8 @@ func go(name: String, focus_uid := "") -> void:
 	page.shell = self
 	page_host.add_child(page)
 	set_scene(page.scene_name())
+	if work_surface != null:
+		work_surface.set_mat(Rect2())
 	ambient_target = Color.WHITE if name == "counter" else ambient_base
 	focus = 0.0
 	page.enter()
@@ -870,6 +877,9 @@ func _update_cursor() -> void:
 func world_to_ui(p: Vector2) -> Vector2:
 	return get_viewport().get_canvas_transform() * p
 
+func ui_to_world(p: Vector2) -> Vector2:
+	return get_viewport().get_canvas_transform().affine_inverse() * p
+
 # ---------------------------------------------------------------- modals
 
 ## A centred sheet; returns [content VBox, close Callable].
@@ -1268,10 +1278,10 @@ func _process(delta: float) -> void:
 	_update_cursor()
 	var t := Time.get_ticks_msec() / 1000.0
 	ambient.color = ambient.color.lerp(ambient_target, 1.0 - exp(-delta * 6.0))
-	cam.zoom = Vector2.ONE * zoom_base * (1.0 + 0.14 * focus)
-	cam.position = CENTER.lerp(focus_point, focus * 0.55)
+	cam.zoom = Vector2.ONE if workspace_mode else Vector2.ONE * zoom_base * (1.0 + 0.14 * focus)
+	cam.position = get_viewport().get_visible_rect().size * 0.5 if workspace_mode else CENTER.lerp(focus_point, focus * 0.55)
 	shake = maxf(0.0, shake - delta * 1.6)
-	cam.offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * shake * shake * 22.0
+	cam.offset = Vector2.ZERO if workspace_mode else Vector2(randf_range(-1, 1), randf_range(-1, 1)) * shake * shake * 22.0
 	var still: bool = Game.prefs.reduced_motion
 	var uv := ambient_target.r < 0.3
 	for f in flickers:

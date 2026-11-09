@@ -81,6 +81,26 @@ def main():
             page.keyboard.press('Escape')
             page.wait_for_function("window.OrbitalTouch.state.workspace === ''")
             assert page.evaluate("window.OrbitalTouch.state.trade"), 'Closing equipment lost the visitor'
+            def command(data):
+                page.evaluate('(data)=>window.orbitalTouchSend(JSON.stringify(data))', data)
+            command({'type': 'page', 'page': 'inspect'})
+            page.wait_for_function("OrbitalTouch.state.workspace === 'inspect'")
+            for number in range(1, 7):
+                command({'type': 'tool', 'tool': f'TOL-{number:03}'})
+                page.wait_for_timeout(450)
+                page.screenshot(path=str(args.screenshots / f'05-instrument-{number}.png'))
+            for target in ('repair', 'warehouse', 'orders', 'report'):
+                command({'type': 'page', 'page': target})
+                page.wait_for_function('(target)=>OrbitalTouch.state.workspace === target', arg=target)
+                page.wait_for_timeout(450)
+                page.screenshot(path=str(args.screenshots / f'06-{target}.png'))
+            for width, height in ((1280, 720), (1024, 768)):
+                page.set_viewport_size({'width': width, 'height': height})
+                command({'type': 'page', 'page': 'inspect'})
+                page.wait_for_function("OrbitalTouch.state.workspace === 'inspect'")
+                command({'type': 'tool', 'tool': 'TOL-005'})
+                page.wait_for_timeout(450)
+                page.screenshot(path=str(args.screenshots / f'07-inspection-{width}.png'))
             assert not errors, 'Browser/Godot errors: ' + '\n'.join(errors[:10])
             resources = page.evaluate("performance.getEntriesByType('resource').filter(r=>/\\.wasm|\\.pck/.test(r.name)).map(r=>({name:r.name.split('/').pop(),transfer:r.encodedBodySize,decoded:r.decodedBodySize}))")
             print('Web resources:',json.dumps(resources),flush=True)

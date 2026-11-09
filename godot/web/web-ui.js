@@ -18,7 +18,7 @@
   const tools = document.createElement('div');
   tools.id = 'touch-tools'; tools.hidden = true;
   tools.innerHTML = `<select aria-label="鉴定仪器"><option value="">选择仪器</option><option value="TOL-001">可变焦灯镜</option><option value="TOL-002">紫外检视灯</option><option value="TOL-003">轨道光谱台</option><option value="TOL-004">双触点万用探针</option><option value="TOL-005">微重力秤</option><option value="TOL-006">脉冲测试夹</option></select><button type="button" class="touch-button" data-command="flip">翻面</button>`;
-  document.body.append(tools);
+  nav.append(tools);
   const trade = document.createElement('dialog');
   trade.id = 'touch-trade'; trade.setAttribute('aria-labelledby', 'trade-heading');
   trade.innerHTML = `<div class="trade-header"><h2 id="trade-heading">柜台交易</h2><button type="button" id="trade-close" aria-label="关闭交易操作">收起</button></div><p id="trade-item"></p><div id="trade-prices"><output id="trade-price"></output><output id="trade-cash"></output></div><div id="trade-draft"><label for="trade-offer-input">我的还价</label><button type="button" data-nudge="-10" aria-label="减十">−10</button><button type="button" data-nudge="-1" aria-label="减一">−1</button><input type="number" inputmode="numeric" id="trade-offer-input" min="1" step="1"><button type="button" data-nudge="1" aria-label="加一">+1</button><button type="button" data-nudge="10" aria-label="加十">+10</button></div><div id="trade-actions"><button type="button" id="trade-pick" data-command="page" data-page="warehouse" class="primary">去仓储选货</button><button type="button" id="trade-offer" data-command="offer">提交还价</button><button type="button" id="trade-accept" data-command="accept" class="primary">接受报价</button><button type="button" id="trade-deliver" data-command="deliver" class="primary">确认交割</button><button type="button" data-command="refuse">送客</button></div><p id="trade-note" role="status" aria-live="polite"></p>`;
@@ -55,6 +55,18 @@
     if (button.dataset.command === 'page' && trade.open) trade.close();
     send({type: button.dataset.command, page: button.dataset.page});
   }));
+  // Resize the actual render buffer as well as its CSS box. Godot's full-window
+  // policy otherwise stretches behind the phone toolbar and hides controls.
+  function fitCanvas() {
+    const canvas = document.getElementById('canvas');
+    const height = Math.max(1, innerHeight - (nav.hidden ? 0 : nav.getBoundingClientRect().height));
+    const ratio = devicePixelRatio || 1;
+    const width = Math.round(innerWidth * ratio), pixels = Math.round(height * ratio);
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== pixels) canvas.height = pixels;
+    canvas.style.width = `${innerWidth}px`;
+    canvas.style.height = `${height}px`;
+  }
   function render() {
     const vertical = portrait();
     guide.hidden = !vertical;
@@ -73,6 +85,7 @@
     document.getElementById('trade-open').textContent = state.has_item ? '交易' : '选货';
     document.getElementById('trade-open').disabled = unavailable || !!state.workspace;
     nav.querySelector('[data-command=close]').hidden = !!state.title || (!state.workspace && !state.blocked);
+    fitCanvas();
     if (!state.trade) { if (trade.open) trade.close(); return; }
     trade.querySelectorAll('[data-command], #trade-draft button, #trade-draft input').forEach(control => {
       control.disabled = unavailable || !!state.workspace;
@@ -110,5 +123,6 @@
   };
   addEventListener('resize', render);
   coarse.addEventListener('change', render);
+  new ResizeObserver(fitCanvas).observe(nav);
   render();
 })();

@@ -2,14 +2,18 @@ extends Page
 ## Repair bench: scrub the grime off, seat the replacement part, run the load
 ## test, then commit (materials and AP are only spent on the final step).
 
-const ITEM_POS := Vector2(860, 500)
-const PART_HOME := Vector2(1230, 610)
+var item_home := Vector2(860, 500)
+var part_home := Vector2(1230, 610)
+var mat_rect := Rect2()
 
 var item: ItemSprite
 var it_uid := ""
 var list_box: VBoxContainer
 var info: VBoxContainer
 var bench_body: VBoxContainer
+var list_panel: PanelContainer
+var detail_panel: PanelContainer
+var bench: PanelContainer
 var mask: Image
 var mask_tex: ImageTexture
 var dirty := 1.0
@@ -37,7 +41,8 @@ func hint_text() -> String:
 	return ""
 
 func enter() -> void:
-	var left := left_panel(380)
+	list_panel = left_panel(380)
+	var left := list_panel
 	var lv := UIKit.vbox(10)
 	left.add_child(lv)
 	lv.add_child(UIKit.label("待修物件", 24, UIKit.AMBER))
@@ -50,20 +55,19 @@ func enter() -> void:
 	list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.add_child(list_box)
 	lv.add_child(sc)
-	var right := side_panel(470)
+	detail_panel = side_panel(470)
+	var right := detail_panel
 	var rsc := ScrollContainer.new()
 	rsc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	info = UIKit.vbox(12)
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rsc.add_child(info)
 	right.add_child(rsc)
-	var r: Rect2 = shell.content_rect()
-	var bench := UIKit.plate()
-	bench.position = Vector2(r.position.x + 380 + 20, r.end.y - 240)
-	bench.size = Vector2(r.size.x - 380 - 470 - 40, 240)
+	bench = UIKit.plate()
 	add_child(bench)
 	bench_body = UIKit.vbox(10)
 	bench.add_child(bench_body)
+	bench_body.minimum_size_changed.connect(queue_relayout)
 	# Only lots in the shop's own storage can go on the bench; the visitor's
 	# item at the counter (Game.item finds it too) is not ours to work on.
 	var it = null
@@ -74,6 +78,20 @@ func enter() -> void:
 		var c := _candidates()
 		it = c[0] if not c.is_empty() else null
 	_select(it.uid if it != null else "")
+	queue_relayout()
+
+func relayout() -> void:
+	if not is_instance_valid(bench):
+		return
+	mat_rect = layout_workbench(list_panel, detail_panel, bench, 380)
+	part_home = shell.ui_to_world(Vector2(mat_rect.end.x - 90, mat_rect.get_center().y + 80))
+	if is_instance_valid(item):
+		item_home = fit_workbench_item(item, mat_rect)
+		item.position = item_home
+	if is_instance_valid(slot):
+		slot.position = item.uv_global(Vector2(0.58, 0.48))
+	if is_instance_valid(part) and not dragging_part:
+		part.position = part_home
 
 func _recipe(it: Dictionary) -> Dictionary:
 	var def := GameData.def(it.defId)
@@ -146,7 +164,7 @@ func _select(uid: String) -> void:
 		return
 	item = ItemSprite.new()
 	item.setup(it.defId, it.uid, 360.0)
-	item.position = ITEM_POS
+	item.position = item_home
 	item.draggable = false
 	add_world(item, "fg")
 	mask = Image.create(64, 64, false, Image.FORMAT_L8)
@@ -263,6 +281,7 @@ func _stage_ui() -> void:
 	_stage_ui_body()
 	# Selecting another lot changes the stage; keep the dock hint in step.
 	shell.hint(hint_text())
+	queue_relayout()
 
 func _stage_ui_body() -> void:
 	UIKit.clear(bench_body)
@@ -306,7 +325,7 @@ func _stage_ui_body() -> void:
 			slot.position = item.uv_global(Vector2(0.58, 0.48))
 			add_world(slot, "top")
 			part = Part.new()
-			part.position = PART_HOME
+			part.position = part_home
 			add_world(part, "top")
 		2:
 			test_bar = ProgressBar.new()
@@ -346,9 +365,9 @@ func _celebrate() -> void:
 
 func _return_part() -> void:
 	if Game.prefs.reduced_motion:
-		part.position = PART_HOME
+		part.position = part_home
 	else:
-		create_tween().tween_property(part, "position", PART_HOME, 0.25).set_trans(Tween.TRANS_BACK)
+		create_tween().tween_property(part, "position", part_home, 0.25).set_trans(Tween.TRANS_BACK)
 
 func _sparks(at: Vector2) -> void:
 	if Game.prefs.reduced_motion:
