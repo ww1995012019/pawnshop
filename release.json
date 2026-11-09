@@ -1,6 +1,6 @@
 {
-  "release_id": "76103e33540270bf",
-  "pack": "workbench-8d1bbd1d0304ecd4.pck",
+  "release_id": "9520aa70a0bc1407",
+  "pack": "workbench-ee16716ebad63d67.pck",
   "engine": "engine-309843874cfdebe8",
   "current_files": [
     ".nojekyll",
@@ -17,18 +17,18 @@
     "godot-license.txt",
     "index.html",
     "loading-shop-c50ece6927cc5cbd.png",
-    "touch-653933419799a7c2.js",
-    "touch-653933419799a7c2.js.gz",
+    "touch-b04a6d9c34d0b126.js",
+    "touch-b04a6d9c34d0b126.js.gz",
     "touch-f405d9fd6dca172a.css",
     "touch-f405d9fd6dca172a.css.gz",
-    "workbench-8d1bbd1d0304ecd4.pck",
-    "workbench-8d1bbd1d0304ecd4.pck.gz"
+    "workbench-ee16716ebad63d67.pck",
+    "workbench-ee16716ebad63d67.pck.gz"
   ],
   "previous_files": [
-    "touch-07563f449ba16e54.js",
-    "touch-07563f449ba16e54.js.gz",
-    "workbench-deaa176add32f573.pck",
-    "workbench-deaa176add32f573.pck.gz"
+    "touch-653933419799a7c2.js",
+    "touch-653933419799a7c2.js.gz",
+    "workbench-8d1bbd1d0304ecd4.pck",
+    "workbench-8d1bbd1d0304ecd4.pck.gz"
   ],
   "files": {
     ".nojekyll": {
@@ -81,19 +81,11 @@
     },
     "index.html": {
       "bytes": 9311,
-      "sha256": "e4c835b37737691c5d02a06e52094cceb3fcee493b2fa7c2ee8ebb43426094d7"
+      "sha256": "cac39f2bd3ff7c251188ce7a76f2b59866d10a6445fe748fcce670b7723683b5"
     },
     "loading-shop-c50ece6927cc5cbd.png": {
       "bytes": 266052,
       "sha256": "c50ece6927cc5cbd66e2f29ecdba955452ee2aa2d7654822aec7feb99ddb45fa"
-    },
-    "touch-07563f449ba16e54.js": {
-      "bytes": 10611,
-      "sha256": "07563f449ba16e54c885f611d5ca8a4583771f3b08e60c9947bb862ed5f305d1"
-    },
-    "touch-07563f449ba16e54.js.gz": {
-      "bytes": 3462,
-      "sha256": "32026878a8059a537ee07a7b2f9c68cc44cd9922cc1701d456e8a11b455120a4"
     },
     "touch-653933419799a7c2.js": {
       "bytes": 12216,
@@ -102,6 +94,14 @@
     "touch-653933419799a7c2.js.gz": {
       "bytes": 3848,
       "sha256": "6e58a0bedd4966c423294b4bc90947cd58488567303bb885e2f0ad0b9fa23aca"
+    },
+    "touch-b04a6d9c34d0b126.js": {
+      "bytes": 12243,
+      "sha256": "b04a6d9c34d0b126cf1ea1dfe3c42a2c84fba76cf2defe448a69ee2860ec1571"
+    },
+    "touch-b04a6d9c34d0b126.js.gz": {
+      "bytes": 3851,
+      "sha256": "746d745d6822b9dec0176bd76758fb56b96df9561b9fc51ab89264621e59a79c"
     },
     "touch-f405d9fd6dca172a.css": {
       "bytes": 3367,
@@ -119,15 +119,15 @@
       "bytes": 7613451,
       "sha256": "21ca1028805c4d22fc94aace74332110c5cc73c99565e32819dd135118f58e29"
     },
-    "workbench-deaa176add32f573.pck": {
-      "bytes": 7868260,
-      "sha256": "deaa176add32f573bccf87286e8fca38ba5229043aa2e4debeeb744b85ad0416"
+    "workbench-ee16716ebad63d67.pck": {
+      "bytes": 7926284,
+      "sha256": "ee16716ebad63d6719915e23261eab115c0f0628efdab2fc25f2563c03d76e29"
     },
-    "workbench-deaa176add32f573.pck.gz": {
-      "bytes": 7595799,
-      "sha256": "ae16503c9fca867ded529fc29809efc73c8551c756f267272fd05d592e3907cb"
+    "workbench-ee16716ebad63d67.pck.gz": {
+      "bytes": 7636585,
+      "sha256": "b4d091fdb672c8e62a89c4b4cf64828c243ab683fc6556ff0a236a4420403394"
     }
   },
-  "initial_raw_bytes": 45593878,
-  "initial_gzip_bytes": 16995733
+  "initial_raw_bytes": 45626950,
+  "initial_gzip_bytes": 17018867
 }
