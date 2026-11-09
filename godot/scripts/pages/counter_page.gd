@@ -35,7 +35,8 @@ var stock_grid: GridContainer
 var stock_count: Label
 var display_goods: Control
 var orders_readout: Label
-var status_readout: Label
+var status_panel: PanelContainer
+var status_values := {}
 var tag: PanelContainer
 var tag_name: Label
 var tag_info: Label
@@ -371,25 +372,36 @@ func _build_equipment() -> void:
 	add_child(orders_readout)
 	_fixture("people", Rect2(1700, 320, 115, 92), "人物档案", func(): shell.open_people())
 	_fixture("bell", Rect2(488, 575, 105, 85), "接客铃", _bell_clicked, false)
-	status_readout = UIKit.label("", 20, Color("ecdabb"), true)
-	status_readout.position = Vector2(1394, 185)
-	status_readout.size = Vector2(435, 32)
-	status_readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	status_readout.add_theme_color_override("font_outline_color", Color("261d28"))
-	status_readout.add_theme_constant_override("outline_size", 4)
-	status_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(status_readout)
-	var x := 1637.0
+	_build_status()
+
+func _build_status() -> void:
+	status_panel = UIKit.plate(UIKit.inset_style(12))
+	status_panel.position = Vector2(1410, 60)
+	status_panel.custom_minimum_size.x = 420
+	add_child(status_panel)
+	var body := UIKit.vbox(8)
+	status_panel.add_child(body)
+	var stats := UIKit.grid(3, 16)
+	body.add_child(stats)
+	for caption in ["现金", "行动点", "站务关注"]:
+		stats.add_child(UIKit.label(caption, 15, UIKit.MUTED))
+	for key in ["cash", "ap", "risk"]:
+		var value := UIKit.label("", 26, UIKit.AMBER if key == "cash" else UIKit.TEXT, true)
+		value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		stats.add_child(value)
+		status_values[key] = value
+	body.add_child(UIKit.rule())
+	var utilities := UIKit.hbox(8)
+	body.add_child(utilities)
 	for spec in [["help", "手册", "help"], ["sound", "声音", "soundOn"], ["settings", "设置", "settings"]]:
 		var key: String = spec[0]
-		var b := UIKit.button("", "chip", Vector2(48, 42), 17, spec[2])
-		b.position = Vector2(x, 112)
+		var b := UIKit.button(spec[1], "chip", Vector2(0, 40), 16, spec[2])
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.tooltip_text = spec[1]
-		b.add_theme_constant_override("icon_max_width", 26)
+		b.add_theme_constant_override("icon_max_width", 22)
 		b.pressed.connect(func(): _utility_clicked(key, b))
-		add_child(b)
+		utilities.add_child(b)
 		fixture_buttons[key] = b
-		x += 60
 
 func _refresh_utility_icons() -> void:
 	if fixture_buttons.has("sound"):
@@ -452,7 +464,9 @@ func _refresh_board() -> void:
 	var rent_day := mini(int(ceil(day / 7.0)) * 7, 21)
 	board_rent.text = "今晚缴租 · 点此看事件" if rent_day == day else "租期余 %d 天 · 事件" % (rent_day - day)
 	fixture_buttons.events.tooltip_text = "今日事件 · " + ("已处理" if Game.event_done() else "待查看")
-	status_readout.text = "%s Cr   AP %d   关注 %d" % [Model.jnum(s.cash), int(s.ap), int(s.risk)]
+	status_values.cash.text = "%s Cr" % Model.jnum(s.cash)
+	status_values.ap.text = "%d AP" % int(s.ap)
+	status_values.risk.text = "%d / 100" % int(s.risk)
 	var active := 0
 	for order in s.orders:
 		if order.status == "active":
