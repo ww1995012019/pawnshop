@@ -1,7 +1,6 @@
 {
-  "source_commit": "1864a93a1072bfd73954390ffffd716be9a786ed",
-  "release_id": "5aae2121cf1e964f",
-  "pack": "workbench-102a5b02099a1c53.pck",
-  "checks_url": "https://github.com/ww1995012019/pawnshop/actions/runs/42587914003",
-  "html_sha256": "18081b706d4e305fc1d9a45ddd2afe57c513a9a5e9b6261847246e62d222df9a"
+  "source_commit": "387f52c9781157e2a06f04fcc77ddcdf2f9eda0b",
+  "release_id": "d56ba52372d77383",
+  "pack": "workbench-d69b00145398f0ea.pck",
+  "html_sha256": "e3c4e022407fbc82187c9f7bd5a6c152c25bb5f2ebffbabe24f52b87515061a1"
 }
