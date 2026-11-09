@@ -57,11 +57,11 @@ def main():
                     return page.evaluate('OrbitalTouch.state.appraisal')
                 def inspect_all():
                     cmd({'type':'tool','tool':'TOL-001'})
-                    page.wait_for_function("OrbitalTouch.state.inspection_current==='TOL-001'")
+                    page.wait_for_function("OrbitalTouch.state.inspection_current==='TOL-001' && !OrbitalTouch.state.inspection_busy")
                     click('定位并固定标识');first=appraisal(1)
                     snapshot('one-tool')
-                    cmd({'type':'tool','tool':'TOL-002'});page.wait_for_function("OrbitalTouch.state.inspection_current==='TOL-002'");click('翻面 F');page.wait_for_timeout(600)
-                    page.wait_for_function('!OrbitalTouch.state.inspection_busy')
+                    cmd({'type':'tool','tool':'TOL-002'})
+                    page.wait_for_function("OrbitalTouch.state.inspection_current==='TOL-002' && !OrbitalTouch.state.inspection_busy")
                     click('定位并固定编号');second=appraisal(2)
                     assert second['low']>=first['low'] and second['high']<=first['high']
                     snapshot('two-tools')
