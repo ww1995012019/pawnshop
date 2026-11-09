@@ -37,11 +37,15 @@ func run() -> void:
 		var trade := {"id": "compare-sale", "npcId": "CHR-003", "kind": "sell", "evidenceUsed": []}
 		check(Model.sale_eligibility(copy, "CHR-003") != null and Model.sale_eligibility(item, "CHR-003") == null,
 			"an undiscovered disguise can satisfy a buyer's apparent requirements")
-		check(Model.trade_terms(game.state, trade, item).value > Model.trade_terms(game.state, trade, copy).value,
+		check(Model.trade_terms(game.state, trade.duplicate(true), item).value > Model.trade_terms(game.state, trade.duplicate(true), copy).value,
 			"the buyer values the apparent condition while the real item stays unchanged")
 		trade.kind = "buy"
-		check(Model.trade_terms(game.state, trade, item).value == Model.trade_terms(game.state, trade, copy).value,
-			"a purchase from a customer still uses the item's true value")
+		var purchase_quote := Model.trade_terms(game.state, trade, item)
+		var hidden_change: Dictionary = item.duplicate(true)
+		hidden_change.authentic = not hidden_change.authentic
+		hidden_change.working = not hidden_change.working
+		check(Model.trade_terms(game.state, trade, hidden_change) == purchase_quote,
+			"purchase quote stays tied to NPC knowledge when hidden truth changes")
 		ap = game.state.ap
 		materials = game.state.materials.duplicate(true)
 		game.dispatch({"type": "FORGE", "uid": uid})

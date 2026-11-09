@@ -44,8 +44,8 @@ func run():
 	shell._close_title()
 	game.new_game("ORBITAL-P0")
 	game.state = Model.reduce(game.state,{"type":"ARRIVE"})
-	# Exercise both electrical instruments on a powered item that actually uses them.
-	game.state.trade.item.defId = "ITM-002"
+	# Exercise the three physical watch instruments.
+	game.state.trade.item.defId = "WCH-002"
 	shell.go("counter")
 	shell.go("inspect")
 	await process_frame
@@ -57,31 +57,24 @@ func run():
 		if DisplayServer.get_name() != "headless":
 			await RenderingServer.frame_post_draw
 			root.get_texture().get_image().save_png("/tmp/pawn-v3-tools/"+tool.id+".png")
-		if tool.id == "TOL-004":
-			for i in page.probes.size():
-				var tip: Vector2 = active.world_to_ui(page.probes[i].tip())
-				check(tip.x > page.instrument_panel.get_rect().end.x+30 and tip.x < page.detail_panel.position.x-30 and tip.y < page.bench.position.y-30,"probe %d can be grabbed clear of panels (%s)" % [i,tip])
-			for i in page.probes.size():
-				var from: Vector2 = page.probes[i].tip()
-				var target: Vector2 = page.ports[i].position
-				await move(active,from)
-				await button(active,from,true)
-				await move(active,target,true)
-				await button(active,target,false)
-				check(page.probes[i].attached,"real pointer attaches probe %d" % i)
-			await create_timer(1.2).timeout
-			check(game.trade_item().evidence.has("TOL-004"),"both connected probes record real circuit evidence")
 		if tool.id == "TOL-005":
-			check(page.bench.get_rect().end.x <= page.detail_panel.position.x-8, "scale weights fit beside detail panel")
-			var last_weight: Button
-			for control in page.bench.find_children("*","Button",true,false):
-				if control.text == "100g": last_weight = control
-			var world: Vector2 = active.get_viewport().get_canvas_transform().affine_inverse() * last_weight.get_global_rect().get_center()
-			await move(active,world)
-			await button(active,world,true)
-			await button(active,world,false)
-			check(page.weights.get(5,0) == 100,"last scale weight is reachable through the actual drawer")
+			check(page.bench.get_rect().end.x <= page.detail_panel.position.x-8, "scale controls fit beside detail panel")
+			for key in [page.tare_button, page.place_button]:
+				var world: Vector2 = active.ui_to_world(key.get_global_rect().get_center())
+				await move(active, world)
+				await button(active, world, true)
+				await button(active, world, false)
+			check(page.tared and page.scale_occupied, "real pointer tares empty scale and places the actual watch")
+			check(not page.scale_stable and page.record_button.disabled, "real placement cannot record an unsettled reading")
+			await create_timer(1.3).timeout
+			var record_point: Vector2 = active.ui_to_world(page.record_button.get_global_rect().get_center())
+			await move(active, record_point)
+			await button(active, record_point, true)
+			await button(active, record_point, false)
+			check(game.trade_item().evidence.has("TOL-005"), "real record key saves the stable mass observation")
+
 	active.go("repair")
+	await process_frame
 	await process_frame
 	page = active.page
 	var candidates: Array = page._candidates()
@@ -132,7 +125,11 @@ func run():
 	check(int(game.state.repairProgress[page.it_uid]) == 2, "real pointer seats the replacement part inside the repair surface")
 	var load_key: Button
 	for control in page.bench.find_children("*", "Button", true, false):
-		if control.text.contains("负载复测"): load_key = control
+		if control.text.contains("复核装配"): load_key = control
+	check(load_key != null, "repair assembly test has a real hold control")
+	if load_key == null:
+		quit(1)
+		return
 	var load_point: Vector2 = active.ui_to_world(load_key.get_global_rect().get_center())
 	var emulation := Input.emulate_mouse_from_touch
 	Input.emulate_mouse_from_touch = true
@@ -161,15 +158,15 @@ func run():
 			check(viewport.get_visible_rect().size == Vector2(1600, 900), "logical drawer layout remains stable at %s×" % render_scale)
 			check(viewport.size == Vector2i(roundi(1600 * render_scale), roundi(900 * render_scale)), "drawer raster follows %s× display resolution" % render_scale)
 			check(page.it_uid == uid and page.tool == "TOL-005", "resizing preserves the selected lot and instrument")
-			var last_weight: Button
-			for control in page.bench.find_children("*", "Button", true, false):
-				if control.text == "100g": last_weight = control
-			var was_on: bool = page.weights.has(5)
-			var world: Vector2 = active.get_viewport().get_canvas_transform().affine_inverse() * last_weight.get_global_rect().get_center()
+			if page.scale_occupied: page._scale_remove()
+			page.tared = false
+			page._scale_controls()
+			var world: Vector2 = active.ui_to_world(page.tare_button.get_global_rect().get_center())
 			await move(active, world)
 			await button(active, world, true)
 			await button(active, world, false)
-			check(page.weights.has(5) != was_on, "scale weight stays clickable at %s×" % render_scale)
+			check(page.tared, "physical scale tare remains clickable at %s×" % render_scale)
+
 	print("GEOMETRY failures=",failures)
 	shell.queue_free()
 	await process_frame

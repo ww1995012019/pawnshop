@@ -105,11 +105,11 @@ func run() -> void:
 			"insufficient AP cannot buy or consume the rare item")
 		var no_room: Dictionary = restored.duplicate(true)
 		no_room.inventory.clear()
-		for slot in 60:
-			var filler := Model.new_item(no_room, "ITM-002")
+		for slot in 30:
+			var filler := Model.new_item(no_room, "WCH-002")
 			Model.put_in(no_room, filler)
 		var blocked: Dictionary = commerce.reduce(no_room, {"type": "BUY_RARE_ITEM"})
-		check(blocked.inventory.size() == 60 and blocked.cash == no_room.cash and blocked.ap == no_room.ap and
+		check(blocked.inventory.size() == 30 and blocked.cash == no_room.cash and blocked.ap == no_room.ap and
 			blocked.trade.rare.available and blocked.nextId == no_room.nextId,
 			"a full warehouse does not spend money, AP or consume a rare item")
 		game.state = restored

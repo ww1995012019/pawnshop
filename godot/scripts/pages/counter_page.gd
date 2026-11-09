@@ -148,11 +148,10 @@ func enter() -> void:
 	stage_root.material = Util.unshaded()
 	add_world(stage_root, "top")
 	_align_stage()
-	# The bell is already painted in the master scene. Keep its physical hit
-	# and ringing API while the transparent scene target supplies focus/hover.
+	# The importer lifts the original painted bell out of the background.
+	# This is its sole visible copy, at the exact source coordinates.
 	bell = ServiceBell.new()
 	bell.position = Vector2(540, 650)
-	bell.visible = false
 	stage_root.add_child(bell)
 	_build_board()
 	_build_terminal()
@@ -446,10 +445,7 @@ func _refresh_utility_icons() -> void:
 		fixture_buttons.sound.get_node("content/row/icon").texture = UIKit.icon("soundOn" if Game.prefs.sound else "soundOff")
 
 func _bell_clicked() -> void:
-	if Game.state.trade == null and Game.state.phase == "open":
-		_ring()
-	else:
-		shell.sound("check", -8, 1.3)
+	_ring()
 
 func _utility_clicked(key: String, _button: Button) -> void:
 	if _scene_blocked():
@@ -585,7 +581,7 @@ func _refresh_desk() -> void:
 	tag.visible = it != null
 	if it != null:
 		tag_name.text = GameData.def(it.defId).name
-		tag_info.text = "%s · %s · 物证 %d" % [UIKit.pct(it.condition), "运转" if it.working else "故障", Model.evidence_count(it)]
+		tag_info.text = "%s · %s · 物证 %d" % [UIKit.pct(it.condition), "本店维护" if it.repaired else "状态待对照", Model.evidence_count(it)]
 	idle_label.visible = it == null
 	idle_jobs.visible = t == null
 	if t == null:
@@ -921,14 +917,14 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 	else:
 		contents.add_child(UIKit.label("本次没有可购买的稀有货。", 18, UIKit.MUTED))
 	contents.add_child(UIKit.rule())
-	contents.add_child(UIKit.label("出售旧物 · 按真实估值回收，每件消耗 1 AP", 19, UIKit.TEXT))
+	contents.add_child(UIKit.label("出售手表 · 商人按自己的判断报价，每件消耗1 AP", 19, UIKit.TEXT))
 	var eligible := 0
 	for item in s.inventory:
 		if item.owner != "shop" or item.has("orderId") or item.sealed or item.location == "isolation" or not item.sourceVerified:
 			continue
 		eligible += 1
 		var uid: String = item.uid
-		var price := maxf(1, floor(Model.item_value(item) * 0.6))
+		var price := Commerce.recovery_price(Game.state, item)
 		var sell_item := UIKit.button("出售旧物 %s · 收 %s" % [GameData.def(item.defId).name, UIKit.money(price)], "secondary", Vector2(0, 50), 17)
 		sell_item.set_meta("merchant_focus", "item:" + uid)
 		focus_targets["item:" + uid] = sell_item
@@ -987,7 +983,7 @@ func _pick_goods() -> void:
 		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		cv.add_child(pic)
 		cv.add_child(UIKit.label(GameData.def(it.defId).name, 19, UIKit.TEXT))
-		cv.add_child(UIKit.label("品相 %s · %s · 物证 %d" % [UIKit.pct(it.condition), "正常" if it.working else "故障", Model.evidence_count(it)], 15, UIKit.MUTED))
+		cv.add_child(UIKit.label("品相 %s · %s · 物证 %d" % [UIKit.pct(it.condition), "本店维护" if it.repaired else "状态待对照", Model.evidence_count(it)], 15, UIKit.MUTED))
 		var est := Model.estimate(it)
 		cv.add_child(UIKit.label("挂牌 %s · 成本 %s" % [UIKit.money(it.listPrice), UIKit.money(it.cost)], 15, UIKit.AMBER))
 		cv.add_child(UIKit.label("估值 %s" % (UIKit.money(est.low) if est.exact else "%s–%s Cr" % [Model.jnum(est.low), Model.jnum(est.high)]), 15, UIKit.CYAN))
@@ -1087,6 +1083,11 @@ func _hide_bubble() -> void:
 # ---------------------------------------------------------------- flow
 
 func _ring() -> void:
+	if busy or _scene_blocked():
+		return
+	var s := Game.state
+	if s.trade != null or s.phase != "open" or (s.ap < 1 and not Commerce.merchant_due(s)):
+		return
 	bell.strike()
 	shell.sound("check", -2.0, 1.25)
 	Game.dispatch({"type": "ARRIVE"})
@@ -1353,11 +1354,7 @@ func _unhandled_input(e: InputEvent) -> void:
 		var mb := e as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if bell.hit_test(p):
-				if Game.state.trade == null and Game.state.phase == "open":
-					_ring()
-				else:
-					bell.strike()
-					shell.sound("check", -8, 1.3)
+				_bell_clicked()
 				return
 			if mat_item != null and is_instance_valid(mat_item) and mat_item.contains(p):
 				mat_item.begin_drag(p)

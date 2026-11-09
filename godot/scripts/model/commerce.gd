@@ -4,7 +4,7 @@ extends RefCounted
 
 const MERCHANT_ID := "CHR-010"
 const CrimeEvents = preload("res://scripts/model/crime_events.gd")
-const RARE_ITEMS := ["ITM-056", "ITM-055", "ITM-072", "ITM-099"]
+const RARE_ITEMS := ["WCH-003", "WCH-008", "WCH-012", "WCH-015"]
 
 static func merchant_slot(s: Dictionary) -> int:
 	var day := int(s.day)
@@ -73,6 +73,10 @@ static func forgery_problem(s: Dictionary, item) -> String:
 		return "伪装需要导电纤维×1和合规封签×1。"
 	return ""
 
+static func recovery_price(s: Dictionary, item: Dictionary) -> float:
+	var belief_trade := {"id": "merchant-resale-" + item.uid, "npcId": MERCHANT_ID, "kind": "sell", "evidenceUsed": []}
+	return maxf(1, floor(Model.trade_terms(s, belief_trade, item).value * 0.6))
+
 static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 	GameData.ensure()
 	var kind: String = action.get("type", "")
@@ -113,7 +117,7 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 			var s: Dictionary = previous.duplicate(true)
 			item = Model.find_inventory(s, item.uid)
 			var npc := GameData.npc(s.trade.npcId)
-			var chance := clampi(int(npc.get("detect", 42)), 0, 100)
+			var chance := clampi(int(Model.watch_expertise(npc.id).logo), 0, 100)
 			var draw := Model.fnv("%s/%s/%s/forgery" % [s.seed, s.trade.id, item.uid]) % 100
 			var checks: Dictionary = s.trade.get("forgeryChecks", {})
 			checks[item.uid] = "caught" if draw < chance else "passed"
@@ -140,6 +144,7 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 			if npc_id != next.trade.npcId:
 				var t: Dictionary = next.trade
 				t.npcId = npc_id
+				t.npcKnowledge = {}
 				var npc := GameData.npc(npc_id)
 				var greeting := Model.npc_dialogue(next, npc_id, "arrival", npc.line)
 				if t.kind == "buy":
@@ -209,7 +214,7 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 			return _message(previous, "只能回收来源已核验、未被占用的店铺自有物品。")
 		if not Model.has_ap(previous, 1):
 			return _message(previous, "行动点不足，旧物未售出。")
-		var price := maxf(1, floor(Model.item_value(item) * 0.6))
+		var price := recovery_price(previous, item)
 		if previous.cash + price > 1000000000:
 			return _message(previous, "现金已达到保存上限，本次没有出售旧物。")
 		var s: Dictionary = previous.duplicate(true)

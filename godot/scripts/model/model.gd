@@ -89,6 +89,7 @@ static func new_item(s: Dictionary, id: String, options := {}) -> Dictionary:
 	var it := {"uid": next_id(s, "item"), "defId": id, "owner": "shop", "condition": 0.8, "working": true, "authentic": true, "sourceVerified": true, "source": "回环九号旧港登记批次", "evidence": [], "inspectedPaid": false, "repaired": false, "location": "warehouse", "x": 0, "y": 0, "rotated": false, "listPrice": ceil(def.value * 0.88), "cost": 0, "sealed": false}
 	for k in options:
 		it[k] = options[k]
+	WatchRules.initialize(it, s.seed)
 	return it
 
 static func dimensions(it: Dictionary, rotated = null) -> Array:
@@ -155,19 +156,8 @@ static func item_value(it: Dictionary) -> float:
 
 static func estimate(it: Dictionary) -> Dictionary:
 	var base: float = D(it.defId).value
-	var known := evidence_count(it)
-	if known < 2:
-		return {"low": jround(base * 0.35 * 0.5 * 0.6), "high": jround(base), "exact": false}
-	var relevant := []
-	for t in D(it.defId).tools:
-		if it.evidence.has(t):
-			relevant.append(t)
-	if it.evidence.has("SPEC") and not GameData.inspection_profile(it.defId).is_empty():
-		relevant.append("SPEC")
-	if relevant.size() < 2:
-		return {"low": jround(base * 0.3), "high": jround(base), "exact": false}
-	var p := item_value(it)
-	return {"low": p, "high": p, "exact": true}
+	# Reference market range is not a price oracle for this particular watch.
+	return {"low": jround(base * 0.3), "high": jround(base), "exact": false}
 
 static func available_orders(s: Dictionary) -> Array:
 	var out := []
@@ -229,14 +219,73 @@ static func customer_need(npc_id: String) -> String:
 ## Only a buyer's first impression changes; the owned item's true fields and
 ## all inspection/order calculations remain untouched.
 static func sale_appearance(it: Dictionary) -> Dictionary:
+	# Visible wear and the stated history are public. Internal truth is not.
+	var claims: Dictionary = it.get("claims", {})
+	var view := {"condition": float(it.condition), "working": claims.get("working", true), "authentic": claims.get("authentic", true)}
 	var forged = it.get("forgery", null)
-	if not forged is Dictionary or forged.get("exposed", false):
-		return it
-	var view := it.duplicate(true)
-	view.condition = forged.get("condition", it.condition)
-	view.working = forged.get("working", it.working)
-	view.authentic = forged.get("authentic", it.authentic)
+	if forged is Dictionary and not forged.get("exposed", false):
+		view.condition = forged.get("condition", view.condition)
+		view.working = forged.get("working", view.working)
+		view.authentic = forged.get("authentic", view.authentic)
 	return view
+
+static func watch_expertise(npc_id: String) -> Dictionary:
+	return GameData.npc(npc_id).get("expertise", {}).get("watch", {"logo": 20, "serial": 20, "structure": 20, "market": 30})
+
+static func npc_knowledge(t: Dictionary, it: Dictionary) -> Dictionary:
+	var all_known: Dictionary = t.get("npcKnowledge", {})
+	if not all_known.has(it.uid):
+		var visible := sale_appearance(it)
+		var expertise := watch_expertise(t.npcId)
+		var market_error := (float(fnv("%s/%s/%s/market-belief" % [t.npcId, t.id, it.uid]) % 21) - 10.0) / 100.0
+		market_error *= 1.0 - float(expertise.market) / 120.0
+		var prior: Dictionary = it.get("npcKnowledge", {}).get(t.npcId, {})
+		all_known[it.uid] = {"condition": prior.get("condition", visible.condition), "working": prior.get("working", visible.working), "authentic": prior.get("authentic", visible.authentic),
+			"marketFactor": 1.0 + market_error, "evidence": {}, "risk": 0.0}
+		t.npcKnowledge = all_known
+	return all_known[it.uid]
+
+static func record_inspection(it: Dictionary, tool: String) -> Dictionary:
+	var facts := {"condition": sale_appearance(it).condition}
+	match tool:
+		"TOL-001": facts.logo_variant = WatchRules.logo_variant(it)
+		"TOL-002": facts.serial = WatchRules.serial(it)
+		"TOL-005": facts.mass = WatchRules.mass(it)
+	var readings: Dictionary = it.get("evidenceReadings", {})
+	var snapshots: Dictionary = it.get("inspectionFacts", {})
+	readings[tool] = WatchRules.reading(it, tool)
+	snapshots[tool] = facts
+	it.evidenceReadings = readings
+	it.inspectionFacts = snapshots
+	return facts
+
+static func disclose_evidence(t: Dictionary, it: Dictionary, tool: String) -> void:
+	var known := npc_knowledge(t, it)
+	# Compatibility with initial direct-rule fixtures/early watch saves: establish
+	# one first snapshot. Subsequent disclosures always use recorded facts.
+	var snapshots: Dictionary = it.get("inspectionFacts", {})
+	var facts: Dictionary = snapshots[tool] if snapshots.has(tool) else record_inspection(it, tool)
+	if known.evidence.has(tool) and known.evidence[tool].get("facts", {}) == facts:
+		return
+	var ref := WatchRules.model_reference(it.defId)
+	var expertise := watch_expertise(t.npcId)
+	var strength := 0.0
+	match tool:
+		"TOL-001":
+			strength = (0.16 if facts.logo_variant else -0.025) * float(expertise.logo) / 100.0
+		"TOL-002":
+			var expected := "%s %s " % [ref.serial_prefix, ref.model]
+			strength = (0.19 if not String(facts.serial).begins_with(expected) else -0.025) * float(expertise.serial) / 100.0
+		"TOL-005":
+			var difference := absf(float(facts.mass) - float(ref.nominal_mass))
+			strength = (0.13 if difference > float(ref.tolerance) else -0.02) * float(expertise.structure) / 100.0
+	known.evidence[tool] = {"reading": it.evidenceReadings[tool], "facts": facts.duplicate(true), "adjustment": strength}
+	var total := 0.0
+	for received in known.evidence.values():
+		total += float(received.adjustment)
+	known.risk = clampf(total, -0.08, 0.45)
+	# Wear is refreshed only with newly recorded and explicitly presented facts.
+	known.condition = facts.condition
 
 static func sale_eligibility(it: Dictionary, npc_id: String):
 	if it.owner != "shop" or it.has("orderId"):
@@ -265,9 +314,9 @@ static func sale_eligibility(it: Dictionary, npc_id: String):
 
 static func trade_terms(s: Dictionary, t: Dictionary, it: Dictionary) -> Dictionary:
 	var def := D(it.defId)
-	var priced := sale_appearance(it) if t.kind == "sell" else it
-	var value := maxf(1, jround(def.value * maxf(0.35, minf(1, priced.condition)) * (1.0 if priced.working else 0.5) * (1.0 if priced.authentic else 0.6)))
-	var proof := relevant_evidence(it, t.evidenceUsed).size()
+	var priced := npc_knowledge(t, it)
+	var value := maxf(1, jround(def.value * clampf(float(priced.condition), 0.35, 1.0) * (1.0 if priced.working else 0.65) * (1.0 if priced.authentic else 0.75) * float(priced.marketFactor) * (1.0 - float(priced.risk))))
+	var proof: int = priced.evidence.size()
 	var faction: String = GameData.npc(t.npcId).faction
 	var relation := maxf(0, minf(100, s.relations[faction]))
 	var variation := ((fnv("%s|%s|%s|%s" % [s.seed, t.id, it.uid, t.npcId]) % 7) - 3) / 100.0
@@ -320,7 +369,7 @@ static func _seeded_id(s: Dictionary, day: int, slot: int) -> String:
 static func market_stock(s: Dictionary, day = null, slot = null) -> Dictionary:
 	var dd: int = int(s.day if day == null else day)
 	var sl: int = int(s.cursor if slot == null else slot)
-	var opening := [["ITM-011", "ITM-001"], ["ITM-009", "ITM-010"], ["ITM-049", "ITM-050"]]
+	var opening := [["WCH-001", "WCH-002"], ["WCH-007", "WCH-008"], ["WCH-013", "WCH-014"]]
 	if dd <= 3 and sl < 4:
 		var def_id: String = opening[dd - 1][sl / 2]
 		var unverified := dd == 3 and sl == 0
@@ -374,46 +423,19 @@ static func fault_label(it: Dictionary) -> String:
 	return "异常响应：%s" % f
 
 static func item_mark(it: Dictionary) -> String:
-	return "原始编号与底层暗纹一致" if it.authentic else "编号重叠 / 复制暗纹与原厂记录不符"
+	return WatchRules.serial(it)
 
 static func _physical_clue(it: Dictionary, tool: String) -> String:
-	var wear := "外壳仅有轻微使用痕迹" if it.condition >= 0.85 else ("接缝有磨损和旧装配痕迹" if it.condition >= 0.65 else "接缝与活动部件磨损明显")
-	var result := ("维修后的复测响应稳定，故障已排除" if it.repaired else "工作响应稳定，未出现失效症状") if it.working else fault_label(it)
-	match tool:
-		"TOL-001": return "侧光观察：%s。%s" % [wear, "可见本店修复标记。" if it.repaired else ""]
-		"TOL-002": return "紫外显影：%s；%s。" % [item_mark(it), "来源回执可交叉核对" if it.sourceVerified else "来源回执仍需补证"]
-		"TOL-003": return "材料谱线：%s。" % ("主材与型号参考谱一致" if it.authentic else "主材与原厂参考谱不一致，符合替代件或复制品特征")
-		"TOL-004": return "接口回路：%s。" % result
-		"TOL-005": return "质量校零：%s。" % ("质量分布落在原型号公差内" if it.authentic else "质量分布偏离原型号公差，需结合暗纹判断真伪")
-		"TOL-006": return "模拟负载：%s。%s" % [result, "磨损仍会限制长期可靠性。" if it.condition < 0.65 else ""]
-	return ""
+	return WatchRules.reading(it, tool)
 
 static func item_clue(it: Dictionary, tool: String) -> String:
-	if tool == "SPEC":
-		var profile := GameData.inspection_profile(it.defId)
-		if profile.is_empty():
-			return ""
-		var measured: Dictionary = it.duplicate()
-		var snapshot = it.get("specificResult", null)
-		if snapshot is Dictionary:
-			measured.working = snapshot.get("working", it.working)
-			measured.repaired = snapshot.get("repaired", it.repaired)
-		return "%s：%s。" % [profile.title, profile.normal if measured.working else profile.get("fault", fault_label(measured))]
-	var c = GameData.content_clues.get(it.defId, null)
-	var focus = c.clues.get(tool, null) if c != null else null
-	return _physical_clue(it, tool) + (" 本次核对：%s。" % focus if focus != null else "")
+	return WatchRules.reading(it, tool)
 
 static func displayed_clue(it: Dictionary, tool: String) -> String:
-	if not GameData.applicable_tools(it.defId).has(tool):
-		return "旧版检测记录：保留此前的物证，可用于估值与议价。" if GameData.relevant_tool(it.defId, tool) else "旧版检测记录：保留此前的辅助物证。"
-	return item_clue(it, tool)
+	return String(it.get("evidenceReadings", {}).get(tool, item_clue(it, tool)))
 
 static func evidence_caption(it: Dictionary, tool: String) -> String:
-	var caption := GameData.evidence_name(it.defId, tool)
-	var recorded = it.get("specificResult", null)
-	if tool == "SPEC" and it.repaired and recorded is Dictionary and not recorded.get("repaired", false):
-		caption += " · 维修前记录"
-	return caption
+	return GameData.evidence_name(it.defId, tool)
 
 static func npc_dialogue(s: Dictionary, npc_id: String, stage: String, fallback: String, price := 0.0) -> String:
 	var voice = GameData.npc(npc_id).get("voice", null)
@@ -500,12 +522,12 @@ static func create(seed := "ORBITAL-P0") -> Dictionary:
 	var orders := []
 	for d in GameData.orders:
 		orders.append({"id": d.id, "status": "available"})
-	var s := {"schema": 3, "seed": seed, "day": 1, "ap": 12, "cash": 1200, "phase": "open", "risk": 12, "relations": {"station": 30, "salvage": 35, "merchant": 20},
+	var s := {"schema": 4, "seed": seed, "day": 1, "ap": 12, "cash": 1200, "phase": "open", "risk": 12, "relations": {"station": 30, "salvage": 35, "merchant": 20},
 		"inventory": [], "trade": null, "cursor": 0, "ledger": [], "completedTrades": [], "orders": orders, "materials": mats, "events": [], "repairProgress": {},
 		"scanned": [], "inspection": "announced", "upgrades": {"lamp": false, "shelf": false}, "report": null,
-		"notice": "回环九号旧港重新点灯。先接待栗叔，翻面检查巡检蜂，再安排维修和订单。", "nextId": 1, "tutorial": 0}
-	for id in ["ITM-001", "ITM-002", "ITM-003", "ITM-026", "ITM-027", "ITM-041"]:
-		var it := new_item(s, id, {"condition": 0.55 if id == "ITM-001" else 0.85, "working": id != "ITM-001", "source": "前任店主移交清单 / 所有权已核对", "cost": jround(D(id).value * 0.28)})
+		"notice": "回环九号旧港重新点灯。先接待来客，对照说明书检验手表，再安排维护和订单。", "nextId": 1, "tutorial": 0}
+	for id in ["WCH-001", "WCH-002", "WCH-003", "WCH-010", "WCH-011", "WCH-014"]:
+		var it := new_item(s, id, {"condition": 0.55 if id == "WCH-001" else 0.85, "working": id != "WCH-001", "source": "前任店主移交清单 / 所有权已核对", "cost": jround(D(id).value * 0.28)})
 		put_in(s, it)
 	return s
 
@@ -522,7 +544,7 @@ static func order_item_valid(s: Dictionary, id: String, it: Dictionary, required
 		return "交付物品型号不符，原物保留在库存。"
 	if trade_reserved(s, it):
 		return "当前报价已占用该物件，先取消交易再交单。"
-	if def.id != "ORD-011" and (it.location == "isolation" or it.sealed):
+	if it.location == "isolation" or it.sealed:
 		return "隔离或封存的物件不能交付，先核对并解除保管状态。"
 	if def.get("customerOwned", false) and (it.owner != "customer" or it.get("orderId", "") != id or order.get("uid", "") != it.uid):
 		return "委修单必须交还顾客原物，不能拿自有货替换。"
@@ -536,9 +558,9 @@ static func order_item_valid(s: Dictionary, id: String, it: Dictionary, required
 		return "维修与复测尚未完成。"
 	if evidence_count(it) < 2:
 		return "请至少记录两条独立物证后再交付。"
-	if not def.get("customerOwned", false) and def.id != "ORD-011" and not it.sourceVerified:
+	if not def.get("customerOwned", false) and not it.sourceVerified:
 		return "来源尚未核验，不能履约。"
-	if not def.get("customerOwned", false) and def.id != "ORD-011" and not it.working:
+	if not def.get("customerOwned", false) and not it.working:
 		return "购买订单要求功能正常的货物，鉴定服务可如实报告故障。"
 	return null
 
@@ -656,7 +678,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				return previous
 			if trade_reserved(s, it) or not owns(it) or it.has("orderId") or not it.sourceVerified or it.sealed or it.location == "isolation":
 				return notice(s, "应急清仓仍不能出售顾客、抵押、预留或来源未核货物。")
-			var amount := maxf(1, floor(item_value(it) * 0.55))
+			var amount := maxf(1, floor(D(it.defId).value * sale_appearance(it).condition * 0.45))
 			if not ledger(s, "relief-sale-%s" % it.uid, "clearance", "应急清仓 %s" % D(it.defId).name, amount, it.cost):
 				return previous
 			_remove_item(s, it.uid)
@@ -676,9 +698,9 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				t.item = new_item(s, stock.defId, stock_item_options(stock))
 				t.price = maxf(stock.price, trade_terms(s, t, t.item).floor)
 				if s.day == 1 and s.cursor == 0:
-					t.line = "这台折叠巡检蜂从旧航道带回。机臂展开后有点迟，你先看看。"
+					t.line = "这只北辰通勤表从旧航道带回。表带连接需要维护，你先对照手册看看。"
 				elif s.day == 3 and s.cursor == 0:
-					t.line = "这张定位片的持续脉冲和封签不一致，先别放上销售架。"
+					t.line = "这只旧航表的来源回执还没有核对，先别放上销售架。"
 				else:
 					t.line = "%s 来路：%s。" % [greeting, stock.source.split(" / ")[0]]
 			s.trade = t
@@ -702,13 +724,9 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			var it = find_item(s, a.uid)
 			if it == null or not GameData.tool_ids.has(a.tool):
 				return previous
-			if a.tool == "SPEC" and GameData.inspection_profile(it.defId).is_empty():
-				return previous
 			if it.evidence.has(a.tool):
-				if a.tool == "SPEC":
-					it.specificResult = {"working": it.working, "repaired": it.repaired}
-					return notice(s, "%s 已免费复测。" % item_clue(it, a.tool))
-				return notice(s, "已取得该工具的证据，免费复看，不重复扣AP。")
+				record_inspection(it, a.tool)
+				return notice(s, "本次实物读数已更新，复测不重复扣AP。")
 			if not it.inspectedPaid:
 				var cost := 0.0 if s.upgrades.lamp else 1.0
 				if not has_ap(s, cost):
@@ -716,8 +734,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				spend(s, cost)
 				it.inspectedPaid = true
 			it.evidence.append(a.tool)
-			if a.tool == "SPEC":
-				it.specificResult = {"working": it.working, "repaired": it.repaired}
+			record_inspection(it, a.tool)
 			s.tutorial = maxf(s.tutorial, 1)
 			var extra := "已有两条独立物证，可交叉判断估值。" if evidence_count(it) >= 2 else "仍需另一工具的独立物证，不能只凭外观定真伪。"
 			return notice(s, "%s %s" % [item_clue(it, a.tool), extra])
@@ -743,8 +760,10 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			if ev != null and (not it.evidence.has(ev) or not GameData.relevant_tool(it.defId, ev)):
 				return notice(s, "请选这件实物已取得的相关物证，其他读数不能支撑议价。")
 			t.evidenceUsed = relevant_evidence(it, t.evidenceUsed)
-			if ev != null and not t.evidenceUsed.has(ev):
-				t.evidenceUsed.append(ev)
+			if ev != null:
+				if not t.evidenceUsed.has(ev):
+					t.evidenceUsed.append(ev)
+				disclose_evidence(t, it, ev)
 			var terms := trade_terms(s, t, it)
 			var acceptable := price_agreed(s, t, it, a.price)
 			t.rounds += 1
@@ -902,7 +921,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				return notice(s, "24个销售陈列位已满。")
 			it.location = "display"
 			if s.upgrades.shelf:
-				it.listPrice = jround(item_value(it) * 1.05)
+				it.listPrice = jround(D(it.defId).value * sale_appearance(it).condition * 0.9)
 			return notice(s, "物品与已知证据价签已上架。")
 		"PRICE":
 			var it = find_inventory(s, a.uid)
@@ -986,7 +1005,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				return notice(s, "该物件不能开始新的维修工序。")
 			var progress: float = s.repairProgress.get(it.uid, 0)
 			if a.stage != progress or a.stage < 0 or a.stage > 2:
-				return notice(s, "按清洁排故、换件连接、负载复测的顺序操作。")
+				return notice(s, "按清洁排故、换件连接、配置复核的顺序操作。")
 			s.repairProgress[it.uid] = progress + 1
 			return notice(s, "三道工序准备完成，确认后才扣除材料与AP。" if progress == 2 else "工序位置已记录，材料与AP尚未提交。")
 		"REPAIR":
@@ -1013,66 +1032,15 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				s.materials[id] -= r.materials[id]
 			spend(s, r.ap)
 			it.cost += _materials_cost(r)
+			WatchRules.restore_parts(it)
 			it.repaired = true
 			it.working = true
 			it.condition = minf(0.9 if r.id == "REC-001" else 0.95, it.condition + 0.3)
-			it.listPrice = item_value(it)
+			it.listPrice = jround(D(it.defId).value * it.condition * 0.88)
 			s.tutorial = maxf(s.tutorial, 2)
-			return notice(s, "修复与负载复测通过。外壳保留维修标记，真伪和来源没有改变。")
-		"DISMANTLE":
-			var it = find_inventory(s, a.uid)
-			if it == null:
-				return previous
-			if trade_reserved(s, it) or not owns(it) or it.has("orderId") or it.location == "isolation" or it.sealed or not it.sourceVerified:
-				return notice(s, "受托、抵押、订单占用、来源未核或隔离物品不能拆解。")
-			if evidence_count(it) < 1 or not has_ap(s, 1):
-				return notice(s, "拆解前需要故障诊断证据和1AP。")
-			_remove_item(s, it.uid)
-			s.materials["MAT-001"] = s.materials.get("MAT-001", 0) + 2
-			s.materials["MAT-003"] = s.materials.get("MAT-003", 0) + 1
-			spend(s, 1)
-			return notice(s, "原物已不可逆拆解：获得导电纤维×2、标准微线圈×1。")
-		"CRAFT":
-			var r := GameData.recipe(a.recipeId)
-			if r.is_empty() or r.kind != "craft" or not r.has("outputId"):
-				return previous
-			var ok := func(i: Dictionary, def_id: String) -> bool:
-				return i.defId == def_id and owns(i) and not i.has("orderId") and i.working and i.sourceVerified and not trade_reserved(s, i) and not i.sealed and i.location != "isolation"
-			var servo = null
-			var bearing = null
-			for i in s.inventory:
-				if servo == null and ok.call(i, r.itemId):
-					servo = i
-				if bearing == null and ok.call(i, "ITM-027"):
-					bearing = i
-			if servo == null or bearing == null:
-				return notice(s, "组装需要一台正常伺服器与一只已注销轴承，顾客原物不能作主料。")
-			if s.repairProgress.get(servo.uid, 0) != 3:
-				return notice(s, "请先将两件主料装入实体槽位并完成端子复测，再提交组装。")
-			var lacking := false
-			for id in r.materials:
-				if s.materials.get(id, 0) < r.materials[id]:
-					lacking = true
-			if not has_ap(s, r.ap) or lacking:
-				return notice(s, "组装材料或AP不足，主料未消耗。")
-			var candidate := new_item(s, r.outputId, {"condition": 1, "working": true, "repaired": true, "evidence": ["TOL-004", "TOL-006"], "inspectedPaid": true, "cost": servo.cost + bearing.cost + _materials_cost(r)})
-			var remaining := []
-			for i in s.inventory:
-				if i.uid != servo.uid and i.uid != bearing.uid:
-					remaining.append(i)
-			var trial := s.duplicate()
-			trial.inventory = remaining
-			var pos = empty_cell(trial, candidate)
-			if pos == null:
-				return notice(s, "组装成品需要3×2仓位，先整理后仓。")
-			s.inventory = remaining
-			candidate.x = pos.x
-			candidate.y = pos.y
-			s.inventory.append(candidate)
-			for id in r.materials:
-				s.materials[id] -= r.materials[id]
-			spend(s, r.ap)
-			return notice(s, "伺服器与轴承已装入维护框，双向限位测试通过，产出舱门维护套组。")
+			return notice(s, "表带与缺件维护已完成，质量已更新；不证明走时精度、防水或真伪。")
+		"DISMANTLE", "CRAFT":
+			return notice(s, "本店目前只提供手表基础维护。")
 		"TAKE_ORDER":
 			var def := GameData.order(a.id)
 			var o = _order_state(s, a.id)
@@ -1080,12 +1048,6 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				return previous
 			if s.day < float(GameData.order_earliest.get(def.id, 1)) or s.day > def.dueDay:
 				return notice(s, "这张预约尚未开始或已经到期。")
-			if def.id == "ORD-011" and not s.inventory.any(func(i): return i.defId == def.itemId and not i.sourceVerified):
-				return notice(s, "没有实际来源争议件，不生成虚假的归还订单。")
-			if def.id == "ORD-004" and not ["ITM-003", "ITM-041"].all(func(id): return s.inventory.any(func(i): return i.defId == id and owns(i) and i.working)):
-				return notice(s, "需要同时持有正常光合灯与健康藻苗罐才能接单。")
-			if def.id == "ORD-003" and not s.inventory.any(func(i): return i.defId == def.itemId and owns(i) and i.working):
-				return notice(s, "先备好自有正常保温杯，再预约栗叔取货。")
 			if def.get("customerOwned", false):
 				var it := new_item(s, def.itemId, {"owner": "customer", "orderId": def.id, "condition": 0.55 if def.needsRepair else 0.8, "working": not def.needsRepair, "sourceVerified": true, "source": "%s 顾客委修登记 / 禁止销售" % def.id, "cost": 0})
 				if not put_in(s, it):
@@ -1105,13 +1067,6 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			if not has_ap(s, 1):
 				return notice(s, "订单交付需要1AP，当前不足。")
 			var extra = null
-			if def.id == "ORD-004":
-				for i in s.inventory:
-					if order_item_valid(s, a.id, i, "ITM-041") == null:
-						extra = i
-						break
-				if extra == null:
-					return notice(s, "还缺可交付的藻苗罐，请核对归属、封存、报价占用和物证后再交货。")
 			var id := "order-%s" % o.id
 			for e in s.ledger:
 				if e.id == id:

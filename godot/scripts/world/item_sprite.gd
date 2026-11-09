@@ -28,6 +28,7 @@ var display_scale := 1.0
 var busy := false
 var draggable := true
 var land_tween: Tween
+var logo_variant := 0
 
 ## height: on-screen height in px for the front face.
 func setup(id: String, item_uid := "", height := 300.0, start_back := false) -> void:
@@ -70,9 +71,18 @@ func _apply_face() -> void:
 	body.texture = UIKit.lit_atlas(cell.key)
 	body.region_rect = cell.region
 	var asz: Vector2 = UIKit.tex("res://assets/atlas/%s.png" % cell.key).get_size()
-	var r: Rect2 = cell.region
+	var it = Game.item(uid) if not uid.is_empty() else null
+	logo_variant = WatchRules.logo_variant(it) if it != null else 0
+	if not back and logo_variant != 0:
+		body.texture = UIKit.watch_variant_texture(def_id)
+		body.region_rect = Rect2(8.96, 8.96, 238.08, 238.08)
+		asz = Vector2(256, 256)
+	var r: Rect2 = body.region_rect
 	mat.set_shader_parameter("region", Vector4(r.position.x / asz.x, r.position.y / asz.y, r.size.x / asz.x, r.size.y / asz.y))
 	mat.set_shader_parameter("back_face", 1.0 if back else 0.0)
+
+func logo_world_position() -> Vector2:
+	return body.to_global(Vector2(0, -24))
 
 func set_reveal(text: String, at_uv: Vector2) -> void:
 	reveal.text = text

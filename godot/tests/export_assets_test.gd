@@ -12,14 +12,21 @@ func run() -> void:
 	# registered. Resolve the UI script after the deferred run has begun.
 	var kit = load("res://scripts/app/ui_kit.gd")
 	kit.ensure()
-	for id in GameData.items:
-		check(not GameData.inspection_profile(id).is_empty(), "Missing exported item-specific inspection: " + id)
-		check(GameData.motion_profile(id).get("actions", []).size() == 3, "Missing exported inspection motions: " + id)
+	check(GameData.items.size() == 15, "Export contains exactly fifteen watch models")
+	check(GameData.tool_ids == ["TOL-001", "TOL-002", "TOL-005"], "Export contains exactly three watch tools")
+	for index in 15:
+		var id := "WCH-%03d" % (index + 1)
+		check(GameData.items.has(id) and GameData.def(id).category == "watch", "Missing exported watch: " + id)
 		for back in [false, true]:
 			var icon = kit.item_icon(id, back)
 			check(icon != null and icon.atlas != null, "Missing exported item face: " + id)
 			var cell = kit.item_cell(id, back)
 			check(kit.lit_atlas(cell.key).normal_texture != null, "Missing item normal: " + cell.key)
+	for family in ["orbital-items", "orbital-expansion", "orbital-annex"]:
+		for face in ["front", "back"]:
+			for suffix in ["", "_n"]:
+				var path := "res://assets/atlas/%s-%s%s.png" % [family, face, suffix]
+				check(not ResourceLoader.exists(path), "Legacy item art should not ship: " + path)
 	for npc in GameData.people():
 		check(kit.npc_portrait(npc.id).atlas != null, "Missing resident: " + npc.id)
 		var cell = kit.npc_cell(npc.id)

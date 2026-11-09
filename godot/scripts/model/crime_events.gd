@@ -85,7 +85,7 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 			s.relations.station = Model.clampn(s.relations.station + 4)
 			message = "站务接走疑似赃物并登记线索。"
 		"CRIME-GOODS-hold":
-			var item := Model.new_item(s, "ITM-002", {"condition": 0.6, "working": false,
+			var item := Model.new_item(s, "WCH-002", {"condition": 0.6, "working": false,
 				"sourceVerified": false, "source": "疑似失窃物品 / 待移交站务", "sealed": true,
 				"location": "isolation", "stolen": true, "cost": 0})
 			s.inventory.append(item)

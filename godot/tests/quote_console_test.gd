@@ -47,19 +47,19 @@ func run() -> void:
 	shell.go("counter")
 	await audit("buy")
 	var lot = Model.trade_item(game.state)
-	# A draft of 107 must never look like accepting the visitor's 134 Cr.
+	var visitor_price: int = game.state.trade.price
+	var purchase_cash: int = game.state.cash - visitor_price
 	var accept_button: Button = shell.page.actions.get_child(1)
-	check(accept_button.text.contains("134"), "accept names the visitor's actual 134 Cr offer")
-	check(shell.page.scr.line3.visible and shell.page.scr.line3.text.contains("1066"), "purchase projects 1200 minus 134 as 1066 Cr")
+	check(accept_button.text.contains(Model.jnum(visitor_price)), "accept names the visitor's actual offer")
+	check(shell.page.scr.line3.visible and shell.page.scr.line3.text.contains(Model.jnum(purchase_cash)), "purchase projects cash minus the visitor offer")
 	lot.evidence = GameData.def(lot.defId).tools.duplicate()
-	lot.evidence.append("SPEC")
 	shell.page._refresh()
 	await audit("evidence")
-	check(shell.page.chips.get_child_count() == 3, "specific evidence is offered alongside the two relevant instrument readings")
+	check(shell.page.chips.get_child_count() == 3, "three recorded watch tools are offered as negotiation evidence")
 	game.state = Model.reduce(game.state,{"type":"ACCEPT"})
 	shell.go("counter")
 	await audit("locked")
-	check(shell.page.actions.get_child(0).text.contains("134"), "locked purchase confirms the actual 134 Cr payment")
+	check(shell.page.actions.get_child(0).text.contains(Model.jnum(visitor_price)), "locked purchase confirms the actual payment")
 	game.new_game("ORBITAL-P0")
 	game.state.cursor = 1
 	game.state = Model.reduce(game.state,{"type":"ARRIVE"})
@@ -70,7 +70,6 @@ func run() -> void:
 	stock.condition = 1.0
 	stock.sourceVerified = true
 	stock.evidence = GameData.def(stock.defId).tools.duplicate()
-	stock.evidence.append("SPEC")
 	game.state = Model.reduce(game.state,{"type":"SELECT_TRADE","uid":stock.uid})
 	shell.go("counter")
 	await audit("sale selected")

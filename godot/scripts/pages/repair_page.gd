@@ -36,7 +36,7 @@ func hint_text() -> String:
 	match stage:
 		0: return "按住实物来回擦，清掉污垢与氧化层。"
 		1: return "把工作台右侧的新零件拖进实物上发光的槽位。"
-		2: return "按住「负载复测」，指针进入绿区时松开。"
+		2: return "按住「复核装配」，指针进入绿区时松开。"
 		3: return "三道工序完成：确认修复后才扣材料与行动点。"
 	return ""
 
@@ -179,15 +179,10 @@ func _select(uid: String) -> void:
 	_stage_ui()
 
 func repair_status(it: Dictionary) -> String:
-	var prefix := "品相 %s · " % UIKit.pct(it.condition)
 	if it.evidence.is_empty():
-		return prefix + "功能状态待鉴定"
-	var tool: String = it.evidence[0]
-	for candidate in ["SPEC", "TOL-004", "TOL-006"]:
-		if it.evidence.has(candidate):
-			tool = candidate
-			break
-	return prefix + Model.evidence_caption(it, tool) + "：" + Model.displayed_clue(it, tool)
+		return "尚无检验记录；可先用三种工具对照手册。"
+	var tool: String = it.evidence[-1]
+	return Model.evidence_caption(it, tool) + "：" + Model.displayed_clue(it, tool)
 
 func _refresh_info() -> void:
 	UIKit.clear(info)
@@ -225,28 +220,8 @@ func _refresh_info() -> void:
 		if why != "" and not it.repaired:
 			cv.add_child(UIKit.label(why, 16, UIKit.DANGER, false, true))
 		info.add_child(card)
-	var craft := _craft_recipe()
-	if not craft.is_empty() and it.defId == craft.itemId:
-		var cc := UIKit.plate(UIKit.inset_style(12))
-		var ccv := UIKit.vbox(6)
-		cc.add_child(ccv)
-		ccv.add_child(UIKit.label("组装：" + craft.name, 20, UIKit.AMBER, false, true))
-		ccv.add_child(UIKit.label("需要正常的伺服器与已注销轴承；先在本台完成三道装配工序。", 16, UIKit.TEXT, false, true))
-		var b := UIKit.button("组装维护套组", "good", Vector2(0, 52), 20)
-		b.pressed.connect(func(): Game.dispatch({"type": "CRAFT", "recipeId": craft.id}))
-		ccv.add_child(b)
-		info.add_child(cc)
 	if r.is_empty():
 		info.add_child(_inspect_button(it.uid))
-	var dis := UIKit.button("拆解回收（不可逆，1 AP）", "danger", Vector2(0, 52), 19)
-	var dis_why := _dismantle_block(it)
-	dis.disabled = dis_why != ""
-	dis.tooltip_text = dis_why
-	var dis_name: String = GameData.def(it.defId).name
-	dis.pressed.connect(func():
-		shell.confirm("拆解回收", "「%s」会被拆成导电纤维×2、标准微线圈×1，原物不可恢复，并消耗 1 AP。" % dis_name, "确认拆解", func():
-			Game.dispatch({"type": "DISMANTLE", "uid": it_uid})))
-	info.add_child(dis)
 	_materials()
 
 func _inspect_button(uid: String) -> Button:
@@ -281,21 +256,6 @@ func _repair_block(it: Dictionary, r: Dictionary) -> String:
 		return "行动点不足（需 %s AP）" % Model.jnum(r.ap)
 	return ""
 
-## Mirrors the DISMANTLE rule.
-func _dismantle_block(it: Dictionary) -> String:
-	if Game.state.phase != "open":
-		return "当前未营业，明天可继续拆解"
-	if Model.trade_reserved(Game.state, it):
-		return "正在柜台交易中"
-	if it.owner != "shop" or it.has("orderId"):
-		return "受托、抵押或订单占用的物件不能拆解"
-	if it.location == "isolation" or it.sealed or not it.sourceVerified:
-		return "隔离或来源未核验的物件不能拆解"
-	if Model.evidence_count(it) < 1:
-		return "拆解前需要一条故障诊断物证"
-	if Game.state.ap < 1:
-		return "行动点不足"
-	return ""
 
 func _materials() -> void:
 	info.add_child(UIKit.rule())
@@ -335,7 +295,7 @@ func _stage_ui_body() -> void:
 		stage = -1
 		return
 	item.mat.set_shader_parameter("grime", 1.0 if stage == 0 else 0.0)
-	var titles := ["清洁排故", "换件连接", "负载复测"]
+	var titles := ["清洁排故", "换件连接", "复核装配"]
 	var steps := UIKit.hbox(8)
 	for i in 3:
 		var tag := UIKit.plate(UIKit.inset_style(6))
@@ -368,7 +328,7 @@ func _stage_ui_body() -> void:
 			test_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			test_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			row.add_child(test_bar)
-			var b := UIKit.button("按住 · 负载复测", "primary", Vector2(260, 60), 20)
+			var b := UIKit.button("按住 · 复核装配", "primary", Vector2(260, 60), 20)
 			b.button_down.connect(func():
 				test_hold = true
 				test_value = 0.0)

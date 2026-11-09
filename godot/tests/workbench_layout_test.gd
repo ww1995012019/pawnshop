@@ -56,7 +56,7 @@ func run() -> void:
 	await settle()
 	shell._close_title()
 	game.new_game("ORBITAL-P0")
-	game.state.inventory[0].defId = "ITM-002"
+	game.state.inventory[0].defId = "WCH-002"
 	shell.go("inspect")
 	await settle()
 	var page = shell.active_shell().page
@@ -66,23 +66,16 @@ func run() -> void:
 		page._set_tool(tool.id)
 		await settle()
 		check_workbench(page, tool.id)
-		if tool.id == "TOL-004":
-			for probe in page.probes:
-				var tip: Vector2 = shell.active_shell().world_to_ui(probe.tip())
-				check(tip.x > page.instrument_panel.get_rect().end.x + 30 and tip.x < page.detail_panel.position.x - 30 and tip.y < page.bench.position.y - 30, "probe tip is reachable beside the item")
-			page.drag_probe = 0
+		if tool.id == "TOL-005":
+			check(page.tare_button.is_visible_in_tree(), "scale tare control is visible")
+			page._scale_tare()
+			page._scale_place()
+			await settle()
+			check_workbench(page, "occupied physical scale")
 		page._set_tool("")
 		await settle()
-		check(page.drag_probe == -1, "switching tools cancels an in-flight probe drag")
-	page._set_tool("SPEC")
-	await settle()
-	check_workbench(page, "item-specific fixture")
-	page._advance_specific(0)
-	page._advance_specific(1)
-	page._advance_specific(2)
-	await create_timer(1.1).timeout
-	await settle()
-	check_workbench(page, "item-specific test result")
+		check(not page.scale_occupied and page.item.draggable, "switching tools returns the scale item to its work surface")
+
 	shell.active_shell().go("repair")
 	await settle()
 	page = shell.active_shell().page
@@ -144,10 +137,10 @@ func run() -> void:
 	shell._close_title()
 	game.new_game("ORBITAL-P0")
 	game.prefs.reduced_motion = false
-	game.state.inventory[0].defId = "ITM-002"
+	game.state.inventory[0].defId = "WCH-002"
 	shell.go("inspect")
 	await settle()
-	for tool in [""] + GameData.applicable_tools("ITM-002"):
+	for tool in [""] + GameData.applicable_tools("WCH-002"):
 		var inspection = shell.active_shell().page
 		inspection._set_tool(tool)
 		await settle()

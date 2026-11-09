@@ -85,7 +85,7 @@ def main():
                 page.evaluate('(data)=>window.orbitalTouchSend(JSON.stringify(data))', data)
             command({'type': 'page', 'page': 'inspect'})
             page.wait_for_function("OrbitalTouch.state.workspace === 'inspect'")
-            for number in range(1, 7):
+            for number in (1, 2, 5):
                 command({'type': 'tool', 'tool': f'TOL-{number:03}'})
                 page.wait_for_timeout(450)
                 page.screenshot(path=str(args.screenshots / f'05-instrument-{number}.png'))

@@ -65,6 +65,7 @@ func run() -> void:
 	shell.go("repair")
 	await frame()
 	var repair = shell.workspace_shell.page
+	check(button_with_text(repair.info, "拆解回收") == null and button_with_text(repair.info, "组装维护套组") == null, "watch repair exposes no removed dismantle or crafting action")
 	check(button_with_text(repair.info, "+1 ·") == null, "the repair bench has no always-available purchase buttons")
 	shell.go("warehouse", game.state.inventory[0].uid)
 	await frame()

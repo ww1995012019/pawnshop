@@ -7,7 +7,9 @@ signal prefs_changed
 
 const Commerce = preload("res://scripts/model/commerce.gd")
 const CrimeEvents = preload("res://scripts/model/crime_events.gd")
-const SAVE_PATH := "user://orbital-save-v3.json"
+const SAVE_PATH := "user://orbital-watch-save-v4.json"
+const LEGACY_PATH := "user://orbital-save-v3.json"
+const LEGACY_BACKUP_PATH := "user://orbital-save-v3.backup.json"
 const PREFS_PATH := "user://orbital-prefs.json"
 
 var state: Dictionary = {}
@@ -17,17 +19,28 @@ var has_save := false
 
 func _ready() -> void:
 	GameData.ensure()
+	backup_legacy_save()
 	if FileAccess.file_exists(PREFS_PATH):
 		var p = JSON.parse_string(FileAccess.get_file_as_string(PREFS_PATH))
 		if p is Dictionary:
 			prefs.merge(p, true)
 	if FileAccess.file_exists(SAVE_PATH):
 		var s = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
-		if s is Dictionary and s.get("schema", 0) == 3:
+		if s is Dictionary and s.get("schema", 0) == 4:
 			state = s
 			has_save = true
 	if state.is_empty():
 		state = Model.create()
+
+## Preserve the previous catalogue independently of the new watch campaign.
+func backup_legacy_save() -> void:
+	if FileAccess.file_exists(LEGACY_PATH) and not FileAccess.file_exists(LEGACY_BACKUP_PATH):
+		var error := DirAccess.copy_absolute(ProjectSettings.globalize_path(LEGACY_PATH), ProjectSettings.globalize_path(LEGACY_BACKUP_PATH))
+		if error != OK:
+			push_warning("旧档备份未完成；原始旧档仍完整保留。")
+
+func legacy_save_text() -> String:
+	return FileAccess.get_file_as_string(LEGACY_BACKUP_PATH) if FileAccess.file_exists(LEGACY_BACKUP_PATH) else ""
 
 func new_game(seed := "") -> void:
 	var prev := state

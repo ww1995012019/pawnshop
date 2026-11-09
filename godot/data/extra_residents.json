@@ -1,36 +1,151 @@
 [
   {
-    "id": "CHR-010", "name": "绫舟", "title": "流动补给商 · 航线跑商", "faction": "merchant", "role": "supplier",
+    "id": "CHR-010",
+    "name": "绫舟",
+    "title": "流动补给商 · 航线跑商",
+    "faction": "merchant",
+    "role": "supplier",
     "line": "常用材料都带了，稀罕货得看这趟运气。",
     "bio": "沿旧港航线给各舱补给，喜欢把常用耗材和偶然淘到的特别货分开码放。什么时候靠港，要看船期与航道。",
-    "desire": "出售维修材料和偶尔到手的稀有货，也回收多余耗材与来源清楚的旧物。",
-    "voice": {"arrival": ["这趟带齐了修东西的常用材料。"], "refused": ["我还要赶下一段航线，下次靠港再见。"]}
+    "desire": "来源清楚的手表；按可见状态、个人经验和预算议价。",
+    "voice": {
+      "arrival": [
+        "这趟带齐了修东西的常用材料。"
+      ],
+      "refused": [
+        "我还要赶下一段航线，下次靠港再见。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 78,
+        "serial": 73,
+        "structure": 70,
+        "market": 95
+      }
+    }
   },
   {
-    "id": "CHR-011", "name": "阿砾", "title": "零件回收商 · 旧船拆解工", "faction": "salvage", "detect": 28,
+    "id": "CHR-011",
+    "name": "阿砾",
+    "title": "零件回收商 · 旧船拆解工",
+    "faction": "salvage",
+    "detect": 28,
     "line": "坏了也有能再用的零件，先让我看看。",
     "bio": "曾在废船拆解队工作，善于从故障设备里发现仍能服役的零件，说话直爽，谈价只看实际用处。",
-    "desire": "回收各类旧设备与零件，故障品和仿品也可以谈，但来源必须清楚。",
-    "purchase": {"minCondition": 0.35, "authentic": false, "working": false},
-    "voice": {"arrival": ["旧船的零件还有用，今天有什么能拆的？", "别急着报废，先看看里面还剩什么。"],
-      "counter": ["修复还要工时，{price} Cr 我能收。"], "agreed": ["行，零件回去还能派上用场。"], "refused": ["这趟先不收，下次再聊。"]}
+    "desire": "来源清楚的手表；按可见状态、个人经验和预算议价。",
+    "purchase": {
+      "minCondition": 0.35,
+      "authentic": false,
+      "working": false,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "旧船的零件还有用，今天有什么能拆的？",
+        "别急着报废，先看看里面还剩什么。"
+      ],
+      "counter": [
+        "修复还要工时，{price} Cr 我能收。"
+      ],
+      "agreed": [
+        "行，零件回去还能派上用场。"
+      ],
+      "refused": [
+        "这趟先不收，下次再聊。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 78,
+        "serial": 73,
+        "structure": 70,
+        "market": 95
+      }
+    }
   },
   {
-    "id": "CHR-012", "name": "苏镜", "title": "独立鉴定师 · 航行史藏家", "faction": "merchant", "detect": 72,
+    "id": "CHR-012",
+    "name": "苏镜",
+    "title": "独立鉴定师 · 航行史藏家",
+    "faction": "merchant",
+    "detect": 72,
     "line": "外表会骗人，读数和细节不会。",
     "bio": "研究旧航线上的仪器与文物，习惯用放大镜反复核对细节，宁愿错过一件货也不愿买下证据不清的藏品。",
-    "desire": "寻找品相良好、功能正常的正品文物、精密电子和稀有设备。",
-    "purchase": {"minCondition": 0.6, "authentic": true, "working": true, "categories": ["记忆与文物", "精密电子", "稀有与战略件"]},
-    "voice": {"arrival": ["有值得细看的旧航线藏品吗？", "我先核对痕迹，再谈价格。"],
-      "counter": ["细节还需要复核，我可以出 {price} Cr。"], "agreed": ["证据和价格都清楚，就按这个数。"], "refused": ["我再查查记录，下次见。"]}
+    "desire": "来源清楚的手表；按可见状态、个人经验和预算议价。",
+    "purchase": {
+      "minCondition": 0.6,
+      "authentic": true,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "有值得细看的旧航线藏品吗？",
+        "我先核对痕迹，再谈价格。"
+      ],
+      "counter": [
+        "细节还需要复核，我可以出 {price} Cr。"
+      ],
+      "agreed": [
+        "证据和价格都清楚，就按这个数。"
+      ],
+      "refused": [
+        "我再查查记录，下次见。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 91,
+        "serial": 87,
+        "structure": 68,
+        "market": 90
+      }
+    }
   },
   {
-    "id": "CHR-013", "name": "拓野", "title": "驻站工程师 · 航道设备维护", "faction": "station", "detect": 42,
+    "id": "CHR-013",
+    "name": "拓野",
+    "title": "驻站工程师 · 航道设备维护",
+    "faction": "station",
+    "detect": 42,
     "line": "能不能修好，比外壳亮不亮更重要。",
     "bio": "负责维护旧港附近的航道设备，常在值班间隙寻找还能修复的机械和精密部件。",
-    "desire": "采购机械、航行设备与精密电子，故障品也可以商量。",
-    "purchase": {"minCondition": 0.4, "authentic": false, "working": false, "categories": ["机械与航行", "精密电子"]},
-    "voice": {"arrival": ["值班前来看看，有没有还能修的设备？", "我在找航道维护能用上的部件。"],
-      "counter": ["我还要留出维修预算，{price} Cr 怎么样？"], "agreed": ["成交，我带回维护舱复测。"], "refused": ["我再去别处找找，回头见。"]}
+    "desire": "来源清楚的手表；按可见状态、个人经验和预算议价。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": false,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "值班前来看看，有没有还能修的设备？",
+        "我在找航道维护能用上的部件。"
+      ],
+      "counter": [
+        "我还要留出维修预算，{price} Cr 怎么样？"
+      ],
+      "agreed": [
+        "成交，我带回维护舱复测。"
+      ],
+      "refused": [
+        "我再去别处找找，回头见。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 22,
+        "serial": 24,
+        "structure": 21,
+        "market": 35
+      }
+    }
   }
 ]

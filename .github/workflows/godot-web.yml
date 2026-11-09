@@ -33,6 +33,8 @@ jobs:
           godot --headless --editor --path godot --import
           python scripts/test-godot-native.py
           python scripts/test-godot-packaging.py
+          python godot/tools/test_portrait_import.py
+          python godot/tools/test_bell_art.py
       - name: Build and check exported resources
         run: |
           python scripts/build-godot-web.py

@@ -6,33 +6,38 @@
 
 ## 能玩到的内容
 
-56 类货物、13 位人物（含店主）、21 天经营、32 张订单、每日事件（含失窃和赃物）、23 条维修/组装配方、抵押与赎回、来源核验与安检、租金与救济清仓、第 3 天起的设备升级和三种结局。
+15 款虚构品牌手表、13 位人物、21 天经营，以及维修、仓储、订单、抵押与赎回、失窃与赃物事件。分类仅在数据中保留，界面按型号显示。
 
-| 页面 | 交互 |
-|---|---|
-| 柜台 | 正面像素店面可直接操作：日牌看事件，玻璃柜选货，服务铃接客，仪表开鉴定、工具柜开维修，CRT 接订单、纸夹看人物、账本做日结。商品和居民采用统一像素美术，顾客收在服务窗口内。右侧像素报价机把读数、旋钮、物证插槽和交易按键收进同一个机壳；旋钮或 ±1/±10 调价，接受报价后再确认交割。设备面板收起后保留同一顾客、物品位置和报价。 |
-| 鉴定 | 按物品选择适用的通用仪器：侧光、紫外、光谱、称量，带电部件还可用探针或负载夹。每件货物另有自己的逐步功能检测，例如磁靴吸附与解锁、咖啡机萃取和压力检查；专属检测同样记录物证并反映实物状态。 |
-| 维修 | 三道工序都是手上的活：在实物上来回擦掉污垢、把新零件拖进发光槽位、按住负载复测在绿区松开。最后确认时才扣材料和 AP。也可以组装维护套组、拆解回收；维修材料要等流动商人到店才能购买。 |
-| 仓储 | 10×6 占格后仓，拖动换位、拖动时右键旋转，非法位置会标红。陈列架、隔离柜、抵押柜，扫描、登记、隔离、归还、赎回、救济清仓；也可以给符合条件的自有货做有风险的伪装。 |
-| 订单 | 可接 / 进行中 / 已结束三栏，交付前逐条显示规则校验结果。 |
-| 日结 | 当日流水、维护费与租金、升级二选一、换天卷帘、21 天结局。 |
+### 三种检验与说明书
 
-另外还有：每日站内消息（按事件选择处理方式）、人物档案、经营手册、设置（声音、减少动态、全屏、新开一家店）、标题画面、自动存档。
+- 放大镜：移动镜片或固定观察点，放大实物 logo，对照型号的标准标识。
+- 紫外线：翻到背面，用灯照亮隐藏编号，记录实际字符并查阅编号规则。
+- 电子秤：空秤归零，把同一只表放上秤盘，等待读数稳定后记录，再取回。桌面支持拖放，触屏也可使用放表按钮。
 
-流动商人绫舟在第 1 天的前四位客人之后首次到店，之后不定时出现。到店期间每种基础维修材料各有 5 份，可购买或以半价出售自己的多余材料；还有概率带来一件稀有物品，并以真实估值回收来源已核验的自有旧物。材料买卖不耗 AP，稀有货购买和旧物回收各耗 1 AP。商人离开后不能采购，库存随存档保留，不会因重新打开游戏刷新。
+检验说明书可从标题、经营手册或检验工具面板打开，提供全部 15 款的正反面、标准 logo、编号规则、重量与表带配置。查看免费，关闭后保留原物位置和工具状态。
 
-仓储中的「伪装造假」消耗导电纤维×1、合规封签×1和 1 AP。它只改变交易时呈现给顾客的品相、功能与真伪，保留实物真实状态；顾客可能识破，导致交易受阻、风险上升和对应阵营关系下降。受托、占用、封存或来源未核验的货物不能伪装。
+检验只提供物证，不给精确售价。真品可能缺件，仿品也可能重量正常；工具不能证明走时精度、防水或所有内部故障。
 
-第 3 天起，部分非固定日期的站内消息会出现后仓失窃或疑似赃物事件。守住后仓消耗 1 AP；若放任小偷，可能损失一件未封存的店铺自有货。疑似赃物可以拒收、直接通知站务，或暂存隔离柜；暂存会增加风险，随后可在仓储中移交站务。赃物不能通过普通来源登记转为可出售货物。事件只可处理一次，结果随存档保留。
+### NPC 与交易
+
+手表维修师、收藏者、表商、港务人员和普通人分别具有标识、编号、结构、行情方面的能力。对方报价按自己的认识、预算和动机形成，不会随玩家私下检测自动变化；玩家主动出示的物证才会进入对方知识，专业能力影响理解程度。
+
+基础维修仍有清洁、换件、复核装配，材料等流动商人到店购买。修复缺件会改变同一只表的实际重量。来货、订单、商人稀有货与事件奖励只使用当前手表目录，旧物品的组装和拆解已关闭。
+
+服务铃点击或“接待下一位来客”都会触发原场景铃铛的按压回弹，重复点击不会重复接客。人物导入会清除与主体分离的杂点。
+
+### 经营进度
+
+手表版本使用独立的 `orbital-watch-save-v4.json`。旧版档案保留原文件，并另存一次备份；设置中可导出旧版档案。新内容从手表新店开始，不把旧物品强行转换为手表。
 
 ## 结构
 
 ```
 godot/
   project.godot  main.tscn  export_presets.cfg
-  data/game_data.json          基础游戏数据，直接维护此 JSON
+  data/game_data.json          15款手表、工具、订单、NPC与事件
   data/extra_residents.json    新增人物数据
-  scripts/model/               model.gd（基础规则）、commerce.gd（商人和伪装）、crime_events.gd（失窃和赃物）、game_data.gd
+  scripts/model/               model.gd、watch_rules.gd、commerce.gd、crime_events.gd、game_data.gd
   scripts/app/                 game.gd（全局状态与存档）、shell.gd（主店面/设备抽屉/弹窗）、ui_kit.gd、capture.gd
   scripts/pages/               counter / inspect / repair / warehouse / orders / report
   scripts/world/item_sprite.gd 实物；scripts/customer.gd 人物网格变形
@@ -70,17 +75,18 @@ npm run test:godot:web     # 先启动预览；桌面、真实音频输出与手
 按 `Accept-Encoding` 提供 gzip 并设置 `Vary`、`ETag`。静态/CDN 托管需要配置相同的
 `Content-Encoding` 和缓存规则；仅上传 `.gz` 文件不代表服务器会自动使用它。
 
-基础数据直接编辑 `godot/data/game_data.json`；美术生成工具所需的共享原画位于 `art-source/shared/`，字体和音效直接保存在 `godot/assets/`。
+基础数据直接编辑 `godot/data/game_data.json`；店铺人物原画位于 `art-source/shop-v3/`，手表由生成脚本与像素标识数据定义，字体和音效直接保存在 `godot/assets/`。
 
 ## 其他开发命令
 
 ```bash
 python3 godot/tools/prepare_assets.py      # 生成场景并重建物品图集
-python3 godot/tools/prepare_item_art.py    # 单独重建新物品图集（Pillow / NumPy / SciPy）
-python3 godot/tools/prepare_shop_art.py    # 原创店铺、九位居民、设备与界面图标
+python3 scripts/generate-watch-art.py     # 重建15款手表与logo像素数据（Pillow）
+python3 godot/tools/prepare_shop_art.py    # 店铺、铃铛、九位居民、设备与界面图标
+python3 godot/tools/prepare_extra_residents.py # 另外四位居民
 XDG_DATA_HOME=/tmp/pawnshop-input-test godot --path godot -- --inputtest # 真实输入：接客、拖动、报价、店内设备、锁价、交割
 XDG_DATA_HOME=/tmp/pawnshop-capture godot --path godot -- --capture=/tmp/shots # 页面截图
-XDG_DATA_HOME=/tmp/pawnshop-art-test godot --headless --path godot --script res://tests/item_art_test.gd # 57件物品、114张正反面
+XDG_DATA_HOME=/tmp/pawnshop-art-test godot --headless --path godot --script res://tests/item_art_test.gd # 15款手表、30张正反面
 XDG_DATA_HOME=/tmp/pawnshop-cursor-test godot --path godot --script res://tests/cursor_test.gd # 图形环境：指针状态
 XDG_DATA_HOME=/tmp/pawnshop-ui-test godot --headless --path godot --script res://tests/ui_regression.gd
 XDG_DATA_HOME=/tmp/pawnshop-orders-test godot --headless --path godot --script res://tests/orders_ui_test.gd
@@ -93,6 +99,17 @@ godot --headless --path godot --export-release "Web" build/web/index.html
 
 ## 已知限制
 
-- 物品使用新的像素精灵集：56 类货物和独立组装套组都有正反面；原始画稿保存在 `art-source/items-v2/`，导入工具生成固定像素密度的运行图集。主店面、十三位人物、28 个界面图标、六种仪器使用统一像素风；原始画稿保存在 `art-source/shop-v3/`。人物采用半身像及轻量动作，尚未拆分独立手臂。
-- 网页引擎与游戏包原始约 45.6 MB，其中数据包约 7.9 MB；相同 gzip 条件下合计约 17.0 MB。实际传输量取决于服务器的压缩与缓存配置。
-- 手机横屏入口与店内触控操作已通过 Chromium 触控模拟；六种实物仪器仍使用原有画布交互，尚未完成手机真机测试。
+- 三种工具无法证明所有内部功能，检验说明书明确记录适用范围。
+- 网页引擎与游戏包约 44 MB，gzip 后约 15.4 MB。实际传输量取决于托管服务器的压缩与缓存配置。
+- 已覆盖 Chromium 桌面与触屏模拟；尚未完成手机真机验收。
+
+## 素材与检验回归
+
+当前手表图集由 `scripts/generate-watch-art.py` 生成，运行时的同一实物按实例叠加标识差异。原始店铺与人物画稿保留在 `art-source/shop-v3/`；人物通过导入器去除分离杂点，铃铛从原画提取并独立动画，原画本身保持不变。
+
+```sh
+python3 godot/tools/test_portrait_import.py
+python3 godot/tools/test_bell_art.py
+```
+
+这两项素材测试需要 Pillow。原生回归入口 `scripts/test-godot-native.py` 包含 23 组检查，覆盖交易、工作面布局、三工具、15款素材、NPC知识、手册、独立存档和铃铛两个接客入口。

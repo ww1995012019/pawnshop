@@ -43,8 +43,10 @@ func run() -> void:
 	shell.add_child(bridge)
 	bridge.setup(shell)
 	var status: Dictionary = bridge.snapshot()
-	check(status.price == 134 and status.offer == 107, "visitor price and draft remain distinct")
-	check(status.projected_cash == 1066, "touch display projects actual purchase price")
+	var visitor_price: int = game.state.trade.price
+	var initial_cash: int = game.state.cash
+	check(status.price == visitor_price and status.offer == int(visitor_price * 0.8), "visitor price and draft remain distinct")
+	check(status.projected_cash == initial_cash - visitor_price, "touch display projects actual purchase price")
 	var before: Dictionary = game.state.duplicate(true)
 	bridge.command({"type":"quote", "value":145})
 	check(shell.page.dial.value == 145 and game.state == before, "editing a draft does not submit an offer or spend money")
@@ -62,39 +64,15 @@ func run() -> void:
 	bridge.command({"type":"page", "page":"inspect"})
 	await frame()
 	check(shell.workspace_shell.page.it_uid == stock_uid, "switching an existing workspace preserves deliberate stock selection")
-	bridge.command({"type":"tool", "tool":"SPEC"})
+	var inspection = shell.workspace_shell.page
+	var inspection_before: Dictionary = game.state.duplicate(true)
+	bridge.command({"type":"tool", "tool":"TOL-003"})
 	bridge.command({"type":"specific_step", "uid":stock_uid, "index":0})
-	bridge.command({"type":"specific_step", "uid":stock_uid, "index":0})
-	bridge.command({"type":"specific_step", "uid":stock_uid, "index":0})
-	check(shell.workspace_shell.page.specific_step == 1 and not game.item(stock_uid).evidence.has("SPEC"), "duplicate touch commands cannot skip specific inspection steps")
-	bridge.command({"type":"specific_step", "uid":visitor_uid, "index":1})
-	check(shell.workspace_shell.page.specific_step == 1, "stale touch commands cannot act on a different lot")
-	bridge.command({"type":"specific_step", "uid":stock_uid, "index":1})
-	check(not game.item(stock_uid).evidence.has("SPEC"), "the result is not recorded before the final operation")
-	game.state.ap = 0
-	var no_ap: Dictionary = bridge.snapshot()
-	check(not no_ap.get("specific_allowed", true) and no_ap.get("specific_reason", "").contains("行动点不足"), "phone shows why the final test cannot run without AP")
-	game.item(stock_uid).inspectedPaid = true
-	check(bridge.snapshot().get("specific_allowed", false), "phone permits a previously paid item's free test at zero AP")
-	game.item(stock_uid).inspectedPaid = false
-	game.state.upgrades.lamp = true
-	check(bridge.snapshot().get("specific_allowed", false), "phone permits the free-inspection upgrade at zero AP")
-	game.state.upgrades.lamp = false
-	bridge.command({"type":"specific_step", "uid":stock_uid, "index":2})
-	check(not shell.workspace_shell.page.specific_running and not game.item(stock_uid).evidence.has("SPEC"), "a blocked final step does not start or reveal a test")
-	game.state.ap = 12
-	bridge.command({"type":"specific_step", "uid":stock_uid, "index":2})
-	if shell.workspace_shell.page.get("specific_running") == true:
-		await create_timer(1.2).timeout
-	check(game.item(stock_uid).evidence.has("SPEC"), "distinct touch steps complete the specific inspection")
-	game.item(stock_uid).working = true
-	game.item(stock_uid).repaired = true
-	var previous_result := "\n".join(bridge.snapshot().get("detail_lines", []))
-	check(previous_result.contains("维修前记录"), "phone identifies an inspection result recorded before repair")
-	game.item(stock_uid).working = false
-	game.item(stock_uid).repaired = false
-	bridge.command({"type":"specific_step", "uid":stock_uid, "index":3})
-	check(shell.workspace_shell.page.specific_step == 3, "out-of-range touch commands cannot advance a completed test")
+	check(inspection.tool == "" and game.state == inspection_before, "removed tool and legacy inspection commands cannot reveal evidence or spend AP")
+	for id in ["TOL-001", "TOL-002", "TOL-005"]:
+		bridge.command({"type":"tool", "tool":id})
+		check(inspection.tool == id and bridge.snapshot().inspection_current == id, "touch selects supported physical tool " + id)
+	check(bridge.snapshot().inspection_tools == ["TOL-001", "TOL-002", "TOL-005"], "phone exposes exactly the three watch tools")
 	bridge.command({"type":"tool", "tool":""})
 	check(shell.workspace_shell.page.tool == "", "touch can deselect a tool and return to moving the item")
 	bridge.command({"type":"accept"})
@@ -102,16 +80,16 @@ func run() -> void:
 	shell.close_workspace()
 	await frame()
 	bridge.command({"type":"accept"})
-	check(game.state.trade.locked and game.state.cash == 1200, "accept locks 134 Cr without paying the 145 Cr draft")
+	check(game.state.trade.locked and game.state.cash == initial_cash, "accept locks the actual visitor offer without paying the draft")
 	var popup: Array = shell.modal("核对", 420)
 	await frame()
 	bridge.command({"type":"deliver"})
-	check(game.state.cash == 1200 and game.state.trade != null, "native modal prevents touch delivery")
+	check(game.state.cash == initial_cash and game.state.trade != null, "native modal prevents touch delivery")
 	popup[1].call()
 	await frame()
 	bridge.command({"type":"deliver"})
 	await frame()
-	check(game.state.cash == 1066 and game.state.trade == null, "touch delivery uses the reducer's atomic transfer")
+	check(game.state.cash == initial_cash - visitor_price and game.state.trade == null, "touch delivery uses the reducer's atomic transfer")
 	game.new_game("ORBITAL-P0")
 	var repair_uid: String = game.state.inventory[0].uid
 	shell.go("repair", repair_uid)
@@ -120,7 +98,7 @@ func run() -> void:
 	check(repair_state.get("repair_uid", "") == repair_uid and repair_state.get("repair_materials", []).size() == GameData.materials.size(), "phone repair controls describe the selected item and current supplies")
 	check(repair_state.get("detail_title", "") == GameData.def(game.item(repair_uid).defId).name and not repair_state.get("detail_lines", []).is_empty(), "phone can show the selected repair details at readable size")
 	var undiscovered := "\n".join(repair_state.get("detail_lines", []))
-	check(undiscovered.contains("待鉴定") and not undiscovered.contains(Model.fault_label(game.item(repair_uid))), "repair details do not reveal a fault before any evidence is recorded")
+	check(undiscovered.contains("尚无检验记录") and not undiscovered.contains(Model.fault_label(game.item(repair_uid))), "repair details do not reveal a fault before any evidence is recorded")
 	check(String(repair_state.detail_lines[1]).contains("先去鉴定"), "phone shows the reason repair is blocked before the recipe steps")
 	var cash_before: float = game.state.cash
 	var ap_before: float = game.state.ap
@@ -181,13 +159,16 @@ func run() -> void:
 	check(game.item(repair_uid).rotated, "sealed stock cannot be rotated by a direct phone command")
 	game.new_game("ORBITAL-P0")
 	game.state.inventory.clear()
-	var long_item := Model.new_item(game.state, "ITM-001", {"x": 0, "y": 0})
+	var long_item := Model.new_item(game.state, "WCH-001", {"x": 0, "y": 0})
 	game.state.inventory.append(long_item)
-	for y in 6:
+	# Tile watches vertically, leaving the source and a horizontal destination.
+	for y in [0, 2, 4]:
 		for x in 10:
-			if (x == 0 and y < 2) or (y == 5 and x in [5, 6]):
+			if (x == 0 and y == 0) or (y == 4 and x in [5, 6]):
 				continue
-			game.state.inventory.append(Model.new_item(game.state, "ITM-035", {"x": x, "y": y}))
+			game.state.inventory.append(Model.new_item(game.state, "WCH-015", {"x": x, "y": y}))
+	game.state.inventory.append(Model.new_item(game.state, "WCH-015", {"x": 5, "y": 4, "rotated": true}))
+
 	shell.go("warehouse", long_item.uid)
 	await frame()
 	check(not Model.can_place(game.state, long_item.uid, 0, 0, true) and Model.can_place(game.state, long_item.uid, 5, 5, true), "full warehouse has room only for the rotated item at a different position")

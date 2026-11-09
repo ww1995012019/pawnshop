@@ -1,6 +1,7 @@
 """Prepare four original resident portraits using the existing pixel-art scale."""
 from pathlib import Path
 from PIL import Image
+from portrait_import import connected_portrait
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "art-source/shop-v3/residents-extra-master.png"
@@ -16,12 +17,14 @@ def main():
                             round((col + 1) * source.width / 2), round((row + 1) * source.height / 2)))
         alpha = crop.getchannel("A").point(lambda a: 255 if a >= 160 else 0)
         crop.putalpha(alpha)
-        bounds = alpha.getbbox()
+        crop = connected_portrait(crop)
+        bounds = crop.getchannel("A").getbbox()
         if not bounds:
             raise ValueError(f"empty resident {index}")
         crop = crop.crop(bounds)
         crop.thumbnail((116, 116), Image.Resampling.LANCZOS)
         crop.putalpha(crop.getchannel("A").point(lambda a: 255 if a >= 128 else 0))
+        crop = connected_portrait(crop)
         crop = crop.resize((crop.width * 2, crop.height * 2), Image.Resampling.NEAREST)
         atlas.alpha_composite(crop, (col * 256 + (256 - crop.width) // 2, row * 256 + 248 - crop.height))
     atlas.save(ATLAS / "shop-residents-extra.png")

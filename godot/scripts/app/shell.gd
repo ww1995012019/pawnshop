@@ -1124,6 +1124,13 @@ func open_people(npc_id := "") -> void:
 		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		v.add_child(UIKit.label(n.name, 34, Color("f3e6cc")))
 		v.add_child(UIKit.label(n.title, 19, UIKit.AMBER, false, true))
+		var skills: Dictionary = Model.watch_expertise(id)
+		var strengths := []
+		for field in [["logo", "标识辨认"], ["serial", "编号理解"], ["structure", "结构与缺件"], ["market", "行情"]]:
+			if float(skills.get(field[0], 0)) >= 65:
+				strengths.append(field[1])
+		v.add_child(UIKit.label("熟悉：" + "、".join(strengths) if not strengths.is_empty() else "主要凭佩戴经验和个人喜好判断，细节需解释。", 17, UIKit.MUTED, false, true))
+
 		v.add_child(UIKit.rule())
 		var bio := UIKit.label(String(n.get("bio", n.line)), 19, UIKit.TEXT, false, true)
 		bio.custom_minimum_size.x = 380
@@ -1161,10 +1168,36 @@ func open_people(npc_id := "") -> void:
 	var first: String = npc_id if npc_id != "" else String(GameData.npcs[1].id if GameData.npcs.size() > 1 else GameData.npcs[0].id)
 	show.call(first)
 
+func open_watch_manual(def_id := "") -> void:
+	load("res://scripts/ui/watch_manual.gd").open(self, def_id)
+
+func export_legacy_backup() -> void:
+	var text: String = Game.legacy_save_text()
+	if text == "":
+		return
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("(()=>{const blob=new Blob([%s],{type:'application/json'});const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='orbital-legacy-backup.json';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1000)})()" % JSON.stringify(text))
+	else:
+		var dialog := FileDialog.new()
+		dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+		dialog.access = FileDialog.ACCESS_FILESYSTEM
+		dialog.current_file = "orbital-legacy-backup.json"
+		dialog.add_filter("*.json", "经营档案")
+		add_child(dialog)
+		dialog.file_selected.connect(func(path: String):
+			var f := FileAccess.open(path, FileAccess.WRITE)
+			if f: f.store_string(text)
+			dialog.queue_free())
+		dialog.canceled.connect(dialog.queue_free)
+		dialog.popup_centered(Vector2i(800, 500))
+
 func open_help() -> void:
 	var m := modal("经营手册", 1000)
 	var body: VBoxContainer = m[0]
-	var text := "• 柜台：按服务铃请客人进来。收购时先鉴定再出价；销售时从仓储挑选合格的自有货。客人有 3 轮耐心，接受报价只锁价，确认交割才付钱拿货（1 AP）。\n• 鉴定：根据物品选择适用仪器，也可以完成该物品的专属检测。首次记录本件物证消耗 1 AP，取得两条相关的独立物证后可精确估值。\n• 维修：清洁排故、换件连接、负载复测三道工序，最后确认时才扣材料与 AP。材料须等流动商人上门购买。\n• 仓储：10×6 占格后仓，拖动摆放、右键旋转。上架需要两条物证和已核验来源；来源不明的货物要扫描、登记或隔离。自有货可以伪装，但有被识破的风险。\n• 订单：接单后交付合格原物，委修单必须交还顾客原物。\n• 日结：每日维护 20 Cr，第 7/14/21 天交租金。第 3 天起可选一项设备升级。撑满 21 天即可。"
+	var manual := UIKit.button("打开手表检验说明书", "primary", Vector2(0, 56))
+	manual.pressed.connect(func(): open_watch_manual())
+	body.add_child(manual)
+	var text := "• 柜台：按服务铃请下一位来客。报价只代表对方的认识与预算；检测不会自动改变对方的开价。\n• 检验：只用放大镜、紫外线、称重。对照说明书查看 logo、编号与重量，记录物证；工具不提供唯一正确价格。\n• 议价：可以主动出示物证。维修师、收藏者和普通人理解同一条证据的能力不同，专业人士也不知道未观察的细节。\n• 维修：清洁、换件、复核装配，最后确认才扣材料和行动点。材料等流动商人到店购买。\n• 仓储与订单：保管每一只原表，核验来源，按订单要求交还同一实物。\n• 日结：按账本支付维护费与租金，继续经营 21 天。"
 	body.add_child(UIKit.label(text, 21, UIKit.TEXT, false, true))
 
 ## One mixer channel: name, slider and percentage; saves when released.
@@ -1223,6 +1256,11 @@ func open_settings() -> void:
 			Game.new_game()
 			shutter(1)))
 	body.add_child(reset)
+	if Game.legacy_save_text() != "":
+		body.add_child(UIKit.label("旧版经营档案已保留，手表新店使用独立进度。", 17, UIKit.MUTED, false, true))
+		var legacy := UIKit.button("导出旧版经营档案备份", "secondary", Vector2(0, 52))
+		legacy.pressed.connect(export_legacy_backup)
+		body.add_child(legacy)
 
 # ---------------------------------------------------------------- title & shutter
 
@@ -1288,7 +1326,7 @@ func _show_title() -> void:
 				shutter(1)))
 		v.add_child(fresh)
 	var hb := UIKit.hbox(12)
-	for spec in [["玩法说明", open_help], ["设置", open_settings]]:
+	for spec in [["检验说明书", open_watch_manual], ["玩法说明", open_help], ["设置", open_settings]]:
 		var button := UIKit.button(spec[0], "secondary", Vector2(0, 50), 20)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.pressed.connect(spec[1])

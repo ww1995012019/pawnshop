@@ -61,31 +61,16 @@ func snapshot() -> Dictionary:
 	if active.page_name == "inspect":
 		var current = Game.item(active.page.it_uid)
 		if current != null:
-			var profile := GameData.inspection_profile(current.defId)
 			var definition := GameData.def(current.defId)
-			var description: String = profile.get("description", definition.description)
-			if description.contains("→"):
-				description = description.split("。")[0] + "。"
-			var estimate := Model.estimate(current)
-			var details := ["品相 %s · 物证 %d 条" % [UIKit.pct(current.condition), Model.evidence_count(current)], description,
-				"参考估值：%s" % (UIKit.money(estimate.low) if estimate.exact else "%s–%s Cr" % [Model.jnum(estimate.low), Model.jnum(estimate.high)])]
+			var details := [definition.description, "检验记录 %d 条 · 对照手册判断" % Model.evidence_count(current)]
 			for evidence in current.evidence:
 				details.append("%s：%s" % [Model.evidence_caption(current, evidence), Model.displayed_clue(current, evidence)])
-			var step: int = active.page.specific_step
-			var steps: Array = profile.get("steps", [])
-			var can_pay: bool = current.inspectedPaid or state.upgrades.lamp or Model.has_ap(state, 1.0)
-			var needs_ap: bool = step == steps.size() - 1 and not can_pay
-			var status_text: String = active.page.specific_status.text if is_instance_valid(active.page.specific_status) else ""
 			result.merge({"detail_title": definition.name, "detail_lines": details,
 				"inspection_tools": GameData.applicable_tools(current.defId),
-				"inspection_title": profile.get("title", "专属检测"),
-				"inspection_current": active.page.tool,
+				"inspection_current": active.page.tool, "inspection_uid": current.uid,
 				"inspection_busy": is_instance_valid(active.page.item) and active.page.item.busy,
-				"specific_uid": current.uid, "specific_index": step,
-				"specific_allowed": not needs_ap and not active.page.specific_running,
-				"specific_reason": "行动点不足" if needs_ap else "",
-				"specific_feedback": status_text,
-				"specific_next": steps[step] if active.page.tool == "SPEC" and step < steps.size() else ""})
+				"scale_stable": active.page.scale_stable,
+				"scale_occupied": active.page.scale_occupied})
 	elif active.page_name == "repair":
 		var materials := []
 		for material in GameData.materials:
@@ -153,7 +138,7 @@ func snapshot() -> Dictionary:
 			for item in state.inventory:
 				if item.owner == "shop" and not item.has("orderId") and not item.sealed and item.location != "isolation" and item.sourceVerified:
 					sellable.append({"uid": item.uid, "name": GameData.def(item.defId).name,
-						"price": maxf(1, floor(Model.item_value(item) * 0.6))})
+						"price": Commerce.recovery_price(state, item)})
 			result.merchant_items = sellable
 	return result
 
@@ -197,18 +182,18 @@ func command(data: Dictionary) -> void:
 			else:
 				shell.go(target)
 		return
+	if kind == "manual":
+		var active = shell.active_shell()
+		var current = Game.workbench_item()
+		active.open_watch_manual(current.defId if current != null else "")
+		return
 	if kind == "tool":
 		var id = data.get("tool", "")
 		var active = shell.active_shell()
 		if active.page_name == "inspect" and id is String and (id == "" or GameData.tool_ids.has(id)):
 			active.page._set_tool(id)
 		return
-	if kind == "specific_step":
-		var active = shell.active_shell()
-		var index = data.get("index", null)
-		if active.page_name == "inspect" and active.page.tool == "SPEC" and data.get("uid", "") == active.page.it_uid and (index is int or index is float) and is_finite(float(index)) and float(index) == floor(float(index)):
-			active.page._advance_specific(int(index))
-		return
+
 	if kind == "finish_repair":
 		var active = shell.active_shell()
 		if active.page_name == "repair" and data.get("uid", "") == active.page.it_uid:

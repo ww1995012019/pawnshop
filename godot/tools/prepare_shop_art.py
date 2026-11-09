@@ -3,6 +3,7 @@ Source crops are asset import operations; source masters remain unchanged.
 """
 from pathlib import Path
 from PIL import Image
+from portrait_import import connected_portrait
 import json
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -27,9 +28,40 @@ def pack_icons(filename, columns, rows, count, cell, max_logical, multiplier, ta
     atlas.save(ASSETS / target)
 
 
+
+def extract_service_bell(shop):
+    """Lift the original bell at its native 4px scale; restore table beneath it.
+
+    The fixed crop belongs to this scene master. Its brass/red pixels identify
+    the silhouette; a one-logical-pixel border retains its dark painted edges.
+    Adjacent pixels on the same tabletop row supply the hidden resting surface.
+    Compositing the sprite at rest reconstructs the original scene exactly.
+    """
+    logical = shop.resize((480, 270), Image.Resampling.NEAREST)
+    box = (122, 144, 150, 165)
+    crop = logical.crop(box).convert('RGBA')
+    subject = set()
+    for y in range(crop.height):
+        for x in range(crop.width):
+            r, g, b, _ = crop.getpixel((x, y))
+            if r >= g:
+                subject.add((x, y))
+    silhouette = {(x+dx,y+dy) for x,y in subject
+                  for dx in (-1,0,1) for dy in (-1,0,1)
+                  if 0 <= x+dx < crop.width and 0 <= y+dy < crop.height}
+    mask = Image.new('L', crop.size)
+    for x,y in silhouette:
+        mask.putpixel((x,y), 255)
+        logical.putpixel((box[0]+x,box[1]+y), logical.getpixel((box[0]+x+32,box[1]+y)))
+    crop.putalpha(mask)
+    crop.resize((112,84), Image.Resampling.NEAREST).save(ASSETS / 'scene/service_bell.png')
+    return logical.resize(shop.size, Image.Resampling.NEAREST)
+
+
 def main():
     shop = Image.open(SOURCE / 'shop-master.png').convert('RGB')
     shop = shop.resize((480, 270), Image.Resampling.BOX).resize((1920, 1080), Image.Resampling.NEAREST)
+    shop = extract_service_bell(shop)
     shop.save(ASSETS / 'scene/shop_pixel.png')
     source = Image.open(SOURCE / 'residents-master.png').convert('RGBA')
     atlas = Image.new('RGBA', (768, 768))
@@ -39,13 +71,15 @@ def main():
         crop = source.crop((round(col * source.width / 3), round(row * source.height / 3), round((col+1) * source.width / 3), round((row+1) * source.height / 3)))
         alpha = crop.getchannel('A').point(lambda p: 255 if p >= 160 else 0)
         crop.putalpha(alpha)
-        bounds = alpha.getbbox()
+        crop = connected_portrait(crop)
+        bounds = crop.getchannel("A").getbbox()
         if not bounds:
             raise ValueError(f'empty resident {index}')
         crop = crop.crop(bounds)
         crop.thumbnail((116, 116), Image.Resampling.LANCZOS)
         # Hard alpha and a shared 2x logical pixel scale give clean silhouettes.
         crop.putalpha(crop.getchannel('A').point(lambda p: 255 if p >= 128 else 0))
+        crop = connected_portrait(crop)
         crop = crop.resize((crop.width * 2, crop.height * 2), Image.Resampling.NEAREST)
         x, y = col*256 + (256-crop.width)//2, row*256 + 248-crop.height
         atlas.alpha_composite(crop, (x, y))

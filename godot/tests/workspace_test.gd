@@ -55,7 +55,7 @@ func audit() -> void:
 	var repair_labels := ""
 	for label in repair_page.info.find_children("*", "Label", true, false):
 		repair_labels += label.text + "\n"
-	check(repair_labels.contains("待鉴定") and not repair_labels.contains(Model.fault_label(game.item(repair_uid))), "Repair does not show a hidden functional result before inspection")
+	check(repair_labels.contains("尚无检验记录") and not repair_labels.contains(Model.fault_label(game.item(repair_uid))), "Repair does not show a hidden functional result before inspection")
 	var to_inspect: Button = null
 	for control in repair_page.info.find_children("*", "Button", true, false):
 		if control.text == "去鉴定":
