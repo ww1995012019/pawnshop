@@ -55,14 +55,14 @@ func setup(id: String, item_uid := "", height := 300.0, start_back := false) -> 
 	body.scale = Vector2.ONE * display_scale
 	reveal = Label.new()
 	reveal.add_theme_font_override("font", UIKit.mono)
-	reveal.add_theme_font_size_override("font_size", 26)
-	reveal.add_theme_color_override("font_color", Color(0.55, 1.0, 0.82))
-	reveal.add_theme_color_override("font_outline_color", Color(0.2, 1.0, 0.7, 0.5))
-	reveal.add_theme_constant_override("outline_size", 6)
+	reveal.add_theme_font_size_override("font_size", 13)
+	reveal.add_theme_color_override("font_color", Color(0.64, 0.94, 0.86))
+	reveal.add_theme_color_override("font_outline_color", Color(0.22, 0.52, 0.49, 0.45))
+	reveal.add_theme_constant_override("outline_size", 1)
 	var rm := ShaderMaterial.new()
 	rm.shader = load("res://shaders/reveal.gdshader")
 	reveal.material = rm
-	reveal.rotation = -0.1
+	reveal.rotation = 0.0
 	reveal.visible = false
 	body.add_child(reveal)
 

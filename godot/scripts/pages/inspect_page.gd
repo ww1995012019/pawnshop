@@ -222,7 +222,8 @@ func _optical(id: String) -> void:
 	var node := Node2D.new()
 	node.z_index = 60
 	lens_ring = Ring.new()
-	lens_ring.radius = 128 if id == "TOL-001" else 90
+	lens_ring.radius = 128
+	lens_ring.ultraviolet = id == "TOL-002"
 	node.add_child(lens_ring)
 	if id == "TOL-001":
 		var glass := Sprite2D.new()
@@ -239,7 +240,8 @@ func _optical(id: String) -> void:
 		uv_light = PointLight2D.new()
 		uv_light.texture = Util.light_tex()
 		uv_light.color = Color(.62,.36,1)
-		uv_light.energy = 2.4
+		uv_light.energy = 1.5
+		uv_light.scale = Vector2(.62,.38)
 		add_world(uv_light,"top")
 	add_world(node,"top")
 	bench_body.add_child(UIKit.label("翻到正面，移动镜片观察表盘标识；停住记录细节。" if id == "TOL-001" else "翻到背面，移动紫外灯照亮隐藏编号；停住记录字符。",18,UIKit.TEXT,false,true))
@@ -385,9 +387,9 @@ func _process(delta: float) -> void:
 		if tool == "TOL-002":
 			uv_light.global_position = at
 			item.mat.set_shader_parameter("uv_pos",at)
-			item.mat.set_shader_parameter("uv_r",230.0)
+			item.mat.set_shader_parameter("uv_r",150.0)
 			item.reveal.material.set_shader_parameter("uv_pos",at)
-			item.reveal.material.set_shader_parameter("uv_r",230.0)
+			item.reveal.material.set_shader_parameter("uv_r",150.0)
 		if at.distance_to(_optical_target())<65:
 			progress = minf(1.0,progress+delta/.9)
 			if progress >= 1.0: _record()
@@ -403,8 +405,12 @@ class ScalePan extends Node2D:
 		draw_line(Vector2(-135,depression),Vector2(135,depression),Color("f3e6cc"),3)
 
 class Ring extends Node2D:
+	var ultraviolet := false
 	var radius := 128.0
 	var progress := 0.0
 	func _draw() -> void:
+		if ultraviolet:
+			draw_texture_rect(Util.radial(256,.22),Rect2(-150,-92,300,184),false,Color(.55,.28,.94,.24))
+			return
 		draw_arc(Vector2.ZERO,radius,0,TAU,64,Color("ab9267"),3)
 		if progress>0: draw_arc(Vector2.ZERO,radius+6,-PI/2,-PI/2+TAU*progress,64,Color("91dab7"),5)

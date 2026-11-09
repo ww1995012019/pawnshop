@@ -106,9 +106,7 @@ void fragment() {
 	base.rgb = mix(base.rgb, vec3(0.95, 0.92, 0.85), sc * 0.55 * a);
 	base.rgb = mix(base.rgb, vec3(1.0, 0.62, 0.25), seam * a);
 	// UV wand: fluorescent residue speckles on the repainted belly.
-	float in_uv = uv_r > 0.0 ? 1.0 - smoothstep(uv_r * 0.5, uv_r, distance(world, uv_pos)) : 0.0;
-	float speck = step(0.985, hash(floor(luv * 140.0))) * in_uv;
-	base.rgb += vec3(0.35, 1.0, 0.75) * speck * a * 0.9;
+	float in_uv = uv_r > 0.0 ? 1.0 - smoothstep(uv_r * 0.28, uv_r, length((world - uv_pos) * vec2(1.0, 1.6))) : 0.0;
 	base.rgb += vec3(0.25, 0.12, 0.45) * in_uv * a * 0.15;
 	base.rgb += vec3(1.0, 0.85, 0.6) * hover * 0.06 * a;
 	// Grime layer for the repair bench: brown film where the mask is still dirty.
