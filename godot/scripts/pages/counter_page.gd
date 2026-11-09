@@ -4,6 +4,18 @@ extends Page
 
 const CUSTOMER_HEIGHT := 320.0
 const CRATE_COLS := 10
+# Mounting strips measured on the 1920×1080 shop illustration. Labels belong
+# to these physical rails/bezel faces, independently of the equipment hit area.
+const FIXTURE_MOUNTS := {
+	"report": Rect2(218, 675, 244, 28),
+	"warehouse": Rect2(212, 1003, 300, 28),
+	"display": Rect2(180, 533, 370, 28),
+	"repair": Rect2(1596, 1003, 204, 28),
+	"inspect": Rect2(1417, 818, 146, 28),
+	"orders": Rect2(1460, 384, 172, 26),
+	"people": Rect2(1703, 382, 110, 26),
+	"bell": Rect2(488, 675, 105, 28),
+}
 const Commerce = preload("res://scripts/model/commerce.gd")
 var MAT_POS := Vector2(990, 575)
 var STAND := Vector2(880, 490)
@@ -89,12 +101,13 @@ class QuotationBody extends PanelContainer:
 		var pixel := Vector2i(point / size * Vector2(silhouette.get_size()))
 		return silhouette.get_pixelv(pixel).a >= 0.5
 
-## Transparent equipment buttons retain the illustration at rest. Hover and
-## keyboard focus add crisp pixel corner marks and a compact nameplate.
+## Equipment stays painted at rest. Each nameplate has a measured mounting
+## strip; hover/focus decorates that plate without outlining adjacent objects.
 class FixtureButton extends Button:
 	var caption := ""
 	var accent := Color("e7ba70")
 	var permanent := true
+	var caption_region := Rect2()
 	func _ready() -> void:
 		mouse_entered.connect(queue_redraw)
 		mouse_exited.connect(queue_redraw)
@@ -102,20 +115,27 @@ class FixtureButton extends Button:
 		focus_exited.connect(queue_redraw)
 	func _draw() -> void:
 		var active := is_hovered() or has_focus()
-		if active:
-			var r := Rect2(Vector2(3, 3), size - Vector2(6, 6))
-			for c in [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]:
-				var dx := 1.0 if c.x == r.position.x else -1.0
-				var dy := 1.0 if c.y == r.position.y else -1.0
-				draw_rect(Rect2(c + Vector2(minf(0, dx * 16), 0), Vector2(18, 3)), accent)
-				draw_rect(Rect2(c + Vector2(0, minf(0, dy * 16)), Vector2(3, 18)), accent)
-		if caption == "" or (not permanent and not active):
+		if caption == "":
+			if active:
+				draw_rect(Rect2(Vector2(3, 3), size - Vector2(6, 6)), accent, false, 2)
 			return
-		var w := minf(size.x - 10, UIKit.font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 22)
-		var box := Rect2(Vector2((size.x - w) * 0.5, size.y - 32), Vector2(w, 28))
-		draw_rect(box, Color("233536") if active else Color("29242c"))
-		draw_rect(Rect2(box.position, Vector2(w, 2)), accent)
-		draw_string(UIKit.font, box.position + Vector2(11, 21), caption, HORIZONTAL_ALIGNMENT_LEFT, w - 20, 20, Color("f0dfbd"))
+		if not permanent and not active:
+			return
+		var font_size := mini(20, floori(caption_region.size.y - 8))
+		while font_size > 14 and (UIKit.font.get_height(font_size) > caption_region.size.y - 2 or UIKit.font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > caption_region.size.x - 22):
+			font_size -= 1
+		var text_width := UIKit.font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		var w := minf(caption_region.size.x, ceilf(text_width) + 22)
+		var box := Rect2(caption_region.position + Vector2(floorf((caption_region.size.x - w) * 0.5), 0), Vector2(w, caption_region.size.y))
+		# All trim, fasteners and focus marks are inset inside the mounting strip.
+		draw_rect(box, Color("354b43") if active else Color("3d4239"))
+		draw_rect(box, accent if active else Color("8f876c"), false, 1)
+		draw_line(box.position + Vector2(2, 2), box.position + Vector2(w - 3, 2), Color("b2a380") if active else Color("6f7560"), 1)
+		draw_line(box.position + Vector2(2, box.size.y - 2), box.end - Vector2(2, 2), Color("242b27"), 1)
+		for x in [box.position.x + 4, box.end.x - 6]:
+			draw_rect(Rect2(Vector2(x, box.position.y + floorf(box.size.y * 0.5) - 1), Vector2(2, 2)), accent if active else Color("a69c7d"))
+		var baseline := floorf((box.size.y - UIKit.font.get_height(font_size)) * 0.5 + UIKit.font.get_ascent(font_size))
+		draw_string(UIKit.font, box.position + Vector2(floorf((w - text_width) * 0.5), baseline), caption, HORIZONTAL_ALIGNMENT_LEFT, w - 20, font_size, Color("f0dfbd"))
 
 func scene_name() -> String:
 	return "counter"
@@ -262,6 +282,8 @@ func _fixture(key: String, rect: Rect2, caption: String, fn: Callable, permanent
 	b.position = rect.position
 	b.size = rect.size
 	b.caption = caption
+	if FIXTURE_MOUNTS.has(key):
+		b.caption_region = Rect2(FIXTURE_MOUNTS[key].position - rect.position, FIXTURE_MOUNTS[key].size)
 	b.permanent = permanent
 	b.accent = accent
 	b.tooltip_text = caption + " · 点击打开操作面板"
@@ -293,13 +315,13 @@ func _build_board() -> void:
 	board.add_child(board_rent)
 	for label in [board_day, board_rent]:
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_fixture("report", Rect2(292, 673, 246, 52), "日结账本 · 打烊", func(): shell.go("report"))
+	_fixture("report", Rect2(200, 670, 270, 40), "日结账本 · 打烊", func(): shell.go("report"))
 
 func _build_tag() -> void:
-	tag = UIKit.plate(_flat(Color("d8c9a8"), Color("887859"), 5))
+	tag = UIKit.plate(_flat(Color("d8c9a8"), Color("887859"), 4))
 	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(tag)
-	var v := UIKit.vbox(1)
+	var v := UIKit.hbox(10)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tag.add_child(v)
 	tag_name = UIKit.label("", 16, Color("322b2f"))
@@ -308,6 +330,7 @@ func _build_tag() -> void:
 	v.add_child(tag_info)
 	for label in [tag_name, tag_info]:
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	idle_label = UIKit.label("", 21, Color("eadbb9"), false, true)
 	idle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	idle_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -356,14 +379,14 @@ func _build_crate() -> void:
 	sc.add_child(stock_grid)
 
 func _build_equipment() -> void:
-	_fixture("warehouse", Rect2(200, 735, 312, 280), "仓储 · 隔离柜", func(): shell.go("warehouse"))
-	_fixture("display", Rect2(170, 220, 386, 314), "陈列柜 · 选货", func(): shell.go("warehouse"), false)
+	_fixture("warehouse", Rect2(200, 735, 320, 300), "仓储 · 隔离柜", func(): shell.go("warehouse"))
+	_fixture("display", Rect2(170, 220, 386, 344), "陈列柜 · 选货", func(): shell.go("warehouse"), false)
 	display_goods = Control.new()
 	display_goods.position = Vector2(170, 220)
 	display_goods.size = Vector2(386, 314)
 	display_goods.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(display_goods)
-	_fixture("repair", Rect2(1410, 730, 400, 290), "维修工作台", func(): _open_instrument("repair"))
+	_fixture("repair", Rect2(1410, 730, 400, 305), "维修工作台", func(): _open_instrument("repair"))
 	# The gauge takes precedence over the surrounding repair station.
 	_fixture("inspect", Rect2(1414, 730, 151, 158), "鉴定仪", func(): _open_instrument("inspect"), true, Color("a3d6c4"))
 	_fixture("orders", Rect2(1420, 240, 240, 172), "订单终端", func(): shell.go("orders"))
@@ -375,7 +398,7 @@ func _build_equipment() -> void:
 	orders_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(orders_readout)
 	_fixture("people", Rect2(1700, 320, 115, 92), "人物档案", func(): shell.open_people())
-	_fixture("bell", Rect2(488, 575, 105, 85), "接客铃", _bell_clicked, false)
+	_fixture("bell", Rect2(488, 575, 105, 132), "接客铃", _bell_clicked, false)
 	_build_status()
 
 func _build_status() -> void:
@@ -488,9 +511,9 @@ func relayout() -> void:
 	footer.size = Vector2(bubble_rect.size.x - 24, 46)
 	call_deferred("_layout_bubble_content")
 	tag.position = Vector2(640, 610)
-	tag.size = Vector2(195, 48)
-	tag_name.custom_minimum_size.x = 180
-	tag_info.custom_minimum_size.x = 180
+	tag.size = Vector2(402, 32)
+	tag_name.custom_minimum_size.x = 124
+	tag_info.custom_minimum_size.x = 246
 	idle_label.position = Vector2(692, 590)
 	idle_label.size = Vector2(610, 56)
 	if is_instance_valid(customer) and not customer.walking:
@@ -815,7 +838,7 @@ func _refresh() -> void:
 		scr.price.text = Model.jnum(t.price) + " Cr" if it != null else "待选货"
 		if it != null:
 			var e := Model.estimate(it)
-			scr.line1.text = "%s · 估值 %s" % [GameData.def(it.defId).name.left(8), Model.jnum(e.low) if e.exact else "%s–%s" % [Model.jnum(e.low), Model.jnum(e.high)]]
+			scr.line1.text = "%s · %s %s" % [GameData.def(it.defId).name.left(8), "市价" if e.exact else "估价", Model.jnum(e.low) if e.exact else "%s–%s" % [Model.jnum(e.low), Model.jnum(e.high)]]
 			scr.line2.text = "物证 %d · 议价 %d/3%s" % [Model.evidence_count(it), int(t.rounds), " · 已锁价" if t.locked else ""]
 		else:
 			scr.line1.text = "需求：" + Model.customer_need(t.npcId).left(20)
@@ -971,7 +994,8 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 		var sell_item := UIKit.button("出售旧物 %s · 收 %s" % [GameData.def(item.defId).name, UIKit.money(price)], "secondary", Vector2(0, 50), 17)
 		sell_item.set_meta("merchant_focus", "item:" + uid)
 		focus_targets["item:" + uid] = sell_item
-		sell_item.disabled = s.ap < 1
+		sell_item.disabled = s.ap < 1 or Commerce.forgery_rejected(s, item)
+		if Commerce.forgery_rejected(s, item): sell_item.tooltip_text = "本轮商人已识破这只表的加工，不接受反复出售。"
 		sell_item.pressed.connect(func(): _merchant_transaction({"type": "SELL_MERCHANT_ITEM", "uid": uid}, contents))
 		contents.add_child(sell_item)
 	if eligible == 0:

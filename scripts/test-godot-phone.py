@@ -56,6 +56,13 @@ def wait(page, condition, timeout=15000):
 
 
 def assert_full_screen(page, width, height):
+    # Resize/render callbacks can span several frames on a busy software GPU.
+    page.wait_for_function("""([width,height]) => {
+        const element=document.getElementById('canvas'), rect=element.getBoundingClientRect();
+        return Math.abs(rect.width-width)<=1 && Math.abs(rect.height-height)<=1 &&
+            Math.abs(element.width-rect.width*devicePixelRatio)<=1 &&
+            Math.abs(element.height-rect.height*devicePixelRatio)<=1;
+    }""", arg=[width,height], timeout=6000)
     assert page.locator('#touch-nav').count() == 0, 'Phones must not show a separate Web toolbar'
     canvas = page.locator('#canvas').bounding_box()
     assert canvas['x'] == 0 and canvas['y'] == 0, 'The game canvas must start at the screen corner'

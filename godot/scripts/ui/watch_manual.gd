@@ -83,8 +83,9 @@ static func open(shell: Node, def_id := "") -> void:
 		if float(reference.get("link_mass", 0)) > 0:
 			mass_text += "\n每节可拆表节：%.1f g；按实际表节数量修正完整重量，调短表带不等于内部缺件。" % float(reference.link_mass)
 		content.add_child(UIKit.record_card("重量与配置", mass_text, "03 / 称重参考"))
-		content.add_child(UIKit.note_card("对照提示", "• 放大镜比较图形、字形与刻印位置，磨损可能遮住细节。\n• 紫外编号要核对品牌和型号码。规则符合也可能是复制号；编号异常也可能来自更换后盖。\n• 偏轻可能是缺件、少表节或替换机芯；重量正常仍可能是仿品或配重。三项结果要结合判断。"))
+		content.add_child(UIKit.note_card("对照提示", "• 放大镜比较图形、字形与刻印位置，磨损可能遮住细节。\n• 紫外编号要核对品牌和型号码。规则符合也可能是复制号；编号异常也可能来自更换后盖。\n• 偏轻可能是缺件、少表节或替换机芯；重量正常仍可能是仿品或配重。正常重量也可能来自人为配重；重心偏移是加工痕迹。三项结果要结合判断。"))
 		content.add_child(UIKit.record_card("完好品参考行情", "%d–%d Cr。此区间只供查阅，不是当前实物的检测定价。" % [roundi(float(d.value) * 0.8), roundi(float(d.value) * 1.2)], "附录 / 行情摘录"))
+		content.add_child(UIKit.note_card("检验估价与加工痕迹", "每项当前检验缩小估价范围；三项完成后显示准确参考市价，成交价仍需商议。维修、重描、覆印或配重后需复测更新记录，复测免费。\n重描标识留下漆层；伪造编号留下紫外晕边；配重改变重心却没有补齐缺件。专家更容易看懂对应痕迹。造假可能抬高外行买家的心理价，不提高真实市价；已判断准确的专家不会因此高估。"))
 		content.add_child(UIKit.note_card("手册范围", "本手册不验证走时精度、防水性能或所有内部故障。查看手册不消耗行动点，也不会自动告诉来客你的检验结果。"))
 		scroll.scroll_vertical = 0
 	picker.item_selected.connect(show)

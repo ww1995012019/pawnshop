@@ -71,10 +71,10 @@ func snapshot() -> Dictionary:
 		var current = Game.item(active.page.it_uid)
 		if current != null:
 			var definition := GameData.def(current.defId)
-			var details := [definition.description, "检验记录 %d 条 · 对照手册判断" % Model.evidence_count(current)]
+			var details := [definition.description, Model.appraisal_text(current), "检验记录 %d 条 · 对照手册判断" % Model.evidence_count(current)]
 			for evidence in current.evidence:
 				details.append("%s：%s" % [Model.evidence_caption(current, evidence), Model.displayed_clue(current, evidence)])
-			result.merge({"detail_title": definition.name, "detail_lines": details,
+			result.merge({"detail_title": definition.name, "detail_lines": details, "appraisal":Model.estimate(current),
 				"inspection_tools": GameData.applicable_tools(current.defId),
 				"inspection_current": active.page.tool, "inspection_uid": current.uid,
 				"inspection_busy": is_instance_valid(active.page.item) and active.page.item.busy,
@@ -224,7 +224,7 @@ func command(data: Dictionary) -> void:
 		var active = shell.active_shell()
 		var uid = data.get("uid", null)
 		if active.page_name == "warehouse" and uid is String and uid == active.page.selected:
-			Game.dispatch({"type": "FORGE", "uid": uid})
+			Game.dispatch({"type": "FORGE", "uid": uid, "method":data.get("method", "logo")})
 		return
 	# Native workspace and modal input boundaries apply to every trade command.
 	if shell.workspace_open() or shell.page._scene_blocked():

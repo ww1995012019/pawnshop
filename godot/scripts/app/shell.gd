@@ -1203,8 +1203,14 @@ func open_help() -> void:
 	var manual := UIKit.button("打开手表检验说明书", "primary", Vector2(0, 56))
 	manual.pressed.connect(func(): open_watch_manual())
 	body.add_child(manual)
-	var text := "• 柜台：按服务铃请下一位来客。报价只代表对方的认识与预算；检测不会自动改变对方的开价。\n• 检验：只用放大镜、紫外线、称重。对照说明书查看 logo、编号与重量，记录物证；工具不提供唯一正确价格。\n• 议价：可以主动出示物证。维修师、收藏者和普通人理解同一条证据的能力不同，专业人士也不知道未观察的细节。\n• 维修：清洁、换件、复核装配，最后确认才扣材料和行动点。材料等流动商人到店购买。\n• 仓储与订单：保管每一只原表，核验来源，按订单要求交还同一实物。\n• 日结：按账本支付维护费与租金，继续经营 21 天。"
-	body.add_child(UIKit.label(text, 21, UIKit.TEXT, false, true))
+	var text := "• 柜台：按服务铃请下一位来客。报价只代表对方的认识与预算；检测不会自动改变对方的开价。\n• 检验：只用放大镜、紫外线、称重。对照说明书查看 logo、编号与重量，记录物证；每项缩小估价范围，三项当前检验完成后显示准确参考市价，成交价仍需议定。\n• 议价：可以主动出示物证。维修师、收藏者和普通人理解同一条证据的能力不同，相关专家85%概率独立准确估价，普通客人20%概率接近市价；你的私下检验不会自动更新对方认知。\n• 造假：在仓储选择重描标识、伪造编号或添加配重。分别留下放大镜、紫外线和称重可辨认的痕迹，不修复真实故障或缺件；顾客按对应专业能力识别。\n• 维修：清洁、换件、复核装配，最后确认才扣材料和行动点。材料等流动商人到店购买。\n• 仓储与订单：保管每一只原表，核验来源，按订单要求交还同一实物。\n• 日结：按账本支付维护费与租金，继续经营 21 天。"
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size.y = clampf(get_viewport().get_visible_rect().size.y - 300, 180, 450)
+	body.add_child(scroll)
+	var instructions := UIKit.label(text, 21, UIKit.TEXT, false, true)
+	instructions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(instructions)
 
 ## One mixer channel: name, slider and percentage; saves when released.
 func _volume_row(text: String, key: String, fallback: float) -> Control:

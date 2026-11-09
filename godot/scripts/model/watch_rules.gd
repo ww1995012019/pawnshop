@@ -34,15 +34,15 @@ static func initialize(it: Dictionary, seed := "") -> void:
 
 static func mass(it: Dictionary) -> float:
 	initialize(it)
-	return float(it.watch.mass)
+	return float(it.watch.mass) + (float(WatchForgery.treatments(it).weight.get("ballast", 0)) if WatchForgery.active(it, "weight") else 0.0)
 
 static func serial(it: Dictionary) -> String:
 	initialize(it)
-	return String(it.watch.serial)
+	return String(WatchForgery.treatments(it).serial.serial) if WatchForgery.active(it, "serial") else String(it.watch.serial)
 
 static func logo_variant(it: Dictionary) -> int:
 	initialize(it)
-	return int(it.watch.logo_variant)
+	return 0 if WatchForgery.active(it, "logo") else int(it.watch.logo_variant)
 
 static func logo_note(it: Dictionary) -> String:
 	var ref := model_reference(it.defId)
@@ -53,14 +53,18 @@ static func logo_note(it: Dictionary) -> String:
 	return "可见标识：%s。" % altered[index] if logo_variant(it) else "可见标识：%s。边缘有使用磨痕。" % ref.logo
 
 static func reading(it: Dictionary, tool: String) -> String:
+	var text := ""
 	match tool:
-		"TOL-001": return logo_note(it)
-		"TOL-002": return "后盖紫外编号：%s。" % serial(it)
-		"TOL-005": return "稳定质量：%.1f g。按实际表带配置与说明书比较。" % mass(it)
-	return ""
+		"TOL-001": text = logo_note(it)
+		"TOL-002": text = "后盖紫外编号：%s。" % serial(it)
+		"TOL-005": text = "稳定质量：%.1f g。按实际表带配置与说明书比较。" % mass(it)
+	var trace := WatchForgery.trace(it, tool)
+	return text + (" " + trace if trace != "" else "")
 
 static func restore_parts(it: Dictionary) -> void:
 	initialize(it)
-	it.watch.mass = snappedf(mass(it) + float(it.watch.get("part_mass", 0)), 0.1)
+	it.watch.mass = snappedf(float(it.watch.mass) + float(it.watch.get("part_mass", 0)), 0.1)
+	if WatchForgery.active(it, "weight"):
+		it.forgery.methods.weight.removed = true
 	it.watch.missing_part = ""
 	it.watch.part_mass = 0.0

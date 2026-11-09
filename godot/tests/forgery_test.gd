@@ -18,6 +18,7 @@ func run() -> void:
 	item.authentic = false
 	item.working = false
 	item.condition = 0.55
+	item.watch.logo_variant = 1
 	var uid: String = item.uid
 	var original: Dictionary = item.duplicate(true)
 	var materials: Dictionary = game.state.materials.duplicate(true)
@@ -26,7 +27,7 @@ func run() -> void:
 	item = Model.find_inventory(game.state, uid)
 	check(item.get("forgery", null) is Dictionary and game.state.ap == ap - 1 and
 		game.state.materials["MAT-001"] == materials["MAT-001"] - 1 and
-		game.state.materials["MAT-004"] == materials["MAT-004"] - 1,
+		game.state.materials["MAT-006"] == materials["MAT-006"] - 1,
 		"disguising owned goods consumes the announced materials and one AP")
 	check(item.authentic == original.authentic and item.working == original.working and
 		item.condition == original.condition and item.uid == original.uid,
@@ -35,10 +36,10 @@ func run() -> void:
 		var copy: Dictionary = item.duplicate(true)
 		copy.erase("forgery")
 		var trade := {"id": "compare-sale", "npcId": "CHR-003", "kind": "sell", "evidenceUsed": []}
-		check(Model.sale_eligibility(copy, "CHR-003") != null and Model.sale_eligibility(item, "CHR-003") == null,
-			"an undiscovered disguise can satisfy a buyer's apparent requirements")
-		check(Model.trade_terms(game.state, trade.duplicate(true), item).value > Model.trade_terms(game.state, trade.duplicate(true), copy).value,
-			"the buyer values the apparent condition while the real item stays unchanged")
+		check(Model.sale_eligibility(copy, "CHR-003") != null and Model.sale_eligibility(item, "CHR-003") != null,
+			"logo repainting cannot hide poor condition or repair functional requirements")
+		check(Model.item_value(item) == Model.item_value(copy) and WatchRules.logo_variant(item) == 0 and WatchRules.logo_variant(copy) == 1,
+			"the visible mark changes while true value and wear stay unchanged")
 		trade.kind = "buy"
 		var purchase_quote := Model.trade_terms(game.state, trade, item)
 		var hidden_change: Dictionary = item.duplicate(true)
@@ -85,7 +86,7 @@ func run() -> void:
 		item = state.inventory[0]
 		item.authentic = false
 		item.working = false
-		item.condition = 0.55
+		item.condition = 0.75
 		uid = item.uid
 		state = commerce.reduce(state, {"type": "FORGE", "uid": uid})
 		state.trade = {"id": "buyer-%d" % index, "npcId": "CHR-003", "kind": "sell", "item": null,

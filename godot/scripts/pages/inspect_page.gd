@@ -141,20 +141,24 @@ func _refresh_info() -> void:
 		distinction.add_child(UIKit.tier_badge(it.defId))
 		distinction.add_child(UIKit.label("名贵型号 · 金饰徽章", 16, UIKit.AMBER))
 		info.add_child(distinction)
+	var appraisal := Model.estimate(it)
+	var price_text := "参考市价 %s" % UIKit.money(appraisal.low) if appraisal.exact else "估价 %s–%s Cr" % [Model.jnum(appraisal.low), Model.jnum(appraisal.high)]
+	info.add_child(UIKit.note_card("检验估价 · %d/3" % appraisal.count, price_text + ("\n成交价仍需议定。" if appraisal.exact else "\n三项检验齐全后确定市价；加工或维修后可免费复测。")))
 	info.add_child(UIKit.label("观察记录 · %d / %d" % [it.evidence.size(), TOOL_IDS.size()], 17, UIKit.AMBER))
 	var pending: Array[String] = []
 	for index in TOOL_IDS.size():
 		var id: String = TOOL_IDS[index]
 		var done: bool = it.evidence.has(id)
-		tool_buttons[id].text = GameData.tool(id).name + ("  ✓" if done else "")
+		var fresh: bool = done and it.get("inspectionFacts", {}).get(id, {}).get("appraisalRevision", "") == Model.appraisal_revision(it)
+		tool_buttons[id].text = GameData.tool(id).name + ("  ✓" if fresh else " · 复测" if done else "")
 		tool_buttons[id].add_theme_stylebox_override("normal",UIKit.key_style("primary" if tool == id else "secondary","normal"))
 		if done:
-			info.add_child(UIKit.record_card(Model.evidence_caption(it, id), Model.displayed_clue(it, id), "物证 / %02d" % [index + 1]))
-		else:
+			info.add_child(UIKit.record_card(Model.evidence_caption(it, id), Model.displayed_clue(it, id), "物证 / %02d%s" % [index + 1, " · 需复测" if not fresh else ""]))
+		if not fresh:
 			pending.append("%02d %s" % [index + 1, GameData.tool(id).name])
 	if not pending.is_empty():
 		info.add_child(UIKit.label("待检：" + " / ".join(pending), 16, UIKit.MUTED, false, true))
-	info.add_child(UIKit.note_card("检验须知", "工具记录物证，不能单独证明原装、走时或防水。请对照说明书判断。\n首次记录本件消耗 1 AP；后续取证免费。"))
+	info.add_child(UIKit.note_card("检验须知", "单项物证不能证明原装、走时或防水。三项当前记录齐全后显示准确参考市价。重描、覆印和配重会留下对应加工痕迹。\n首次记录本件消耗 1 AP；后续取证免费。"))
 
 func _load_item() -> void:
 	_set_tool("")
@@ -344,7 +348,7 @@ func _record() -> void:
 	if (tool == "TOL-001" or tool == "TOL-002") and not _optical_face_visible(): return
 	var it = Game.item(it_uid)
 	if it == null: return
-	if it.evidence.has(tool) and Model.displayed_clue(it,tool) == WatchRules.reading(it,tool): return
+	if it.evidence.has(tool) and Model.displayed_clue(it,tool) == WatchRules.reading(it,tool) and it.get("inspectionFacts", {}).get(tool, {}).get("appraisalRevision", "") == Model.appraisal_revision(it): return
 	Game.dispatch({"type":"CHECK","uid":it_uid,"tool":tool})
 	_refresh_info()
 
