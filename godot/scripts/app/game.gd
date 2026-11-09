@@ -6,6 +6,7 @@ signal changed(prev: Dictionary, next: Dictionary, action: Dictionary)
 signal prefs_changed
 
 const Commerce = preload("res://scripts/model/commerce.gd")
+const CrimeEvents = preload("res://scripts/model/crime_events.gd")
 const SAVE_PATH := "user://orbital-save-v3.json"
 const PREFS_PATH := "user://orbital-prefs.json"
 
@@ -77,7 +78,7 @@ func workbench_item():
 	return it
 
 func today_event():
-	return Model.event_for_day(state.seed, state.day)
+	return CrimeEvents.event_for_day(state)
 
 func event_done() -> bool:
 	for r in state.events:

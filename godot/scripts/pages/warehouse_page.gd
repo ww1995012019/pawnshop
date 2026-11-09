@@ -247,6 +247,8 @@ func _detail() -> void:
 	var e := Model.estimate(it)
 	detail.add_child(UIKit.label("估值 %s · 成本 %s" % [UIKit.money(e.low) if e.exact else "%s–%s Cr" % [Model.jnum(e.low), Model.jnum(e.high)], UIKit.money(it.cost)], 18, UIKit.AMBER))
 	detail.add_child(UIKit.label(("来源已核验" if it.sourceVerified else "来源待核") + " · " + String(it.source), 16, UIKit.GOOD if it.sourceVerified else UIKit.DANGER, false, true))
+	if it.get("stolen", false):
+		detail.add_child(UIKit.label("疑似赃物 · 已封存，只能移交站务", 17, UIKit.DANGER, false, true))
 	if it.has("forgery"):
 		detail.add_child(UIKit.label("伪装已被识破" if it.forgery.get("exposed", false) else "已做伪装 · 顾客可能识破", 17, UIKit.DANGER, false, true))
 	if it.owner == "pawn":
@@ -265,13 +267,20 @@ func _detail() -> void:
 	_act(g, "挂牌 +10", "chip", {"type": "PRICE", "uid": it.uid, "price": it.listPrice + 10}, price_ok)
 	_act(g, "已扫描 · 复查" if s.scanned.has(it.uid) else "安检扫描", "secondary", {"type": "SCAN", "uid": it.uid})
 	var reg_why := ""
-	if it.owner == "pawn":
+	if it.get("stolen", false):
+		reg_why = "疑似赃物不能办理普通来源登记"
+	elif it.owner == "pawn":
 		reg_why = "抵押保管物不需要登记"
 	elif not s.scanned.has(it.uid):
 		reg_why = "先做安检扫描"
 	elif Model.evidence_count(it) < 2:
 		reg_why = "先在鉴定台取得两条物证"
 	_act(g, "来源已登记" if it.sourceVerified else "来源登记 35Cr·1AP", "secondary", {"type": "REGISTER", "uid": it.uid}, not it.sourceVerified and reg_why == "", reg_why)
+	if it.get("stolen", false):
+		var report_uid: String = it.uid
+		_act(g, "移交站务", "primary", func():
+			shell.confirm("移交疑似赃物", "原物将从隔离柜移交站务，登记后风险下降、站务关系提升。", "确认移交", func():
+				Game.dispatch({"type": "REPORT_STOLEN", "uid": report_uid})))
 	_act(g, "解除隔离" if it.location == "isolation" else "放入隔离柜", "secondary", {"type": "ISOLATE", "uid": it.uid}, it.owner != "pawn" and not reserved, "正在柜台交易中" if reserved else "")
 	_act(g, "去鉴定", "secondary", func(): shell.go("inspect", it.uid))
 	_act(g, "去维修", "secondary", func(): shell.go("repair", it.uid))
@@ -297,9 +306,10 @@ func _detail() -> void:
 	var return_text := "原物会移交原主并从库存移除，不能撤回。"
 	if it.owner == "shop":
 		return_text = "这是店铺花 %s 收来的货。归还后不会退款，原物从库存移除，不能撤回。" % UIKit.money(it.cost)
-	_act(g, "主动归还原主", "danger", func():
-		shell.confirm("主动归还原主", "「%s」：%s" % [item_name, return_text], "确认归还", func():
-			Game.dispatch({"type": "RETURN_ITEM", "uid": uid})), it.owner != "pawn" and not reserved, "正在柜台交易中" if reserved else "")
+	if not it.get("stolen", false):
+		_act(g, "主动归还原主", "danger", func():
+			shell.confirm("主动归还原主", "「%s」：%s" % [item_name, return_text], "确认归还", func():
+				Game.dispatch({"type": "RETURN_ITEM", "uid": uid})), it.owner != "pawn" and not reserved, "正在柜台交易中" if reserved else "")
 	detail.add_child(g)
 	if shelf_why != "" and it.owner == "shop":
 		detail.add_child(UIKit.label("上架条件：" + shelf_why, 16, UIKit.DANGER, false, true))

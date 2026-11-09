@@ -6,7 +6,7 @@
 
 ## 能玩到的内容
 
-56 类货物、13 位人物（含店主）、21 天经营、32 张订单、21 个每日事件、23 条维修/组装配方、抵押与赎回、来源核验与安检、租金与救济清仓、第 3 天起的设备升级和三种结局。
+56 类货物、13 位人物（含店主）、21 天经营、32 张订单、每日事件（含失窃和赃物）、23 条维修/组装配方、抵押与赎回、来源核验与安检、租金与救济清仓、第 3 天起的设备升级和三种结局。
 
 | 页面 | 交互 |
 |---|---|
@@ -17,11 +17,13 @@
 | 订单 | 可接 / 进行中 / 已结束三栏，交付前逐条显示规则校验结果。 |
 | 日结 | 当日流水、维护费与租金、升级二选一、换天卷帘、21 天结局。 |
 
-另外还有：每日站内消息（三选一）、人物档案、经营手册、设置（声音、减少动态、全屏、新开一家店）、标题画面、自动存档。
+另外还有：每日站内消息（按事件选择处理方式）、人物档案、经营手册、设置（声音、减少动态、全屏、新开一家店）、标题画面、自动存档。
 
 流动商人绫舟在第 1 天的前四位客人之后首次到店，之后不定时出现。到店期间每种基础维修材料各有 5 份，可购买或以半价出售自己的多余材料；还有概率带来一件稀有物品，并以真实估值回收来源已核验的自有旧物。材料买卖不耗 AP，稀有货购买和旧物回收各耗 1 AP。商人离开后不能采购，库存随存档保留，不会因重新打开游戏刷新。
 
 仓储中的「伪装造假」消耗导电纤维×1、合规封签×1和 1 AP。它只改变交易时呈现给顾客的品相、功能与真伪，保留实物真实状态；顾客可能识破，导致交易受阻、风险上升和对应阵营关系下降。受托、占用、封存或来源未核验的货物不能伪装。
+
+第 3 天起，部分非固定日期的站内消息会出现后仓失窃或疑似赃物事件。守住后仓消耗 1 AP；若放任小偷，可能损失一件未封存的店铺自有货。疑似赃物可以拒收、直接通知站务，或暂存隔离柜；暂存会增加风险，随后可在仓储中移交站务。赃物不能通过普通来源登记转为可出售货物。事件只可处理一次，结果随存档保留。
 
 ## 结构
 
@@ -30,7 +32,7 @@ godot/
   project.godot  main.tscn  export_presets.cfg
   data/game_data.json          由 tools/export_data.mjs 从 TS 源数据导出
   data/extra_residents.json    Godot 版新增人物，独立于旧数据导出
-  scripts/model/               model.gd（基础规则）、commerce.gd（商人和伪装）、game_data.gd
+  scripts/model/               model.gd（基础规则）、commerce.gd（商人和伪装）、crime_events.gd（失窃和赃物）、game_data.gd
   scripts/app/                 game.gd（全局状态与存档）、shell.gd（主店面/设备抽屉/弹窗）、ui_kit.gd、capture.gd
   scripts/pages/               counter / inspect / repair / warehouse / orders / report
   scripts/world/item_sprite.gd 实物；scripts/customer.gd 人物网格变形
@@ -46,7 +48,7 @@ godot/
 ```bash
 npm run build:godot        # 导入资源、导出数据包、生成 play-godot/
 npm run preview:godot      # http://127.0.0.1:4174/，支持 gzip、ETag 与缓存
-npm run test:godot         # 7 组原生回归和打包/缓存测试
+npm run test:godot         # 原生回归和打包/缓存测试
 python3 -m pip install -r scripts/requirements-web-test.txt
 python3 -m playwright install chromium
 npm run test:godot:web     # 先启动预览；桌面、真实音频输出与手机触控
