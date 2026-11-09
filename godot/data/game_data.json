@@ -36,7 +36,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "low"
     },
     {
       "id": "WCH-002",
@@ -74,7 +75,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "low"
     },
     {
       "id": "WCH-003",
@@ -112,7 +114,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "low"
     },
     {
       "id": "WCH-004",
@@ -150,7 +153,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "low"
     },
     {
       "id": "WCH-005",
@@ -188,7 +192,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "low"
     },
     {
       "id": "WCH-006",
@@ -226,7 +231,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "low"
     },
     {
       "id": "WCH-007",
@@ -264,7 +270,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "mid"
     },
     {
       "id": "WCH-008",
@@ -302,7 +309,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "mid"
     },
     {
       "id": "WCH-009",
@@ -340,7 +348,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "mid"
     },
     {
       "id": "WCH-010",
@@ -378,7 +387,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "mid"
     },
     {
       "id": "WCH-011",
@@ -416,7 +426,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "mid"
     },
     {
       "id": "WCH-012",
@@ -454,7 +465,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "mid"
     },
     {
       "id": "WCH-013",
@@ -492,7 +504,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "luxury"
     },
     {
       "id": "WCH-014",
@@ -530,7 +543,8 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "luxury"
     },
     {
       "id": "WCH-015",
@@ -568,7 +582,728 @@
         "TOL-001": "记录实物细节后对照说明书。",
         "TOL-002": "记录实物细节后对照说明书。",
         "TOL-005": "记录实物细节后对照说明书。"
-      }
+      },
+      "tier": "luxury"
+    },
+    {
+      "id": "WCH-016",
+      "name": "晨栖 C01 晨班",
+      "category": "watch",
+      "value": 80,
+      "sprite": 15,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "皮带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-016",
+      "watch": {
+        "brand": "晨栖",
+        "model": "C01",
+        "logo": "半圆朝阳与水平底线，右侧有1道短刻线",
+        "serial_prefix": "CQ",
+        "nominal_mass": 42,
+        "tolerance": 1.0,
+        "strap": "皮带",
+        "link_mass": 0,
+        "serial_format": "CQ C01 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装皮带与完整表扣；无可拆金属表节。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "半圆朝阳与水平底线，右侧有0道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "low"
+    },
+    {
+      "id": "WCH-017",
+      "name": "晨栖 C02 书页",
+      "category": "watch",
+      "value": 98,
+      "sprite": 16,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "皮带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-017",
+      "watch": {
+        "brand": "晨栖",
+        "model": "C02",
+        "logo": "半圆朝阳与水平底线，右侧有2道短刻线",
+        "serial_prefix": "CQ",
+        "nominal_mass": 46,
+        "tolerance": 1.0,
+        "strap": "皮带",
+        "link_mass": 0,
+        "serial_format": "CQ C02 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装皮带与完整表扣；无可拆金属表节。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "半圆朝阳与水平底线，右侧有1道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "low"
+    },
+    {
+      "id": "WCH-018",
+      "name": "晨栖 C03 雨巷",
+      "category": "watch",
+      "value": 120,
+      "sprite": 17,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "织物带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-018",
+      "watch": {
+        "brand": "晨栖",
+        "model": "C03",
+        "logo": "半圆朝阳与水平底线，右侧有3道短刻线",
+        "serial_prefix": "CQ",
+        "nominal_mass": 55,
+        "tolerance": 1.0,
+        "strap": "织物带",
+        "link_mass": 0,
+        "serial_format": "CQ C03 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装织物带与完整表扣；无可拆金属表节。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "半圆朝阳与水平底线，右侧有2道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "low"
+    },
+    {
+      "id": "WCH-019",
+      "name": "晨栖 C04 麦田",
+      "category": "watch",
+      "value": 145,
+      "sprite": 18,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "织物带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-019",
+      "watch": {
+        "brand": "晨栖",
+        "model": "C04",
+        "logo": "半圆朝阳与水平底线，右侧有4道短刻线",
+        "serial_prefix": "CQ",
+        "nominal_mass": 62,
+        "tolerance": 1.0,
+        "strap": "织物带",
+        "link_mass": 0,
+        "serial_format": "CQ C04 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装织物带与完整表扣；无可拆金属表节。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "半圆朝阳与水平底线，右侧有3道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "low"
+    },
+    {
+      "id": "WCH-020",
+      "name": "晨栖 C05 周末",
+      "category": "watch",
+      "value": 170,
+      "sprite": 19,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "金属带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-020",
+      "watch": {
+        "brand": "晨栖",
+        "model": "C05",
+        "logo": "半圆朝阳与水平底线，右侧有5道短刻线",
+        "serial_prefix": "CQ",
+        "nominal_mass": 98,
+        "tolerance": 1.5,
+        "strap": "金属带",
+        "link_mass": 3.4,
+        "serial_format": "CQ C05 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "半圆朝阳与水平底线，右侧有4道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "low"
+    },
+    {
+      "id": "WCH-021",
+      "name": "晨栖 C06 初晴",
+      "category": "watch",
+      "value": 195,
+      "sprite": 20,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "金属带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-021",
+      "watch": {
+        "brand": "晨栖",
+        "model": "C06",
+        "logo": "半圆朝阳与水平底线，右侧有6道短刻线",
+        "serial_prefix": "CQ",
+        "nominal_mass": 108,
+        "tolerance": 1.5,
+        "strap": "金属带",
+        "link_mass": 3.4,
+        "serial_format": "CQ C06 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "半圆朝阳与水平底线，右侧有5道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "low"
+    },
+    {
+      "id": "WCH-022",
+      "name": "澄川 D01 溪石",
+      "category": "watch",
+      "value": 225,
+      "sprite": 21,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "皮带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-022",
+      "watch": {
+        "brand": "澄川",
+        "model": "D01",
+        "logo": "两道折线河纹，右侧有1道短刻线",
+        "serial_prefix": "CC",
+        "nominal_mass": 59,
+        "tolerance": 1.0,
+        "strap": "皮带",
+        "link_mass": 0,
+        "serial_format": "CC D01 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装皮带与完整表扣；无可拆金属表节。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "两道折线河纹，右侧有0道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "mid"
+    },
+    {
+      "id": "WCH-023",
+      "name": "澄川 D02 渡口",
+      "category": "watch",
+      "value": 245,
+      "sprite": 22,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "金属带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-023",
+      "watch": {
+        "brand": "澄川",
+        "model": "D02",
+        "logo": "两道折线河纹，右侧有2道短刻线",
+        "serial_prefix": "CC",
+        "nominal_mass": 104,
+        "tolerance": 1.5,
+        "strap": "金属带",
+        "link_mass": 3.4,
+        "serial_format": "CC D02 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "两道折线河纹，右侧有1道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "mid"
+    },
+    {
+      "id": "WCH-024",
+      "name": "澄川 D03 流光",
+      "category": "watch",
+      "value": 265,
+      "sprite": 23,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "皮带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-024",
+      "watch": {
+        "brand": "澄川",
+        "model": "D03",
+        "logo": "两道折线河纹，右侧有3道短刻线",
+        "serial_prefix": "CC",
+        "nominal_mass": 68,
+        "tolerance": 1.0,
+        "strap": "皮带",
+        "link_mass": 0,
+        "serial_format": "CC D03 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装皮带与完整表扣；无可拆金属表节。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "两道折线河纹，右侧有2道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "mid"
+    },
+    {
+      "id": "WCH-025",
+      "name": "澄川 D04 长桥",
+      "category": "watch",
+      "value": 285,
+      "sprite": 24,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "金属带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-025",
+      "watch": {
+        "brand": "澄川",
+        "model": "D04",
+        "logo": "两道折线河纹，右侧有4道短刻线",
+        "serial_prefix": "CC",
+        "nominal_mass": 118,
+        "tolerance": 1.5,
+        "strap": "金属带",
+        "link_mass": 3.4,
+        "serial_format": "CC D04 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "两道折线河纹，右侧有3道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "mid"
+    },
+    {
+      "id": "WCH-026",
+      "name": "澄川 D05 夜航",
+      "category": "watch",
+      "value": 305,
+      "sprite": 25,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "橡胶带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-026",
+      "watch": {
+        "brand": "澄川",
+        "model": "D05",
+        "logo": "两道折线河纹，右侧有5道短刻线",
+        "serial_prefix": "CC",
+        "nominal_mass": 74,
+        "tolerance": 1.0,
+        "strap": "橡胶带",
+        "link_mass": 0,
+        "serial_format": "CC D05 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装橡胶带与完整表扣；无可拆金属表节。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "两道折线河纹，右侧有4道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "mid"
+    },
+    {
+      "id": "WCH-027",
+      "name": "澄川 D06 回澜",
+      "category": "watch",
+      "value": 325,
+      "sprite": 26,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "金属带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-027",
+      "watch": {
+        "brand": "澄川",
+        "model": "D06",
+        "logo": "两道折线河纹，右侧有6道短刻线",
+        "serial_prefix": "CC",
+        "nominal_mass": 126,
+        "tolerance": 1.5,
+        "strap": "金属带",
+        "link_mass": 3.4,
+        "serial_format": "CC D06 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "两道折线河纹，右侧有5道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "mid"
+    },
+    {
+      "id": "WCH-028",
+      "name": "星冕 X01 银穹",
+      "category": "watch",
+      "value": 420,
+      "sprite": 27,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "皮带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-028",
+      "watch": {
+        "brand": "星冕",
+        "model": "X01",
+        "logo": "三峰冠冕与水平底线，右侧有1道短刻线",
+        "serial_prefix": "XM",
+        "nominal_mass": 64,
+        "tolerance": 1.0,
+        "strap": "皮带",
+        "link_mass": 0,
+        "serial_format": "XM X01 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装皮带与完整表扣；无可拆金属表节。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "三峰冠冕与水平底线，右侧有0道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "luxury"
+    },
+    {
+      "id": "WCH-029",
+      "name": "星冕 X02 星轨",
+      "category": "watch",
+      "value": 480,
+      "sprite": 28,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "金属带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-029",
+      "watch": {
+        "brand": "星冕",
+        "model": "X02",
+        "logo": "三峰冠冕与水平底线，右侧有2道短刻线",
+        "serial_prefix": "XM",
+        "nominal_mass": 122,
+        "tolerance": 1.5,
+        "strap": "金属带",
+        "link_mass": 3.4,
+        "serial_format": "XM X02 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "三峰冠冕与水平底线，右侧有1道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "luxury"
+    },
+    {
+      "id": "WCH-030",
+      "name": "星冕 X03 月庭",
+      "category": "watch",
+      "value": 540,
+      "sprite": 29,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "皮带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-030",
+      "watch": {
+        "brand": "星冕",
+        "model": "X03",
+        "logo": "三峰冠冕与水平底线，右侧有3道短刻线",
+        "serial_prefix": "XM",
+        "nominal_mass": 71,
+        "tolerance": 1.0,
+        "strap": "皮带",
+        "link_mass": 0,
+        "serial_format": "XM X03 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装皮带与完整表扣；无可拆金属表节。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "三峰冠冕与水平底线，右侧有2道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "luxury"
+    },
+    {
+      "id": "WCH-031",
+      "name": "星冕 X04 王冠",
+      "category": "watch",
+      "value": 610,
+      "sprite": 30,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "皮带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-031",
+      "watch": {
+        "brand": "星冕",
+        "model": "X04",
+        "logo": "三峰冠冕与水平底线，右侧有4道短刻线",
+        "serial_prefix": "XM",
+        "nominal_mass": 88,
+        "tolerance": 1.0,
+        "strap": "皮带",
+        "link_mass": 0,
+        "serial_format": "XM X04 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装皮带与完整表扣；无可拆金属表节。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "三峰冠冕与水平底线，右侧有3道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "luxury"
+    },
+    {
+      "id": "WCH-032",
+      "name": "星冕 X05 天极",
+      "category": "watch",
+      "value": 690,
+      "sprite": 31,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "金属带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-032",
+      "watch": {
+        "brand": "星冕",
+        "model": "X05",
+        "logo": "三峰冠冕与水平底线，右侧有5道短刻线",
+        "serial_prefix": "XM",
+        "nominal_mass": 136,
+        "tolerance": 1.5,
+        "strap": "金属带",
+        "link_mass": 3.4,
+        "serial_format": "XM X05 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "三峰冠冕与水平底线，右侧有4道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "luxury"
+    },
+    {
+      "id": "WCH-033",
+      "name": "星冕 X06 典藏",
+      "category": "watch",
+      "value": 780,
+      "sprite": 32,
+      "size": [
+        1,
+        2
+      ],
+      "tools": [
+        "TOL-001",
+        "TOL-002",
+        "TOL-005"
+      ],
+      "description": "金属带手表。放大镜对照标识，紫外查看后盖编号，称重对照完整配置。",
+      "defect": "表带连接或部件需要维护；三种检验不验证走时或防水。",
+      "recipeId": "REC-033",
+      "watch": {
+        "brand": "星冕",
+        "model": "X06",
+        "logo": "三峰冠冕与水平底线，右侧有6道短刻线",
+        "serial_prefix": "XM",
+        "nominal_mass": 148,
+        "tolerance": 1.5,
+        "strap": "金属带",
+        "link_mass": 3.4,
+        "serial_format": "XM X06 0000 000000",
+        "serial_location": "后盖中央，紫外光下显现",
+        "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "logo_altered": "三峰冠冕与水平底线，右侧有5道短刻线"
+      },
+      "clues": {
+        "TOL-001": "记录实物细节后对照说明书。",
+        "TOL-002": "记录实物细节后对照说明书。",
+        "TOL-005": "记录实物细节后对照说明书。"
+      },
+      "tier": "luxury"
     }
   ],
   "tools": [
@@ -1228,6 +1963,294 @@
       "id": "REC-015",
       "name": "旧航 J03 基础维护",
       "itemId": "WCH-015",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-016",
+      "name": "晨栖 C01 基础维护",
+      "itemId": "WCH-016",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-017",
+      "name": "晨栖 C02 基础维护",
+      "itemId": "WCH-017",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-018",
+      "name": "晨栖 C03 基础维护",
+      "itemId": "WCH-018",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-019",
+      "name": "晨栖 C04 基础维护",
+      "itemId": "WCH-019",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-020",
+      "name": "晨栖 C05 基础维护",
+      "itemId": "WCH-020",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-021",
+      "name": "晨栖 C06 基础维护",
+      "itemId": "WCH-021",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-022",
+      "name": "澄川 D01 基础维护",
+      "itemId": "WCH-022",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-023",
+      "name": "澄川 D02 基础维护",
+      "itemId": "WCH-023",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-024",
+      "name": "澄川 D03 基础维护",
+      "itemId": "WCH-024",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-025",
+      "name": "澄川 D04 基础维护",
+      "itemId": "WCH-025",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-026",
+      "name": "澄川 D05 基础维护",
+      "itemId": "WCH-026",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-027",
+      "name": "澄川 D06 基础维护",
+      "itemId": "WCH-027",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-028",
+      "name": "星冕 X01 基础维护",
+      "itemId": "WCH-028",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-029",
+      "name": "星冕 X02 基础维护",
+      "itemId": "WCH-029",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-030",
+      "name": "星冕 X03 基础维护",
+      "itemId": "WCH-030",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-031",
+      "name": "星冕 X04 基础维护",
+      "itemId": "WCH-031",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-032",
+      "name": "星冕 X05 基础维护",
+      "itemId": "WCH-032",
+      "materials": {
+        "MAT-001": 1,
+        "MAT-004": 1
+      },
+      "steps": [
+        "清洁表壳与检查连接",
+        "补回缺失部件并固定表带",
+        "称重核对配置并登记维护"
+      ],
+      "ap": 1,
+      "kind": "repair"
+    },
+    {
+      "id": "REC-033",
+      "name": "星冕 X06 基础维护",
+      "itemId": "WCH-033",
       "materials": {
         "MAT-001": 1,
         "MAT-004": 1
@@ -2440,7 +3463,7 @@
       "back": "watches-back",
       "index": 0,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-002": {
@@ -2448,7 +3471,7 @@
       "back": "watches-back",
       "index": 1,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-003": {
@@ -2456,7 +3479,7 @@
       "back": "watches-back",
       "index": 2,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-004": {
@@ -2464,7 +3487,7 @@
       "back": "watches-back",
       "index": 3,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-005": {
@@ -2472,7 +3495,7 @@
       "back": "watches-back",
       "index": 4,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-006": {
@@ -2480,7 +3503,7 @@
       "back": "watches-back",
       "index": 5,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-007": {
@@ -2488,7 +3511,7 @@
       "back": "watches-back",
       "index": 6,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-008": {
@@ -2496,7 +3519,7 @@
       "back": "watches-back",
       "index": 7,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-009": {
@@ -2504,7 +3527,7 @@
       "back": "watches-back",
       "index": 8,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-010": {
@@ -2512,7 +3535,7 @@
       "back": "watches-back",
       "index": 9,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-011": {
@@ -2520,7 +3543,7 @@
       "back": "watches-back",
       "index": 10,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-012": {
@@ -2528,7 +3551,7 @@
       "back": "watches-back",
       "index": 11,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-013": {
@@ -2536,7 +3559,7 @@
       "back": "watches-back",
       "index": 12,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-014": {
@@ -2544,7 +3567,7 @@
       "back": "watches-back",
       "index": 13,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
       "inset": 0.035
     },
     "WCH-015": {
@@ -2552,7 +3575,151 @@
       "back": "watches-back",
       "index": 14,
       "columns": 5,
-      "rows": 3,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-016": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 15,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-017": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 16,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-018": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 17,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-019": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 18,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-020": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 19,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-021": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 20,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-022": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 21,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-023": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 22,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-024": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 23,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-025": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 24,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-026": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 25,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-027": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 26,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-028": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 27,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-029": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 28,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-030": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 29,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-031": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 30,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-032": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 31,
+      "columns": 5,
+      "rows": 7,
+      "inset": 0.035
+    },
+    "WCH-033": {
+      "front": "watches-front",
+      "back": "watches-back",
+      "index": 32,
+      "columns": 5,
+      "rows": 7,
       "inset": 0.035
     }
   }

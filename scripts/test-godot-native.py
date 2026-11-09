@@ -10,7 +10,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ("ui_regression", "quote_console_test", "orders_ui_test", "workspace_test",
          "workbench_layout_test", "instrument_layout_test", "audio_test", "web_touch_test", "item_art_test",
-         "merchant_test", "residents_test", "forgery_test", "commerce_ui_test", "commerce_phone_test", "crime_event_test", "watch_rules_test", "watch_art_test", "watch_inspection_test", "watch_manual_test", "watch_save_test", "bell_test", "watch_optical_face_test", "watch_evidence_refresh_test")
+         "merchant_test", "residents_test", "forgery_test", "commerce_ui_test", "commerce_phone_test", "crime_event_test", "watch_rules_test", "watch_catalogue_test", "watch_art_test", "watch_inspection_test", "watch_manual_test", "watch_save_test", "bell_test", "watch_optical_face_test", "watch_evidence_refresh_test")
 
 
 def main():

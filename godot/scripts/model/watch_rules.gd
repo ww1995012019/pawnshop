@@ -23,7 +23,7 @@ static func initialize(it: Dictionary, seed := "") -> void:
 		mass_offset = 0.0
 	elif not it.authentic:
 		mass_offset += -4.2 if draw % 2 == 0 else 3.6
-	var loss := 3.1 if ref.strap == "金属带" else 6.2
+	var loss := float(ref.get("link_mass", 3.1)) if ref.strap == "金属带" else 6.2
 	it.watch = {"mass": snappedf(float(ref.nominal_mass) + mass_offset - (loss if missing else 0.0), 0.1),
 		"serial": "%s %s %04d %06d" % [ref.serial_prefix, ref.model, 2400 + (draw % 26), draw % 1000000],
 		"logo_variant": 1 if not it.authentic and draw % 4 != 0 else 0,
@@ -46,6 +46,8 @@ static func logo_variant(it: Dictionary) -> int:
 
 static func logo_note(it: Dictionary) -> String:
 	var ref := model_reference(it.defId)
+	if logo_variant(it) and ref.has("logo_altered"):
+		return "可见标识：%s。" % ref.logo_altered
 	var altered := ["星标下方短横缺失", "星标下方短横缺失", "星标下方短横缺失", "双浪线中段相连", "双浪线中段相连", "双浪线中段相连", "方框右上角封闭", "月标小点偏到右侧", "方框右上角封闭", "中峰偏低", "中峰偏低且基线偏短", "盾框内中峰偏低", "船锚右侧横臂偏短", "年份末字缺一笔", "船锚右侧横臂偏短"]
 	var index := clampi(String(it.defId).get_slice("-", 1).to_int() - 1, 0, 14)
 	return "可见标识：%s。" % altered[index] if logo_variant(it) else "可见标识：%s。边缘有使用磨痕。" % ref.logo

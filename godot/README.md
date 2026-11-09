@@ -6,7 +6,7 @@
 
 ## 能玩到的内容
 
-15 款虚构品牌手表、13 位人物、21 天经营，以及维修、仓储、订单、抵押与赎回、失窃与赃物事件。分类仅在数据中保留，界面按型号显示。
+33 款虚构品牌手表、13 位人物、21 天经营，以及维修、仓储、订单、抵押与赎回、失窃与赃物事件。按型号行情分为低等12款、中等12款、名贵9款；说明书分档排列，仓储与鉴定详情显示型号档次，档次不代表实物真伪或品相。
 
 ### 三种检验与说明书
 
@@ -81,12 +81,12 @@ npm run test:godot:web     # 先启动预览；桌面、真实音频输出与手
 
 ```bash
 python3 godot/tools/prepare_assets.py      # 生成场景并重建物品图集
-python3 scripts/generate-watch-art.py     # 重建15款手表与logo像素数据（Pillow）
+python3 scripts/generate-watch-art.py     # 重建33款手表与logo像素数据（Pillow）
 python3 godot/tools/prepare_shop_art.py    # 店铺、铃铛、九位居民、设备与界面图标
 python3 godot/tools/prepare_extra_residents.py # 另外四位居民
 XDG_DATA_HOME=/tmp/pawnshop-input-test godot --path godot -- --inputtest # 真实输入：接客、拖动、报价、店内设备、锁价、交割
 XDG_DATA_HOME=/tmp/pawnshop-capture godot --path godot -- --capture=/tmp/shots # 页面截图
-XDG_DATA_HOME=/tmp/pawnshop-art-test godot --headless --path godot --script res://tests/item_art_test.gd # 15款手表、30张正反面
+XDG_DATA_HOME=/tmp/pawnshop-art-test godot --headless --path godot --script res://tests/item_art_test.gd # 33款手表、66张正反面
 XDG_DATA_HOME=/tmp/pawnshop-cursor-test godot --path godot --script res://tests/cursor_test.gd # 图形环境：指针状态
 XDG_DATA_HOME=/tmp/pawnshop-ui-test godot --headless --path godot --script res://tests/ui_regression.gd
 XDG_DATA_HOME=/tmp/pawnshop-orders-test godot --headless --path godot --script res://tests/orders_ui_test.gd
@@ -113,3 +113,9 @@ python3 godot/tools/test_bell_art.py
 ```
 
 这两项素材测试需要 Pillow。原生回归入口 `scripts/test-godot-native.py` 包含 23 组检查，覆盖交易、工作面布局、三工具、15款素材、NPC知识、手册、独立存档和铃铛两个接客入口。
+
+## 手表档次与扩充
+
+原有15款型号和价格不变，新增晨栖C01–C06（低等，80–195 Cr）、澄川D01–D06（中等，225–325 Cr）、星冕X01–X06（名贵，420–780 Cr）。每款都有独立正反面、标准/变体标识、编号规则、称重资料和维护配方，第四天起进入现有轮换市场。
+
+`itemDefs[].tier` 使用 `low`、`mid`、`luxury`，物品大类仍为 `watch`；原有存档不需要迁移。图集为5列7行，运行时读取 `itemArt` 元数据，不按型号编号截断到旧15款。

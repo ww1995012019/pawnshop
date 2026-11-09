@@ -8,12 +8,16 @@ static func open(shell: Node, def_id := "") -> void:
 	picker.name = "manual_model"
 	picker.custom_minimum_size = Vector2(0, 50)
 	picker.add_theme_font_size_override("font_size", 20)
-	var selected := 0
-	for i in GameData.item_list.size():
-		var definition: Dictionary = GameData.item_list[i]
-		picker.add_item(definition.name)
-		picker.set_item_metadata(i, definition.id)
-		if definition.id == def_id: selected = i
+	var selected := 1
+	for tier in ["low", "mid", "luxury"]:
+		var label: String = {"low": "低等", "mid": "中等", "luxury": "名贵"}[tier]
+		picker.add_separator(label)
+		for definition in GameData.item_list:
+			if definition.get("tier", "") != tier: continue
+			picker.add_item("%s · %s" % [label, definition.name])
+			var index := picker.item_count - 1
+			picker.set_item_metadata(index, definition.id)
+			if definition.id == def_id: selected = index
 	picker.select(selected)
 	body.add_child(picker)
 	var scroll := ScrollContainer.new()
@@ -32,6 +36,7 @@ static func open(shell: Node, def_id := "") -> void:
 		var d: Dictionary = GameData.def(id)
 		var reference: Dictionary = WatchRules.model_reference(id)
 		content.add_child(UIKit.module_header(d.name, "型号参考档案 · 对照实物逐项查阅", String(reference.get("model", "型号参考"))))
+		content.add_child(UIKit.label("型号档次：%s · 档次仅指型号行情，不代表本件真伪或品相。" % GameData.tier_label(id), 17, UIKit.RUST, false, true))
 		var art_card := UIKit.plate(UIKit.paper_style(12))
 		var art_body := UIKit.vbox(8)
 		art_card.add_child(art_body)
