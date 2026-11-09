@@ -80,6 +80,16 @@ func run():
 		active.close_top_modal()
 		await process_frame
 		check(page.item.position.is_equal_approx(pose) and page.optical_fixed, "manual preserves item pose and fixed lens")
+	for price_tool in ["TOL-001", "TOL-002", "TOL-005"]:
+		game.dispatch({"type":"CHECK", "uid":page.it_uid, "tool":price_tool})
+	var unchanged_reading := Model.displayed_clue(game.item(page.it_uid), "TOL-005")
+	game.item(page.it_uid).condition = 0.77
+	page._set_tool("TOL-005")
+	page._scale_tare()
+	page._scale_place()
+	await create_timer(1.3).timeout
+	page._scale_record()
+	check(Model.estimate(game.item(page.it_uid)).count == 1 and Model.displayed_clue(game.item(page.it_uid),"TOL-005") == unchanged_reading, "same mass can refresh stale appraisal after a condition change")
 	print("WATCH INSPECT failures=", failures)
 	for player in root.find_children("*", "AudioStreamPlayer", true, false):
 		player.stop()

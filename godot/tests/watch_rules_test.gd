@@ -15,14 +15,13 @@ func run() -> void:
 	check(s.schema == 4 and s.inventory.all(func(it): return String(it.defId).begins_with("WCH-")), "v4 watch-only opening stock")
 	var it: Dictionary = s.inventory[0]
 	it.evidence = ["TOL-001", "TOL-002", "TOL-005"]
-	check(not Model.estimate(it).exact and Model.estimate(it).low < Model.estimate(it).high, "inspection never gives exact price")
+	check(not Model.estimate(it).exact and Model.estimate(it).low < Model.estimate(it).high, "legacy evidence without current snapshots still requires rechecks")
 	var t := {"id":"test-trade", "kind":"buy", "npcId":"CHR-002", "evidenceUsed":[]}
 	var terms := Model.trade_terms(s, t, it).duplicate(true)
-	var recovery := Commerce.recovery_price(s, it)
 	it.authentic = not it.authentic
 	it.working = not it.working
 	it.evidence = []
-	check(Model.trade_terms(s, t, it) == terms and Commerce.recovery_price(s, it) == recovery, "NPC quotes ignore private truth and CHECK records")
+	check(Model.trade_terms(s, t, it) == terms, "established NPC judgement is cached rather than rereading hidden changes")
 	var initial_mass := WatchRules.mass(it)
 	var initial_serial := WatchRules.serial(it)
 	var restored: Dictionary = JSON.parse_string(JSON.stringify(it))

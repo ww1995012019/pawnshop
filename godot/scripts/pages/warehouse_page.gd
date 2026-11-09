@@ -251,13 +251,12 @@ func _detail() -> void:
 	hv.add_child(UIKit.label("品相 %s · 物证 %d · 挂牌 %s" % [UIKit.pct(it.condition), Model.evidence_count(it), UIKit.money(it.listPrice)], 17, UIKit.INK, false, true))
 	head.add_child(hv)
 	record.add_child(head)
-	var e := Model.estimate(it)
-	record.add_child(UIKit.label("估值 %s · 成本 %s" % [UIKit.money(e.low) if e.exact else "%s–%s Cr" % [Model.jnum(e.low), Model.jnum(e.high)], UIKit.money(it.cost)], 18, UIKit.RUST, false, true))
+	record.add_child(UIKit.label(Model.appraisal_text(it) + " · 成本 " + UIKit.money(it.cost), 18, UIKit.RUST, false, true))
 	record.add_child(UIKit.label(("来源已核验" if it.sourceVerified else "来源待核") + " · " + String(it.source), 16, Color("2f6b3a") if it.sourceVerified else UIKit.RUST, false, true))
 	if it.get("stolen", false):
 		record.add_child(UIKit.label("疑似赃物 · 已封存，只能移交站务", 17, UIKit.RUST, false, true))
 	if it.has("forgery"):
-		record.add_child(UIKit.label("伪装已被识破" if it.forgery.get("exposed", false) else "已做伪装 · 顾客可能识破", 17, UIKit.RUST, false, true))
+		record.add_child(UIKit.label(WatchForgery.summary(it), 17, UIKit.RUST, false, true))
 	if it.owner == "pawn":
 		record.add_child(UIKit.label("本金 %s · 第 %s 天抵押，赎期至第 %s 天（含宽限）" % [UIKit.money(it.pawnPrincipal), Model.jnum(it.pawnDay), Model.jnum(it.pawnDay + 4)], 16, UIKit.INK, false, true))
 	detail.add_child(docket)
@@ -265,6 +264,7 @@ func _detail() -> void:
 	var g := UIKit.grid(2, 10)
 	if t != null and t.kind == "sell" and it.owner == "shop":
 		var why = Model.sale_eligibility(it, t.npcId)
+		if Commerce.forgery_rejected(s,it): why = "这位顾客本轮已识破本件加工，请更换货物。"
 		_act(g, "推荐给顾客", "primary", func():
 			if Game.dispatch({"type": "SELECT_TRADE", "uid": it.uid}):
 				shell.go("counter"), why == null, why if why != null else "")
@@ -298,10 +298,8 @@ func _detail() -> void:
 	if it.owner == "shop":
 		var forge_why := Commerce.forgery_problem(s, it)
 		var forge_uid: String = it.uid
-		var forge_name: String = def.name
-		_act(g, "伪装造假", "danger", func():
-			shell.confirm("伪装造假", "对「%s」做伪装，消耗导电纤维×1、合规封签×1和1 AP。真实状态不会改变；顾客可能识破，导致关系下降、风险上升。" % forge_name, "确认伪装", func():
-				Game.dispatch({"type": "FORGE", "uid": forge_uid})), forge_why == "", forge_why)
+		_act(g, "伪装造假", "danger", func(): _open_forgery(forge_uid), forge_why == "", forge_why)
+
 	if it.owner == "pawn":
 		_act(g, "客人赎回", "good", {"type": "REDEEM", "uid": it.uid})
 	var relief := false
@@ -528,3 +526,37 @@ class StorageGrid extends Control:
 			var tl: Vector2 = ((ghost.position - Vector2(4, 4)) / cs).round()
 			var ok := Model.can_place(Game.state, drag_uid, int(tl.x), int(tl.y), drag_rot)
 			draw_rect(Rect2(tl * cs + Vector2(2, 2), Vector2(d[0], d[1]) * cs - Vector2(4, 4)), Color(0.4, 0.9, 0.6, 0.25) if ok else Color(0.95, 0.4, 0.3, 0.25))
+
+func _open_forgery(uid: String) -> void:
+	var it = Game.item(uid)
+	if it == null: return
+	var m: Array = shell.modal("造假工作台 · " + GameData.def(it.defId).name, 800)
+	var body: VBoxContainer = m[0]
+	body.add_child(UIKit.label("把异常物证伪装成参考读数，可能抬高外行买家的心理价；专家更容易识破。不会修好故障、补齐缺件或提高真实市价，每项只能做一次。", 19, UIKit.TEXT, false, true))
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size.y = clampf(get_viewport().get_visible_rect().size.y - 320, 220, 370)
+	body.add_child(scroll)
+	var list := UIKit.vbox(12)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	for method in WatchForgery.METHODS:
+		var explanation := "当前：%s\n处理后：符合参考标识；放大镜下仍可见重描漆层。" % WatchRules.logo_note(it)
+		if method == "serial": explanation = "当前：%s\n处理后：%s；紫外线下可见覆印晕边。" % [WatchRules.serial(it), WatchForgery.target_serial(it)]
+		if method == "weight": explanation = "当前 %.1f g → 参考 %.1f g；只填加配重，缺失部件仍然缺失，称重可发现重心偏移。" % [WatchRules.mass(it), float(GameData.def(it.defId).watch.nominal_mass)]
+		if method == "logo" and WatchRules.logo_variant(it) == 0: explanation += "\n当前标识已符合参考，重描不会改善读数。"
+		if method == "serial" and WatchRules.serial(it) == WatchForgery.target_serial(it): explanation += "\n当前编号已符合规则，覆印不会改善读数。"
+		var card := UIKit.record_card(WatchForgery.LABELS[method], explanation + "\n消耗：" + WatchForgery.cost_text(method), "加工 / " + method.to_upper())
+		list.add_child(card)
+		# Let finger drags on the receipt reach its enclosing scroller.
+		card.mouse_filter = Control.MOUSE_FILTER_PASS
+		var button := UIKit.button(WatchForgery.LABELS[method], "danger", Vector2(0, 48), 19)
+		var reason := Commerce.forgery_problem(Game.state, it, method)
+		button.disabled = reason != ""
+		button.tooltip_text = reason
+		card.get_child(0).add_child(button)
+		if reason != "": card.get_child(0).add_child(UIKit.label(reason, 16, UIKit.RUST, false, true))
+		button.pressed.connect(func():
+			m[1].call()
+			shell.confirm("确认" + WatchForgery.LABELS[method], explanation + "\n消耗：" + WatchForgery.cost_text(method) + "。真实价值不变；被识破将关注+10、对应阵营关系-8。", "确认" + WatchForgery.LABELS[method], func():
+				Game.dispatch({"type":"FORGE", "uid":uid, "method":method})))

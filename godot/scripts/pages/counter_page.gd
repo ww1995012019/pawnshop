@@ -803,7 +803,7 @@ func _refresh() -> void:
 		scr.price.text = Model.jnum(t.price) + " Cr" if it != null else "待选货"
 		if it != null:
 			var e := Model.estimate(it)
-			scr.line1.text = "%s · 估值 %s" % [GameData.def(it.defId).name.left(8), Model.jnum(e.low) if e.exact else "%s–%s" % [Model.jnum(e.low), Model.jnum(e.high)]]
+			scr.line1.text = "%s · %s %s" % [GameData.def(it.defId).name.left(8), "市价" if e.exact else "估价", Model.jnum(e.low) if e.exact else "%s–%s" % [Model.jnum(e.low), Model.jnum(e.high)]]
 			scr.line2.text = "物证 %d · 议价 %d/3%s" % [Model.evidence_count(it), int(t.rounds), " · 已锁价" if t.locked else ""]
 		else:
 			scr.line1.text = "需求：" + Model.customer_need(t.npcId).left(20)
@@ -951,7 +951,8 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 		var sell_item := UIKit.button("出售旧物 %s · 收 %s" % [GameData.def(item.defId).name, UIKit.money(price)], "secondary", Vector2(0, 50), 17)
 		sell_item.set_meta("merchant_focus", "item:" + uid)
 		focus_targets["item:" + uid] = sell_item
-		sell_item.disabled = s.ap < 1
+		sell_item.disabled = s.ap < 1 or Commerce.forgery_rejected(s, item)
+		if Commerce.forgery_rejected(s, item): sell_item.tooltip_text = "本轮商人已识破这只表的加工，不接受反复出售。"
 		sell_item.pressed.connect(func(): _merchant_transaction({"type": "SELL_MERCHANT_ITEM", "uid": uid}, contents))
 		contents.add_child(sell_item)
 	if eligible == 0:

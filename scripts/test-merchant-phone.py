@@ -93,7 +93,9 @@ def main():
             assert 60 < forge_target['y'] < 330, 'Forgery control must be reachable by scrolling'
             tap(page, '伪装造假')
             page.wait_for_timeout(400)
-            tap(page, '确认伪装')
+            tap(page, '重描标识')
+            page.wait_for_timeout(400)
+            tap(page, '确认重描标识')
             wait(page, "s.forge_done === true", 10000)
             assert state(page, 'ap') == before_ap - 1
             page.screenshot(path=str(args.screenshots / 'forgery.png'))

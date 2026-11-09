@@ -152,12 +152,37 @@ static func find_item(s: Dictionary, uid):
 	return null
 
 static func item_value(it: Dictionary) -> float:
-	return maxf(1, jround(D(it.defId).value * clampn(it.condition, 0.35, 1) * (1.0 if it.working else 0.5) * (1.0 if it.authentic else 0.6)))
+	var missing := not String(it.get("watch", {}).get("missing_part", "")).is_empty()
+	return maxf(1, jround(D(it.defId).value * clampn(it.condition, 0.35, 1) * (1.0 if it.working else 0.5) * (1.0 if it.authentic else 0.6) * (0.85 if missing else 1.0)))
+
+static func appraisal_revision(it: Dictionary) -> String:
+	WatchRules.initialize(it)
+	return JSON.stringify([String(it.defId), snappedf(float(it.condition), 0.000001), bool(it.working), bool(it.authentic), int(it.watch.logo_variant), String(it.watch.serial), snappedf(float(it.watch.mass), 0.1), String(it.watch.get("missing_part", "")), snappedf(float(it.watch.get("part_mass", 0)), 0.1), WatchForgery.active(it,"logo"), WatchForgery.active(it,"serial"), WatchForgery.active(it,"weight"), WatchRules.serial(it), snappedf(WatchRules.mass(it), 0.1)])
 
 static func estimate(it: Dictionary) -> Dictionary:
 	var base: float = D(it.defId).value
-	# Reference market range is not a price oracle for this particular watch.
-	return {"low": jround(base * 0.3), "high": jround(base), "exact": false}
+	var low := maxf(1, floor(base * 0.05))
+	var high := maxf(low + 1, ceil(base))
+	var count := 0
+	var value := 0.0
+	var revision := appraisal_revision(it)
+	for tool in ["TOL-001", "TOL-002", "TOL-005"]:
+		var facts: Dictionary = it.get("inspectionFacts", {}).get(tool, {})
+		if it.evidence.has(tool) and facts.get("appraisalRevision", "") == revision and facts.has("appraisalValue"):
+			count += 1
+			value = facts.appraisalValue
+	if count == 3: return {"low":value, "high":value, "exact":true, "count":3}
+	# Binary buckets are nested, include the recorded value, and never use
+	# hidden price information before the first current inspection.
+	for step in count:
+		var midpoint: float = floor((low + high) * 0.5)
+		if value <= midpoint: high = midpoint
+		else: low = midpoint + 1
+	return {"low":low, "high":high, "exact":false, "count":count}
+
+static func appraisal_text(it: Dictionary) -> String:
+	var appraisal := estimate(it)
+	return ("参考市价 %s Cr · 已完成3/3项" % jnum(appraisal.low)) if appraisal.exact else "估价 %s–%s Cr · 当前检验%d/3项" % [jnum(appraisal.low), jnum(appraisal.high), appraisal.count]
 
 static func available_orders(s: Dictionary) -> Array:
 	var out := []
@@ -222,11 +247,7 @@ static func sale_appearance(it: Dictionary) -> Dictionary:
 	# Visible wear and the stated history are public. Internal truth is not.
 	var claims: Dictionary = it.get("claims", {})
 	var view := {"condition": float(it.condition), "working": claims.get("working", true), "authentic": claims.get("authentic", true)}
-	var forged = it.get("forgery", null)
-	if forged is Dictionary and not forged.get("exposed", false):
-		view.condition = forged.get("condition", view.condition)
-		view.working = forged.get("working", view.working)
-		view.authentic = forged.get("authentic", view.authentic)
+
 	return view
 
 static func watch_expertise(npc_id: String) -> Dictionary:
@@ -237,16 +258,30 @@ static func npc_knowledge(t: Dictionary, it: Dictionary) -> Dictionary:
 	if not all_known.has(it.uid):
 		var visible := sale_appearance(it)
 		var expertise := watch_expertise(t.npcId)
-		var market_error := (float(fnv("%s/%s/%s/market-belief" % [t.npcId, t.id, it.uid]) % 21) - 10.0) / 100.0
-		market_error *= 1.0 - float(expertise.market) / 120.0
+		var specialist := maxf(float(expertise.market), maxf(float(expertise.logo), maxf(float(expertise.serial), float(expertise.structure)))) >= 80.0
+		var key := "%s/%s/%s" % [t.npcId, t.id, it.uid]
+		var recognized := fnv(key + "/appraisal-recognition-v1") % 100 < (85 if specialist else 20)
+		var grade := ("accurate" if specialist else "rough") if recognized else "impression"
+		var error := float(int(fnv(key + "/appraisal-error") % 25) - 12) / 100.0
+		if not specialist and recognized and absf(error) < 0.03: error = 0.06
+		var market_error := (float(fnv(key + "/market-belief") % 61) - 30.0) / 100.0
+		market_error *= 1.0 - float(expertise.market) / 150.0
+		var ref := WatchRules.model_reference(it.defId)
+		var visible_risks := {"TOL-001":0.18 * float(expertise.logo) / 100.0 if WatchRules.logo_variant(it) else 0.0,
+			"TOL-002":0.22 * float(expertise.serial) / 100.0 if not WatchRules.serial(it).begins_with("%s %s " % [ref.serial_prefix, ref.model]) else 0.0,
+			"TOL-005":0.16 * float(expertise.structure) / 100.0 if absf(WatchRules.mass(it) - float(ref.nominal_mass)) > float(ref.tolerance) else 0.0}
+		var visible_risk := 0.0
+		for assessment in visible_risks.values(): visible_risk += float(assessment)
 		var prior: Dictionary = it.get("npcKnowledge", {}).get(t.npcId, {})
-		all_known[it.uid] = {"condition": prior.get("condition", visible.condition), "working": prior.get("working", visible.working), "authentic": prior.get("authentic", visible.authentic),
-			"marketFactor": 1.0 + market_error, "evidence": {}, "risk": 0.0}
+		all_known[it.uid] = {"condition":prior.get("condition", visible.condition), "working":prior.get("working", visible.working), "authentic":prior.get("authentic", visible.authentic),
+			"marketFactor":1.0 + market_error, "evidence":{}, "risk":clampf(visible_risk,0,0.45), "visibleRisks":visible_risks, "appraisalGrade":grade,
+			"appraisalError":0.0 if specialist else error}
+		if recognized: all_known[it.uid].appraisedValue = maxf(1, jround(item_value(it) * (1.0 if specialist else 1.0 + error)))
 		t.npcKnowledge = all_known
 	return all_known[it.uid]
 
 static func record_inspection(it: Dictionary, tool: String) -> Dictionary:
-	var facts := {"condition": sale_appearance(it).condition}
+	var facts := {"condition":sale_appearance(it).condition, "appraisalRevision":appraisal_revision(it), "appraisalValue":item_value(it), "tampered":WatchForgery.trace(it, tool) != ""}
 	match tool:
 		"TOL-001": facts.logo_variant = WatchRules.logo_variant(it)
 		"TOL-002": facts.serial = WatchRules.serial(it)
@@ -264,7 +299,10 @@ static func disclose_evidence(t: Dictionary, it: Dictionary, tool: String) -> vo
 	# Compatibility with initial direct-rule fixtures/early watch saves: establish
 	# one first snapshot. Subsequent disclosures always use recorded facts.
 	var snapshots: Dictionary = it.get("inspectionFacts", {})
-	var facts: Dictionary = snapshots[tool] if snapshots.has(tool) else record_inspection(it, tool)
+	var facts: Dictionary = snapshots[tool] if snapshots.has(tool) else record_inspection(it.duplicate(true), tool)
+	if not snapshots.has(tool):
+		facts.erase("appraisalRevision")
+		facts.erase("appraisalValue")
 	if known.evidence.has(tool) and known.evidence[tool].get("facts", {}) == facts:
 		return
 	var ref := WatchRules.model_reference(it.defId)
@@ -279,10 +317,17 @@ static func disclose_evidence(t: Dictionary, it: Dictionary, tool: String) -> vo
 		"TOL-005":
 			var difference := absf(float(facts.mass) - float(ref.nominal_mass))
 			strength = (0.13 if difference > float(ref.tolerance) else -0.02) * float(expertise.structure) / 100.0
-	known.evidence[tool] = {"reading": it.evidenceReadings[tool], "facts": facts.duplicate(true), "adjustment": strength}
+	if facts.get("tampered", false):
+		var skill: String = "logo" if tool == "TOL-001" else "serial" if tool == "TOL-002" else "structure"
+		strength = maxf(strength, 0.28 * float(expertise[skill]) / 100.0)
+	if known.get("appraisalGrade", "impression") != "impression" and facts.get("appraisalRevision", "") == appraisal_revision(it):
+		# An able buyer reassesses this watch from current shared observations;
+		# an old/private player price snapshot is never their source of truth.
+		known.appraisedValue = maxf(1, jround(item_value(it) * (1.0 + float(known.get("appraisalError", 0)))))
+	known.evidence[tool] = {"reading": it.get("evidenceReadings", {}).get(tool, WatchRules.reading(it, tool)), "facts": facts.duplicate(true), "adjustment": strength}
 	var total := 0.0
-	for received in known.evidence.values():
-		total += float(received.adjustment)
+	for channel in ["TOL-001", "TOL-002", "TOL-005"]:
+		total += float(known.evidence[channel].adjustment) if known.evidence.has(channel) else float(known.get("visibleRisks", {}).get(channel, 0))
 	known.risk = clampf(total, -0.08, 0.45)
 	# Wear is refreshed only with newly recorded and explicitly presented facts.
 	known.condition = facts.condition
@@ -316,6 +361,8 @@ static func trade_terms(s: Dictionary, t: Dictionary, it: Dictionary) -> Diction
 	var def := D(it.defId)
 	var priced := npc_knowledge(t, it)
 	var value := maxf(1, jround(def.value * clampf(float(priced.condition), 0.35, 1.0) * (1.0 if priced.working else 0.65) * (1.0 if priced.authentic else 0.75) * float(priced.marketFactor) * (1.0 - float(priced.risk))))
+	if priced.has("appraisedValue"):
+		value = float(priced.appraisedValue)
 	var proof: int = priced.evidence.size()
 	var faction: String = GameData.npc(t.npcId).faction
 	var relation := maxf(0, minf(100, s.relations[faction]))
@@ -736,7 +783,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			it.evidence.append(a.tool)
 			record_inspection(it, a.tool)
 			s.tutorial = maxf(s.tutorial, 1)
-			var extra := "已有两条独立物证，可交叉判断估值。" if evidence_count(it) >= 2 else "仍需另一工具的独立物证，不能只凭外观定真伪。"
+			var extra := appraisal_text(it) + ("；这是参考市价，成交价仍需议定。" if estimate(it).exact else "；三项当前检验完成后显示准确参考市价。")
 			return notice(s, "%s %s" % [item_clue(it, a.tool), extra])
 		"OFFER":
 			var t = s.trade

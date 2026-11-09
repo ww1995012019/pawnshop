@@ -291,6 +291,8 @@ static func module_header(title: String, subtitle := "", serial := "") -> VBoxCo
 static func record_card(title: String, text: String, serial := "", tone := "paper") -> PanelContainer:
 	var paper := tone == "paper"
 	var card := plate(paper_style(14) if paper else screen_style(14))
+	# Passive receipt faces must let touch drags reach their enclosing scroller.
+	card.mouse_filter = Control.MOUSE_FILTER_PASS
 	var v := vbox(7)
 	var row := hbox(8)
 	var heading := label(title,17,RUST if paper else CYAN,false,true)

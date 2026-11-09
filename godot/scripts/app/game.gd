@@ -64,6 +64,9 @@ func save() -> void:
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(state))
+		# Close before marking the in-memory file ready; browser persistence
+		# still completes asynchronously through Godot's WebFS sync.
+		f.close()
 		has_save = true
 
 func save_prefs() -> void:

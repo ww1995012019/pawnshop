@@ -56,26 +56,68 @@ static func _merchant_present(s: Dictionary) -> bool:
 static func _message(previous: Dictionary, text: String) -> Dictionary:
 	return Model.notice(previous.duplicate(true), text)
 
-static func forgery_problem(s: Dictionary, item) -> String:
-	if item == null:
-		return "请先选择一件自有物品。"
-	if s.phase != "open":
-		return "打烊后不能处理货物。"
+static func forgery_problem(s: Dictionary, item, method := "") -> String:
+	if item == null: return "请先选择一件自有手表。"
+	if s.phase != "open": return "打烊后不能加工。"
 	if item.owner != "shop" or item.has("orderId") or item.sealed or item.location == "isolation" or not item.sourceVerified or Model.trade_reserved(s, item):
-		return "只能处理来源已核验、未被占用的店铺自有货物。"
-	if item.has("forgery"):
-		return "这件物品已经做过伪装。"
-	if item.condition >= 0.9 and item.working and item.authentic:
-		return "这件货物的品相和状态已经足够好。"
-	if not Model.has_ap(s, 1):
-		return "伪装需要 1 AP。"
-	if s.materials.get("MAT-001", 0) < 1 or s.materials.get("MAT-004", 0) < 1:
-		return "伪装需要导电纤维×1和合规封签×1。"
+		return "只能加工来源已核验、未被占用的店铺自有手表。"
+	if method == "":
+		for candidate in WatchForgery.METHODS:
+			if forgery_problem(s, item, candidate) == "": return ""
+		return "暂无可用加工方式，请核对材料、行动点和加工记录。"
+	if not WatchForgery.METHODS.has(method): return "请选择标识、编号或配重加工。"
+	if WatchForgery.treatments(item).has(method): return "本件已做过这项加工，不能重复。"
+	if method == "weight" and float(item.watch.mass) >= float(GameData.def(item.defId).watch.nominal_mass):
+		return "当前质量不低于参考值，添加配重不能减轻手表。"
+	if not Model.has_ap(s, 1): return "加工需要1 AP。"
+	for id in WatchForgery.COSTS[method]:
+		if s.materials.get(id, 0) < WatchForgery.COSTS[method][id]: return "材料不足：" + WatchForgery.cost_text(method)
 	return ""
 
 static func recovery_price(s: Dictionary, item: Dictionary) -> float:
 	var belief_trade := {"id": "merchant-resale-" + item.uid, "npcId": MERCHANT_ID, "kind": "sell", "evidenceUsed": []}
 	return maxf(1, floor(Model.trade_terms(s, belief_trade, item).value * 0.6))
+
+static func _check_forgery(s: Dictionary, item: Dictionary) -> Array[String]:
+	var expertise := Model.watch_expertise(s.trade.npcId)
+	var all_checks: Dictionary = s.trade.get("forgeryChecks", {})
+	var checks = all_checks.get(item.uid, {})
+	if not checks is Dictionary: checks = {}
+	var caught: Array[String] = []
+	for method in WatchForgery.METHODS:
+		if not WatchForgery.active(item, method) or checks.has(method): continue
+		var chance := clampi(int(expertise[WatchForgery.SKILLS[method]]), 0, 100)
+		var draw := Model.fnv("%s/%s/%s/forgery/%s" % [s.seed, s.trade.id, item.uid, method]) % 100
+		checks[method] = "caught" if draw < chance else "passed"
+		if draw < chance:
+			item.forgery.methods[method].exposed = true
+			caught.append(WatchForgery.LABELS[method])
+	all_checks[item.uid] = checks
+	s.trade.forgeryChecks = all_checks
+	if item.has("forgery"): item.forgery.exposed = WatchForgery.exposed(item)
+	return caught
+
+static func forgery_rejected(s: Dictionary, item: Dictionary) -> bool:
+	if s.trade == null: return false
+	var checks = s.trade.get("forgeryChecks", {}).get(item.uid, {})
+	if not checks is Dictionary: return false
+	for method in WatchForgery.METHODS:
+		if WatchForgery.active(item, method) and checks.get(method, "") == "caught": return true
+	return false
+
+static func _reject_forgery(s: Dictionary, item: Dictionary, caught: Array[String]) -> Dictionary:
+	s.trade.erase("selectedUid")
+	s.trade.price = 0
+	s.trade.evidenceUsed = []
+	var checks: Dictionary = s.trade.forgeryChecks[item.uid]
+	var first_penalty: bool = not checks.get("_penalized", false)
+	if first_penalty:
+		checks._penalized = true
+		s.risk = Model.clampn(s.risk + 10)
+		var faction: String = GameData.npc(s.trade.npcId).faction
+		s.relations[faction] = Model.clampn(s.relations[faction] - 8)
+	s.trade.line = "伪装我识破了：%s有加工痕迹，不会按这个状态收货。" % "、".join(caught)
+	return Model.notice(s, "伪装被识破：%s；本次未售出。%s" % ["、".join(caught), "关注+10，阵营关系-8。" if first_penalty else "同一轮已记录处罚，不重复扣关系或增加关注。"])
 
 static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 	GameData.ensure()
@@ -97,42 +139,27 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 		return Model.notice(s, "疑似赃物已移交站务，风险下降。")
 	if kind == "FORGE":
 		var item = Model.find_inventory(previous, action.get("uid", ""))
-		var problem := forgery_problem(previous, item)
-		if problem != "":
-			return _message(previous, problem)
+		var method: String = action.get("method", "logo")
+		var problem := forgery_problem(previous, item, method)
+		if problem != "": return _message(previous, problem)
 		var s: Dictionary = previous.duplicate(true)
 		item = Model.find_inventory(s, item.uid)
-		s.materials["MAT-001"] -= 1
-		s.materials["MAT-004"] -= 1
+		for id in WatchForgery.COSTS[method]:
+			s.materials[id] -= WatchForgery.COSTS[method][id]
+			item.cost += GameData.material(id).price * WatchForgery.COSTS[method][id]
 		Model.spend(s, 1)
-		item.cost += GameData.material("MAT-001").price + GameData.material("MAT-004").price
-		item.forgery = {"condition": maxf(float(item.condition), 0.9), "working": true,
-			"authentic": true, "exposed": false}
-		return Model.notice(s, "伪装完成：真实状态未改变。顾客仍可能识破。")
+		WatchForgery.apply(item, method)
+		return Model.notice(s, "%s完成：对应实物读数已改变，留下加工痕迹；故障、缺件与真实价值未改变，请复测更新记录。" % WatchForgery.LABELS[method])
 	if kind == "SELECT_TRADE" and previous.phase == "open" and previous.trade != null and previous.trade.kind == "sell" and not previous.trade.locked:
 		var item = Model.find_inventory(previous, action.get("uid", ""))
-		var forged = item.get("forgery", null) if item != null else null
-		var checked: Dictionary = previous.trade.get("forgeryChecks", {})
-		if forged is Dictionary and not forged.get("exposed", false) and not checked.has(item.uid) and Model.sale_eligibility(item, previous.trade.npcId) == null:
+		if item != null and not WatchForgery.treatments(item).is_empty() and Model.sale_eligibility(item, previous.trade.npcId) == null:
 			var s: Dictionary = previous.duplicate(true)
 			item = Model.find_inventory(s, item.uid)
-			var npc := GameData.npc(s.trade.npcId)
-			var chance := clampi(int(Model.watch_expertise(npc.id).logo), 0, 100)
-			var draw := Model.fnv("%s/%s/%s/forgery" % [s.seed, s.trade.id, item.uid]) % 100
-			var checks: Dictionary = s.trade.get("forgeryChecks", {})
-			checks[item.uid] = "caught" if draw < chance else "passed"
-			s.trade.forgeryChecks = checks
-			if draw < chance:
-				item.forgery.exposed = true
-				s.trade.erase("selectedUid")
-				s.trade.price = 0
-				s.trade.evidenceUsed = []
-				s.risk = Model.clampn(s.risk + 10)
-				var faction: String = npc.faction
-				s.relations[faction] = Model.clampn(s.relations[faction] - 8)
-				s.trade.line = "伪装被识破了，我不会按这个状态收货。"
-				return Model.notice(s, "顾客识破伪装：货物未售出，风险上升，关系下降。")
+			var caught := _check_forgery(s, item)
+			if not caught.is_empty(): return _reject_forgery(s, item, caught)
+			if forgery_rejected(s, item): return Model.notice(s, "这位顾客本轮已识破本件加工，不接受反复推荐；可更换货物或接待其他客人。")
 			return Model.reduce(s, action)
+
 	if kind == "ARRIVE" and merchant_due(previous):
 		var s: Dictionary = previous.duplicate(true)
 		s.trade = _new_merchant(s)
@@ -214,10 +241,15 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 			return _message(previous, "只能回收来源已核验、未被占用的店铺自有物品。")
 		if not Model.has_ap(previous, 1):
 			return _message(previous, "行动点不足，旧物未售出。")
-		var price := recovery_price(previous, item)
+		var checked_state: Dictionary = previous.duplicate(true)
+		var checked_item: Dictionary = Model.find_inventory(checked_state, item.uid)
+		var caught := _check_forgery(checked_state, checked_item)
+		if not caught.is_empty(): return _reject_forgery(checked_state, checked_item, caught)
+		if forgery_rejected(checked_state, checked_item): return Model.notice(checked_state, "本轮商人已识破这只表的加工，不接受反复出售。")
+		var price := recovery_price(checked_state, checked_item)
 		if previous.cash + price > 1000000000:
 			return _message(previous, "现金已达到保存上限，本次没有出售旧物。")
-		var s: Dictionary = previous.duplicate(true)
+		var s: Dictionary = checked_state
 		Model.ledger(s, Model.next_id(s, "merchant-sale"), "sale", "商人回收 %s" % GameData.def(item.defId).name, price, item.cost)
 		Model._remove_item(s, item.uid)
 		Model.spend(s, 1)
