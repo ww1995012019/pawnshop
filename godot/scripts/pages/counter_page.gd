@@ -35,7 +35,7 @@ var stock_grid: GridContainer
 var stock_count: Label
 var display_goods: Control
 var orders_readout: Label
-var status_panel: PanelContainer
+var status_panel: Control
 var status_values := {}
 var tag: PanelContainer
 var tag_name: Label
@@ -375,32 +375,44 @@ func _build_equipment() -> void:
 	_build_status()
 
 func _build_status() -> void:
-	status_panel = UIKit.plate(UIKit.inset_style(12))
-	status_panel.position = Vector2(1410, 60)
-	status_panel.custom_minimum_size.x = 420
+	var wall_unit := preload("res://scripts/ui/wall_status.gd")
+	status_panel = wall_unit.new()
+	status_panel.position = Vector2(1440, 48)
+	status_panel.size = Vector2(432, 112)
 	add_child(status_panel)
-	var body := UIKit.vbox(8)
-	status_panel.add_child(body)
-	var stats := UIKit.grid(3, 16)
-	body.add_child(stats)
-	for caption in ["现金", "行动点", "站务关注"]:
-		stats.add_child(UIKit.label(caption, 15, UIKit.MUTED))
+	var stats := UIKit.hbox(16)
+	stats.position = Vector2(32, 20)
+	stats.size = Vector2(368, 28)
+	stats.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	status_panel.add_child(stats)
 	for key in ["cash", "ap", "risk"]:
-		var value := UIKit.label("", 26, UIKit.AMBER if key == "cash" else UIKit.TEXT, true)
+		var value := UIKit.label("", 20 if key == "cash" else 18, Color("c4d1a5"), true)
 		value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if key == "cash" else (HORIZONTAL_ALIGNMENT_CENTER if key == "ap" else HORIZONTAL_ALIGNMENT_RIGHT)
+		value.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		stats.add_child(value)
 		status_values[key] = value
-	body.add_child(UIKit.rule())
-	var utilities := UIKit.hbox(8)
-	body.add_child(utilities)
+	var utilities := UIKit.hbox(16)
+	utilities.position = Vector2(28, 64)
+	utilities.size = Vector2(376, 32)
+	utilities.alignment = BoxContainer.ALIGNMENT_CENTER
+	status_panel.add_child(utilities)
 	for spec in [["help", "手册", "help"], ["sound", "声音", "soundOn"], ["settings", "设置", "settings"]]:
 		var key: String = spec[0]
-		var b := UIKit.button(spec[1], "chip", Vector2(0, 40), 16, spec[2])
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var b := Button.new()
+		b.text = spec[1]
+		b.icon = UIKit.icon(spec[2])
+		b.expand_icon = true
+		b.custom_minimum_size = Vector2(112, 32)
+		b.add_theme_font_size_override("font_size", 16)
+		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		b.tooltip_text = spec[1]
-		b.add_theme_constant_override("icon_max_width", 22)
+		b.add_theme_constant_override("icon_max_width", 18)
 		b.pressed.connect(func(): _utility_clicked(key, b))
 		utilities.add_child(b)
+		wall_unit.fit_key(b)
 		fixture_buttons[key] = b
 
 func _refresh_utility_icons() -> void:
@@ -465,8 +477,8 @@ func _refresh_board() -> void:
 	board_rent.text = "今晚缴租 · 点此看事件" if rent_day == day else "租期余 %d 天 · 事件" % (rent_day - day)
 	fixture_buttons.events.tooltip_text = "今日事件 · " + ("已处理" if Game.event_done() else "待查看")
 	status_values.cash.text = "%s Cr" % Model.jnum(s.cash)
-	status_values.ap.text = "%d AP" % int(s.ap)
-	status_values.risk.text = "%d / 100" % int(s.risk)
+	status_values.ap.text = "AP %d" % int(s.ap)
+	status_values.risk.text = "关注 %d" % int(s.risk)
 	var active := 0
 	for order in s.orders:
 		if order.status == "active":
