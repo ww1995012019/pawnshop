@@ -45,9 +45,7 @@ func enter() -> void:
 	var left := list_panel
 	var lv := UIKit.vbox(10)
 	left.add_child(lv)
-	lv.add_child(UIKit.label("待修物件", 24, UIKit.AMBER))
-	lv.add_child(UIKit.label("选货后按工序完成维修", 16, UIKit.MUTED))
-	lv.add_child(UIKit.rule())
+	lv.add_child(UIKit.module_header("待修物件", "选货后按工序完成维修", "REPAIR / 01"))
 	var sc := ScrollContainer.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -192,13 +190,12 @@ func _refresh_info() -> void:
 		_materials()
 		return
 	var r := _recipe(it)
-	info.add_child(UIKit.label(GameData.def(it.defId).name, 28, Color("f3e6cc")))
-	info.add_child(UIKit.label(repair_status(it), 17, UIKit.TEXT, false, true))
+	info.add_child(UIKit.record_card(GameData.def(it.defId).name, repair_status(it), "工单 / " + String(it.uid)))
 	if not r.is_empty():
 		var card := UIKit.plate(UIKit.inset_style(12))
 		var cv := UIKit.vbox(6)
 		card.add_child(cv)
-		cv.add_child(UIKit.label(r.name, 21, UIKit.AMBER, false, true))
+		cv.add_child(UIKit.module_header(r.name, "完成三道工序后确认交工", "STAGE / 03"))
 		var p: int = int(Game.state.repairProgress.get(it.uid, 0))
 		for i in 3:
 			cv.add_child(UIKit.label(("✓ " if i < p else ("▶ " if i == p else "· ")) + String(r.steps[i]), 17, UIKit.GOOD if i < p else (UIKit.TEXT if i == p else UIKit.MUTED), false, true))
@@ -259,7 +256,7 @@ func _repair_block(it: Dictionary, r: Dictionary) -> String:
 
 func _materials() -> void:
 	info.add_child(UIKit.rule())
-	info.add_child(UIKit.label("维修材料库存", 18, UIKit.MUTED))
+	info.add_child(UIKit.module_header("维修材料库存", "按最终交工数量扣料", "PARTS"))
 	var visiting: bool = Game.state.trade != null and Game.state.trade.kind == "merchant"
 	info.add_child(UIKit.label("商人正在柜台，可回柜台购买。" if visiting else "商人上门时才能购买维修材料。", 16, UIKit.AMBER, false, true))
 	var g := UIKit.grid(2, 8)
@@ -295,6 +292,7 @@ func _stage_ui_body() -> void:
 		stage = -1
 		return
 	item.mat.set_shader_parameter("grime", 1.0 if stage == 0 else 0.0)
+	bench_body.add_child(UIKit.module_header("维修工序台", "", "BENCH / 03"))
 	var titles := ["清洁排故", "换件连接", "复核装配"]
 	var steps := UIKit.hbox(8)
 	for i in 3:

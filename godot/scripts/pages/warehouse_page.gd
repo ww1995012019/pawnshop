@@ -46,12 +46,8 @@ func enter() -> void:
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	holder_contents = v
 	holder_scroll.add_child(v)
-	var head := UIKit.hbox()
-	head.add_child(UIKit.label("货物保管区", 24, UIKit.AMBER))
-	head.add_child(UIKit.spacer(false))
 	var grid_hint := "10 × 6  /  拖动换位 · 点选后旋转" if shell._landscape_phone() else "10 × 6  /  拖动换位 · 右键旋转"
-	head.add_child(UIKit.label(grid_hint, 16, UIKit.MUTED))
-	v.add_child(head)
+	v.add_child(UIKit.module_header("货物保管区", grid_hint, "STORAGE / 60"))
 	grid = StorageGrid.new()
 	grid.page = self
 	# Empty cells must let touch drags reach the enclosing scroll container;
@@ -68,7 +64,12 @@ func enter() -> void:
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	detail = UIKit.vbox(12)
 	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sc.add_child(detail)
+	# Keep printed edges and right-aligned serials clear of the scroll rail.
+	var scroll_gutter := MarginContainer.new()
+	scroll_gutter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_gutter.add_theme_constant_override("margin_right", 14)
+	scroll_gutter.add_child(detail)
+	sc.add_child(scroll_gutter)
 	detail_panel.add_child(sc)
 	# Only stock in our storage; the visitor's lot at the counter is not ours.
 	selected = Game.focus_uid if Model.find_inventory(Game.state, Game.focus_uid) != null else ""
@@ -224,10 +225,14 @@ func _detail() -> void:
 		detail.add_child(banner)
 	var it = Game.item(selected)
 	if it == null:
-		detail.add_child(UIKit.label("选中一件货物查看详情。", 20, UIKit.MUTED))
+		detail.add_child(UIKit.note_card("库存登记簿", "选中一件货物查看详情。"))
 		_stock_summary()
 		return
 	var def := GameData.def(it.defId)
+	var docket := UIKit.plate(UIKit.paper_style(16))
+	var record := UIKit.vbox(8)
+	docket.add_child(record)
+	record.add_child(UIKit.label("保管凭单 / " + String(it.uid), 15, UIKit.RUST, true))
 	var head := UIKit.hbox(14)
 	var pic := TextureRect.new()
 	pic.texture = UIKit.item_icon(it.defId)
@@ -238,22 +243,24 @@ func _detail() -> void:
 	head.add_child(pic)
 	var hv := UIKit.vbox(4)
 	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hv.add_child(UIKit.label(def.name, 26, Color("f3e6cc"), false, true))
+	hv.add_child(UIKit.label(def.name, 26, UIKit.INK, false, true))
 	var owner: String = {"shop": "店铺自有", "customer": "顾客委修", "pawn": "抵押保管"}[it.owner]
 	var loc: String = {"warehouse": "后仓", "display": "陈列架", "isolation": "隔离柜", "pawn": "抵押柜"}[it.location]
-	hv.add_child(UIKit.label("%s · %s · 占格 %d×%d" % [owner, loc, def.size[0], def.size[1]], 16, UIKit.MUTED))
-	hv.add_child(UIKit.label("品相 %s · 物证 %d · 挂牌 %s" % [UIKit.pct(it.condition), Model.evidence_count(it), UIKit.money(it.listPrice)], 17, UIKit.TEXT))
+	hv.add_child(UIKit.label("%s · %s · 占格 %d×%d" % [owner, loc, def.size[0], def.size[1]], 16, Color("6b5a40"), false, true))
+	hv.add_child(UIKit.label("品相 %s · 物证 %d · 挂牌 %s" % [UIKit.pct(it.condition), Model.evidence_count(it), UIKit.money(it.listPrice)], 17, UIKit.INK, false, true))
 	head.add_child(hv)
-	detail.add_child(head)
+	record.add_child(head)
 	var e := Model.estimate(it)
-	detail.add_child(UIKit.label("估值 %s · 成本 %s" % [UIKit.money(e.low) if e.exact else "%s–%s Cr" % [Model.jnum(e.low), Model.jnum(e.high)], UIKit.money(it.cost)], 18, UIKit.AMBER))
-	detail.add_child(UIKit.label(("来源已核验" if it.sourceVerified else "来源待核") + " · " + String(it.source), 16, UIKit.GOOD if it.sourceVerified else UIKit.DANGER, false, true))
+	record.add_child(UIKit.label("估值 %s · 成本 %s" % [UIKit.money(e.low) if e.exact else "%s–%s Cr" % [Model.jnum(e.low), Model.jnum(e.high)], UIKit.money(it.cost)], 18, UIKit.RUST, false, true))
+	record.add_child(UIKit.label(("来源已核验" if it.sourceVerified else "来源待核") + " · " + String(it.source), 16, Color("2f6b3a") if it.sourceVerified else UIKit.RUST, false, true))
 	if it.get("stolen", false):
-		detail.add_child(UIKit.label("疑似赃物 · 已封存，只能移交站务", 17, UIKit.DANGER, false, true))
+		record.add_child(UIKit.label("疑似赃物 · 已封存，只能移交站务", 17, UIKit.RUST, false, true))
 	if it.has("forgery"):
-		detail.add_child(UIKit.label("伪装已被识破" if it.forgery.get("exposed", false) else "已做伪装 · 顾客可能识破", 17, UIKit.DANGER, false, true))
+		record.add_child(UIKit.label("伪装已被识破" if it.forgery.get("exposed", false) else "已做伪装 · 顾客可能识破", 17, UIKit.RUST, false, true))
 	if it.owner == "pawn":
-		detail.add_child(UIKit.label("本金 %s · 第 %s 天抵押，赎期至第 %s 天（含宽限）" % [UIKit.money(it.pawnPrincipal), Model.jnum(it.pawnDay), Model.jnum(it.pawnDay + 4)], 16, UIKit.CYAN, false, true))
+		record.add_child(UIKit.label("本金 %s · 第 %s 天抵押，赎期至第 %s 天（含宽限）" % [UIKit.money(it.pawnPrincipal), Model.jnum(it.pawnDay), Model.jnum(it.pawnDay + 4)], 16, UIKit.INK, false, true))
+	detail.add_child(docket)
+	detail.add_child(UIKit.module_header("出入库操作", "按保管权属办理", "CONTROL"))
 	var g := UIKit.grid(2, 10)
 	if t != null and t.kind == "sell" and it.owner == "shop":
 		var why = Model.sale_eligibility(it, t.npcId)
@@ -339,7 +346,7 @@ func _stock_summary() -> void:
 	var mats := []
 	for m in GameData.materials:
 		mats.append("%s ×%s" % [m.name, Model.jnum(Game.state.materials.get(m.id, 0))])
-	detail.add_child(UIKit.label("工具柜：" + "、".join(mats), 16, UIKit.MUTED, false, true))
+	detail.add_child(UIKit.note_card("工具柜存料", "、".join(mats)))
 
 func on_changed(_p: Dictionary, _n: Dictionary, _a: Dictionary) -> void:
 	if Game.item(selected) == null:

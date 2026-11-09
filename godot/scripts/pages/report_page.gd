@@ -28,7 +28,12 @@ func enter() -> void:
 	sheet.add_child(sc)
 	body = UIKit.vbox(12)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sc.add_child(body)
+	# Keep printed edges and right-aligned serials clear of the scroll rail.
+	var scroll_gutter := MarginContainer.new()
+	scroll_gutter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_gutter.add_theme_constant_override("margin_right", 14)
+	scroll_gutter.add_child(body)
+	sc.add_child(scroll_gutter)
 	_refresh()
 	relayout()
 	call_deferred("relayout")
@@ -46,8 +51,8 @@ func relayout() -> void:
 	sheet.position = Vector2(r.position.x + (r.size.x - width) * 0.5, r.position.y)
 	sheet.size = Vector2(width, height)
 
-func _row(g: GridContainer, k: String, v: String, color := UIKit.TEXT) -> void:
-	g.add_child(UIKit.label(k, 20, UIKit.MUTED))
+func _row(g: GridContainer, k: String, v: String, color := UIKit.INK) -> void:
+	g.add_child(UIKit.label(k, 20, Color("6b5a40")))
 	var l := UIKit.label(v, 22, color, true)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -58,10 +63,11 @@ func _refresh() -> void:
 	var s := Game.state
 	var day := int(s.day)
 	if s.phase == "ending":
-		body.add_child(UIKit.label("经营结束 · 第 %d 天" % day, 34, UIKit.AMBER))
-		body.add_child(UIKit.label(String(s.get("outcome", "旧货局的灯熄了。")), 28, Color("f3e6cc"), false, true))
+		body.add_child(UIKit.module_header("经营结束 · 第 %d 天" % day, "最终经营账目", "CLOSE / 21"))
+		body.add_child(UIKit.record_card("结业记录", String(s.get("outcome", "旧货局的灯熄了。")), "FINAL"))
+		var final_sheet := UIKit.plate(UIKit.paper_style(18))
 		var g := UIKit.grid(2, 10)
-		_row(g, "期末现金", UIKit.money(s.cash), UIKit.AMBER)
+		_row(g, "期末现金", UIKit.money(s.cash), UIKit.RUST)
 		_row(g, "完成交易", "%d 笔" % s.completedTrades.size())
 		var done := 0
 		for o in s.orders:
@@ -69,27 +75,27 @@ func _refresh() -> void:
 				done += 1
 		_row(g, "履约订单", "%d 张" % done)
 		_row(g, "站务关注", "%d / 100" % int(s.risk))
-		body.add_child(g)
+		final_sheet.add_child(g)
+		body.add_child(final_sheet)
 		var again := UIKit.button("新开一家店", "primary", Vector2(0, 64), 24)
 		again.pressed.connect(func():
 			Game.new_game()
 			shell.shutter(1))
 		body.add_child(again)
 		return
-	var heading := UIKit.hbox(12)
-	heading.add_child(UIKit.label("第 %d 天 · %s" % [day, "日结报告" if s.phase == "report" else "营业中"], 28, UIKit.AMBER))
-	heading.add_child(UIKit.spacer(false))
-	heading.add_child(UIKit.label("营业账目", 17, UIKit.MUTED))
-	body.add_child(heading)
-	body.add_child(UIKit.rule())
+	body.add_child(UIKit.module_header("第 %d 天 · %s" % [day, "日结报告" if s.phase == "report" else "营业中"], "营业账目", "LEDGER / %02d" % day))
 	var today := []
 	for r in s.ledger:
 		if r.day == s.day:
 			today.append(r)
 	var cols := UIKit.hbox(16)
+	var receipt := UIKit.plate(UIKit.paper_style(16))
+	receipt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var left := UIKit.vbox(8)
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left.add_child(UIKit.label("今日流水", 20, UIKit.MUTED))
+	receipt.add_child(left)
+	left.add_child(UIKit.label("今日流水 / TRANSACTIONS", 18, UIKit.INK, true))
+	left.add_child(UIKit.label("第 %02d 营业日 · %02d 笔记录" % [day, today.size()], 15, Color("6b5a40")))
 	var sc := ScrollContainer.new()
 	sc.custom_minimum_size = Vector2(0, 250)
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -97,34 +103,37 @@ func _refresh() -> void:
 	lv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for r in today:
 		var row := UIKit.hbox(8)
-		var l := UIKit.label(String(r.label), 18, UIKit.TEXT)
+		var l := UIKit.label(String(r.label), 18, UIKit.INK)
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		l.clip_text = true
 		row.add_child(l)
-		row.add_child(UIKit.label(("+" if r.amount > 0 else "") + Model.jnum(r.amount), 18, UIKit.GOOD if r.amount > 0 else UIKit.DANGER, true))
+		row.add_child(UIKit.label(("+" if r.amount > 0 else "") + Model.jnum(r.amount), 18, Color("2f6b3a") if r.amount > 0 else UIKit.RUST, true))
 		lv.add_child(row)
 	if today.is_empty():
-		lv.add_child(UIKit.label("今天还没有流水。", 18, UIKit.MUTED))
+		lv.add_child(UIKit.label("今天还没有流水。", 18, Color("6b5a40")))
 	sc.add_child(lv)
 	left.add_child(sc)
-	cols.add_child(left)
+	cols.add_child(receipt)
+	var totals := UIKit.plate(UIKit.paper_style(16))
+	totals.custom_minimum_size = Vector2(390, 0)
 	var right := UIKit.vbox(10)
-	right.custom_minimum_size = Vector2(390, 0)
+	totals.add_child(right)
+	right.add_child(UIKit.label("结算联 / TOTALS", 18, UIKit.INK, true))
 	var g := UIKit.grid(2, 8)
 	var due := Model.rent_due(s.day)
 	if s.phase == "report" and s.report != null:
-		_row(g, "收入", UIKit.money(s.report.income), UIKit.GOOD)
-		_row(g, "支出", UIKit.money(s.report.expenses), UIKit.DANGER)
+		_row(g, "收入", UIKit.money(s.report.income), Color("2f6b3a"))
+		_row(g, "支出", UIKit.money(s.report.expenses), UIKit.RUST)
 		_row(g, "能源维护", UIKit.money(s.report.maintenance))
 		_row(g, "租金", UIKit.money(s.report.rent))
-		_row(g, "结余现金", UIKit.money(s.report.cash), UIKit.AMBER)
+		_row(g, "结余现金", UIKit.money(s.report.cash), UIKit.RUST)
 	else:
-		_row(g, "当前现金", UIKit.money(s.cash), UIKit.AMBER)
+		_row(g, "当前现金", UIKit.money(s.cash), UIKit.RUST)
 		_row(g, "今晚维护", UIKit.money(20))
 		_row(g, "今晚租金", UIKit.money(due) if due > 0 else "无（第 7/14/21 天收取）")
 		_row(g, "剩余行动点", "%d AP" % int(s.ap))
 	right.add_child(g)
-	cols.add_child(right)
+	cols.add_child(totals)
 	body.add_child(cols)
 	body.add_child(UIKit.rule())
 	if s.phase == "open":
@@ -144,8 +153,7 @@ func _refresh() -> void:
 				card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				var cv := UIKit.vbox(6)
 				card.add_child(cv)
-				cv.add_child(UIKit.label(spec[1], 21, UIKit.AMBER))
-				cv.add_child(UIKit.label(spec[2], 17, UIKit.TEXT))
+				cv.add_child(UIKit.module_header(spec[1], spec[2], "UPGRADE"))
 				var b := UIKit.button("已安装" if spec[3] else "安装", "good", Vector2(0, 50), 19)
 				b.disabled = spec[3]
 				var id: String = spec[0]

@@ -71,14 +71,16 @@ const SKIN_RIM := {"glass": [49, 50, 41, 63], "strip": [27, 32, 27, 53], "amber"
 	"paper": [9, 9, 9, 9], "screen": [41, 41, 41, 49]}
 
 static func skin(name: String, size := "lg", pad := -1.0, tint := Color.WHITE) -> StyleBox:
-	var fills := {"glass": Color("293a3c"), "strip": Color("34313c"), "amber": Color("976e3e"), "graphite": Color("3d3c47"), "socket": Color("191d27"), "rail": Color("302e3b"), "paper": Color("e1d3b0"), "screen": Color("182f30")}
-	var edges := {"glass": Color("6b9290"), "strip": Color("7d716b"), "amber": Color("d9ad69"), "graphite": Color("7a747a"), "socket": Color("5d626a"), "rail": Color("9c8064"), "paper": Color("9d8767"), "screen": Color("628e85")}
-	var padding := (18.0 if size == "lg" else 12.0 if size == "sm" else 8.0) if pad < 0 else pad
-	var s := box(fills.get(name, PLATE) * tint, edges.get(name, PLATE_EDGE) * tint, 0, 3 if size == "lg" else 2, int(padding), 4 if size == "lg" else 2)
-	s.border_width_bottom += 2
-	s.shadow_color = Color("141720")
-	s.shadow_offset = Vector2(3, 4)
-	return s
+	var fills := {"glass": Color("243d38"), "strip": Color("34362f"), "amber": Color("97653a"), "graphite": Color("3b4442"), "socket": Color("1a2525"), "rail": Color("2d3331"), "paper": Color("e8d9b7"), "screen": Color("142c29")}
+	var edges := {"glass": Color("64877b"), "strip": Color("837961"), "amber": Color("d8a76a"), "graphite": Color("78877f"), "socket": Color("566960"), "rail": Color("9c8064"), "paper": Color("b09a73"), "screen": Color("5f8172")}
+	var surface = load("res://scripts/ui/retro_surface.gd").new()
+	surface.kind = name
+	surface.fill = fills.get(name,PLATE)
+	surface.edge = edges.get(name,PLATE_EDGE)
+	surface.tint = tint
+	surface.compact = size == "xs"
+	surface.set_content_margin_all((18.0 if size == "lg" else 12.0 if size == "sm" else 8.0) if pad < 0 else pad)
+	return surface
 
 static func plate_style() -> StyleBox:
 	return skin("rail", "lg", PAD + 6)
@@ -135,8 +137,8 @@ static func build_theme() -> Theme:
 	t.set_color("font_pressed_color", "Button", AMBER)
 	t.set_color("font_disabled_color", "Button", Color("b9b0a1"))
 	t.set_font_size("font_size", "Button", 22)
-	t.set_stylebox("panel", "TooltipPanel", box(Color("16110c"), Color("e0a16c"), 6, 1, 10, 4))
-	t.set_color("font_color", "TooltipLabel", Color("f4e7cf"))
+	t.set_stylebox("panel", "TooltipPanel", paper_style(12))
+	t.set_color("font_color", "TooltipLabel", INK)
 	t.set_font_size("font_size", "TooltipLabel", 18)
 	var grab := box(AMBER, Color("3a2412"), 10, 2, 0, 2)
 	t.set_stylebox("grabber_area", "HSlider", box(Color("8a5226"), Color.TRANSPARENT, 4, 0, 0, 0))
@@ -187,10 +189,10 @@ static func button(text: String, kind := "secondary", min_size := Vector2(0, 58)
 			b.add_theme_color_override(c, Color("fff3df"))
 		b.add_theme_color_override("font_pressed_color", Color("ffe2b8"))
 		b.add_theme_color_override("font_outline_color", Color(0.22, 0.08, 0.0, 0.9))
-		b.add_theme_constant_override("outline_size", 5)
+		b.add_theme_constant_override("outline_size", 2)
 	else:
 		b.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
-		b.add_theme_constant_override("outline_size", 3)
+		b.add_theme_constant_override("outline_size", 1)
 	if icon_name != "":
 		b.icon = icon(icon_name)
 		b.expand_icon = true
@@ -269,8 +271,44 @@ static func compact(b: Button, kind := "secondary") -> void:
 
 static func plate(style: StyleBox = null) -> PanelContainer:
 	var p := PanelContainer.new()
+	p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	p.add_theme_stylebox_override("panel", style if style != null else plate_style())
 	return p
+
+## A small engraved heading; keeps hierarchy without adding another big panel.
+static func module_header(title: String, subtitle := "", serial := "") -> VBoxContainer:
+	var v := vbox(5)
+	var row := hbox(10)
+	var caption := label(title,22,AMBER,false,true)
+	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(caption)
+	if serial != "": row.add_child(label(serial,14,MUTED,true))
+	v.add_child(row)
+	if subtitle != "": v.add_child(label(subtitle,16,MUTED,false,true))
+	v.add_child(rule())
+	return v
+
+static func record_card(title: String, text: String, serial := "", tone := "paper") -> PanelContainer:
+	var paper := tone == "paper"
+	var card := plate(paper_style(14) if paper else screen_style(14))
+	var v := vbox(7)
+	var row := hbox(8)
+	var heading := label(title,17,RUST if paper else CYAN,false,true)
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(heading)
+	if serial != "": row.add_child(label(serial,13,Color("897551") if paper else MUTED,true))
+	v.add_child(row)
+	var line := ColorRect.new()
+	line.color = Color(0.40,0.29,0.16,.22) if paper else Color(.37,.58,.49,.35)
+	line.custom_minimum_size.y = 1
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(line)
+	v.add_child(label(text,18,INK if paper else TEXT,false,true))
+	card.add_child(v)
+	return card
+
+static func note_card(title: String, text: String, tone := "screen") -> PanelContainer:
+	return record_card(title,text,"",tone)
 
 ## The details stay in the rim, leaving the panel's content and hit area
 ## untouched. Integer coordinates and square corners echo the shop's hardware.

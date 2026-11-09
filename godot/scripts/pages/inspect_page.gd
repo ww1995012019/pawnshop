@@ -55,9 +55,7 @@ func _build_panels() -> void:
 	instrument_panel = left_panel(300)
 	var lv := UIKit.vbox(10)
 	instrument_panel.add_child(lv)
-	instrument_header = UIKit.vbox(10)
-	instrument_header.add_child(UIKit.label("检验工具", 24, UIKit.AMBER))
-	instrument_header.add_child(UIKit.label("观察实物 · 对照说明书", 16, UIKit.MUTED))
+	instrument_header = UIKit.module_header("检验工具", "观察实物 · 对照说明书", "BENCH / 01")
 	lv.add_child(instrument_header)
 	instrument_list = UIKit.vbox(10)
 	lv.add_child(instrument_list)
@@ -134,16 +132,21 @@ func _refresh_info() -> void:
 		info.add_child(UIKit.label("工作台空着。去柜台或仓储挑一只表。",20,UIKit.MUTED,false,true))
 		return
 	var def := GameData.def(it.defId)
-	info.add_child(UIKit.label(def.name,28,UIKit.AMBER))
-	info.add_child(UIKit.label(def.description,18,UIKit.TEXT,false,true))
-	info.add_child(UIKit.label("工具记录物证，不能单独证明原装、走时或防水。请对照说明书判断。",17,UIKit.MUTED,false,true))
-	info.add_child(UIKit.label("首次记录本件消耗 1 AP；后续取证免费。",16,UIKit.MUTED,false,true))
-	for id in TOOL_IDS:
+	info.add_child(UIKit.module_header(def.name, String(def.description).split("。")[0] + "。", "实物档案"))
+	info.add_child(UIKit.label("观察记录 · %d / %d" % [it.evidence.size(), TOOL_IDS.size()], 17, UIKit.AMBER))
+	var pending: Array[String] = []
+	for index in TOOL_IDS.size():
+		var id: String = TOOL_IDS[index]
 		var done: bool = it.evidence.has(id)
 		tool_buttons[id].text = GameData.tool(id).name + ("  ✓" if done else "")
 		tool_buttons[id].add_theme_stylebox_override("normal",UIKit.key_style("primary" if tool == id else "secondary","normal"))
 		if done:
-			info.add_child(UIKit.label(GameData.tool(id).name + "：" + Model.displayed_clue(it,id),17,UIKit.CYAN,false,true))
+			info.add_child(UIKit.record_card(Model.evidence_caption(it, id), Model.displayed_clue(it, id), "物证 / %02d" % [index + 1]))
+		else:
+			pending.append("%02d %s" % [index + 1, GameData.tool(id).name])
+	if not pending.is_empty():
+		info.add_child(UIKit.label("待检：" + " / ".join(pending), 16, UIKit.MUTED, false, true))
+	info.add_child(UIKit.note_card("检验须知", "工具记录物证，不能单独证明原装、走时或防水。请对照说明书判断。\n首次记录本件消耗 1 AP；后续取证免费。"))
 
 func _load_item() -> void:
 	_set_tool("")
@@ -214,7 +217,7 @@ func _set_tool(id: String) -> void:
 	elif id == "TOL-001" or id == "TOL-002":
 		_optical(id)
 	else:
-		bench_body.add_child(UIKit.label("选择工具观察实物；说明书随时可查。",18,UIKit.MUTED,false,true))
+		bench_body.add_child(UIKit.module_header("工作台待命", "选择工具观察实物；说明书随时可查。", "READY"))
 	_refresh_info()
 	call_deferred("relayout")
 

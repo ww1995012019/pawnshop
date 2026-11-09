@@ -22,11 +22,7 @@ func enter() -> void:
 	add_child(board)
 	var surface := UIKit.vbox(16)
 	board.add_child(surface)
-	var heading := UIKit.hbox(12)
-	heading.add_child(UIKit.label("委托终端", 30, UIKit.AMBER))
-	heading.add_child(UIKit.spacer(false))
-	heading.add_child(UIKit.label("接单 · 备货 · 交付", 20, UIKit.MUTED))
-	surface.add_child(heading)
+	surface.add_child(UIKit.module_header("委托终端", "接单 · 备货 · 交付", "ORDERS / 登记簿"))
 	var tab_row := UIKit.hbox(10)
 	surface.add_child(tab_row)
 	for status in ["open", "active", "closed"]:
@@ -145,6 +141,7 @@ func _card(def: Dictionary) -> VBoxContainer:
 	head.add_child(hv)
 	v.add_child(head)
 	v.add_child(_dashes())
+	v.add_child(UIKit.label("委托事项", 15, INK_SOFT, true))
 	var brief := UIKit.label(_readable(String(def.description)), 19, UIKit.INK, false, true)
 	brief.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(brief)
@@ -232,6 +229,7 @@ func _refresh() -> void:
 					shell.sound("coin", -2)
 					if not Game.prefs.reduced_motion:
 						shell.shake = 0.3)
+			v.add_child(UIKit.label("交付核对 / 原物选择", 15, INK_SOFT, true))
 			v.add_child(opt)
 			v.add_child(why)
 			v.add_child(b)

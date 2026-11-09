@@ -532,7 +532,9 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	workspace_overlay.add_child(workspace_frame)
 	var body := UIKit.vbox(12)
 	workspace_frame.add_child(body)
+	var header_mount := UIKit.plate(UIKit.skin("strip", "sm", 8))
 	var header := UIKit.hbox(12)
+	header_mount.add_child(header)
 	workspace_title = UIKit.label("", 27, UIKit.AMBER)
 	workspace_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(workspace_title)
@@ -540,7 +542,7 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	workspace_close = UIKit.button("收起", "secondary", Vector2(108, 48), 20, "close")
 	workspace_close.pressed.connect(close_workspace)
 	header.add_child(workspace_close)
-	body.add_child(header)
+	body.add_child(header_mount)
 	# The drawer's logical size remains fixed. Render its viewport at the
 	# display's pixel scale so text is rasterized at the final resolution.
 	workspace_host = Control.new()
