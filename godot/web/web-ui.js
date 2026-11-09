@@ -9,11 +9,11 @@
   guide.id = 'phone-guide'; guide.hidden = true;
   guide.setAttribute('role', 'dialog'); guide.setAttribute('aria-modal', 'true');
   guide.setAttribute('aria-labelledby', 'phone-heading');
-  guide.innerHTML = `<section><h2 id="phone-heading">横过来，柜台更好操作</h2><p>将手机横放，即可看清整张柜台。横屏后会出现大按钮操作栏，接客、鉴定和报价都可以直接点。</p><button type="button" class="touch-button primary" id="phone-fullscreen">横屏并全屏</button><p id="phone-orientation-note">如有需要，请先关闭手机的方向锁定。</p></section>`;
+  guide.innerHTML = `<section><h2 id="phone-heading">横过来，柜台更好操作</h2><p>点一下屏幕，游戏会全屏并自动横过来；也可以直接把手机横放。横屏后会出现大按钮操作栏，接客、鉴定和报价都可以直接点。</p><button type="button" class="touch-button primary" id="phone-fullscreen">横屏开始</button><p id="phone-orientation-note">如有需要，请先关闭手机的方向锁定。</p></section>`;
   document.body.append(guide);
   const nav = document.createElement('nav');
   nav.id = 'touch-nav'; nav.hidden = true; nav.setAttribute('aria-label', '店铺快捷操作');
-  nav.innerHTML = `<button type="button" data-command="start">开门营业</button><button type="button" data-command="arrive" data-playing>接客</button><button type="button" id="trade-open" data-playing>交易</button><button type="button" data-command="page" data-page="inspect" data-playing>鉴定</button><button type="button" data-command="page" data-page="repair" data-playing>维修</button><button type="button" data-command="page" data-page="warehouse" data-playing>仓储</button><button type="button" id="touch-forge" data-playing hidden>伪装</button><button type="button" data-command="page" data-page="orders" data-playing>订单</button><button type="button" data-command="page" data-page="report" data-playing>日结</button><button type="button" id="touch-detail-open" data-playing hidden>详情</button><button type="button" id="repair-supplies-open" data-playing hidden>材料</button><button type="button" id="touch-rotate" data-playing hidden>旋转</button><button type="button" data-command="close" data-playing>收起</button><button type="button" id="touch-fullscreen">全屏</button>`;
+  nav.innerHTML = `<button type="button" data-command="start">开门营业</button><button type="button" data-command="arrive" data-playing>接客</button><button type="button" id="trade-open" data-playing>交易</button><button type="button" data-command="page" data-page="inspect" data-playing>鉴定</button><button type="button" data-command="page" data-page="repair" data-playing>维修</button><button type="button" data-command="page" data-page="warehouse" data-playing>仓储</button><button type="button" id="touch-forge" data-playing hidden>伪装</button><button type="button" data-command="page" data-page="orders" data-playing>订单</button><button type="button" data-command="page" data-page="report" data-playing>日结</button><button type="button" id="touch-detail-open" data-playing hidden>详情</button><button type="button" id="repair-supplies-open" data-playing hidden>材料</button><button type="button" id="touch-rotate" data-playing hidden>旋转</button><button type="button" data-command="close" data-playing>收起</button>`;
   document.body.append(nav);
   const tools = document.createElement('div');
   tools.id = 'touch-tools'; tools.hidden = true;
@@ -67,7 +67,11 @@
     }
   }
   document.getElementById('phone-fullscreen').addEventListener('click', fullscreen);
-  document.getElementById('touch-fullscreen').addEventListener('click', fullscreen);
+  // Phones always play fullscreen and landscape. Browsers only allow this from
+  // a user gesture, so every tap re-enters it (e.g. after a back gesture).
+  addEventListener('pointerup', event => {
+    if (event.pointerType !== 'mouse' && phone() && !document.fullscreenElement) fullscreen();
+  }, true);
   document.getElementById('trade-open').addEventListener('click', () => {
     const target = state.merchant ? merchant : trade;
     if (!target.open) target.showModal();
@@ -126,9 +130,6 @@
   });
   document.querySelectorAll('[data-command]').forEach(button => button.addEventListener('click', () => {
     if (button.dataset.command === 'page' && trade.open) trade.close();
-    // Browser chrome takes about a third of a landscape phone's height. Opening
-    // the shop is a user gesture, so it may also request fullscreen.
-    if (button.dataset.command === 'start' && phone()) fullscreen();
     send({type: button.dataset.command, page: button.dataset.page});
   }));
   // Resize the actual render buffer as well as its CSS box. Godot's full-window
