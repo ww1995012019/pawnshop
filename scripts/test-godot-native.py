@@ -9,7 +9,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ("ui_regression", "quote_console_test", "orders_ui_test", "workspace_test",
-         "workbench_layout_test", "instrument_layout_test", "item_specific_test", "audio_test", "web_touch_test", "item_art_test")
+         "workbench_layout_test", "instrument_layout_test", "item_specific_test", "inspection_animation_test", "audio_test", "web_touch_test", "item_art_test")
 
 
 def main():
@@ -32,6 +32,8 @@ def main():
                 bad = result.returncode != 0 or any(marker in text for marker in
                       ("SCRIPT ERROR:", "Parse Error:", "Failed loading resource:",
                        'Condition "!is_inside_tree()"'))
+                bad = bad or any(line.startswith("ERROR:") and "resources still in use at exit" not in line
+                                 for line in text.splitlines())
             except subprocess.TimeoutExpired:
                 bad = True
             print(("FAIL " if bad else "PASS ") + name, flush=True)

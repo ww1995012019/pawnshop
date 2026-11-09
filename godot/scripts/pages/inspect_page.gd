@@ -36,9 +36,14 @@ var hold := 0.0
 var specific_step := 0
 var specific_buttons: Array = []
 var specific_status: Label
-var specific_rig: SpecificRig
+var specific_motion
 var specific_running := false
 var specific_elapsed := 0.0
+var specific_duration := 0.9
+var specific_active_index := -1
+var specific_result_running := false
+var specific_result_elapsed := 0.0
+var pending_tool := ""
 
 func scene_name() -> String:
 	return "workbench"
@@ -121,7 +126,7 @@ func _build_panels() -> void:
 	var row := UIKit.grid(2, 10)
 	var flip := UIKit.button("翻面 F", "secondary", Vector2(0, 54), 20, "flip")
 	flip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	flip.pressed.connect(func(): if item: item.flip())
+	flip.pressed.connect(flip_item)
 	row.add_child(flip)
 	var home := UIKit.button("实物归位", "secondary", Vector2(0, 54), 20, "recentre")
 	home.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -257,6 +262,14 @@ func _home() -> void:
 	var tw := create_tween()
 	tw.tween_property(item, "position", item_home, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
+func flip_item() -> void:
+	if not is_instance_valid(item) or specific_running:
+		return
+	# An open part belongs to the current face. Return it before flipping.
+	if tool == "SPEC":
+		_set_tool("")
+	item.flip()
+
 func _return_probe(probe: Probe) -> void:
 	if Game.prefs.reduced_motion:
 		probe.position = probe.home
@@ -266,9 +279,26 @@ func _return_probe(probe: Probe) -> void:
 # ---------------------------------------------------------------- instruments
 
 func _set_tool(id: String) -> void:
+	if id == "":
+		pending_tool = ""
 	var current = Game.item(it_uid)
 	if id != "" and (current == null or not GameData.applicable_tools(current.defId).has(id)):
 		return
+	if id != "" and is_instance_valid(item) and item.busy:
+		if tool != "":
+			_set_tool("")
+		_queue_tool_after_flip(id)
+		return
+	if id == "SPEC" and is_instance_valid(item) and item.back:
+		if tool != "":
+			_set_tool("")
+		_queue_tool_after_flip(id)
+		item.flip()
+		return
+	if is_instance_valid(specific_motion):
+		specific_motion.cancel()
+		specific_motion.queue_free()
+		specific_motion = null
 	tool = id
 	progress = 0.0
 	hold = 0.0
@@ -293,9 +323,11 @@ func _set_tool(id: String) -> void:
 	specific_step = 0
 	specific_buttons.clear()
 	specific_status = null
-	specific_rig = null
 	specific_running = false
 	specific_elapsed = 0.0
+	specific_active_index = -1
+	specific_result_running = false
+	specific_result_elapsed = 0.0
 	shell.ambient_target = shell.ambient_base
 	shell.focus = 0.0
 	UIKit.clear(bench_body)
@@ -324,6 +356,17 @@ func _set_tool(id: String) -> void:
 	_refresh_info()
 	shell.hint(hint_text())
 	call_deferred("relayout")
+
+func _queue_tool_after_flip(id: String) -> void:
+	pending_tool = id
+	if not item.flip_finished.is_connected(_open_pending_tool):
+		item.flip_finished.connect(_open_pending_tool)
+
+func _open_pending_tool(_back: bool) -> void:
+	var next := pending_tool
+	pending_tool = ""
+	if next != "" and is_inside_tree():
+		_set_tool(next)
 
 func _lens() -> void:
 	lens = Node2D.new()
@@ -502,14 +545,9 @@ func _load() -> void:
 func _specific() -> void:
 	var it = Game.item(it_uid)
 	var profile := GameData.inspection_profile(it.defId)
-	var rig := SpecificRig.new()
-	rig.name = "specific_rig"
-	rig.mode = profile.get("mode", "motion")
-	rig.subject = UIKit.item_icon(it.defId)
-	rig.working = it.working
-	rig.custom_minimum_size = Vector2(0, 72)
-	bench_body.add_child(rig)
-	specific_rig = rig
+	specific_motion = preload("res://scripts/world/inspection_motion.gd").new()
+	specific_motion.setup(item, GameData.motion_profile(it.defId))
+	item.add_child(specific_motion)
 	var row := UIKit.hbox(8)
 	for i in profile.steps.size():
 		var b := UIKit.button("%d  %s" % [i + 1, profile.steps[i]], "secondary", Vector2(0, 52), 17)
@@ -524,27 +562,50 @@ func _specific() -> void:
 
 func _advance_specific(index: int) -> void:
 	var it = Game.item(it_uid)
-	if tool != "SPEC" or it == null or specific_running or index < 0 or index >= specific_buttons.size() or index != specific_step:
+	if tool != "SPEC" or it == null or item.busy or specific_running or index < 0 or index >= specific_buttons.size() or index != specific_step:
 		return
 	if index == specific_buttons.size() - 1:
 		var cost := 0.0 if Game.state.upgrades.lamp else 1.0
 		if not it.inspectedPaid and not Model.has_ap(Game.state, cost):
 			specific_status.text = "行动点不足，明天可继续检测。"
 			return
-		specific_running = true
-		specific_elapsed = 0.0
-		specific_rig.stage = 2
-		specific_rig.fraction = 0.0
-		specific_rig.testing = true
-		specific_status.text = "正在%s，观察测试响应。" % GameData.inspection_profile(it.defId).steps[index]
-		for b in specific_buttons:
-			b.disabled = true
+	specific_active_index = index
+	specific_motion.start(index)
+	# Reduced-motion players still see each completed pose, without the tween.
+	if Game.prefs.reduced_motion and index < specific_buttons.size() - 1:
+		specific_motion.finish(true)
+		_finish_specific_step(index)
 		return
-	specific_step += 1
-	specific_rig.stage = specific_step
-	specific_rig.fraction = 1.0 if specific_step == 2 else 0.0
-	specific_rig.queue_redraw()
-	specific_status.text = "已完成：%s。继续下一步。" % GameData.inspection_profile(it.defId).steps[index]
+	specific_running = true
+	specific_elapsed = 0.0
+	specific_duration = (0.9 if Game.prefs.reduced_motion else 1.65) if index == specific_buttons.size() - 1 else 0.9
+	specific_status.text = "正在%s。" % GameData.inspection_profile(it.defId).steps[index]
+	for b in specific_buttons:
+		b.disabled = true
+
+func _finish_specific_step(index: int) -> void:
+	var it = Game.item(it_uid)
+	if it == null:
+		return
+	if index == specific_buttons.size() - 1:
+		_record()
+		it = Game.item(it_uid)
+		if it != null and it.evidence.has("SPEC"):
+			specific_step = specific_buttons.size()
+			specific_motion.reveal_result(bool(it.specificResult.working))
+			if Game.prefs.reduced_motion:
+				specific_motion.sample_result(1.0)
+				specific_motion.finish_result()
+			else:
+				specific_result_running = true
+				specific_result_elapsed = 0.0
+			specific_status.text = Model.item_clue(it, "SPEC")
+			specific_status.add_theme_color_override("font_color", UIKit.CYAN)
+		else:
+			specific_status.text = "行动点不足，明天可继续检测。"
+	else:
+		specific_step = index + 1
+		specific_status.text = "已完成：%s。继续下一步。" % GameData.inspection_profile(it.defId).steps[index]
 	for i in specific_buttons.size():
 		specific_buttons[i].disabled = i != specific_step
 
@@ -616,11 +677,11 @@ func _unhandled_input(e: InputEvent) -> void:
 					_return_probe(pr)
 				drag_probe = -1
 		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
-			item.flip()
+			flip_item()
 	elif e is InputEventKey and e.pressed and not e.echo:
 		var k := (e as InputEventKey).keycode
 		if k == KEY_F:
-			item.flip()
+			flip_item()
 		elif k >= KEY_1 and k <= KEY_6:
 			_set_tool(GameData.tools[k - KEY_1].id)
 		elif k == KEY_7:
@@ -640,24 +701,18 @@ func _process(delta: float) -> void:
 		return
 	if specific_running and tool == "SPEC":
 		specific_elapsed += delta
-		specific_rig.fraction = clampf(specific_elapsed / 0.9, 0.0, 1.0)
-		specific_rig.queue_redraw()
-		if specific_elapsed >= 0.9:
+		var fraction := clampf(specific_elapsed / specific_duration, 0.0, 1.0)
+		specific_motion.sample(1.0 if Game.prefs.reduced_motion else fraction)
+		if specific_elapsed >= specific_duration:
 			specific_running = false
-			specific_rig.testing = false
-			_record()
-			it = Game.item(it_uid)
-			if it.evidence.has("SPEC"):
-				specific_step = specific_buttons.size()
-				specific_rig.stage = specific_step
-				specific_rig.working = bool(it.specificResult.working)
-				specific_status.text = Model.item_clue(it, "SPEC")
-				specific_status.add_theme_color_override("font_color", UIKit.CYAN)
-			else:
-				specific_status.text = "行动点不足，明天可继续检测。"
-			specific_rig.queue_redraw()
-			for i in specific_buttons.size():
-				specific_buttons[i].disabled = i != specific_step
+			specific_motion.finish()
+			_finish_specific_step(specific_active_index)
+	if specific_result_running and tool == "SPEC":
+		specific_result_elapsed += delta
+		specific_motion.sample_result(clampf(specific_result_elapsed / 0.9, 0.0, 1.0))
+		if specific_result_elapsed >= 0.9:
+			specific_result_running = false
+			specific_motion.finish_result()
 	var target := -1.0
 	match tool:
 		"TOL-001":
@@ -739,77 +794,6 @@ func _process(delta: float) -> void:
 	if lens_ring != null and is_instance_valid(lens_ring):
 		lens_ring.value = progress
 
-
-class SpecificRig extends Control:
-	## A small animated test fixture, using the item's own sprite and a visual
-	## response suited to its type (magnet, flow, optics, heat, motion or signal).
-	var mode := "motion"
-	var stage := 0
-	var fraction := 0.0
-	var testing := false
-	var working := true
-	var subject: Texture2D
-	func _draw() -> void:
-		draw_rect(Rect2(Vector2.ZERO, size), Color("1c252c"))
-		draw_rect(Rect2(Vector2.ZERO, size), Color("53645c"), false, 2.0)
-		var observed := stage >= 3
-		var visual_working := working if observed else true
-		var active := testing or observed or (mode == "magnet" and stage == 2)
-		var response := 1.0 if visual_working else 0.48
-		var progress := fraction * response if active else 0.0
-		var accent := Color("9bd4b0") if visual_working else Color("e6a477")
-		var icon_x := 12.0
-		if mode == "magnet" and stage == 2:
-			icon_x = 44.0 - 32.0 * fraction if testing else 44.0
-		elif mode == "magnet" and observed:
-			icon_x = 12.0 if working else 28.0
-		if subject != null:
-			draw_texture_rect(subject, Rect2(icon_x, 8, 54, 54), false)
-		var x := 85.0
-		var y := 36.0
-		match mode:
-			"magnet":
-				draw_rect(Rect2(124, 10, 12, 52), Color("a3a498"))
-				draw_rect(Rect2(136, 14, 4, 44), Color("5c6964"))
-				if active and stage < 3:
-					for i in 3:
-						draw_line(Vector2(100, 22 + i * 14), Vector2(120, 22 + i * 14), accent, 2.0)
-			"flow":
-				draw_line(Vector2(x, y - 9), Vector2(143, y - 9), Color("9aab9c"), 3.0)
-				draw_line(Vector2(x, y + 9), Vector2(143, y + 9), Color("9aab9c"), 3.0)
-				if active:
-					draw_rect(Rect2(x, y - 5, 58 * progress, 10), accent)
-			"optical":
-				draw_circle(Vector2(140, y), 15, Color("455b59"))
-				draw_arc(Vector2(140, y), 15, 0, TAU, 24, Color("9aab9c"), 2.0)
-				if active:
-					var shift := 0.0 if visual_working else 8.0
-					draw_line(Vector2(x, y - 13), Vector2(140, y + shift), accent, 2.0)
-					draw_line(Vector2(x, y + 13), Vector2(140, y - shift), Color("7ebdc2"), 2.0)
-			"thermal":
-				draw_rect(Rect2(100, 12, 20, 48), Color("4b5c57"))
-				if active:
-					draw_rect(Rect2(104, 56 - 40 * progress, 12, 40 * progress), accent)
-				draw_rect(Rect2(100, 12, 20, 48), Color("a3aa93"), false, 2.0)
-			"signal":
-				if active:
-					var pts := PackedVector2Array()
-					for i in 30:
-						var phase := float(i) / 29.0
-						pts.append(Vector2(x + phase * 66, y + sin(phase * TAU * 2.0) * 12.0 * (1.0 if visual_working or phase < 0.55 else 0.25)))
-					draw_polyline(pts, accent, 2.0)
-			"growth":
-				draw_line(Vector2(115, 57), Vector2(115, 30), Color("89aa7f"), 3.0)
-				if active:
-					draw_line(Vector2(115, 40), Vector2(100, 40 - 15 * progress), accent, 3.0)
-					draw_line(Vector2(115, 34), Vector2(130, 34 - 15 * progress), accent, 3.0)
-			_:
-				draw_arc(Vector2(118, y), 20, 0, TAU, 32, Color("8d9b87"), 3.0)
-				var angle := progress * TAU * 1.5
-				draw_line(Vector2(118, y), Vector2(118, y) + Vector2(cos(angle), sin(angle)) * 17, accent, 3.0)
-		var message := "准备检测" if stage == 0 else ("已准备" if not testing and not observed else ("测试进行中" if testing else ("响应稳定" if working else "响应异常")))
-		draw_string(UIKit.font, Vector2(170, 30), message, HORIZONTAL_ALIGNMENT_LEFT, maxf(0.0, size.x - 180), 17, accent)
-		draw_string(UIKit.font, Vector2(170, 53), "专属测试示意", HORIZONTAL_ALIGNMENT_LEFT, maxf(0.0, size.x - 180), 14, Color("93a39a"))
 
 
 class Ring extends Node2D:

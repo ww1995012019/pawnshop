@@ -1,0 +1,677 @@
+{
+ "ITM-001": {
+  "actions": [
+   "open",
+   "extract",
+   "flow"
+  ],
+  "parts": {
+   "0": {
+    "rect": [
+     0.39,
+     0.02,
+     0.4,
+     0.18
+    ],
+    "offset": [
+     0.08,
+     -0.18
+    ],
+    "angle": -0.14
+   },
+   "1": {
+    "rect": [
+     0.46,
+     0.4,
+     0.16,
+     0.39
+    ],
+    "offset": [
+     -0.28,
+     -0.18
+    ],
+    "angle": -0.1
+   }
+  },
+  "result_effect": "leak"
+ },
+ "ITM-002": {
+  "actions": [
+   "open",
+   "connect",
+   "heat"
+  ],
+  "parts": {
+   "0": {
+    "rect": [
+     0.25,
+     0.02,
+     0.43,
+     0.18
+    ],
+    "offset": [
+     0.11,
+     -0.16
+    ],
+    "angle": -0.16
+   }
+  },
+  "result_effect": "flicker"
+ },
+ "ITM-003": {
+  "actions": [
+   "unfold",
+   "switch",
+   "light"
+  ],
+  "parts": {
+   "0": {
+    "rect": [
+     0.31,
+     0.04,
+     0.62,
+     0.35
+    ],
+    "offset": [
+     0.01,
+     -0.07
+    ],
+    "angle": -0.12
+   }
+  },
+  "result_effect": "blue"
+ },
+ "ITM-009": {
+  "actions": [
+   "unfold",
+   "insert",
+   "align"
+  ],
+  "result_effect": "split"
+ },
+ "ITM-010": {
+  "actions": [
+   "slide",
+   "switch",
+   "press"
+  ],
+  "result_effect": "high"
+ },
+ "ITM-011": {
+  "actions": [
+   "unfold",
+   "lift",
+   "balance"
+  ],
+  "details": {
+   "1": "drone_wings",
+   "2": "drone_wings"
+  },
+  "parts": {
+   "0": [
+    {
+     "polygon": [
+      [
+       0.138777,
+       0.331989
+      ],
+      [
+       0.142977,
+       0.289987
+      ],
+      [
+       0.168179,
+       0.264785
+      ],
+      [
+       0.201781,
+       0.201781
+      ],
+      [
+       0.243784,
+       0.168179
+      ],
+      [
+       0.33619,
+       0.113575
+      ],
+      [
+       0.483199,
+       0.067372
+      ],
+      [
+       0.554603,
+       0.063172
+      ],
+      [
+       0.642809,
+       0.067372
+      ],
+      [
+       0.647009,
+       0.105175
+      ],
+      [
+       0.617608,
+       0.130376
+      ],
+      [
+       0.533602,
+       0.168179
+      ],
+      [
+       0.34459,
+       0.281586
+      ],
+      [
+       0.285786,
+       0.331989
+      ],
+      [
+       0.256384,
+       0.34459
+      ],
+      [
+       0.18078,
+       0.34879
+      ]
+     ],
+     "pivot": [
+      0.285786,
+      0.310988
+     ],
+     "angle": -0.12
+    },
+    {
+     "polygon": [
+      [
+       0.462198,
+       0.34459
+      ],
+      [
+       0.491599,
+       0.319388
+      ],
+      [
+       0.689012,
+       0.18918
+      ],
+      [
+       0.768817,
+       0.147177
+      ],
+      [
+       0.81082,
+       0.109375
+      ],
+      [
+       0.903226,
+       0.109375
+      ],
+      [
+       0.953629,
+       0.142977
+      ],
+      [
+       0.957829,
+       0.18498
+      ],
+      [
+       0.932628,
+       0.264785
+      ],
+      [
+       0.886425,
+       0.323589
+      ],
+      [
+       0.80662,
+       0.373992
+      ],
+      [
+       0.714214,
+       0.420195
+      ],
+      [
+       0.617608,
+       0.445397
+      ],
+      [
+       0.554603,
+       0.445397
+      ],
+      [
+       0.4958,
+       0.436996
+      ],
+      [
+       0.445397,
+       0.399194
+      ]
+     ],
+     "pivot": [
+      0.474798,
+      0.378192
+     ],
+     "angle": 0.12
+    }
+   ]
+  }
+ },
+ "ITM-017": {
+  "actions": [
+   "bend",
+   "insert",
+   "release"
+  ]
+ },
+ "ITM-018": {
+  "actions": [
+   "insert",
+   "rotate",
+   "align"
+  ],
+  "result_effect": "split"
+ },
+ "ITM-019": {
+  "actions": [
+   "switch",
+   "insert",
+   "signal"
+  ],
+  "result_effect": "drift"
+ },
+ "ITM-025": {
+  "actions": [
+   "rotate",
+   "spin",
+   "balance"
+  ],
+  "details": {
+   "0": "gyro_ring",
+   "1": "gyro_rotor",
+   "2": "gyro_axis"
+  }
+ },
+ "ITM-026": {
+  "actions": [
+   "extract",
+   "cycle",
+   "lock"
+  ]
+ },
+ "ITM-027": {
+  "actions": [
+   "insert",
+   "magnet",
+   "align"
+  ]
+ },
+ "ITM-033": {
+  "actions": [
+   "open",
+   "rotate",
+   "scan"
+  ]
+ },
+ "ITM-034": {
+  "actions": [
+   "flip",
+   "lock",
+   "pull"
+  ]
+ },
+ "ITM-035": {
+  "actions": [
+   "extract",
+   "light",
+   "align"
+  ],
+  "result_effect": "dim"
+ },
+ "ITM-041": {
+  "actions": [
+   "light",
+   "growth",
+   "seal"
+  ]
+ },
+ "ITM-042": {
+  "actions": [
+   "light",
+   "cover",
+   "compare"
+  ],
+  "result_effect": "dim"
+ },
+ "ITM-043": {
+  "actions": [
+   "rotate",
+   "light",
+   "align"
+  ],
+  "result_effect": "split"
+ },
+ "ITM-048": {
+  "actions": [
+   "connect",
+   "press",
+   "signal"
+  ]
+ },
+ "ITM-049": {
+  "actions": [
+   "insert",
+   "signal",
+   "switch"
+  ],
+  "result_effect": "drift"
+ },
+ "ITM-050": {
+  "actions": [
+   "scan",
+   "close",
+   "lock"
+  ]
+ },
+ "ITM-055": {
+  "actions": [
+   "connect",
+   "pulse",
+   "signal"
+  ],
+  "result_effect": "gap"
+ },
+ "ITM-056": {
+  "actions": [
+   "attach",
+   "swing",
+   "balance"
+  ]
+ },
+ "ITM-057": {
+  "actions": [
+   "open",
+   "connect",
+   "load"
+  ],
+  "result_effect": "drop"
+ },
+ "ITM-061": {
+  "actions": [
+   "inspect",
+   "connect",
+   "breath"
+  ],
+  "result_effect": "slow"
+ },
+ "ITM-062": {
+  "actions": [
+   "unfold",
+   "rotate",
+   "signal"
+  ],
+  "details": {
+   "1": "crank"
+  },
+  "result_effect": "drop"
+ },
+ "ITM-063": {
+  "actions": [
+   "insert",
+   "rotate",
+   "align"
+  ],
+  "result_effect": "split"
+ },
+ "ITM-064": {
+  "actions": [
+   "lock",
+   "insert",
+   "heat"
+  ],
+  "result_effect": "rise"
+ },
+ "ITM-065": {
+  "actions": [
+   "unfold",
+   "attach",
+   "walk"
+  ],
+  "details": {
+   "0": "walker_unfold",
+   "1": "test_pipe",
+   "2": "walker_legs"
+  }
+ },
+ "ITM-066": {
+  "actions": [
+   "unfold",
+   "spin",
+   "signal"
+  ],
+  "details": {
+   "1": "weather_rotor"
+  },
+  "result_effect": "jump"
+ },
+ "ITM-067": {
+  "actions": [
+   "insert",
+   "press",
+   "slide"
+  ]
+ },
+ "ITM-068": {
+  "actions": [
+   "position",
+   "flow",
+   "weight"
+  ],
+  "result_effect": "high"
+ },
+ "ITM-069": {
+  "actions": [
+   "insert",
+   "press",
+   "stamp"
+  ]
+ },
+ "ITM-070": {
+  "actions": [
+   "spin",
+   "scan",
+   "balance"
+  ],
+  "details": {
+   "0": "flywheel",
+   "2": "flywheel"
+  }
+ },
+ "ITM-071": {
+  "actions": [
+   "lock",
+   "connect",
+   "pulse"
+  ]
+ },
+ "ITM-072": {
+  "actions": [
+   "lock",
+   "signal",
+   "align"
+  ],
+  "result_effect": "flicker"
+ },
+ "ITM-081": {
+  "actions": [
+   "lock",
+   "magnet",
+   "release"
+  ]
+ },
+ "ITM-082": {
+  "actions": [
+   "insert",
+   "press",
+   "seal"
+  ],
+  "result_effect": "uneven"
+ },
+ "ITM-083": {
+  "actions": [
+   "extract",
+   "insert",
+   "flow"
+  ],
+  "result_effect": "low"
+ },
+ "ITM-084": {
+  "actions": [
+   "insert",
+   "close",
+   "heat"
+  ],
+  "result_effect": "leak"
+ },
+ "ITM-085": {
+  "actions": [
+   "rotate",
+   "align",
+   "signal"
+  ],
+  "result_effect": "jump"
+ },
+ "ITM-086": {
+  "actions": [
+   "open",
+   "rotate",
+   "press"
+  ],
+  "result_effect": "jam"
+ },
+ "ITM-087": {
+  "actions": [
+   "rotate",
+   "flow",
+   "weight"
+  ],
+  "details": {
+   "0": "coffee_cup"
+  },
+  "result_effect": "drop"
+ },
+ "ITM-088": {
+  "actions": [
+   "attach",
+   "bend",
+   "load"
+  ]
+ },
+ "ITM-089": {
+  "actions": [
+   "connect",
+   "extract",
+   "light"
+  ],
+  "result_effect": "flicker"
+ },
+ "ITM-090": {
+  "actions": [
+   "connect",
+   "switch",
+   "flow"
+  ],
+  "result_effect": "low"
+ },
+ "ITM-091": {
+  "actions": [
+   "lock",
+   "switch",
+   "light"
+  ],
+  "result_effect": "flicker"
+ },
+ "ITM-092": {
+  "actions": [
+   "position",
+   "fill",
+   "flow"
+  ],
+  "result_effect": "leak"
+ },
+ "ITM-093": {
+  "actions": [
+   "rotate",
+   "close",
+   "heat"
+  ],
+  "result_effect": "leak"
+ },
+ "ITM-094": {
+  "actions": [
+   "align",
+   "focus",
+   "signal"
+  ],
+  "result_effect": "split"
+ },
+ "ITM-095": {
+  "actions": [
+   "connect",
+   "attach",
+   "audio"
+  ]
+ },
+ "ITM-096": {
+  "actions": [
+   "scan",
+   "connect",
+   "signal"
+  ]
+ },
+ "ITM-097": {
+  "actions": [
+   "connect",
+   "audio",
+   "signal"
+  ],
+  "result_effect": "dim"
+ },
+ "ITM-098": {
+  "actions": [
+   "wipe",
+   "insert",
+   "weight"
+  ],
+  "result_effect": "drift"
+ },
+ "ITM-099": {
+  "actions": [
+   "swing",
+   "scan",
+   "balance"
+  ],
+  "details": {
+   "0": "pendulum",
+   "2": "pendulum"
+  }
+ },
+ "ITM-100": {
+  "actions": [
+   "connect",
+   "press",
+   "cycle"
+  ],
+  "details": {
+   "2": "needle"
+  }
+ },
+ "BND-001": {
+  "actions": [
+   "lock",
+   "cycle",
+   "release"
+  ]
+ }
+}

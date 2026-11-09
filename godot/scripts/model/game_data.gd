@@ -16,6 +16,7 @@ static var faults := {}
 static var art := {}
 static var item_list: Array = []
 static var inspection_profiles := {}
+static var inspection_motions := {}
 
 static func ensure() -> void:
 	if not raw.is_empty():
@@ -31,6 +32,7 @@ static func ensure() -> void:
 	# Specific checks are evidence, but not a seventh physical instrument.
 	tool_ids.append("SPEC")
 	inspection_profiles = JSON.parse_string(FileAccess.get_file_as_string("res://data/inspection_profiles.json"))
+	inspection_motions = JSON.parse_string(FileAccess.get_file_as_string("res://data/inspection_motion.json"))
 	materials = raw.materials
 	npcs = raw.npcs
 	recipes = raw.recipes
@@ -64,6 +66,10 @@ static func tool(id: String) -> Dictionary:
 static func inspection_profile(id: String) -> Dictionary:
 	ensure()
 	return inspection_profiles.get(id, {})
+
+static func motion_profile(id: String) -> Dictionary:
+	ensure()
+	return inspection_motions.get(id, {})
 
 static func applicable_tools(id: String) -> Array:
 	ensure()

@@ -6,10 +6,12 @@ extends Node2D
 
 signal dropped
 signal flipped(back: bool)
+signal flip_finished(back: bool)
 
 var def_id := ""
 var uid := ""
 var body: Sprite2D
+var motion_pivot: Node2D
 var shadow: Sprite2D
 var mat: ShaderMaterial
 var reveal: Label
@@ -25,6 +27,7 @@ var bounds := Rect2(-10000, -10000, 20000, 20000)
 var display_scale := 1.0
 var busy := false
 var draggable := true
+var land_tween: Tween
 
 ## height: on-screen height in px for the front face.
 func setup(id: String, item_uid := "", height := 300.0, start_back := false) -> void:
@@ -42,7 +45,10 @@ func setup(id: String, item_uid := "", height := 300.0, start_back := false) -> 
 	mat = ShaderMaterial.new()
 	mat.shader = load("res://shaders/item.gdshader")
 	body.material = mat
-	add_child(body)
+	motion_pivot = Node2D.new()
+	motion_pivot.name = "motion_pivot"
+	add_child(motion_pivot)
+	motion_pivot.add_child(body)
 	_apply_face()
 	display_scale = height / body.region_rect.size.y
 	body.scale = Vector2.ONE * display_scale
@@ -111,7 +117,10 @@ func land(height := 0.0) -> void:
 	lift_target = 0.0
 	if height > 0.0:
 		lift = height
+	if land_tween != null and land_tween.is_valid():
+		land_tween.kill()
 	var tw := create_tween()
+	land_tween = tw
 	tw.tween_property(self, "lift", 0.0, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(func(): dropped.emit())
 	tw.tween_property(body, "scale", Vector2(1.07, 0.9) * display_scale, 0.06)
@@ -119,6 +128,20 @@ func land(height := 0.0) -> void:
 
 func flip() -> void:
 	if busy:
+		return
+	if dragging:
+		end_drag()
+	if land_tween != null and land_tween.is_valid():
+		land_tween.kill()
+	if Game.prefs.reduced_motion:
+		lift = 0.0
+		lift_target = 0.0
+		body.position = Vector2.ZERO
+		body.scale = Vector2.ONE * display_scale
+		back = not back
+		_apply_face()
+		flipped.emit(back)
+		flip_finished.emit(back)
 		return
 	busy = true
 	var tw := create_tween()
@@ -131,7 +154,8 @@ func flip() -> void:
 	tw.tween_property(body, "scale:x", display_scale, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(func():
 		busy = false
-		land())
+		land()
+		flip_finished.emit(back))
 
 func _process(delta: float) -> void:
 	if dragging:

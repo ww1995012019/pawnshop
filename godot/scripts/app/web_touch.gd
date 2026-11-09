@@ -69,6 +69,7 @@ func snapshot() -> Dictionary:
 			result.merge({"inspection_tools": GameData.applicable_tools(current.defId),
 				"inspection_title": profile.get("title", "专属检测"),
 				"inspection_current": active.page.tool,
+				"inspection_busy": is_instance_valid(active.page.item) and active.page.item.busy,
 				"specific_uid": current.uid, "specific_index": step,
 				"specific_allowed": not needs_ap and not active.page.specific_running,
 				"specific_reason": "行动点不足" if needs_ap else "",
@@ -136,7 +137,7 @@ func command(data: Dictionary) -> void:
 	if kind == "flip":
 		var active = shell.active_shell()
 		if active.page_name == "inspect" and active.page.item != null:
-			active.page.item.flip()
+			active.page.flip_item()
 		elif not shell.workspace_open() and shell.page.mat_item != null:
 			shell.page.mat_item.flip()
 		return

@@ -14,6 +14,7 @@ func run() -> void:
 	kit.ensure()
 	for id in GameData.items:
 		check(not GameData.inspection_profile(id).is_empty(), "Missing exported item-specific inspection: " + id)
+		check(GameData.motion_profile(id).get("actions", []).size() == 3, "Missing exported inspection motions: " + id)
 		for back in [false, true]:
 			var icon = kit.item_icon(id, back)
 			check(icon != null and icon.atlas != null, "Missing exported item face: " + id)

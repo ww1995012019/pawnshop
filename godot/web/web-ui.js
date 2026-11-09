@@ -87,7 +87,7 @@
       }
       selector.querySelector('[value="SPEC"]').textContent = state.inspection_title || '专属检测';
       selector.value = state.inspection_current || '';
-      selector.disabled = !!state.blocked || !!state.busy;
+      selector.disabled = !!state.blocked || !!state.busy || !!state.inspection_busy;
     }
     const specific = document.getElementById('touch-specific');
     if (pendingSpecific && (state.blocked || state.busy || state.inspection_current !== 'SPEC' ||

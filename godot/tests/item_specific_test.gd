@@ -65,10 +65,10 @@ func run() -> void:
 		check(Model.estimate(result).exact, "specific inspection and relevant visual evidence support a precise valuation")
 	page._set_tool("SPEC")
 	await settle()
-	var rig = page.bench.find_child("specific_rig", true, false)
-	check(rig != null, "specific check has an observable test fixture")
-	if rig != null:
-		check(rig.mode == "magnet", "magnetic boots show the magnetic adhesion fixture")
+	var motion = page.item.get_node_or_null("specific_motion")
+	check(motion != null, "specific check animates the actual item")
+	if motion != null:
+		check(motion.actions == ["lock", "magnet", "release"], "magnetic boots have locking, adhesion and release animations")
 	page._set_tool("TOL-004")
 	check(page.tool == "SPEC", "shortcut or phone command cannot select an inapplicable electrical tool")
 	page._advance_specific(2)
@@ -81,7 +81,7 @@ func run() -> void:
 			check(page.get("specific_running") == true, "the adhesion test runs and displays a response before it can be recorded")
 			if page.get("specific_running") == true:
 				await create_timer(0.2).timeout
-				check(rig.fraction > 0.0 and rig.fraction < 1.0 and not game.item(shoe_uid).evidence.has("SPEC"), "test fixture animates before evidence is recorded")
+				check(page.specific_elapsed > 0.0 and page.specific_elapsed < page.specific_duration and not game.item(shoe_uid).evidence.has("SPEC"), "test runs before evidence is recorded")
 				await create_timer(1.0).timeout
 				await settle()
 				check(page.specific_status.text.contains("吸附力不足"), "the completed test shows the observed adhesion fault")

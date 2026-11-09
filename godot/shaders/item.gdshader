@@ -14,10 +14,59 @@ uniform float found_seam = 0.0;
 uniform vec4 region = vec4(0.0, 0.0, 1.0, 1.0); // atlas UV rect of this face
 uniform float grime = 0.0;            // repair: dirt still to scrub off
 uniform sampler2D grime_mask : filter_linear;
+// Original sprite regions may move as separate inspection parts.
+uniform vec4 inspection_mask_0 = vec4(0.0);
+uniform vec4 inspection_mask_1 = vec4(0.0);
+uniform vec4 inspection_mask_2 = vec4(0.0);
+uniform float inspection_mask_0_on = 0.0;
+uniform float inspection_mask_1_on = 0.0;
+uniform float inspection_mask_2_on = 0.0;
+// Two shaped cutouts for independent parts which cannot be isolated by a box.
+uniform float inspection_poly_0_on = 0.0;
+uniform vec4 inspection_poly_0_a = vec4(0.0);
+uniform vec4 inspection_poly_0_b = vec4(0.0);
+uniform vec4 inspection_poly_0_c = vec4(0.0);
+uniform vec4 inspection_poly_0_d = vec4(0.0);
+uniform vec4 inspection_poly_0_e = vec4(0.0);
+uniform vec4 inspection_poly_0_f = vec4(0.0);
+uniform vec4 inspection_poly_0_g = vec4(0.0);
+uniform vec4 inspection_poly_0_h = vec4(0.0);
+uniform float inspection_poly_1_on = 0.0;
+uniform vec4 inspection_poly_1_a = vec4(0.0);
+uniform vec4 inspection_poly_1_b = vec4(0.0);
+uniform vec4 inspection_poly_1_c = vec4(0.0);
+uniform vec4 inspection_poly_1_d = vec4(0.0);
+uniform vec4 inspection_poly_1_e = vec4(0.0);
+uniform vec4 inspection_poly_1_f = vec4(0.0);
+uniform vec4 inspection_poly_1_g = vec4(0.0);
+uniform vec4 inspection_poly_1_h = vec4(0.0);
 
 varying vec2 world;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+bool inside_inspection_poly(vec2 point, vec4 a, vec4 b, vec4 c, vec4 d, vec4 e, vec4 f, vec4 g, vec4 h) {
+	vec2 vertices[16];
+	vertices[0] = a.xy; vertices[1] = a.zw;
+	vertices[2] = b.xy; vertices[3] = b.zw;
+	vertices[4] = c.xy; vertices[5] = c.zw;
+	vertices[6] = d.xy; vertices[7] = d.zw;
+	vertices[8] = e.xy; vertices[9] = e.zw;
+	vertices[10] = f.xy; vertices[11] = f.zw;
+	vertices[12] = g.xy; vertices[13] = g.zw;
+	vertices[14] = h.xy; vertices[15] = h.zw;
+	bool inside = false;
+	vec2 previous = vertices[15];
+	for (int i = 0; i < 16; i++) {
+		vec2 current = vertices[i];
+		if ((current.y > point.y) != (previous.y > point.y)) {
+			float crossing = (previous.x - current.x) * (point.y - current.y) / (previous.y - current.y) + current.x;
+			if (point.x < crossing) inside = !inside;
+		}
+		previous = current;
+	}
+	return inside;
+}
 
 float scratches(vec2 uv) {
 	float s = 0.0;
@@ -43,6 +92,11 @@ void fragment() {
 	vec4 base = COLOR;
 	float a = base.a;
 	vec2 luv = (UV - region.xy) / region.zw;
+	if (inspection_mask_0_on > 0.5 && all(greaterThanEqual(luv, inspection_mask_0.xy)) && all(lessThan(luv, inspection_mask_0.xy + inspection_mask_0.zw))) a = 0.0;
+	if (inspection_mask_1_on > 0.5 && all(greaterThanEqual(luv, inspection_mask_1.xy)) && all(lessThan(luv, inspection_mask_1.xy + inspection_mask_1.zw))) a = 0.0;
+	if (inspection_mask_2_on > 0.5 && all(greaterThanEqual(luv, inspection_mask_2.xy)) && all(lessThan(luv, inspection_mask_2.xy + inspection_mask_2.zw))) a = 0.0;
+	if (inspection_poly_0_on > 0.5 && all(greaterThanEqual(luv, inspection_mask_0.xy)) && all(lessThan(luv, inspection_mask_0.xy + inspection_mask_0.zw)) && inside_inspection_poly(luv, inspection_poly_0_a, inspection_poly_0_b, inspection_poly_0_c, inspection_poly_0_d, inspection_poly_0_e, inspection_poly_0_f, inspection_poly_0_g, inspection_poly_0_h)) a = 0.0;
+	if (inspection_poly_1_on > 0.5 && all(greaterThanEqual(luv, inspection_mask_1.xy)) && all(lessThan(luv, inspection_mask_1.xy + inspection_mask_1.zw)) && inside_inspection_poly(luv, inspection_poly_1_a, inspection_poly_1_b, inspection_poly_1_c, inspection_poly_1_d, inspection_poly_1_e, inspection_poly_1_f, inspection_poly_1_g, inspection_poly_1_h)) a = 0.0;
 	// Loupe: micro-scratches everywhere, a bright repaint seam near seam_uv.
 	float in_lens = lens_r > 0.0 ? 1.0 - smoothstep(lens_r * 0.85, lens_r, distance(world, lens_pos)) : 0.0;
 	float sc = scratches(luv * 1.6) * in_lens;
