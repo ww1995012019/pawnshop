@@ -52,8 +52,10 @@ func run() -> void:
 	check(accept_button.text.contains("134"), "accept names the visitor's actual 134 Cr offer")
 	check(shell.page.scr.line3.visible and shell.page.scr.line3.text.contains("1066"), "purchase projects 1200 minus 134 as 1066 Cr")
 	lot.evidence = GameData.def(lot.defId).tools.duplicate()
+	lot.evidence.append("SPEC")
 	shell.page._refresh()
 	await audit("evidence")
+	check(shell.page.chips.get_child_count() == 3, "specific evidence is offered alongside the two relevant instrument readings")
 	game.state = Model.reduce(game.state,{"type":"ACCEPT"})
 	shell.go("counter")
 	await audit("locked")
@@ -68,6 +70,7 @@ func run() -> void:
 	stock.condition = 1.0
 	stock.sourceVerified = true
 	stock.evidence = GameData.def(stock.defId).tools.duplicate()
+	stock.evidence.append("SPEC")
 	game.state = Model.reduce(game.state,{"type":"SELECT_TRADE","uid":stock.uid})
 	shell.go("counter")
 	await audit("sale selected")

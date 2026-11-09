@@ -17,7 +17,7 @@
   document.body.append(nav);
   const tools = document.createElement('div');
   tools.id = 'touch-tools'; tools.hidden = true;
-  tools.innerHTML = `<select aria-label="鉴定仪器"><option value="">选择仪器</option><option value="TOL-001">可变焦灯镜</option><option value="TOL-002">紫外检视灯</option><option value="TOL-003">轨道光谱台</option><option value="TOL-004">双触点万用探针</option><option value="TOL-005">微重力秤</option><option value="TOL-006">脉冲测试夹</option></select><button type="button" class="touch-button" data-command="flip">翻面</button>`;
+  tools.innerHTML = `<select aria-label="鉴定仪器"><option value="">选择仪器</option><option value="TOL-001">可变焦灯镜</option><option value="TOL-002">紫外检视灯</option><option value="TOL-003">轨道光谱台</option><option value="TOL-004">双触点万用探针</option><option value="TOL-005">微重力秤</option><option value="TOL-006">脉冲测试夹</option><option value="SPEC">专属检测</option></select><button type="button" class="touch-button" data-command="flip">翻面</button><button type="button" id="touch-specific" hidden></button>`;
   nav.append(tools);
   const trade = document.createElement('dialog');
   trade.id = 'touch-trade'; trade.setAttribute('aria-labelledby', 'trade-heading');
@@ -25,6 +25,7 @@
   document.body.append(trade);
   const input = document.getElementById('trade-offer-input');
   let state = {ready: false};
+  let pendingSpecific = null;
   const send = data => {
     if (typeof window.orbitalTouchSend === 'function') window.orbitalTouchSend(JSON.stringify(data));
   };
@@ -51,6 +52,12 @@
   input.addEventListener('change', () => setDraft(input.value));
   document.querySelectorAll('[data-nudge]').forEach(button => button.addEventListener('click', () => setDraft(Number(input.value) + Number(button.dataset.nudge))));
   tools.querySelector('select').addEventListener('change', event => send({type: 'tool', tool: event.target.value}));
+  document.getElementById('touch-specific').addEventListener('click', event => {
+    if (!state.specific_next || pendingSpecific) return;
+    pendingSpecific = {uid: state.specific_uid, index: state.specific_index, feedback: state.specific_feedback};
+    event.currentTarget.disabled = true;
+    send({type: 'specific_step', uid: pendingSpecific.uid, index: pendingSpecific.index});
+  });
   document.querySelectorAll('[data-command]').forEach(button => button.addEventListener('click', () => {
     if (button.dataset.command === 'page' && trade.open) trade.close();
     send({type: button.dataset.command, page: button.dataset.page});
@@ -73,6 +80,22 @@
     document.getElementById('canvas').inert = vertical;
     nav.hidden = !phone() || vertical || !state.ready;
     tools.hidden = nav.hidden || state.title || state.workspace !== 'inspect';
+    if (Array.isArray(state.inspection_tools)) {
+      const selector = tools.querySelector('select');
+      for (const option of selector.options) {
+        option.hidden = option.disabled = !!option.value && !state.inspection_tools.includes(option.value);
+      }
+      selector.querySelector('[value="SPEC"]').textContent = state.inspection_title || '专属检测';
+      selector.value = state.inspection_current || '';
+      selector.disabled = !!state.blocked || !!state.busy;
+    }
+    const specific = document.getElementById('touch-specific');
+    if (pendingSpecific && (state.blocked || state.busy || state.inspection_current !== 'SPEC' ||
+        state.specific_uid !== pendingSpecific.uid || state.specific_index !== pendingSpecific.index ||
+        state.specific_feedback !== pendingSpecific.feedback)) pendingSpecific = null;
+    specific.hidden = tools.hidden || !state.specific_next;
+    specific.textContent = state.specific_reason || state.specific_next || '';
+    specific.disabled = !!state.blocked || !!state.busy || !!pendingSpecific || !state.specific_allowed;
     if (vertical && trade.open) trade.close();
     nav.querySelector('[data-command=start]').hidden = !state.title;
     nav.querySelector('[data-command=start]').textContent = state.has_save ? `继续营业 · 第 ${state.day} 天` : '开门营业';

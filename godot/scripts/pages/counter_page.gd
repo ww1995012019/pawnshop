@@ -48,7 +48,7 @@ var back_root: Node2D
 var resident_window: Control
 var mat_rect := Rect2(600, 490, 710, 175)
 var drag_rect := Rect2(660, 545, 600, 67)
-var bubble_rect := Rect2(1040, 190, 275, 245)
+var bubble_rect := Rect2(1032, 180, 283, 270)
 
 ## Extra counter depth in the room's original sage palette. The extension is
 ## behind all goods and controls, with stepped highlights like the painted desk.
@@ -389,7 +389,7 @@ func _build_status() -> void:
 		var value := UIKit.label("", 20 if key == "cash" else 18, Color("c4d1a5"), true)
 		value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if key == "cash" else (HORIZONTAL_ALIGNMENT_CENTER if key == "ap" else HORIZONTAL_ALIGNMENT_RIGHT)
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		value.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		stats.add_child(value)
 		status_values[key] = value
@@ -402,22 +402,47 @@ func _build_status() -> void:
 		var key: String = spec[0]
 		var b := Button.new()
 		b.text = spec[1]
-		b.icon = UIKit.icon(spec[2])
-		b.expand_icon = true
 		b.custom_minimum_size = Vector2(112, 32)
 		b.add_theme_font_size_override("font_size", 16)
 		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		b.tooltip_text = spec[1]
-		b.add_theme_constant_override("icon_max_width", 18)
 		b.pressed.connect(func(): _utility_clicked(key, b))
 		utilities.add_child(b)
 		wall_unit.fit_key(b)
+		# Godot aligns a Button's built-in icon independently of its text. Use
+		# one centered row instead, while retaining the button text for a11y.
+		for color in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_disabled_color"]:
+			b.add_theme_color_override(color, Color.TRANSPARENT)
+		var center := CenterContainer.new()
+		center.name = "content"
+		center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(center)
+		var content := UIKit.hbox(5)
+		content.name = "row"
+		content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		center.add_child(content)
+		var icon := TextureRect.new()
+		icon.name = "icon"
+		icon.texture = UIKit.icon(spec[2])
+		icon.custom_minimum_size = Vector2(18, 18)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		content.add_child(icon)
+		var caption := UIKit.label(spec[1], 16, Color("3d3428"))
+		caption.name = "caption"
+		caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		content.add_child(caption)
 		fixture_buttons[key] = b
 
 func _refresh_utility_icons() -> void:
 	if fixture_buttons.has("sound"):
-		fixture_buttons.sound.icon = UIKit.icon("soundOn" if Game.prefs.sound else "soundOff")
+		fixture_buttons.sound.get_node("content/row/icon").texture = UIKit.icon("soundOn" if Game.prefs.sound else "soundOff")
 
 func _bell_clicked() -> void:
 	if Game.state.trade == null and Game.state.phase == "open":
@@ -425,7 +450,7 @@ func _bell_clicked() -> void:
 	else:
 		shell.sound("check", -8, 1.3)
 
-func _utility_clicked(key: String, button: Button) -> void:
+func _utility_clicked(key: String, _button: Button) -> void:
 	if _scene_blocked():
 		return
 	match key:
@@ -435,7 +460,7 @@ func _utility_clicked(key: String, button: Button) -> void:
 			Game.prefs.sound = not Game.prefs.sound
 			Game.save_prefs()
 			shell._apply_sound()
-			button.icon = UIKit.icon("soundOn" if Game.prefs.sound else "soundOff")
+			_refresh_utility_icons()
 
 func _open_instrument(which: String) -> void:
 	var it = Model.trade_item(Game.state) if Game.state.trade != null else null
@@ -455,9 +480,12 @@ func relayout() -> void:
 	bubble.position = bubble_rect.position
 	bubble.size = bubble_rect.size
 	bubble_name.position = Vector2(12, 10)
-	bubble_name.size = Vector2(251, 27)
+	bubble_name.size = Vector2(bubble_rect.size.x - 24, 27)
 	bubble_label.position = Vector2(12, 43)
-	bubble_label.size = Vector2(251, 188)
+	bubble_label.size = Vector2(bubble_rect.size.x - 24, bubble_rect.size.y - 105)
+	footer.position = Vector2(12, bubble_rect.size.y - 56)
+	footer.size = Vector2(bubble_rect.size.x - 24, 46)
+	call_deferred("_layout_bubble_content")
 	tag.position = Vector2(640, 665)
 	tag.size = Vector2(195, 48)
 	tag_name.custom_minimum_size.x = 180
@@ -651,9 +679,7 @@ func _build_terminal() -> void:
 	chips.add_theme_constant_override("h_separation", 4)
 	chips.add_theme_constant_override("v_separation", 2)
 	evidence_box.add_child(chips)
-	footer = UIKit.label("", 16, Color("d0c6ad"), false, true)
-	footer.position = Vector2(1046, 443)
-	footer.size = Vector2(268, 43)
+	footer = UIKit.label("", 16, Color("79523c"), false, true)
 	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	footer.visible = false
 	add_child(footer)
@@ -766,9 +792,9 @@ func _refresh() -> void:
 			dial.set_value(int(drafts.get(t.id, initial)), false)
 			_update_offer_value(dial.value)
 			for e in it.evidence:
-				if not GameData.def(it.defId).tools.has(e):
+				if not GameData.relevant_tool(it.defId, e):
 					continue
-				var chip := UIKit.button(GameData.tool(e).short, "primary" if chosen_evidence == e else "chip", Vector2(0, 26), 17)
+				var chip := UIKit.button(GameData.evidence_short(it.defId, e), "primary" if chosen_evidence == e else "chip", Vector2(0, 26), 17)
 				var eid: String = e
 				_till_key(chip, "primary" if chosen_evidence == e else "secondary")
 				chip.pressed.connect(func():
@@ -788,7 +814,7 @@ func _refresh() -> void:
 			else:
 				_act("换一件", "secondary", _pick_goods)
 			_act("送客", "danger", func(): Game.dispatch({"type": "REFUSE"}))
-		footer.text = "%s：%s" % [npc.name, Model.customer_need(t.npcId)]
+		footer.text = Model.customer_need(t.npcId)
 	dial.enabled = dial_on and not busy and not _scene_blocked()
 	for k in nudge_keys:
 		(k as Button).disabled = not dial.enabled
@@ -797,6 +823,7 @@ func _refresh() -> void:
 	scr.line3.visible = t != null
 	footer.visible = t != null
 	footer.tooltip_text = footer.text
+	call_deferred("_layout_bubble_content")
 	for k in ["line1", "line2"]:
 		var l: Label = scr[k]
 		if l.text.length() > 21:
@@ -888,6 +915,19 @@ func _build_bubble() -> void:
 	bubble_label.add_theme_color_override("default_color", Color("332d32"))
 	bubble_label.mouse_filter = Control.MOUSE_FILTER_STOP
 	bubble.add_child(bubble_label)
+	footer.reparent(bubble)
+
+func _layout_bubble_content() -> void:
+	if not is_instance_valid(bubble) or not is_instance_valid(bubble_label) or not is_instance_valid(footer):
+		return
+	# Keep the purchase note next to the spoken line, while reserving room for
+	# longer dialogue and retaining a bounded, scrollable text area.
+	var top := 43.0
+	var content_height := maxf(26.0, bubble_label.get_content_height())
+	var note_y := minf(bubble_rect.size.y - 56.0, top + content_height + 10.0)
+	bubble_label.size.y = note_y - top - 8.0
+	footer.position.y = note_y
+	bubble.size.y = note_y + 56.0
 
 func _say(text: String, type := true, mood := "") -> void:
 	if customer == null or not is_instance_valid(customer):
@@ -896,9 +936,16 @@ func _say(text: String, type := true, mood := "") -> void:
 		customer.set_mood(mood)
 	var npc := GameData.npc(customer.npc_id)
 	bubble_name.text = "%s · %s" % [npc.name, npc.title]
-	bubble_label.text = text
-	bubble_label.tooltip_text = text
+	# Purchase requirements live in the note below the dialogue, so long
+	# arrival lines don't repeat the same text or run under the counter.
+	var spoken := text
+	var purchase := spoken.find(" 这次采购：")
+	if purchase >= 0:
+		spoken = spoken.left(purchase)
+	bubble_label.text = spoken
+	bubble_label.tooltip_text = spoken
 	bubble_label.scroll_to_line(0)
+	call_deferred("_layout_bubble_content")
 	var dur := text.length() * 0.035
 	customer.say(dur + 0.2)
 	bubble.modulate.a = 1.0

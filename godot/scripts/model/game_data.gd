@@ -15,6 +15,7 @@ static var content_clues := {}
 static var faults := {}
 static var art := {}
 static var item_list: Array = []
+static var inspection_profiles := {}
 
 static func ensure() -> void:
 	if not raw.is_empty():
@@ -27,6 +28,9 @@ static func ensure() -> void:
 	tools = raw.tools
 	for t in tools:
 		tool_ids.append(t.id)
+	# Specific checks are evidence, but not a seventh physical instrument.
+	tool_ids.append("SPEC")
+	inspection_profiles = JSON.parse_string(FileAccess.get_file_as_string("res://data/inspection_profiles.json"))
 	materials = raw.materials
 	npcs = raw.npcs
 	recipes = raw.recipes
@@ -50,10 +54,38 @@ static func npc(id: String) -> Dictionary:
 
 static func tool(id: String) -> Dictionary:
 	ensure()
+	if id == "SPEC":
+		return {"id": "SPEC", "name": "专属检测", "short": "专检", "instruction": "按物品的实际用途逐步测试。"}
 	for t in tools:
 		if t.id == id:
 			return t
 	return {}
+
+static func inspection_profile(id: String) -> Dictionary:
+	ensure()
+	return inspection_profiles.get(id, {})
+
+static func applicable_tools(id: String) -> Array:
+	ensure()
+	var extra: Array = inspection_profile(id).get("extra", [])
+	var out: Array = []
+	for t in tools:
+		if t.id not in ["TOL-004", "TOL-006"] or extra.has(t.id):
+			out.append(t.id)
+	if not inspection_profile(id).is_empty():
+		out.append("SPEC")
+	return out
+
+static func relevant_tool(id: String, tool_id: String) -> bool:
+	return (tool_id == "SPEC" and not inspection_profile(id).is_empty()) or def(id).tools.has(tool_id)
+
+static func evidence_name(id: String, tool_id: String) -> String:
+	if not applicable_tools(id).has(tool_id):
+		return "旧版检测记录"
+	return tool(tool_id).name
+
+static func evidence_short(id: String, tool_id: String) -> String:
+	return "旧证" if not applicable_tools(id).has(tool_id) else tool(tool_id).short
 
 static func recipe(id: String) -> Dictionary:
 	ensure()

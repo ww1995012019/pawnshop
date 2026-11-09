@@ -62,6 +62,53 @@ def main():
             page.locator('[data-command="page"][data-page="inspect"]').tap()
             page.wait_for_function("window.OrbitalTouch.state.workspace === 'inspect'")
             page.wait_for_timeout(300)
+            selector = page.locator('#touch-tools select')
+            available = page.evaluate('window.OrbitalTouch.state.inspection_tools')
+            for tool in ('TOL-004', 'TOL-006'):
+                assert selector.locator(f'option[value="{tool}"]').is_disabled() == (tool not in available), 'Phone selector must match the item’s applicable tests'
+            ap_before_test = page.evaluate('window.OrbitalTouch.state.ap')
+            selector.select_option('SPEC')
+            page.wait_for_function("window.OrbitalTouch.state.inspection_current === 'SPEC' && !!window.OrbitalTouch.state.specific_next")
+            page.evaluate("""() => {
+              window.__savedTouchState = window.OrbitalTouch.state;
+              window.OrbitalTouch.update({...window.__savedTouchState, specific_allowed:false, specific_reason:'行动点不足'});
+            }""")
+            expect(page.locator('#touch-specific')).to_be_disabled()
+            expect(page.locator('#touch-specific')).to_have_text('行动点不足')
+            page.evaluate('window.OrbitalTouch.update(window.__savedTouchState)')
+            first_step = page.evaluate('window.OrbitalTouch.state.specific_next')
+            page.evaluate("""() => {
+              const s = window.OrbitalTouch.state;
+              const command = JSON.stringify({type:'specific_step', uid:s.specific_uid, index:s.specific_index});
+              for (let i = 0; i < 3; i++) window.orbitalTouchSend(command);
+            }""")
+            page.wait_for_function('(step) => window.OrbitalTouch.state.specific_next !== step', arg=first_step)
+            assert page.evaluate('window.OrbitalTouch.state.ap') == ap_before_test, 'Repeated commands must not skip inspection steps'
+            steps = [first_step]
+            for _ in range(2):
+                step = page.evaluate('window.OrbitalTouch.state.specific_next')
+                steps.append(step)
+                button = page.locator('#touch-specific')
+                expect(button).to_be_visible()
+                box = button.bounding_box()
+                assert box['width'] >= 44 and box['height'] >= 44, 'Specific inspection needs an accessible touch target'
+                button.tap()
+                page.wait_for_function('(step) => window.OrbitalTouch.state.specific_next !== step', arg=step)
+            assert len(set(steps)) == 3, 'The item must have three distinct operations'
+            assert page.evaluate('window.OrbitalTouch.state.ap') == ap_before_test - 1, 'Completing a specific test spends one AP'
+            expect(page.locator('#touch-specific')).to_be_hidden()
+            page.evaluate("window.orbitalTouchSend(JSON.stringify({type:'tool', tool:'TOL-001'}))")
+            page.wait_for_function("window.OrbitalTouch.state.inspection_current === 'TOL-001'")
+            expect(selector).to_have_value('TOL-001')
+            page.evaluate("window.orbitalTouchSend(JSON.stringify({type:'settings'}))")
+            page.wait_for_function("window.OrbitalTouch.state.blocked")
+            expect(selector).to_be_disabled()
+            page.evaluate("window.orbitalTouchSend(JSON.stringify({type:'close'}))")
+            page.wait_for_function("!window.OrbitalTouch.state.blocked")
+            expect(selector).to_be_enabled()
+            selector.select_option('')
+            page.wait_for_function("window.OrbitalTouch.state.inspection_current === ''")
+            expect(selector).to_have_value('')
             canvas = page.locator('#canvas').bounding_box()
             toolbar = page.locator('#touch-nav').bounding_box()
             tools = page.locator('#touch-tools').bounding_box()

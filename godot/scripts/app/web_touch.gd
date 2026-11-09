@@ -57,6 +57,23 @@ func snapshot() -> Dictionary:
 		"can_arrive": not title_open and not blocked and not busy and trade == null and
 			state.phase == "open" and state.cursor < Model.daily_visit_limit() and state.ap >= 1,
 		"offer": shell.page.dial.value, "min": shell.page.dial.min_value, "max": shell.page.dial.max_value}
+	if active.page_name == "inspect":
+		var current = Game.item(active.page.it_uid)
+		if current != null:
+			var profile := GameData.inspection_profile(current.defId)
+			var step: int = active.page.specific_step
+			var steps: Array = profile.get("steps", [])
+			var can_pay: bool = current.inspectedPaid or state.upgrades.lamp or Model.has_ap(state, 1.0)
+			var needs_ap: bool = step == steps.size() - 1 and not can_pay
+			var status_text: String = active.page.specific_status.text if is_instance_valid(active.page.specific_status) else ""
+			result.merge({"inspection_tools": GameData.applicable_tools(current.defId),
+				"inspection_title": profile.get("title", "专属检测"),
+				"inspection_current": active.page.tool,
+				"specific_uid": current.uid, "specific_index": step,
+				"specific_allowed": not needs_ap and not active.page.specific_running,
+				"specific_reason": "行动点不足" if needs_ap else "",
+				"specific_feedback": status_text,
+				"specific_next": steps[step] if active.page.tool == "SPEC" and step < steps.size() else ""})
 	if trade != null:
 		var buy: bool = trade.kind == "buy"
 		result.merge({"price": trade.price, "buy": buy, "locked": trade.locked,
@@ -107,8 +124,14 @@ func command(data: Dictionary) -> void:
 	if kind == "tool":
 		var id = data.get("tool", "")
 		var active = shell.active_shell()
-		if active.page_name == "inspect" and id is String and GameData.tool_ids.has(id):
+		if active.page_name == "inspect" and id is String and (id == "" or GameData.tool_ids.has(id)):
 			active.page._set_tool(id)
+		return
+	if kind == "specific_step":
+		var active = shell.active_shell()
+		var index = data.get("index", null)
+		if active.page_name == "inspect" and active.page.tool == "SPEC" and data.get("uid", "") == active.page.it_uid and (index is int or index is float) and is_finite(float(index)) and float(index) == floor(float(index)):
+			active.page._advance_specific(int(index))
 		return
 	if kind == "flip":
 		var active = shell.active_shell()

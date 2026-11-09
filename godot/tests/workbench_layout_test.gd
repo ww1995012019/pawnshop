@@ -56,6 +56,7 @@ func run() -> void:
 	await settle()
 	shell._close_title()
 	game.new_game("ORBITAL-P0")
+	game.state.inventory[0].defId = "ITM-002"
 	shell.go("inspect")
 	await settle()
 	var page = shell.active_shell().page
@@ -73,6 +74,15 @@ func run() -> void:
 		page._set_tool("")
 		await settle()
 		check(page.drag_probe == -1, "switching tools cancels an in-flight probe drag")
+	page._set_tool("SPEC")
+	await settle()
+	check_workbench(page, "item-specific fixture")
+	page._advance_specific(0)
+	page._advance_specific(1)
+	page._advance_specific(2)
+	await create_timer(1.1).timeout
+	await settle()
+	check_workbench(page, "item-specific test result")
 	shell.active_shell().go("repair")
 	await settle()
 	page = shell.active_shell().page

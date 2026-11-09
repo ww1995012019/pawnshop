@@ -48,6 +48,35 @@ func run() -> void:
 	bridge.command({"type":"page", "page":"inspect"})
 	await frame()
 	check(shell.workspace_shell.page.it_uid == stock_uid, "switching an existing workspace preserves deliberate stock selection")
+	bridge.command({"type":"tool", "tool":"SPEC"})
+	bridge.command({"type":"specific_step", "uid":stock_uid, "index":0})
+	bridge.command({"type":"specific_step", "uid":stock_uid, "index":0})
+	bridge.command({"type":"specific_step", "uid":stock_uid, "index":0})
+	check(shell.workspace_shell.page.specific_step == 1 and not game.item(stock_uid).evidence.has("SPEC"), "duplicate touch commands cannot skip specific inspection steps")
+	bridge.command({"type":"specific_step", "uid":visitor_uid, "index":1})
+	check(shell.workspace_shell.page.specific_step == 1, "stale touch commands cannot act on a different lot")
+	bridge.command({"type":"specific_step", "uid":stock_uid, "index":1})
+	check(not game.item(stock_uid).evidence.has("SPEC"), "the result is not recorded before the final operation")
+	game.state.ap = 0
+	var no_ap: Dictionary = bridge.snapshot()
+	check(not no_ap.get("specific_allowed", true) and no_ap.get("specific_reason", "").contains("行动点不足"), "phone shows why the final test cannot run without AP")
+	game.item(stock_uid).inspectedPaid = true
+	check(bridge.snapshot().get("specific_allowed", false), "phone permits a previously paid item's free test at zero AP")
+	game.item(stock_uid).inspectedPaid = false
+	game.state.upgrades.lamp = true
+	check(bridge.snapshot().get("specific_allowed", false), "phone permits the free-inspection upgrade at zero AP")
+	game.state.upgrades.lamp = false
+	bridge.command({"type":"specific_step", "uid":stock_uid, "index":2})
+	check(not shell.workspace_shell.page.specific_running and not game.item(stock_uid).evidence.has("SPEC"), "a blocked final step does not start or reveal a test")
+	game.state.ap = 12
+	bridge.command({"type":"specific_step", "uid":stock_uid, "index":2})
+	if shell.workspace_shell.page.get("specific_running") == true:
+		await create_timer(1.2).timeout
+	check(game.item(stock_uid).evidence.has("SPEC"), "distinct touch steps complete the specific inspection")
+	bridge.command({"type":"specific_step", "uid":stock_uid, "index":3})
+	check(shell.workspace_shell.page.specific_step == 3, "out-of-range touch commands cannot advance a completed test")
+	bridge.command({"type":"tool", "tool":""})
+	check(shell.workspace_shell.page.tool == "", "touch can deselect a tool and return to moving the item")
 	bridge.command({"type":"accept"})
 	check(not game.state.trade.locked, "equipment drawer blocks background trade commands")
 	shell.close_workspace()

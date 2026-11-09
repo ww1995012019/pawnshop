@@ -44,6 +44,8 @@ func run():
 	shell._close_title()
 	game.new_game("ORBITAL-P0")
 	game.state = Model.reduce(game.state,{"type":"ARRIVE"})
+	# Exercise both electrical instruments on a powered item that actually uses them.
+	game.state.trade.item.defId = "ITM-002"
 	shell.go("counter")
 	shell.go("inspect")
 	await process_frame

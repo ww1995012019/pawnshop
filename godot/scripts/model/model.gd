@@ -164,6 +164,8 @@ static func estimate(it: Dictionary) -> Dictionary:
 	for t in D(it.defId).tools:
 		if it.evidence.has(t):
 			relevant.append(t)
+	if it.evidence.has("SPEC") and not GameData.inspection_profile(it.defId).is_empty():
+		relevant.append("SPEC")
 	if relevant.size() < 2:
 		return {"low": jround(base * 0.3), "high": jround(base), "exact": false}
 	var p := item_value(it)
@@ -212,7 +214,7 @@ static func trade_item(s: Dictionary, t = null):
 static func relevant_evidence(it: Dictionary, used: Array) -> Array:
 	var out := []
 	for e in uniq(used):
-		if it.evidence.has(e) and D(it.defId).tools.has(e):
+		if it.evidence.has(e) and GameData.relevant_tool(it.defId, e):
 			out.append(e)
 	return out
 
@@ -375,9 +377,24 @@ static func _physical_clue(it: Dictionary, tool: String) -> String:
 	return ""
 
 static func item_clue(it: Dictionary, tool: String) -> String:
+	if tool == "SPEC":
+		var profile := GameData.inspection_profile(it.defId)
+		if profile.is_empty():
+			return ""
+		var measured: Dictionary = it.duplicate()
+		var snapshot = it.get("specificResult", null)
+		if snapshot is Dictionary:
+			measured.working = snapshot.get("working", it.working)
+			measured.repaired = snapshot.get("repaired", it.repaired)
+		return "%s：%s。" % [profile.title, profile.normal if measured.working else profile.get("fault", fault_label(measured))]
 	var c = GameData.content_clues.get(it.defId, null)
 	var focus = c.clues.get(tool, null) if c != null else null
 	return _physical_clue(it, tool) + (" 本次核对：%s。" % focus if focus != null else "")
+
+static func displayed_clue(it: Dictionary, tool: String) -> String:
+	if not GameData.applicable_tools(it.defId).has(tool):
+		return "旧版检测记录：保留此前的物证，可用于估值与议价。" if GameData.relevant_tool(it.defId, tool) else "旧版检测记录：保留此前的辅助物证。"
+	return item_clue(it, tool)
 
 static func npc_dialogue(s: Dictionary, npc_id: String, stage: String, fallback: String, price := 0.0) -> String:
 	var voice = GameData.npc(npc_id).get("voice", null)
@@ -666,7 +683,12 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			var it = find_item(s, a.uid)
 			if it == null or not GameData.tool_ids.has(a.tool):
 				return previous
+			if a.tool == "SPEC" and GameData.inspection_profile(it.defId).is_empty():
+				return previous
 			if it.evidence.has(a.tool):
+				if a.tool == "SPEC":
+					it.specificResult = {"working": it.working, "repaired": it.repaired}
+					return notice(s, "%s 已免费复测。" % item_clue(it, a.tool))
 				return notice(s, "已取得该工具的证据，免费复看，不重复扣AP。")
 			if not it.inspectedPaid:
 				var cost := 0.0 if s.upgrades.lamp else 1.0
@@ -675,6 +697,8 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				spend(s, cost)
 				it.inspectedPaid = true
 			it.evidence.append(a.tool)
+			if a.tool == "SPEC":
+				it.specificResult = {"working": it.working, "repaired": it.repaired}
 			s.tutorial = maxf(s.tutorial, 1)
 			var extra := "已有两条独立物证，可交叉判断估值。" if evidence_count(it) >= 2 else "仍需另一工具的独立物证，不能只凭外观定真伪。"
 			return notice(s, "%s %s" % [item_clue(it, a.tool), extra])
@@ -697,7 +721,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			if t.rounds >= 3:
 				return notice(s, "三次有效还价已用完，可以接受当前报价或送客。")
 			var ev = a.get("evidence", null)
-			if ev != null and (not it.evidence.has(ev) or not D(it.defId).tools.has(ev)):
+			if ev != null and (not it.evidence.has(ev) or not GameData.relevant_tool(it.defId, ev)):
 				return notice(s, "请选这件实物已取得的相关物证，其他读数不能支撑议价。")
 			t.evidenceUsed = relevant_evidence(it, t.evidenceUsed)
 			if ev != null and not t.evidenceUsed.has(ev):

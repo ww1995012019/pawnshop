@@ -13,6 +13,7 @@ func run() -> void:
 	var kit = load("res://scripts/app/ui_kit.gd")
 	kit.ensure()
 	for id in GameData.items:
+		check(not GameData.inspection_profile(id).is_empty(), "Missing exported item-specific inspection: " + id)
 		for back in [false, true]:
 			var icon = kit.item_icon(id, back)
 			check(icon != null and icon.atlas != null, "Missing exported item face: " + id)
