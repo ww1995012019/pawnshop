@@ -8,6 +8,7 @@ static var tool_ids: Array = []
 static var materials: Array = []
 static var npcs: Array = []
 static var extra_npcs: Array = []
+static var new_residents: Array = []
 static var recipes: Array = []
 static var orders: Array = []
 static var order_earliest := {}
@@ -34,6 +35,7 @@ static func ensure() -> void:
 	materials = raw.materials
 	npcs = raw.npcs
 	extra_npcs = JSON.parse_string(FileAccess.get_file_as_string("res://data/extra_residents.json"))
+	new_residents = JSON.parse_string(FileAccess.get_file_as_string("res://data/new_residents.json"))
 	recipes = raw.recipes
 	orders = raw.orderDefs
 	order_earliest = raw.orderEarliest
@@ -48,14 +50,14 @@ static func def(id: String) -> Dictionary:
 
 static func npc(id: String) -> Dictionary:
 	ensure()
-	for n in npcs + extra_npcs:
+	for n in npcs + extra_npcs + new_residents:
 		if n.id == id:
 			return n
 	return {}
 
 static func people() -> Array:
 	ensure()
-	return npcs + extra_npcs
+	return npcs + extra_npcs + new_residents
 
 static func tool(id: String) -> Dictionary:
 	ensure()

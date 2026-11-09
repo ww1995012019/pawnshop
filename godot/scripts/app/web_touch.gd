@@ -56,8 +56,17 @@ func snapshot() -> Dictionary:
 		"busy": busy, "workspace": active.page_name if shell.workspace_open() else "",
 		"trade": trade != null, "notice": state.get("notice", ""), "locked": false,
 		"can_arrive": not title_open and not blocked and not busy and trade == null and
-			state.phase == "open" and state.cursor < Model.daily_visit_limit() and (state.ap >= 1 or Commerce.merchant_due(state)),
+			state.phase == "open" and state.cursor < Model.daily_visit_limit() and (state.ap >= 1 or Commerce.merchant_due(state) or Commerce.next_visitor(state) == WantedCases.OFFICER_ID),
 		"offer": shell.page.dial.value, "min": shell.page.dial.min_value, "max": shell.page.dial.max_value}
+	# Only information printed on the owned paper is exposed to the companion.
+	result.notice_owned = WantedCases.has_notice(state)
+	result.notice_visible = bool(WantedCases.case_state(state).paper.visible)
+	result.wanted_names = []
+	if result.notice_owned:
+		for id in WantedCases.case_state(state).wanted:
+			result.wanted_names.append(WantedCases.profile(id).name)
+	result.caught_count = WantedCases.case_state(state).caught.size()
+	result.police_visit = trade != null and trade.kind == "police"
 	if active.page_name == "inspect":
 		var current = Game.item(active.page.it_uid)
 		if current != null:

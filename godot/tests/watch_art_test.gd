@@ -15,6 +15,8 @@ func run_check() -> void:
 	var signatures := {}
 	for i in range(33):
 		var id := "WCH-%03d" % (i + 1)
+		var luxury: bool = GameData.def(id).tier == "luxury"
+		check(not WatchLogo.art(id).get("crest", []).is_empty() if luxury else WatchLogo.art(id).get("crest", []).is_empty(), id + " model tier has the correct gold crest")
 		var prior: Image
 		for is_back in [false, true]:
 			var cell: Dictionary = kit.item_cell(id, is_back)

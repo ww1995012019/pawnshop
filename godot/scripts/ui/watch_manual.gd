@@ -37,6 +37,11 @@ static func open(shell: Node, def_id := "") -> void:
 		var reference: Dictionary = WatchRules.model_reference(id)
 		content.add_child(UIKit.module_header(d.name, "型号参考档案 · 对照实物逐项查阅", String(reference.get("model", "型号参考"))))
 		content.add_child(UIKit.label("型号档次：%s · 档次仅指型号行情，不代表本件真伪或品相。" % GameData.tier_label(id), 17, UIKit.RUST, false, true))
+		if GameData.def(id).get("tier") == "luxury":
+			var distinction := UIKit.hbox(8)
+			distinction.add_child(UIKit.tier_badge(id))
+			distinction.add_child(UIKit.label("名贵型号 · 金饰徽章", 16, UIKit.AMBER))
+			content.add_child(distinction)
 		var art_card := UIKit.plate(UIKit.paper_style(12))
 		var art_body := UIKit.vbox(8)
 		art_card.add_child(art_body)

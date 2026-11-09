@@ -25,6 +25,9 @@ var chosen_evidence := ""
 var busy := false
 var _workspace_suspended := false
 var _last_offer_value := 100
+var alarm_button: Button
+var talk_button: Button
+var cash_tray: Control
 var terminal: PanelContainer
 var offer_panel: PanelContainer
 var evidence_box: VBoxContainer
@@ -159,6 +162,7 @@ func enter() -> void:
 	_build_strip()
 	_build_crate()
 	_build_equipment()
+	_build_police_controls()
 	Game.prefs_changed.connect(_refresh_utility_icons)
 	_refresh_utility_icons()
 	# The till stands in front of the counter fixtures, like the illustration.
@@ -483,7 +487,7 @@ func relayout() -> void:
 	footer.position = Vector2(12, bubble_rect.size.y - 56)
 	footer.size = Vector2(bubble_rect.size.x - 24, 46)
 	call_deferred("_layout_bubble_content")
-	tag.position = Vector2(640, 665)
+	tag.position = Vector2(640, 610)
 	tag.size = Vector2(195, 48)
 	tag_name.custom_minimum_size.x = 180
 	tag_info.custom_minimum_size.x = 180
@@ -532,6 +536,12 @@ func _stock_slot(it: Dictionary, picking: bool, display := false) -> Button:
 		slot.add_theme_stylebox_override("normal", _flat(Color(0.24, 0.48, 0.4, 0.3), Color("8db99d"), 2))
 	elif picking:
 		slot.modulate.a = 0.45
+	if def.get("tier") == "luxury":
+		if not picking:
+			slot.add_theme_stylebox_override("normal", _flat(Color(0.27, 0.22, 0.12, 0.25), Color("bd995b"), 2))
+		var crest := UIKit.tier_badge(it.defId, 18.0)
+		crest.position = Vector2(slot.custom_minimum_size.x - 20, 1)
+		slot.add_child(crest)
 	slot.tooltip_text = "%s · 品相 %s%s" % [def.name, UIKit.pct(it.condition), " · 陈列中" if it.location == "display" else ""]
 	slot.tooltip_text += ("\n点击推荐给顾客" if why == null else "\n" + String(why)) if picking else "\n点击在仓储查看"
 	var uid: String = it.uid
@@ -547,12 +557,19 @@ func _refresh_desk() -> void:
 	UIKit.clear(display_goods)
 	var s := Game.state
 	var items: Array = s.inventory
-	stock_count.text = "%d 件 · 点击选货" % items.size()
+	stock_count.text = "%d 件 · 点击选货" % (items.size()+ (1 if WantedCases.has_notice(s) else 0))
 	var t = s.trade
 	var picking: bool = t != null and t.kind == "sell" and not t.has("selectedUid") and not t.locked
-	for i in maxi(CRATE_COLS * 3, ceili(items.size() / float(CRATE_COLS)) * CRATE_COLS):
+	var stock_total := items.size() + (1 if WantedCases.has_notice(s) else 0)
+	for i in maxi(CRATE_COLS * 3, ceili(stock_total / float(CRATE_COLS)) * CRATE_COLS):
 		if i < items.size():
 			stock_grid.add_child(_stock_slot(items[i], picking))
+		elif i == items.size() and WantedCases.has_notice(s):
+			var document := UIKit.button("名单","secondary",Vector2(58,58),16)
+			document.name="wanted_inventory"
+			document.tooltip_text="库存档案 · 取出或收起通缉名单"
+			document.pressed.connect(func(): shell.toggle_wanted_notice())
+			stock_grid.add_child(document)
 		else:
 			var empty := Control.new()
 			empty.custom_minimum_size = Vector2(58, 58)
@@ -587,7 +604,7 @@ func _refresh_desk() -> void:
 	if t == null:
 		idle_label.text = "按左侧服务铃 · 接待下一位来客" if s.phase == "open" and s.cursor < Model.daily_visit_limit() else "预约已接待完 · 打开日结账本"
 	else:
-		idle_label.text = "商人到店 · 在报价台查看商品" if t.kind == "merchant" else "请从陈列柜或下方抽屉选货"
+		idle_label.text = "巡警到店 · 领取协查名单或聊聊案情" if t.kind == "police" else "商人到店 · 在报价台查看商品" if t.kind == "merchant" else "请从陈列柜或下方抽屉选货"
 
 func _stock_clicked(uid: String, picking: bool, why) -> void:
 	if busy or _scene_blocked():
@@ -617,6 +634,12 @@ func _build_terminal() -> void:
 	housing.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	housing.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	content.add_child(housing)
+	cash_tray = preload("res://scripts/ui/cash_tray.gd").new()
+	cash_tray.name = "cash_tray"
+	cash_tray.position = Vector2(392, 142)
+	cash_tray.size = Vector2(116, 64)
+	cash_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(cash_tray)
 	# Live readouts sit in the painted LCD, not on an extra rectangular plate.
 	scr.head = _terminal_label(content, Vector2(107, 48), Vector2(223, 23), 18, Color("a7cbbb"))
 	scr.price = _terminal_label(content, Vector2(338, 42), Vector2(144, 36), 28, Color("f0d49b"), true)
@@ -754,13 +777,25 @@ func _refresh() -> void:
 				scr.line2.text = "来购：" + Model.customer_need(nid).left(22)
 		scr.line3.text = "按服务铃接客 · 每笔交割 1 AP"
 		offer_label.text = "—"
-		_act("接待下一位来客", "primary", func(): _ring(), s.phase == "open" and not closed and (s.ap >= 1 or Commerce.merchant_due(s)))
+		_act("接待下一位来客", "primary", func(): _ring(), s.phase == "open" and not closed and (s.ap >= 1 or Commerce.merchant_due(s) or Commerce.next_visitor(s) == WantedCases.OFFICER_ID))
 		_act("打烊结算", "secondary", func(): shell.go("report"))
 		var shown := 0
 		for i in s.inventory:
 			if i.location == "display":
 				shown += 1
 		footer.text = "陈列架：%d 件 · 可在仓储上架" % shown
+	elif t.kind == "police":
+		scr.head.text="巡警到访 · 衡岚"
+		scr.price.text="协查档案"
+		scr.line1.text="六张照片 · 留意外貌与交谈细节"
+		scr.line2.text="正确报警有报酬，多次误报会处罚"
+		scr.line3.text="名单在库存中，可随时取出贴放"
+		_act("领取通缉名单" if not WantedCases.has_notice(s) else "展开名单","primary",func():
+			if WantedCases.has_notice(Game.state): shell.toggle_wanted_notice()
+			else: Game.dispatch({"type":"ISSUE_WANTED","tradeId":t.id}))
+		_act("聊聊案情","secondary",_open_conversation)
+		_act("送警官离开","secondary",func(): Game.dispatch({"type":"REFUSE"}))
+		footer.text="对照头像，不要只认一顶帽子。"
 	elif t.kind == "merchant":
 		var npc := GameData.npc(t.npcId)
 		scr.head.text = "流动商人 · " + npc.name
@@ -827,9 +862,17 @@ func _refresh() -> void:
 				_act("换一件", "secondary", _pick_goods)
 			_act("送客", "danger", func(): Game.dispatch({"type": "REFUSE"}))
 		footer.text = Model.customer_need(t.npcId)
+	var alarm_reason := WantedCases.report_reason(s)
+	alarm_button.disabled = busy or alarm_reason != ""
+	alarm_button.tooltip_text = alarm_reason if alarm_reason != "" else "核对当前来客后呼叫巡警；错误报警会记录次数"
+	talk_button.disabled = busy or t == null
 	dial.enabled = dial_on and not busy and not _scene_blocked()
 	for k in nudge_keys:
 		(k as Button).disabled = not dial.enabled
+	# The tray occupies the empty payment space. During active negotiation the
+	# existing price/evidence controls retain their full touch targets.
+	cash_tray.visible = not dial_on
+	if not busy: cash_tray.set_cash(float(s.cash))
 	offer_panel.visible = dial_on
 	evidence_box.visible = dial_on
 	scr.line3.visible = t != null
@@ -1086,7 +1129,7 @@ func _ring() -> void:
 	if busy or _scene_blocked():
 		return
 	var s := Game.state
-	if s.trade != null or s.phase != "open" or (s.ap < 1 and not Commerce.merchant_due(s)):
+	if s.trade != null or s.phase != "open" or (s.ap < 1 and not Commerce.merchant_due(s) and Commerce.next_visitor(s) != WantedCases.OFFICER_ID):
 		return
 	bell.strike()
 	shell.sound("check", -2.0, 1.25)
@@ -1151,6 +1194,10 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 			if pt != null and nt == null:
 				var sold = Model.trade_item(prev)
 				await _deal(pt, a.type == "PAWN", GameData.def(sold.defId).name if sold != null else "货物")
+		"ISSUE_WANTED", "ASK_VISITOR":
+			if nt != null: _say(nt.line,true,"focused")
+		"REPORT_VISITOR":
+			if pt != null and nt == null: await _police_response(pt)
 		"CHECK":
 			if nt != null and customer != null:
 				customer.set_mood("focused")
@@ -1183,57 +1230,82 @@ func _leave_with_goods(t: Dictionary, mood: String) -> void:
 	busy = false
 	_refresh()
 
+func _cash_point() -> Vector2:
+	return cash_tray.note_center()
+
 func _deal(t: Dictionary, pawn: bool, item_name: String) -> void:
 	busy = true
 	_refresh()
 	var buy: bool = t.kind == "buy"
+	var price: float = absf(Game.state.ledger[-1].amount) if pawn and not Game.state.ledger.is_empty() else float(t.price)
+	var cash_change := -price if buy else price
+	var before_cash: float = float(Game.state.cash) - cash_change
+	cash_tray.set_cash(before_cash)
+	if not is_instance_valid(customer):
+		cash_tray.set_cash(float(Game.state.cash))
+		busy = false
+		_refresh()
+		return
 	customer.cheer()
 	_say("痛快！东西归你了。" if buy else "好东西，钱给你点清。", true, "happy")
-	var till: Vector2 = terminal.get_global_rect().get_center()
+	var till := _cash_point()
 	var hand: Vector2 = shell.world_to_ui(customer.hands())
-	var price: float = absf(Game.state.ledger[-1].amount) if not Game.state.ledger.is_empty() else t.price
-	var bills := clampi(int(price / 20), 3, 9)
-	for i in bills:
-		get_tree().create_timer(0.08 * i).timeout.connect(_bill.bind(till if buy else hand, hand if buy else till, i))
-	await get_tree().create_timer(0.08 * bills + 0.5).timeout
+	if not Game.prefs.reduced_motion:
+		var bills := clampi(ceili(price / 50.0), 3, 8)
+		var last_bill: Tween
+		for i in bills:
+			var balance := before_cash + cash_change * float(i + 1) / float(bills)
+			last_bill = _bill(till if buy else hand, hand if buy else till, i, balance)
+		await last_bill.finished
+	cash_tray.set_cash(float(Game.state.cash))
+	# The receipt can print while the goods change hands. Departure waits for
+	# the actual item tween, rather than a shorter, unrelated timer.
 	_receipt(t, price, pawn, item_name)
-	await get_tree().create_timer(1.1).timeout
 	customer.nod()
-	if mat_item != null and is_instance_valid(mat_item):
-		var start := mat_item.global_position
-		var dest: Vector2 = _crate_point() if buy else customer.hands()
-		var tw := create_tween()
-		tw.tween_method(func(p: float):
-			mat_item.global_position = start.lerp(dest, p) + Vector2(0, -sin(p * PI) * 160.0)
-			mat_item.scale = Vector2.ONE * lerpf(1.0, 0.25 if buy else 0.6, p)
-			mat_item.modulate.a = 1.0 - smoothstep(0.7, 1.0, p), 0.0, 1.0, 0.8).set_trans(Tween.TRANS_SINE)
-		tw.tween_callback(mat_item.queue_free)
-	await get_tree().create_timer(0.5).timeout
+	if is_instance_valid(mat_item):
+		var item := mat_item
+		item.draggable = false
+		if not Game.prefs.reduced_motion:
+			var start := item.global_position
+			var dest: Vector2 = _crate_point() if buy else customer.hands()
+			var tw := create_tween()
+			tw.tween_method(func(p: float):
+				item.global_position = start.lerp(dest, p) + Vector2(0, -sin(p * PI) * 80.0)
+				item.scale = Vector2.ONE * lerpf(1.0, 0.25 if buy else 0.6, p)
+				item.modulate.a = 1.0 - smoothstep(0.75, 1.0, p), 0.0, 1.0, 0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			await tw.finished
+		item.queue_free()
+		mat_item = null
 	_hide_bubble()
 	customer.walk_out(-500.0)
 	await customer.left
 	customer.queue_free()
+	customer = null
 	busy = false
 	_refresh()
 
-func _bill(from: Vector2, to: Vector2, i: int) -> void:
-	var b := PanelContainer.new()
-	b.add_theme_stylebox_override("panel", UIKit.box(Color("9fc7a2"), Color("3f6a4b"), 3, 2, 6, 3))
-	var l := UIKit.label("20 Cr", 18, Color("1d3a28"), true)
-	b.add_child(l)
-	shell.fx.add_child(b)
-	b.reset_size()
+func _bill(from: Vector2, to: Vector2, i: int, landing_cash: float) -> Tween:
+	var b := preload("res://scripts/ui/cash_tray.gd").new()
+	b.name = "cash_bill_%d" % i
+	b.single_bill = true
+	b.size = Vector2(68, 30)
 	b.pivot_offset = b.size * 0.5
-	var ctrl := (from + to) * 0.5 + Vector2(randf_range(-80, 80), -260)
+	# Initialize before adding it to the scene: no first-frame flash at (0,0).
+	b.position = from - b.size * 0.5
+	add_child(b)
+	var ctrl := (from + to) * 0.5 + Vector2(0, -70)
 	var tw := create_tween()
+	tw.tween_interval(0.075 * i)
 	tw.tween_method(func(p: float):
 		var q := from.lerp(ctrl, p).lerp(ctrl.lerp(to, p), p)
 		b.position = q - b.size * 0.5
-		b.rotation = sin(p * PI * 2.0 + i) * 0.6
-		b.scale = Vector2.ONE * (1.0 - p * 0.35), 0.0, 1.0, 0.55).set_trans(Tween.TRANS_SINE)
+		b.rotation = lerpf(-0.04, 0.035, p) + sin(p * PI) * 0.06,
+		0.0, 1.0, 0.52).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_callback(func():
-		shell.sound("coin", -5.0, randf_range(0.95, 1.15))
+		cash_tray.set_cash(landing_cash)
+		shell.sound("coin", -10.0, 1.0)
 		b.queue_free())
+	return tw
 
 ## A thermal-paper slip prints out of the till, gets stamped and is torn
 ## off. It belongs to this page, so leaving the counter takes it away too.
@@ -1386,3 +1458,112 @@ func _process(_delta: float) -> void:
 		mat_item.hover = lerpf(mat_item.hover, 1.0 if mat_item.contains(p) or mat_item.dragging else 0.0, 0.2)
 	if is_instance_valid(customer):
 		customer.look = clampf((p.x - customer.global_position.x) / 700.0, -1.0, 1.0)
+
+# ------------------------------------------------ police / conversations
+func _build_police_controls() -> void:
+	alarm_button=UIKit.button("报警 · 呼叫巡警","danger",Vector2(280,44),18,"alert")
+	alarm_button.name="alarm_button"
+	alarm_button.position=Vector2(650,673)
+	alarm_button.pressed.connect(func():
+		if not busy and not _scene_blocked(): _confirm_alarm())
+	add_child(alarm_button)
+	talk_button=UIKit.button("交谈 · 留意细节","secondary",Vector2(280,44),18,"speech")
+	talk_button.name="talk_button"
+	talk_button.position=Vector2(946,673)
+	talk_button.pressed.connect(func():
+		if not busy and not _scene_blocked(): _open_conversation())
+	add_child(talk_button)
+
+func _confirm_alarm() -> void:
+	var reason:=WantedCases.report_reason(Game.state)
+	if reason!="": shell.toast(reason);return
+	var trade_id: String=Game.state.trade.id
+	var npc_id: String=Game.state.trade.npcId
+	var modal: Array=shell.modal("报警前核对来客",820)
+	var body: VBoxContainer=modal[0]
+	var photo:=TextureRect.new()
+	photo.texture=UIKit.npc_icon(npc_id)
+	photo.custom_minimum_size=Vector2(150,150)
+	photo.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+	photo.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	body.add_child(photo)
+	body.add_child(UIKit.label("请先对照通缉照片、外貌和口供。前两次误报提醒，第三次起处罚60 Cr，之后逐次增加20 Cr。",20,UIKit.TEXT,false,true))
+	var notice:=UIKit.button("拿出通缉名单对照","secondary",Vector2(0,48),19)
+	notice.pressed.connect(func():
+		modal[1].call()
+		if not WantedCases.case_state(Game.state).paper.visible: shell.toggle_wanted_notice())
+	body.add_child(notice)
+	var confirm:=UIKit.button("确认报警，请巡警核对","danger",Vector2(0,54),20)
+	confirm.name="confirm_alarm"
+	confirm.pressed.connect(func():
+		modal[1].call()
+		Game.dispatch({"type":"REPORT_VISITOR","tradeId":trade_id}))
+	body.add_child(confirm)
+
+func _open_conversation() -> void:
+	if Game.state.trade==null:return
+	var trade_id: String=Game.state.trade.id
+	var npc:=GameData.npc(Game.state.trade.npcId)
+	var modal: Array=shell.modal("与%s交谈" % npc.name,1000)
+	var body: VBoxContainer=modal[0]
+	var answer:=UIKit.label("问问姓名、来路、物品来源和去向。记住话里的细节，再与名单和实物核对。",21,UIKit.TEXT,false,true)
+	answer.name="conversation_answer"
+	answer.custom_minimum_size=Vector2(0,140)
+	body.add_child(answer)
+	var questions:=UIKit.grid(2,10)
+	for topic in WantedCases.TOPICS:
+		var key: String=topic
+		var button:=UIKit.button(WantedCases.TOPICS[topic],"secondary",Vector2(0,50),19)
+		button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		button.pressed.connect(func():
+			if Game.state.trade==null or Game.state.trade.id!=trade_id:return
+			Game.dispatch({"type":"ASK_VISITOR","tradeId":trade_id,"topic":key})
+			answer.text=Game.state.trade.line)
+		questions.add_child(button)
+	body.add_child(questions)
+	var log:=UIKit.label("交谈不消耗AP。照片和口供是线索，不会自动给来客贴罪犯标签。",16,UIKit.MUTED,false,true)
+	body.add_child(log)
+	if not Game.state.trade.get("talkLog",[]).is_empty():
+		answer.text=Game.state.trade.talkLog[-1].answer
+
+func _police_response(previous_trade: Dictionary) -> void:
+	busy=true
+	_refresh()
+	var result: Dictionary=WantedCases.case_state(Game.state).lastResult
+	var patrol:=Customer.new()
+	patrol.setup(WantedCases.OFFICER_ID)
+	patrol.scale=Vector2.ONE*(CUSTOMER_HEIGHT/patrol.size.y)
+	patrol.position=Vector2(530,STAND.y-resident_window.position.y)
+	resident_window.add_child(patrol)
+	patrol.walk_in(920)
+	await patrol.arrived
+	if is_instance_valid(customer):
+		_say(result.get("text","巡警已完成核对。"),false,"focused")
+		bubble_name.text="衡岚 · 旧港巡警"
+		customer.talking=0
+	patrol.say(1.2)
+	if is_instance_valid(mat_item):
+		var goods:=mat_item
+		goods.draggable=false
+		if not Game.prefs.reduced_motion:
+			var from:=goods.global_position
+			var to: Vector2=_crate_point() if previous_trade.kind=="sell" else patrol.hands() if result.get("arrested",false) else customer.hands() if is_instance_valid(customer) else _crate_point()
+			var transfer:=create_tween()
+			transfer.tween_method(func(p:float):
+				goods.global_position=from.lerp(to,p)+Vector2(0,-sin(p*PI)*50)
+				goods.modulate.a=1.0-smoothstep(.75,1,p),0.0,1.0,.4)
+			await transfer.finished
+		goods.queue_free()
+		mat_item=null
+	if not Game.prefs.reduced_motion: await get_tree().create_timer(1.3).timeout
+	if is_instance_valid(customer):
+		customer.walk_out(-500)
+		await customer.left
+		customer.queue_free()
+		customer=null
+	patrol.walk_out(-500)
+	await patrol.left
+	patrol.queue_free()
+	_hide_bubble()
+	busy=false
+	_refresh()

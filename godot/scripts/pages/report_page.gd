@@ -28,9 +28,11 @@ func enter() -> void:
 	sheet.add_child(sc)
 	body = UIKit.vbox(12)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	# Keep printed edges and right-aligned serials clear of the scroll rail.
 	var scroll_gutter := MarginContainer.new()
 	scroll_gutter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_gutter.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll_gutter.add_theme_constant_override("margin_right", 14)
 	scroll_gutter.add_child(body)
 	sc.add_child(scroll_gutter)
@@ -43,13 +45,10 @@ func relayout() -> void:
 	if not is_instance_valid(sheet):
 		return
 	var r: Rect2 = shell.content_rect()
-	var width := minf(1100.0, r.size.x)
-	var max_height := minf(760.0, r.size.y)
-	var style: StyleBox = sheet.get_theme_stylebox("panel")
-	var pad := style.get_content_margin(SIDE_TOP) + style.get_content_margin(SIDE_BOTTOM)
-	var height := minf(max_height, maxf(360.0, body.get_combined_minimum_size().y + pad + 4.0))
-	sheet.position = Vector2(r.position.x + (r.size.x - width) * 0.5, r.position.y)
-	sheet.size = Vector2(width, height)
+	# The outer equipment drawer already defines the usable area. Filling it
+	# avoids a second, smaller fixed-width window floating inside the drawer.
+	sheet.position = r.position
+	sheet.size = r.size
 
 func _row(g: GridContainer, k: String, v: String, color := UIKit.INK) -> void:
 	g.add_child(UIKit.label(k, 20, Color("6b5a40")))
@@ -89,15 +88,18 @@ func _refresh() -> void:
 		if r.day == s.day:
 			today.append(r)
 	var cols := UIKit.hbox(16)
+	cols.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var receipt := UIKit.plate(UIKit.paper_style(16))
 	receipt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var left := UIKit.vbox(8)
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	receipt.add_child(left)
 	left.add_child(UIKit.label("今日流水 / TRANSACTIONS", 18, UIKit.INK, true))
 	left.add_child(UIKit.label("第 %02d 营业日 · %02d 笔记录" % [day, today.size()], 15, Color("6b5a40")))
 	var sc := ScrollContainer.new()
 	sc.custom_minimum_size = Vector2(0, 250)
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var lv := UIKit.vbox(4)
 	lv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -111,7 +113,13 @@ func _refresh() -> void:
 		lv.add_child(row)
 	if today.is_empty():
 		lv.add_child(UIKit.label("今天还没有流水。", 18, Color("6b5a40")))
-	sc.add_child(lv)
+	# This is a separate scroll area from the whole sheet: reserve its own
+	# gutter so the last amount never touches the thumb or track.
+	var entries_gutter := MarginContainer.new()
+	entries_gutter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	entries_gutter.add_theme_constant_override("margin_right", 24)
+	entries_gutter.add_child(lv)
+	sc.add_child(entries_gutter)
 	left.add_child(sc)
 	cols.add_child(receipt)
 	var totals := UIKit.plate(UIKit.paper_style(16))

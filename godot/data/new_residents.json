@@ -1,0 +1,982 @@
+[
+  {
+    "id": "CHR-014",
+    "name": "衡岚",
+    "title": "旧港巡警",
+    "faction": "station",
+    "detect": 28,
+    "line": "旧港有几宗失窃案，给你留一份带照片的名单。",
+    "bio": "巡查旧港失窃案件，负责交付通缉档案与核对报警。",
+    "desire": "提供通缉档案、核对报警与发放协查报酬。",
+    "purchase": {
+      "minCondition": 0.65,
+      "authentic": true,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "旧港有几宗失窃案，给你留一份带照片的名单。",
+        "例行巡查。名单还留着吗？认人要看细节，别只认一顶帽子。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 25,
+        "serial": 20,
+        "structure": 25,
+        "market": 35
+      }
+    },
+    "role": "police",
+    "features": "银灰短发、深青制服与盾形警徽",
+    "conversations": {
+      "identity": "我叫衡岚，做旧港巡警。巡查旧港失窃案件，负责交付通缉档案与核对报警。",
+      "origin": "我是从二号栈桥过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去北边客运站，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-015",
+    "name": "祁洵",
+    "title": "货舱搬运工",
+    "faction": "salvage",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "长期替货船卸货，熟悉旧港夜间的班次。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是祁洵，做货舱搬运工的。今天顺路来看看。",
+        "刚从温室回廊过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 34,
+        "serial": 32,
+        "structure": 33,
+        "market": 44
+      }
+    },
+    "role": "resident",
+    "features": "黑色短发、红围巾、棕色背带",
+    "conversations": {
+      "identity": "我叫祁洵，做货舱搬运工。长期替货船卸货，熟悉旧港夜间的班次。",
+      "origin": "我是从温室回廊过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去生活舱，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-016",
+    "name": "塔莎",
+    "title": "维修学徒",
+    "faction": "merchant",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "在维修铺学手艺，最近替师傅采购旧表。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是塔莎，做维修学徒的。今天顺路来看看。",
+        "刚从夜班食堂过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 43,
+        "serial": 44,
+        "structure": 41,
+        "market": 53
+      }
+    },
+    "role": "resident",
+    "features": "深肤色、黑色细辫、蓝色颈巾",
+    "conversations": {
+      "identity": "我叫塔莎，做维修学徒。在维修铺学手艺，最近替师傅采购旧表。",
+      "origin": "我是从夜班食堂过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去维修铺，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-017",
+    "name": "柏尧",
+    "title": "退休测绘员",
+    "faction": "station",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "退休后整理旧航线图，喜欢有刻度的工具。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.65,
+      "authentic": true,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是柏尧，做退休测绘员的。今天顺路来看看。",
+        "刚从旧船坞过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 52,
+        "serial": 56,
+        "structure": 49,
+        "market": 62
+      }
+    },
+    "role": "resident",
+    "features": "灰胡须、绿帽、圆眼镜",
+    "conversations": {
+      "identity": "我叫柏尧，做退休测绘员。退休后整理旧航线图，喜欢有刻度的工具。",
+      "origin": "我是从旧船坞过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去回收区，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-018",
+    "name": "穆恩",
+    "title": "票务经纪",
+    "faction": "salvage",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "在客运栈桥办理票据，爱谈船期。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是穆恩，做票务经纪的。今天顺路来看看。",
+        "刚从二号栈桥过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 61,
+        "serial": 20,
+        "structure": 57,
+        "market": 71
+      }
+    },
+    "role": "resident",
+    "features": "光头、圆眼镜、芥黄马甲",
+    "conversations": {
+      "identity": "我叫穆恩，做票务经纪。在客运栈桥办理票据，爱谈船期。",
+      "origin": "我是从二号栈桥过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去北边客运站，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-019",
+    "name": "温茵",
+    "title": "缝衣师",
+    "faction": "merchant",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "在生活舱缝补衣物，习惯记住客人的衣料。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是温茵，做缝衣师的。今天顺路来看看。",
+        "刚从温室回廊过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 25,
+        "serial": 32,
+        "structure": 65,
+        "market": 35
+      }
+    },
+    "role": "resident",
+    "features": "赤褐短发、乳白领口",
+    "conversations": {
+      "identity": "我叫温茵，做缝衣师。在生活舱缝补衣物，习惯记住客人的衣料。",
+      "origin": "我是从温室回廊过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去生活舱，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-020",
+    "name": "陆珩",
+    "title": "回收跑船人",
+    "faction": "station",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "在船坞与回收站之间跑货。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.65,
+      "authentic": true,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是陆珩，做回收跑船人的。今天顺路来看看。",
+        "刚从夜班食堂过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 34,
+        "serial": 44,
+        "structure": 25,
+        "market": 44
+      }
+    },
+    "role": "resident",
+    "features": "黑色长发、紫围巾",
+    "conversations": {
+      "identity": "我叫陆珩，做回收跑船人。在船坞与回收站之间跑货。",
+      "origin": "我是从夜班食堂过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去维修铺，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-021",
+    "name": "茉婆",
+    "title": "食堂掌勺人",
+    "faction": "salvage",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "每天记得来吃饭的人，给夜班工人留热汤。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是茉婆，做食堂掌勺人的。今天顺路来看看。",
+        "刚从旧船坞过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 43,
+        "serial": 56,
+        "structure": 33,
+        "market": 53
+      }
+    },
+    "role": "resident",
+    "features": "银色卷发、赭黄披肩",
+    "conversations": {
+      "identity": "我叫茉婆，做食堂掌勺人。每天记得来吃饭的人，给夜班工人留热汤。",
+      "origin": "我是从旧船坞过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去回收区，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-022",
+    "name": "贺铎",
+    "title": "舱壁检修工",
+    "faction": "merchant",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "负责检修舱壁，常带着工具四处走。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是贺铎，做舱壁检修工的。今天顺路来看看。",
+        "刚从二号栈桥过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 52,
+        "serial": 20,
+        "structure": 41,
+        "market": 62
+      }
+    },
+    "role": "resident",
+    "features": "铜色短胡须、深蓝工作服",
+    "conversations": {
+      "identity": "我叫贺铎，做舱壁检修工。负责检修舱壁，常带着工具四处走。",
+      "origin": "我是从二号栈桥过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去北边客运站，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-023",
+    "name": "禾青",
+    "title": "种子交换员",
+    "faction": "station",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "替温室交换种子，也交换旧物的故事。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.65,
+      "authentic": true,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是禾青，做种子交换员的。今天顺路来看看。",
+        "刚从温室回廊过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 61,
+        "serial": 32,
+        "structure": 49,
+        "market": 71
+      }
+    },
+    "role": "resident",
+    "features": "绿头巾、小圆眼镜",
+    "conversations": {
+      "identity": "我叫禾青，做种子交换员。替温室交换种子，也交换旧物的故事。",
+      "origin": "我是从温室回廊过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去生活舱，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-024",
+    "name": "卓岩",
+    "title": "装卸队长",
+    "faction": "salvage",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "肩膀宽阔，常替队员整理器材。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是卓岩，做装卸队长的。今天顺路来看看。",
+        "刚从夜班食堂过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 25,
+        "serial": 44,
+        "structure": 57,
+        "market": 35
+      }
+    },
+    "role": "resident",
+    "features": "浓黑胡须、橙色肩章",
+    "conversations": {
+      "identity": "我叫卓岩，做装卸队长。肩膀宽阔，常替队员整理器材。",
+      "origin": "我是从夜班食堂过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去维修铺，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-025",
+    "name": "岑绫",
+    "title": "旧衣商",
+    "faction": "merchant",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "经营一间旧衣摊，对布料的来处很有耐心。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是岑绫，做旧衣商的。今天顺路来看看。",
+        "刚从旧船坞过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 34,
+        "serial": 56,
+        "structure": 65,
+        "market": 44
+      }
+    },
+    "role": "resident",
+    "features": "黑色长辫、红色立领",
+    "conversations": {
+      "identity": "我叫岑绫，做旧衣商。经营一间旧衣摊，对布料的来处很有耐心。",
+      "origin": "我是从旧船坞过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去回收区，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-026",
+    "name": "周砚",
+    "title": "印章修复师",
+    "faction": "station",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "为旧港修复磨损的印章与金属牌。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.65,
+      "authentic": true,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是周砚，做印章修复师的。今天顺路来看看。",
+        "刚从二号栈桥过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 43,
+        "serial": 20,
+        "structure": 25,
+        "market": 53
+      }
+    },
+    "role": "resident",
+    "features": "白鬓发、紫色马甲",
+    "conversations": {
+      "identity": "我叫周砚，做印章修复师。为旧港修复磨损的印章与金属牌。",
+      "origin": "我是从二号栈桥过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去北边客运站，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-027",
+    "name": "伊莎",
+    "title": "货运会计",
+    "faction": "salvage",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "随身带着对账本，习惯反复核对日期。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是伊莎，做货运会计的。今天顺路来看看。",
+        "刚从温室回廊过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 52,
+        "serial": 32,
+        "structure": 33,
+        "market": 62
+      }
+    },
+    "role": "resident",
+    "features": "短灰发、蓝色外套",
+    "conversations": {
+      "identity": "我叫伊莎，做货运会计。随身带着对账本，习惯反复核对日期。",
+      "origin": "我是从温室回廊过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去生活舱，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-028",
+    "name": "白澈",
+    "title": "航道信使",
+    "faction": "merchant",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "在不同栈桥送信，记路比记人更快。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是白澈，做航道信使的。今天顺路来看看。",
+        "刚从夜班食堂过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 61,
+        "serial": 44,
+        "structure": 41,
+        "market": 71
+      }
+    },
+    "role": "resident",
+    "features": "金色侧分发、绿围巾",
+    "conversations": {
+      "identity": "我叫白澈，做航道信使。在不同栈桥送信，记路比记人更快。",
+      "origin": "我是从夜班食堂过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去维修铺，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-029",
+    "name": "夏葵",
+    "title": "锅炉技师",
+    "faction": "station",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "擅长让旧锅炉继续工作，常跑夜班。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.65,
+      "authentic": true,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是夏葵，做锅炉技师的。今天顺路来看看。",
+        "刚从旧船坞过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 25,
+        "serial": 56,
+        "structure": 49,
+        "market": 35
+      }
+    },
+    "role": "resident",
+    "features": "深色卷发、头顶黄铜护目镜",
+    "conversations": {
+      "identity": "我叫夏葵，做锅炉技师。擅长让旧锅炉继续工作，常跑夜班。",
+      "origin": "我是从旧船坞过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去回收区，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-030",
+    "name": "阿鲁",
+    "title": "废料分拣员",
+    "faction": "salvage",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "在回收区按材料分拣杂物，常记错班次。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是阿鲁，做废料分拣员的。今天顺路来看看。",
+        "刚从二号栈桥过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 34,
+        "serial": 20,
+        "structure": 57,
+        "market": 44
+      }
+    },
+    "role": "resident",
+    "features": "灰色针织帽、暗红围巾",
+    "conversations": {
+      "identity": "我叫阿鲁，做废料分拣员。在回收区按材料分拣杂物，常记错班次。",
+      "origin": "我是从二号栈桥过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去北边客运站，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-031",
+    "name": "宁素",
+    "title": "档案保管员",
+    "faction": "merchant",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "替旧港保存纸质记录，字迹端正。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是宁素，做档案保管员的。今天顺路来看看。",
+        "刚从温室回廊过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 43,
+        "serial": 32,
+        "structure": 65,
+        "market": 53
+      }
+    },
+    "role": "resident",
+    "features": "银色盘发、深酒红外套",
+    "conversations": {
+      "identity": "我叫宁素，做档案保管员。替旧港保存纸质记录，字迹端正。",
+      "origin": "我是从温室回廊过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去生活舱，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-032",
+    "name": "罗翊",
+    "title": "接线修理工",
+    "faction": "station",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "习惯听设备的声音找故障。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.65,
+      "authentic": true,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是罗翊，做接线修理工的。今天顺路来看看。",
+        "刚从夜班食堂过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 52,
+        "serial": 44,
+        "structure": 25,
+        "market": 62
+      }
+    },
+    "role": "resident",
+    "features": "凌乱黑发、黄铜耳饰、青色夹克",
+    "conversations": {
+      "identity": "我叫罗翊，做接线修理工。习惯听设备的声音找故障。",
+      "origin": "我是从夜班食堂过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去维修铺，今天不赶最后一班船。"
+    }
+  },
+  {
+    "id": "CHR-033",
+    "name": "珂琳",
+    "title": "面包摊主",
+    "faction": "salvage",
+    "detect": 28,
+    "line": "路过旧货局，想看看有没有合适的手表。",
+    "bio": "清晨烤面包，傍晚才有空来逛旧货局。",
+    "desire": "来源清楚、可以日常佩戴的手表。",
+    "purchase": {
+      "minCondition": 0.4,
+      "authentic": false,
+      "working": true,
+      "categories": [
+        "watch"
+      ]
+    },
+    "voice": {
+      "arrival": [
+        "我是珂琳，做面包摊主的。今天顺路来看看。",
+        "刚从旧船坞过来，有好表可以聊聊。"
+      ],
+      "counter": [
+        "还得留点路费，{price} Cr能不能商量？"
+      ],
+      "agreed": [
+        "就这么定，记得把回执给我。"
+      ],
+      "refused": [
+        "那先不打扰，你忙。"
+      ]
+    },
+    "expertise": {
+      "watch": {
+        "logo": 61,
+        "serial": 56,
+        "structure": 33,
+        "market": 71
+      }
+    },
+    "role": "resident",
+    "features": "赤褐卷发、赭黄围裙",
+    "conversations": {
+      "identity": "我叫珂琳，做面包摊主。清晨烤面包，傍晚才有空来逛旧货局。",
+      "origin": "我是从旧船坞过来的，那边刚换过一班人。",
+      "goods": "表是旧物，不怕你逐项看。回执和编号该核对就核对。",
+      "destination": "等会儿要去回收区，今天不赶最后一班船。"
+    }
+  }
+]

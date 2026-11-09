@@ -138,6 +138,17 @@ func _lists() -> void:
 			b.pressed.connect(func(): select(uid))
 			items_row.add_child(b)
 		lists.add_child(row)
+	_document_inventory()
+
+func _document_inventory() -> void:
+	if not WantedCases.has_notice(Game.state): return
+	var row:=UIKit.hbox(8)
+	row.add_child(UIKit.label("纸质档案 / 1",16,UIKit.AMBER))
+	var open:=UIKit.button("通缉名单 · 取出 / 收起","secondary",Vector2(0,48),17)
+	open.name="wanted_inventory"
+	open.pressed.connect(func(): shell.toggle_wanted_notice())
+	row.add_child(open)
+	lists.add_child(row)
 
 func select(uid: String) -> void:
 	if selected != uid:
@@ -245,6 +256,11 @@ func _detail() -> void:
 	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hv.add_child(UIKit.label(def.name, 26, UIKit.INK, false, true))
 	hv.add_child(UIKit.label("型号档次：%s" % GameData.tier_label(it.defId), 17, UIKit.RUST))
+	if GameData.def(it.defId).get("tier") == "luxury":
+		var distinction := UIKit.hbox(8)
+		distinction.add_child(UIKit.tier_badge(it.defId))
+		distinction.add_child(UIKit.label("名贵型号 · 金饰徽章", 16, UIKit.RUST))
+		hv.add_child(distinction)
 	var owner: String = {"shop": "店铺自有", "customer": "顾客委修", "pawn": "抵押保管"}[it.owner]
 	var loc: String = {"warehouse": "后仓", "display": "陈列架", "isolation": "隔离柜", "pawn": "抵押柜"}[it.location]
 	hv.add_child(UIKit.label("%s · %s · 占格 %d×%d" % [owner, loc, def.size[0], def.size[1]], 16, Color("6b5a40"), false, true))

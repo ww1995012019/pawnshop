@@ -27,6 +27,10 @@ func run() -> void:
 			for suffix in ["", "_n"]:
 				var path := "res://assets/atlas/%s-%s%s.png" % [family, face, suffix]
 				check(not ResourceLoader.exists(path), "Legacy item art should not ship: " + path)
+	check(GameData.people().size() == 33, "Export includes 20 new residents")
+	check(WantedCases.profiles().size() == 50, "Export includes 50 wanted profiles")
+	for profile in WantedCases.profiles():
+		check(kit.wanted_portrait(profile).atlas != null, "Missing wanted portrait: " + profile.id)
 	for npc in GameData.people():
 		check(kit.npc_portrait(npc.id).atlas != null, "Missing resident: " + npc.id)
 		var cell = kit.npc_cell(npc.id)

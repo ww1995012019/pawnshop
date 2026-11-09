@@ -5,6 +5,7 @@ extends Control
 var def_id := "WCH-001"
 var variant := 0
 var physical_patch := false
+var crest_only := false
 static var _art: Dictionary = {}
 
 static func art(id: String) -> Dictionary:
@@ -22,9 +23,24 @@ func setup(id: String, logo_variant := 0) -> void:
 	custom_minimum_size = Vector2(120, 80)
 	queue_redraw()
 
+func setup_crest(id: String, side := 24.0) -> void:
+	setup(id)
+	crest_only = true
+	custom_minimum_size = Vector2.ONE * side
+	size = custom_minimum_size
+
 func _draw() -> void:
 	var data := art(def_id)
 	if data.is_empty():
+		return
+	if crest_only:
+		var crest_unit := minf(size.x, size.y) / 16.0
+		var origin := (size - Vector2.ONE * 16.0 * crest_unit) * 0.5
+		var mount := Rect2(origin, Vector2.ONE * 16.0 * crest_unit)
+		draw_rect(mount, Color("353b31"))
+		draw_rect(mount, Color("90784c"), false, maxf(1.0, crest_unit * 0.5))
+		for pixel in data.get("crest", []):
+			draw_rect(Rect2(origin + Vector2(pixel[0], pixel[1]) * crest_unit, Vector2.ONE * crest_unit), Color("e4c375"))
 		return
 	var unit := minf(size.x / 24.0, size.y / 16.0)
 	var origin := (size - Vector2(24, 16) * unit) * 0.5

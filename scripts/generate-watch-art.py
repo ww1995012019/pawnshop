@@ -77,7 +77,17 @@ def glyph(i,v=0):
                     if bit=='1': d.point((4+n*4+pos%3,11+pos//3),fill=1)
     return [[x,y] for y in range(16) for x in range(24) if im.getpixel((x,y))]
 
-def watch(i,back=False):
+def crest():
+    """A small model-tier ornament, independent of authentic/altered brand marks."""
+    im=Image.new('1',(16,16)); d=ImageDraw.Draw(im)
+    d.polygon([(2,5),(5,8),(8,3),(11,8),(14,5),(12,12),(4,12)],fill=1)
+    d.line([(4,14),(12,14)],fill=1)
+    d.polygon([(8,0),(10,2),(8,4),(6,2)],fill=1)
+    for x in [0,15]:
+        for y in [8,11,14]: d.point((x,y),fill=1)
+    return [[x,y] for y in range(16) for x in range(16) if im.getpixel((x,y))]
+
+def watch(i,back=False,luxury=False):
     model_index=i
     if i>=15:
         extra=i-15; i=NEW_TEMPLATES[extra]
@@ -87,7 +97,7 @@ def watch(i,back=False):
     im=Image.new('RGBA',(128,128)); d=ImageDraw.Draw(im)
     def rect(box,c,outline=None,w=1): d.rectangle(box,fill=c,outline=outline,width=w)
     def ellipse(box,c,outline=None,w=1): d.ellipse(box,fill=c,outline=outline,width=w)
-    st=STRAPS[i]; gold=i==13 or model_index>=27; case='#bda064' if gold else STEEL
+    st=STRAPS[i]; gold=i==13 or luxury; case='#bda064' if gold else STEEL
     left,right=(48,80) if i not in [4,10,14] else (45,83)
     rect((left,9,right,119),INK); rect((left+2,10,right-2,117),col)
     rect((left+3,11,left+5,116),'#c0b697' if st=='leather' else '#697673')
@@ -163,6 +173,10 @@ def watch(i,back=False):
         for n,bits in enumerate(['101111111101101','111101101101111','111001111100111']):
             for pos,bit in enumerate(bits):
                 if bit=='1': d.point((76+n*4+pos%3,55+pos//3),fill=INK)
+    if luxury:
+        rect((54,98,73,118),INK)
+        rect((55,99,72,117),'#514735','#ad9156')
+        for x,y in crest(): d.point((56+x,100+y),fill='#e4c375')
     return im.resize((256,256),Image.Resampling.NEAREST)
 
 def main():
@@ -171,9 +185,11 @@ def main():
     count=len(definitions); rows=math.ceil(count/5)
     for side in ['front','back']:
         atlas=Image.new('RGBA',(1280,rows*256))
-        for i in range(count): atlas.paste(watch(i,side=='back'),(i%5*256,i//5*256))
+        for i in range(count): atlas.paste(watch(i,side=='back',definitions[i].get('tier')=='luxury'),(i%5*256,i//5*256))
         atlas.save(OUT/f'watches-{side}.png')
         normal=Image.new('RGBA',atlas.size,(128,128,255,0)); normal.putalpha(atlas.getchannel('A'));normal.save(OUT/f'watches-{side}_n.png')
     payload={f'WCH-{i+1:03}':{'face':(FACES[i] if i<15 else NEW_FACES[i-15]),'ink':('#e2e5d9' if (i if i<15 else NEW_TEMPLATES[i-15]) in [2,3,4,5,7,8,9,10,14] else INK),'pixels':[glyph(i),glyph(i,1)]} for i in range(count)}
+    for i,definition in enumerate(definitions):
+        payload[definition['id']]['crest']=crest() if definition.get('tier')=='luxury' else []
     (ROOT/'godot/data/watch_art.json').write_text(json.dumps(payload,separators=(',',':'))+'\n')
 if __name__=='__main__': main()

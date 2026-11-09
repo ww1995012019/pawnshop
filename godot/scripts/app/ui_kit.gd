@@ -456,6 +456,9 @@ static func watch_variant_texture(def_id: String) -> CanvasTexture:
 ## Portrait cell for an NPC and mood; moods exist for the first five residents.
 static func npc_cell(npc_id: String, _mood := "neutral") -> Dictionary:
 	var index := maxi(int(npc_id.trim_prefix("CHR-")) - 1, 0)
+	if index >= 13 and index < 33:
+		index -= 13
+		return {"key":"shop-residents-new","region":Rect2(index % 5 * 256,index / 5 * 256,256,256)}
 	if index >= 9 and index < 13:
 		index -= 9
 		return {"key": "shop-residents-extra", "region": Rect2((index % 2) * 256, (index / 2) * 256, 256, 256)}
@@ -495,3 +498,17 @@ static func tool_icon(tool_id: String) -> AtlasTexture:
 	a.region = Rect2((i % 3) * 512 + 20, (i / 3) * 512 + 20, 472, 472)
 	_cache[key] = a
 	return a
+
+## The same decorative crest is used on the physical luxury model and its cards.
+static func tier_badge(def_id: String, side := 24.0) -> Control:
+	var badge := WatchLogo.new()
+	badge.setup_crest(def_id, side)
+	return badge
+
+static func wanted_portrait(profile: Dictionary) -> AtlasTexture:
+	if profile.get("npcId", "") != "": return npc_icon(profile.npcId)
+	var index := int(profile.get("faceIndex",0))
+	var face := AtlasTexture.new()
+	face.atlas = tex("res://assets/atlas/wanted-faces.png")
+	face.region = Rect2(index % 8 * 160,index / 8 * 160,160,160)
+	return face

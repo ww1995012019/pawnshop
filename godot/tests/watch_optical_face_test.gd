@@ -20,6 +20,8 @@ func run():
 	page._set_tool("TOL-002")
 	await process_frame
 	await process_frame
+	check(page.item.back, "UV automatically presents the back")
+	page.flip_item()
 	page.optical_fixed = true
 	page.optical_position = page.item.reveal_center()
 	await create_timer(1.0).timeout
@@ -45,6 +47,8 @@ func run():
 	await create_timer(1.0).timeout
 	check(game.item(page.it_uid).evidence.has("TOL-002"), "back serial records after fresh full observation")
 	page._set_tool("TOL-001")
+	check(not page.item.back, "magnifier automatically presents the dial")
+	page.flip_item()
 	page.optical_fixed = true
 	page.optical_position = page.item.logo_world_position()
 	await create_timer(1.0).timeout

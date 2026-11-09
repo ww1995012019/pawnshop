@@ -6,6 +6,7 @@ signal changed(prev: Dictionary, next: Dictionary, action: Dictionary)
 signal prefs_changed
 
 const Commerce = preload("res://scripts/model/commerce.gd")
+const Wanted = preload("res://scripts/model/wanted_cases.gd")
 const CrimeEvents = preload("res://scripts/model/crime_events.gd")
 const SAVE_PATH := "user://orbital-watch-save-v4.json"
 const LEGACY_PATH := "user://orbital-save-v3.json"
@@ -31,6 +32,7 @@ func _ready() -> void:
 			has_save = true
 	if state.is_empty():
 		state = Model.create()
+	Wanted.ensure(state)
 
 ## Preserve the previous catalogue independently of the new watch campaign.
 func backup_legacy_save() -> void:
@@ -45,6 +47,7 @@ func legacy_save_text() -> String:
 func new_game(seed := "") -> void:
 	var prev := state
 	state = Model.create(seed if seed != "" else "ORBITAL-%08X" % randi())
+	Wanted.ensure(state)
 	focus_uid = ""
 	save()
 	changed.emit(prev, state, {"type": "NEW_GAME"})

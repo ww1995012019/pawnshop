@@ -51,6 +51,7 @@ var world_cursor := Input.CURSOR_ARROW
 
 # A drawer gets its own isolated canvas/camera but shares the persistent Game.
 # Only the root Shell owns a customer, the opening screen and ambient audio.
+var wanted_notice: Control
 var workspace_mode := false
 var workspace_parent: Node
 var initial_page := "counter"
@@ -107,6 +108,7 @@ func _ready() -> void:
 		cap.run(self, capture_dir)
 	else:
 		_show_title()
+	_sync_wanted_notice()
 	if OS.has_feature("web"):
 		var touch := preload("res://scripts/app/web_touch.gd").new()
 		add_child(touch)
@@ -654,7 +656,9 @@ func _on_changed(prev: Dictionary, next: Dictionary, action: Dictionary) -> void
 		Game.set_meta("counter_offer_drafts", {})
 		go("counter")
 		_refresh_hud()
+		_sync_wanted_notice()
 		return
+	_sync_wanted_notice()
 	if not workspace_open() and next.notice != "" and (next.notice != prev.notice or action.type != "OFFER"):
 		toast(next.notice)
 	var spent: float = prev.ap - next.ap
@@ -1273,6 +1277,7 @@ func _close_title() -> void:
 	hud.hide()
 	nav.hide()
 	hint_label.visible = workspace_mode
+	call_deferred("_sync_wanted_notice")
 
 func _show_title() -> void:
 	if is_instance_valid(title):
@@ -1420,3 +1425,28 @@ class ShutterDoor extends Control:
 		var f: Font = UIKit.font
 		draw_string(f, Vector2(plate.position.x, plate.position.y + 100), "第 %d 天" % day, HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 72, Color("ffc98f"))
 		draw_string(f, Vector2(plate.position.x, plate.position.y + 150), "回环九号 · 下层旧港", HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 24, Color("d9c4a2"))
+
+# The inventory paper stays in the outer viewport, above equipment drawers.
+func _sync_wanted_notice() -> void:
+	if workspace_mode: return
+	if not WantedCases.has_notice(Game.state):
+		if is_instance_valid(wanted_notice): wanted_notice.hide()
+		return
+	if not is_instance_valid(wanted_notice):
+		wanted_notice=preload("res://scripts/ui/wanted_notice.gd").new()
+		root_ui.add_child(wanted_notice)
+		wanted_notice.setup(self)
+	wanted_notice.refresh()
+	if is_instance_valid(title) and not title.is_queued_for_deletion(): wanted_notice.hide()
+	if wanted_notice.visible:
+		root_ui.move_child(wanted_notice,-1)
+		root_ui.move_child(modal_layer,-1)
+
+func toggle_wanted_notice() -> void:
+	if workspace_mode:
+		workspace_parent.toggle_wanted_notice()
+		return
+	if not WantedCases.has_notice(Game.state):
+		toast("先向巡警领取通缉名单。")
+		return
+	Game.dispatch({"type":"TOGGLE_NOTICE"})

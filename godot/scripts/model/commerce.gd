@@ -3,6 +3,7 @@ extends RefCounted
 ## its TypeScript replay contract. Everything returned here is JSON-saveable.
 
 const MERCHANT_ID := "CHR-010"
+const Wanted = preload("res://scripts/model/wanted_cases.gd")
 const CrimeEvents = preload("res://scripts/model/crime_events.gd")
 const RARE_ITEMS := ["WCH-003", "WCH-008", "WCH-012", "WCH-015"]
 
@@ -22,11 +23,16 @@ static func merchant_due(s: Dictionary) -> bool:
 static func next_visitor(s: Dictionary) -> String:
 	if merchant_due(s):
 		return MERCHANT_ID
+	var override := Wanted.visitor_override(s,merchant_slot(s))
+	if override != "": return override
 	if int(s.day) > 3:
 		var key := "%s/%s/%s" % [s.seed, Model.jnum(s.day), Model.jnum(s.cursor)]
 		if Model.fnv(key + "/new-visitor") % 3 == 0:
 			var ids := ["CHR-011", "CHR-012", "CHR-013"]
 			return ids[Model.fnv(key + "/visitor-role") % ids.size()]
+		var newcomers := Wanted.live_candidates(s)
+		if not newcomers.is_empty() and Model.fnv(key+"/expanded-cast") % 3 == 0:
+			return newcomers[Model.fnv(key+"/expanded-person") % newcomers.size()]
 	return Model.market_npc_id(s)
 
 static func _new_merchant(s: Dictionary) -> Dictionary:
@@ -80,6 +86,8 @@ static func recovery_price(s: Dictionary, item: Dictionary) -> float:
 static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 	GameData.ensure()
 	var kind: String = action.get("type", "")
+	var wanted_result = Wanted.reduce(previous, action)
+	if wanted_result != null: return wanted_result
 	if kind == "CHOOSE_EVENT" and CrimeEvents.is_crime(CrimeEvents.event_for_day(previous)):
 		return CrimeEvents.reduce(previous, action)
 	if kind == "REGISTER":
@@ -137,6 +145,11 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 		var s: Dictionary = previous.duplicate(true)
 		s.trade = _new_merchant(s)
 		return Model.notice(s, "流动商人已到店，可以购买维修材料、交易多余物资。")
+	if kind == "ARRIVE" and previous.trade == null and previous.phase == "open" and next_visitor(previous) == Wanted.OFFICER_ID:
+		var state := previous.duplicate(true)
+		Wanted.ensure(state)
+		state.trade = Wanted.new_officer_trade(state)
+		return Model.notice(state,"巡警到店，带来了带照片的协查档案。")
 	if kind == "ARRIVE":
 		var next := Model.reduce(previous, action)
 		if previous.trade == null and next.trade != null:

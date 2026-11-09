@@ -89,9 +89,11 @@ func _build_panels() -> void:
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.add_child(info)
 	rv.add_child(sc)
-	var row := UIKit.grid(2,10)
+	var row := UIKit.grid(4,10)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for entry in [["翻面 F",flip_item],["实物归位",_home],["回柜台",func(): shell.go("counter")],["去维修",func(): shell.go("repair",it_uid)]]:
-		var b := UIKit.button(entry[0],"secondary",Vector2(0,54),20)
+		var b := UIKit.button(entry[0],"secondary",Vector2(0,54),18)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(entry[1])
 		row.add_child(b)
 	rv.add_child(row)
@@ -134,6 +136,11 @@ func _refresh_info() -> void:
 	var def := GameData.def(it.defId)
 	info.add_child(UIKit.module_header(def.name, String(def.description).split("。")[0] + "。", "实物档案"))
 	info.add_child(UIKit.label("型号档次：%s" % GameData.tier_label(it.defId), 17, UIKit.RUST))
+	if GameData.def(it.defId).get("tier") == "luxury":
+		var distinction := UIKit.hbox(8)
+		distinction.add_child(UIKit.tier_badge(it.defId))
+		distinction.add_child(UIKit.label("名贵型号 · 金饰徽章", 16, UIKit.AMBER))
+		info.add_child(distinction)
 	info.add_child(UIKit.label("观察记录 · %d / %d" % [it.evidence.size(), TOOL_IDS.size()], 17, UIKit.AMBER))
 	var pending: Array[String] = []
 	for index in TOOL_IDS.size():
@@ -165,6 +172,7 @@ func _load_item() -> void:
 	item.bounds = Rect2(560,330,700,260)
 	item.set_reveal(WatchRules.serial(it),Vector2(.5,.62))
 	item.flipped.connect(func(_back: bool): _reset_optical_observation())
+	item.flip_finished.connect(func(_back: bool): _orient_for_tool())
 	add_world(item,"fg")
 
 func _home() -> void:
@@ -191,11 +199,18 @@ func _reset_optical_observation() -> void:
 		item.mat.set_shader_parameter("uv_r",0.0)
 		item.reveal.material.set_shader_parameter("uv_r",0.0)
 
+func _orient_for_tool() -> void:
+	if pending_tool == "" or not is_instance_valid(item) or item.busy: return
+	var needs_back := pending_tool == "TOL-002"
+	pending_tool = ""
+	if item.back != needs_back: item.flip()
+
 func _set_tool(id: String) -> void:
 	if id != "" and not TOOL_IDS.has(id): return
 	if id != "" and Game.item(it_uid) == null: return
 	if scale_occupied: _scale_remove()
 	tool = id
+	pending_tool = id if id in ["TOL-001", "TOL-002"] else ""
 	progress = 0.0
 	optical_fixed = false
 	tared = false
@@ -219,6 +234,7 @@ func _set_tool(id: String) -> void:
 		_optical(id)
 	else:
 		bench_body.add_child(UIKit.module_header("工作台待命", "选择工具观察实物；说明书随时可查。", "READY"))
+	_orient_for_tool()
 	_refresh_info()
 	call_deferred("relayout")
 
@@ -248,7 +264,7 @@ func _optical(id: String) -> void:
 		uv_light.scale = Vector2(.62,.38)
 		add_world(uv_light,"top")
 	add_world(node,"top")
-	bench_body.add_child(UIKit.label("翻到正面，移动镜片观察表盘标识；停住记录细节。" if id == "TOL-001" else "翻到背面，移动紫外灯照亮隐藏编号；停住记录字符。",18,UIKit.TEXT,false,true))
+	bench_body.add_child(UIKit.label("移动镜片观察表盘标识；停住记录细节。" if id == "TOL-001" else "移动紫外灯照亮后盖编号；停住记录字符。",18,UIKit.TEXT,false,true))
 	var fixed := UIKit.button("定位并固定标识" if id == "TOL-001" else "定位并固定编号","primary",Vector2(0,48),18)
 	fixed.pressed.connect(func():
 		optical_fixed = not optical_fixed
@@ -266,9 +282,11 @@ func _scale() -> void:
 	add_world(scale_pan,"fg")
 	scale_label = UIKit.label("0.0 g · 请先空秤归零",22,UIKit.CYAN)
 	bench_body.add_child(scale_label)
-	var grid := UIKit.grid(2,8)
+	var grid := UIKit.grid(4,8)
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for entry in [["空秤归零",_scale_tare],["放到秤上",_scale_place],["记录克数",_scale_record],["取回手表",_scale_remove]]:
 		var b := UIKit.button(entry[0],"secondary",Vector2(0,44),18)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(entry[1])
 		grid.add_child(b)
 	tare_button = grid.get_child(0)

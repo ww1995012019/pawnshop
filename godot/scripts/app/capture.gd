@@ -36,7 +36,6 @@ func run(s, d: String) -> void:
 	await wait(0.8)
 	await shot("04_lens")
 	pg._set_tool("TOL-002")
-	pg.flip_item()
 	await wait(0.6)
 	point(pg.item.uv_global(Vector2(0.5,0.5)))
 	await wait(1.0)
