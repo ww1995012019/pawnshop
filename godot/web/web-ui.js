@@ -134,14 +134,22 @@
   }));
   // Resize the actual render buffer as well as its CSS box. Godot's full-window
   // policy otherwise stretches behind the phone toolbar and hides controls.
+  // A side rail only pays off when the shop then renders larger than it would
+  // above a bottom bar; short or narrow phones keep the bar.
+  const RAIL_WIDTH = 168, BAR_HEIGHT = 56;
+  const useRail = () => !nav.hidden &&
+    Math.min((innerWidth - RAIL_WIDTH) / 1920, innerHeight / 1080) > Math.min(innerWidth / 1920, (innerHeight - BAR_HEIGHT) / 1080);
   function fitCanvas() {
     const canvas = document.getElementById('canvas');
-    const height = Math.max(1, innerHeight - (nav.hidden ? 0 : nav.getBoundingClientRect().height));
+    const box = nav.getBoundingClientRect();
+    const rail = !nav.hidden && nav.classList.contains('rail');
+    const cssWidth = Math.max(1, innerWidth - (rail ? box.width : 0));
+    const height = Math.max(1, innerHeight - (nav.hidden || rail ? 0 : box.height));
     const ratio = devicePixelRatio || 1;
-    const width = Math.round(innerWidth * ratio), pixels = Math.round(height * ratio);
+    const width = Math.round(cssWidth * ratio), pixels = Math.round(height * ratio);
     if (canvas.width !== width) canvas.width = width;
     if (canvas.height !== pixels) canvas.height = pixels;
-    canvas.style.width = `${innerWidth}px`;
+    canvas.style.width = `${cssWidth}px`;
     canvas.style.height = `${height}px`;
   }
   function renderMerchant(unavailable) {
@@ -194,6 +202,7 @@
     guide.hidden = !vertical;
     document.getElementById('canvas').inert = vertical;
     nav.hidden = !phone() || vertical || !state.ready;
+    nav.classList.toggle('rail', useRail());
     tools.hidden = nav.hidden || state.title || state.workspace !== 'inspect';
     if (Array.isArray(state.inspection_tools)) {
       const selector = tools.querySelector('select');

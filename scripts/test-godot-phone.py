@@ -47,6 +47,12 @@ def storage_pixels(page):
     }""")
 
 
+def apart(a, b):
+    """True when two boxes do not overlap (toolbar beside or below the canvas)."""
+    return (a['x'] + a['width'] <= b['x'] + 1 or b['x'] + b['width'] <= a['x'] + 1 or
+            a['y'] + a['height'] <= b['y'] + 1 or b['y'] + b['height'] <= a['y'] + 1)
+
+
 def touch_drag(context, page, points):
     cdp = context.new_cdp_session(page)
     x, y = points[0]
@@ -182,8 +188,10 @@ def main():
             canvas = page.locator('#canvas').bounding_box()
             toolbar = page.locator('#touch-nav').bounding_box()
             tools = page.locator('#touch-tools').bounding_box()
-            assert canvas['y'] + canvas['height'] <= toolbar['y'] + 1, 'Phone toolbar covers the instrument controls'
-            assert tools['y'] >= toolbar['y'], 'Instrument picker must share the reserved toolbar area'
+            assert apart(canvas, toolbar), 'Phone toolbar covers the instrument controls'
+            assert apart(canvas, tools), 'Instrument picker must share the reserved toolbar area'
+            assert page.evaluate("document.getElementById('touch-nav').classList.contains('rail')"), 'A wide phone should use the side rail'
+            assert canvas['height'] >= 389, 'The side rail must give the shop the full screen height'
             pixels = page.evaluate('({width:canvas.width,height:canvas.height,ratio:devicePixelRatio})')
             assert abs(pixels['width'] - canvas['width'] * pixels['ratio']) <= 1, 'Canvas pixel width does not match the display'
             assert abs(pixels['height'] - canvas['height'] * pixels['ratio']) <= 1, 'Canvas pixel height does not match the display'
@@ -193,7 +201,7 @@ def main():
                 page.wait_for_timeout(350)
                 canvas = page.locator('#canvas').bounding_box()
                 toolbar = page.locator('#touch-nav').bounding_box()
-                assert canvas['y'] + canvas['height'] <= toolbar['y'] + 1, 'Small-phone toolbar covers the game'
+                assert apart(canvas, toolbar), 'Small-phone toolbar covers the game'
                 fill = workbench_width_fraction(page)
                 assert fill >= 0.82, f'{width}px phone workspace is too small: {fill:.1%} of screen width'
                 for control in page.locator('#touch-nav button:visible, #touch-nav select:visible').all():
@@ -245,7 +253,8 @@ def main():
             page.wait_for_function("window.OrbitalTouch.state.workspace === 'repair'")
             page.wait_for_timeout(300)
             canvas = page.locator('#canvas').bounding_box()
-            page.touchscreen.tap(canvas['x'] + canvas['width'] * 0.86, canvas['y'] + canvas['height'] * 0.67)
+            page.screenshot(path=str(args.screenshots / '06-repair-workspace.png'))
+            page.touchscreen.tap(canvas['x'] + canvas['width'] * 0.9, canvas['y'] + canvas['height'] * 0.477)
             page.wait_for_function("(uid) => window.OrbitalTouch.state.workspace === 'inspect' && window.OrbitalTouch.state.specific_uid === uid", arg=repair_uid, timeout=10000)
             page.locator('[data-command="page"][data-page="repair"]').tap()
             page.wait_for_function("window.OrbitalTouch.state.workspace === 'repair'")
@@ -271,11 +280,17 @@ def main():
             page.get_by_role('button',name='去仓储选货').tap()
             page.wait_for_function("window.OrbitalTouch.state.workspace === 'warehouse'")
             page.wait_for_timeout(600)
+            # Wide phones fit the whole storage panel beside the side rail; a
+            # shorter bottom-bar layout still has to scroll to the lower lists.
+            page.set_viewport_size({'width': 740, 'height': 400})
+            page.wait_for_timeout(600)
+            assert not page.evaluate("document.getElementById('touch-nav').classList.contains('rail')")
+            page.screenshot(path=str(args.screenshots / '06-warehouse.png'))
             # A prior selection must not capture later swipes on empty cells.
-            page.touchscreen.tap(138, 115)
+            page.touchscreen.tap(103, 110)
             page.wait_for_timeout(400)
             before_scroll = storage_pixels(page)
-            touch_drag(context, page, [(420, y) for y in range(250, 89, -10)])
+            touch_drag(context, page, [(380, y) for y in range(250, 89, -10)])
             after_scroll = storage_pixels(page)
             changed = sum(a != b for a, b in zip(before_scroll, after_scroll)) / len(before_scroll)
             assert changed > 0.10, 'Swiping empty storage cells must reveal the lower storage lists'
@@ -285,7 +300,7 @@ def main():
             page.locator('#touch-nav [data-command="page"][data-page="warehouse"]').tap()
             page.wait_for_function("window.OrbitalTouch.state.workspace === 'warehouse'")
             page.wait_for_timeout(600)
-            touch_drag(context, page, [(140 + i * 10, 110 + i * 6) for i in range(18)])
+            touch_drag(context, page, [(103 + i * 10, 110 + i * 6) for i in range(18)])
             page.wait_for_function("window.OrbitalTouch.state.warehouse_can_rotate")
             rotated = page.evaluate('window.OrbitalTouch.state.warehouse_rotated')
             ap = page.evaluate('window.OrbitalTouch.state.ap')
