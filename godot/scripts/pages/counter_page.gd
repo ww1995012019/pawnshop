@@ -873,6 +873,8 @@ func _refresh() -> void:
 			scr.line2.text = "在货箱里挑一件合格的自有货"
 		var cash_after: float = s.cash + (-float(t.price) if buy else float(t.price))
 		scr.line3.text = "%s %s · 余 %s · 1 AP" % ["支出" if buy else "收入", UIKit.money(t.price), UIKit.money(cash_after)] if it != null else "选定货物后核对金额"
+		if dialogue and pending_count>0:
+			scr.line3.text="收%s / 付%s · %s%s Cr" % [Model.jnum(pending.income),Model.jnum(pending.expense),"实收" if pending.net>=0 else "实付",Model.jnum(absf(pending.net))]
 		scr.line3.tooltip_text = scr.line3.text
 		if t.locked:
 			_act(("谈妥的 %d 件一起交割" % pending_count) if dialogue and pending_count>1 else (("支付 " if buy else "收款 ") + UIKit.money(t.price) + " 并交割"), "primary", func(): Game.dispatch(delivery_action), s.ap >= 1)
