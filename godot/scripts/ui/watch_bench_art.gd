@@ -25,6 +25,8 @@ const STRAP_TYPES := ["leather", "metal", "cloth", "metal", "rubber", "cloth", "
 const STRAP_COLORS := ["76543f", "9eabad", "5e695b", "a6b7bb", "273236", "737856", "735244", "513f3a", "9baba9", "77705a", "879496", "3d5150", "66493b", "78513b", "a4aa9c"]
 const EXTRA_STRAP_COLORS := ["8b694b", "655442", "737b63", "827c60", "a7b2af", "9eaaa6", "585060", "a4b4bf", "48536c", "96a9a0", "465d53", "a6a8b6", "54463e", "c4b87e", "473a57", "6b4939", "b4bba7", "c3b591"]
 
+var _supplies: Dictionary = {}
+var _supplies_known := false
 var _item: Dictionary = {}
 var _task := ""
 var _profile := {"movement":"quartz", "caseback":"screw"}
@@ -135,6 +137,15 @@ func _surface_to_local(p: Vector2) -> Vector2:
 func _local_to_surface(p: Vector2) -> Vector2:
 	var rect := stage_working_rect()
 	return (p - rect.position) * SURFACE.x / maxf(rect.size.x, 0.001)
+
+func set_supplies(supplies: Dictionary) -> void:
+	_supplies=supplies.duplicate()
+	_supplies_known=true
+	queue_redraw()
+
+func replacement_visible(part: String, material_id: String) -> bool:
+	var at:=_v(_state.parts.get(part,[555.0,272.0]))
+	return at.x<420 or not _supplies_known or float(_supplies.get(material_id,0))>0
 
 func interaction_targets() -> Array:
 	if not interaction_allowed or _state.is_empty() or _state.complete or _plan.is_empty():
@@ -735,11 +746,12 @@ func _draw_replaceable() -> void:
 
 func _draw_loose_parts() -> void:
 	if _task == "replace" and _has_fault("missing_link"): _draw_external_parts()
-	if _task == "replace" and _has_fault("missing_fixing"):
+	if _task == "replace" and _has_fault("missing_fixing") and replacement_visible("fixing","MAT-008"):
 		_draw_screw(_v(_state.parts.fixing), 6, 0.2, STEEL)
 	if _task == "replace" and (_has_fault("battery") or _has_fault("movement_part")):
 		var mech: bool = _profile.get("movement", "quartz") == "mechanical"
 		for name in ["old_part", "new_part"]:
+			if name=="new_part" and not replacement_visible("new_part","MAT-010" if _has_fault("battery") else "MAT-008"): continue
 			var p := _v(_state.parts[name])
 			if p.x > 420:
 				if mech: _draw_gear(p, 19, 17, 0.1, Color("b9a565") if name == "old_part" else GOLD)
@@ -761,6 +773,7 @@ func _draw_loose_parts() -> void:
 				draw_circle(p + Vector2(-12 + i * 13, 7), 2.4, Color(0.63, 0.84, 0.80, (1.0 - float(_state.dry)) * 0.65))
 
 func _draw_external_parts() -> void:
+	if _task=="replace" and not replacement_visible("link","MAT-008"): return
 	var p := _v(_state.parts.link)
 	_panel(Rect2(p - Vector2(29, 9), Vector2(58, 18)), Color("7d9182"), Color("c7d0b9"), 3)
 	for offset in [-15.0, 15.0]:
@@ -930,8 +943,9 @@ func _draw_contact() -> void:
 	var p := _v(a.at)
 	for i in range(4):
 		var angle := float(i) * PI * 0.5 + 0.18
-		draw_arc(p, 17, angle, angle + 0.90, 10, CYAN, 1.7, true)
-	draw_circle(p, 2.5, CYAN)
+		draw_arc(p, 26, angle, angle + 1.20, 18, Color(0.02,0.07,0.06,0.95), 9, true)
+		draw_arc(p, 26, angle, angle + 1.20, 18, Color("a4f0d9"), 4, true)
+	draw_circle(p, 4, Color("ffe5a2"))
 	if a.has("part") and p.distance_to(_v(a.to)) > 68.0:
 		var to := _v(a.to)
 		var guide := _transfer_guide(a)

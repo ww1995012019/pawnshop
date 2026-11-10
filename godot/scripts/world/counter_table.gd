@@ -12,6 +12,13 @@ class DeskCard extends Node2D:
  var refused:=false
  var visitor:=false
  var width:=102.0
+ var item_marks: Control
+ func show_item_marks(it: Dictionary) -> void:
+  if item_marks==null:
+   item_marks=Control.new();item_marks.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(item_marks)
+  item_marks.position=Vector2(-width/2,-35)
+  item_marks.size=Vector2(width,64)
+  UIKit.decorate_item(item_marks,it,18.0)
  func area() -> Rect2: return Rect2(Vector2(-width/2,-35),Vector2(width,98))
  func _draw() -> void:
   var edge:=Color("f2c27b") if focused else Color("83b7a0") if agreed else Color("b77e65") if refused else Color("65765d")
@@ -69,6 +76,7 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
     settle.tween_property(sprite,"position",pos,.18).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
     settle.tween_callback(func(): if is_instance_valid(sprite): sprite.remove_meta("layout_destination"))
   card.width=178.0 if visitor else 102.0
+  card.show_item_marks(original)
   card.visitor=visitor;card.focused=info.focused;card.agreed=info.selected;card.refused=info.status in ["rejected","blocked"]
   sprite.set_meta("hit_size",Vector2(card.width,98))
   card.caption=("来客 · " if visitor else "店·")+WatchForgery.sale_name(original).left(8 if visitor else 5)

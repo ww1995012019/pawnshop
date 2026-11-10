@@ -8,7 +8,78 @@ func check(ok,label):
 func verb(s: Dictionary,type: String,extra: Dictionary={}) -> Dictionary:
  var v=TradeSession.summary(s).version
  return Commerce.reduce(s,{"type":type,"tradeId":s.trade.id,"uid":TradeSession.session(s).focus,"version":v,"batch":"counter-"+str(v)}.merged(extra,true))
+func offer_fixture(direction: String) -> Dictionary:
+ var s=Model.create("SUBMITTED-OFFER");s.ap=12;s.cash=5000
+ var lot=Model.new_item(s,"WCH-001",{"owner":"npc","authentic":true,"working":true,"condition":0.9,"sourceVerified":true})
+ s.trade={"id":"submitted-offer","npcId":"CHR-004","kind":"buy","item":lot,"price":100,"rounds":0,"locked":false,"evidenceUsed":[],"line":""}
+ s=CounterDialogue.begin(s)
+ TradeSession.session(s).cash=5000;TradeSession.session(s).want_count=6
+ if direction=="sell":
+  var stock=Model.new_item(s,"WCH-001",{"authentic":true,"working":true,"condition":0.9,"sourceVerified":true})
+  Model.put_in(s,stock)
+  s=Commerce.reduce(s,{"type":"SELECT_TRADE","uid":stock.uid})
+ return s
+func submitted_offer_tests() -> void:
+ # Missing confirmation must fail here; agreement itself never transfers the original.
+ for direction in ["buy","sell"]:
+  var s=offer_fixture(direction)
+  var uid: String=TradeSession.session(s).focus
+  var price: float=100 if direction=="buy" else 1
+  var inventory: Array=s.inventory.duplicate(true)
+  var goods: Array=TradeSession.session(s).goods.duplicate(true)
+  var cash=s.cash;var ap=s.ap
+  var stale_delivery=CounterDialogue.action_for(s,"DELIVER")
+  var submitted=CounterDialogue.action_for(s,"OFFER",{"price":price})
+  s=Commerce.reduce(s,submitted)
+  check(s.trade.locked and CounterDialogue.current(s).selected and CounterDialogue.current(s).status=="confirmed" and s.trade.price==price,"accepted submitted "+direction+" offer immediately locks its exact price")
+  check(s.cash==cash and s.ap==ap and s.inventory==inventory and TradeSession.session(s).goods==goods,"agreed "+direction+" offer leaves cash AP and original ownership unchanged")
+  var stale=Commerce.reduce(s,stale_delivery)
+  check(stale.cash==cash and stale.ap==ap and stale.inventory==inventory,"pre-agreement "+direction+" delivery token cannot settle the new agreement")
+  var repeated=Commerce.reduce(s,submitted)
+  check(TradeSession.summary(repeated).version==TradeSession.summary(s).version and repeated.trade.price==price,"replayed "+direction+" offer cannot revise the locked agreement")
+  var delivery=CounterDialogue.action_for(s,"DELIVER")
+  s=Commerce.reduce(s,delivery)
+  check(s.ap==ap-1 and s.cash==cash+(-price if direction=="buy" else price) and (Model.find_inventory(s,uid)!=null if direction=="buy" else Model.find_inventory(s,uid)==null),"explicit deliver alone settles accepted "+direction+" offer")
+  repeated=Commerce.reduce(s,delivery)
+  check(repeated.cash==s.cash and repeated.ap==s.ap and repeated.inventory==s.inventory,"accepted "+direction+" offer delivery cannot settle twice")
+ # A valid NPC counter can become ready during judgement but still needs consent.
+ var counter=offer_fixture("buy")
+ var before=counter.duplicate(true)
+ counter=verb(counter,"OFFER",{"price":1})
+ check(counter.trade.price>1 and not counter.trade.locked and not CounterDialogue.current(counter).selected and TradeSession.summary(counter).buy_count==0,"different NPC counterprice still requires explicit acceptance")
+ var no_delivery=verb(counter,"DELIVER")
+ check(no_delivery.cash==before.cash and no_delivery.ap==before.ap and no_delivery.inventory==before.inventory,"unaccepted counteroffer cannot be delivered")
+ var accepted=verb(counter,"ACCEPT")
+ check(accepted.trade.locked and accepted.trade.price==counter.trade.price and accepted.cash==before.cash and accepted.ap==before.ap,"explicit accept locks a counteroffer without payment")
+ for round_index in 2: counter=verb(counter,"OFFER",{"price":1})
+ var exhausted=verb(counter,"OFFER",{"price":100})
+ check(counter.trade.rounds==3 and exhausted.trade.rounds==3 and not exhausted.trade.locked,"fourth offer cannot bypass the three-round limit into agreement")
+ var budget=offer_fixture("sell")
+ TradeSession.session(budget).cash=0
+ budget=verb(budget,"OFFER",{"price":1})
+ check(not budget.trade.locked and TradeSession.summary(budget).sell_count==0,"accepted price cannot bypass the NPC budget guard")
+ var reduced=offer_fixture("sell")
+ TradeSession.session(reduced).cash=1
+ reduced=verb(reduced,"OFFER",{"price":2})
+ check(reduced.trade.price==1 and not reduced.trade.locked and TradeSession.summary(reduced).sell_count==0,"budget counterprice does not inherit consent for the submitted price")
+ reduced=verb(reduced,"ACCEPT")
+ check(reduced.trade.locked and reduced.trade.price==1,"budget counterprice can be accepted explicitly")
+ var quantity=offer_fixture("sell")
+ TradeSession.session(quantity).want_count=0
+ quantity=verb(quantity,"OFFER",{"price":1})
+ check(not quantity.trade.locked and TradeSession.summary(quantity).sell_count==0,"accepted price cannot bypass the NPC quantity guard")
+ var invalid=offer_fixture("buy")
+ var untouched_version=TradeSession.summary(invalid).version
+ invalid=verb(invalid,"OFFER",{"price":0})
+ check(invalid.trade.rounds==0 and not invalid.trade.locked and TradeSession.summary(invalid).version==untouched_version,"invalid offer neither spends a round nor creates agreement")
+ var stale_offer=CounterDialogue.action_for(invalid,"OFFER",{"price":100,"version":untouched_version-1})
+ invalid=Commerce.reduce(invalid,stale_offer)
+ check(invalid.trade.rounds==0 and not invalid.trade.locked,"stale offer version cannot create agreement")
+ stale_offer=CounterDialogue.action_for(invalid,"OFFER",{"price":100,"uid":"another-original"})
+ invalid=Commerce.reduce(invalid,stale_offer)
+ check(invalid.trade.rounds==0 and not invalid.trade.locked,"offer for a different original cannot create agreement")
 func run():
+ submitted_offer_tests()
  var s=Model.create("NATURAL-DIALOGUE");s.ap=12;s.cash=5000
  s=Commerce.reduce(s,{"type":"ARRIVE"})
  check(CounterDialogue.active(s),"ordinary arrival automatically enables natural multi-item conversation")

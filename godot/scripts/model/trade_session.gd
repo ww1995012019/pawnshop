@@ -20,7 +20,15 @@ static func ensure(s: Dictionary) -> void:
  if not session(s).is_empty(): return
  var t: Dictionary=s.trade
  if not s.get("npcTrade") is Dictionary: s.npcTrade={}
- var record: Dictionary=s.npcTrade.get(t.npcId,{"cash":800+Model.fnv(String(s.seed)+t.npcId)%1000,"owned":[]})
+ var old_cash: float=800+Model.fnv(String(s.seed)+t.npcId)%1000
+ var record: Dictionary=s.npcTrade.get(t.npcId,{"cash":old_cash,"owned":[]})
+ if String(GameData.npc(t.npcId).get("title","")).contains("收藏") and int(record.get("star_budget_version",0))<1:
+  var high:=0.0
+  for definition in GameData.item_list:
+   if definition.get("watch",{}).get("brand","")=="星冕": high=maxf(high,float(definition.value))
+  var initial: float=high*2+Model.fnv(String(s.seed)+t.npcId)%maxi(1,int(high))
+  record.cash=float(record.cash)+maxf(0,initial-old_cash)
+  record.star_budget_version=1
  s.npcTrade[t.npcId]=record
  var goods: Array=[]
  var count := int(Model.fnv(String(s.seed)+String(t.id)+"/goods")%4)

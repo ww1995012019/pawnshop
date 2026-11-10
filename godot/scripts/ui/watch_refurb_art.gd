@@ -103,7 +103,7 @@ func _draw() -> void:
  var done: Array = _item.get("refurbishment",{}).get("done",[])
  if _task == "refurb_strap":
   _strap_at(_v(_state.parts.strap_old),false)
-  _strap_at(_v(_state.parts.strap_new),true)
+  if replacement_visible("strap_new","MAT-012"): _strap_at(_v(_state.parts.strap_new),true)
  else:
   if _task=="forge_case" and int(_state.step)>=6:
    var previous: String=_appearance.strap
@@ -114,7 +114,7 @@ func _draw() -> void:
   else: _strap_at(CENTER,done.has("strap"))
  if _task in ["refurb_case", "forge_case"]:
   _case_at(_v(_state.parts.case_old),false)
-  _case_at(_v(_state.parts.case_new),true)
+  if replacement_visible("case_new","MAT-011"): _case_at(_v(_state.parts.case_new),true)
   var p := _v(_state.parts.module)
   _part_transform(p,_part_scale(p))
   _draw_dial()

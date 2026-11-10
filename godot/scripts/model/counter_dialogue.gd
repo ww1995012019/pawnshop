@@ -239,7 +239,13 @@ static func reduce(previous: Dictionary,a: Dictionary):
   s=_call(s,"TRADE_OFFER",{"uid":line.uid,"price":a.get("price"),"evidence":a.get("evidence",null)})
   line=TradeSession.row(s,line.uid)
   if int(line.context.rounds)==int(current(previous).context.rounds): s.trade.line=s.notice;return s
-  _judge(s,line);_reply(s,line)
+  # Judgement can mark a changed NPC counterprice ready; only the submitted price carries player consent.
+  var submitted_agreed: bool=line.status=="ready" and line.context.price==a.get("price")
+  _judge(s,line)
+  if submitted_agreed and line.status=="ready" and line.context.price==a.get("price"):
+   s=_call(s,"TRADE_CONFIRM",{"uid":line.uid})
+   line=TradeSession.row(s,line.uid)
+  _reply(s,line)
   return s
  if type=="ACCEPT":
   _judge(s,line)

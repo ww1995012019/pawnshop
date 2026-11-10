@@ -501,6 +501,58 @@ static func tool_icon(tool_id: String) -> AtlasTexture:
 	_cache[key] = a
 	return a
 
+## Player-facing presentation follows the installed shell, never an unfinished target.
+## These helpers do not change item truth or disclose anything to a visitor.
+static func presentation_id(it: Dictionary) -> String:
+	return WatchForgery.appearance_id(it)
+
+static func presentation_tier(it: Dictionary) -> String:
+	return String(GameData.def(presentation_id(it)).get("tier", ""))
+
+## Completed treatments remain player knowledge after parts are removed/restored.
+static func is_modified(it: Dictionary) -> bool:
+	return not WatchForgery.treatments(it).is_empty()
+
+## Small corner marks leave the physical silhouette and selection glow untouched.
+## Safe to call again when an item changes; the decoration never consumes input.
+static func decorate_item(control: Control, it: Dictionary, side := 18.0) -> void:
+	var id := presentation_id(it)
+	var modified := is_modified(it)
+	var signature := "%s:%s:%s" % [id, modified, side]
+	if control.get_meta("item_decoration_signature", "") == signature: return
+	control.set_meta("item_decoration_signature", signature)
+	var previous := control.get_node_or_null("item_decoration")
+	if previous != null:
+		control.remove_child(previous)
+		previous.queue_free()
+	var marks := Control.new()
+	marks.name = "item_decoration"
+	marks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	control.add_child(marks)
+	marks.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if presentation_tier(it) in ["luxury","ultra"]:
+		var crest := tier_badge(id, side)
+		crest.name = "tier_crest"
+		marks.add_child(crest)
+		crest.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		crest.offset_left = -side - 2
+		crest.offset_top = 2
+		crest.offset_right = -2
+		crest.offset_bottom = side + 2
+	if modified:
+		var badge := label("改", roundi(side), AMBER)
+		badge.name = "modified_badge"
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		badge.add_theme_color_override("font_outline_color", Color("101618"))
+		badge.add_theme_constant_override("outline_size", 5)
+		marks.add_child(badge)
+		badge.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		badge.offset_left = 3
+		badge.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		badge.offset_top = -ceilf(side * 1.6) - 4
+		badge.offset_right = side + 7
+		badge.offset_bottom = -2
+
 ## The same decorative crest is used on the physical luxury model and its cards.
 static func tier_badge(def_id: String, side := 24.0) -> Control:
 	var badge := WatchLogo.new()

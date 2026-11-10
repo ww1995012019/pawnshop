@@ -133,7 +133,8 @@ func _lists() -> void:
 			b.icon = UIKit.physical_icon(it)
 			b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 			b.expand_icon = true
-			b.tooltip_text = GameData.def(it.defId).name
+			UIKit.decorate_item(b, it, 16.0)
+			b.tooltip_text = GameData.def(it.defId).name + (" · 改装 / 已加工" if UIKit.is_modified(it) else "")
 			var uid: String = it.uid
 			b.pressed.connect(func(): select(uid))
 			items_row.add_child(b)
@@ -259,15 +260,20 @@ func _detail() -> void:
 	pic.custom_minimum_size = Vector2(120, 120)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	UIKit.decorate_item(pic, it, 22.0)
 	head.add_child(pic)
 	var hv := UIKit.vbox(4)
 	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hv.add_child(UIKit.label(def.name, 26, UIKit.INK, false, true))
 	hv.add_child(UIKit.label("型号档次：%s" % GameData.tier_label(it.defId), 17, UIKit.RUST))
-	if GameData.def(it.defId).get("tier") in ["luxury","ultra"]:
+	if UIKit.presentation_id(it) != String(it.defId):
+		hv.add_child(UIKit.label("外观档次：%s · 改装外壳" % GameData.tier_label(UIKit.presentation_id(it)), 17, UIKit.RUST))
+	if UIKit.is_modified(it):
+		hv.add_child(UIKit.label("改 · 已加工", 17, UIKit.RUST))
+	if UIKit.presentation_tier(it) in ["luxury","ultra"]:
 		var distinction := UIKit.hbox(8)
-		distinction.add_child(UIKit.tier_badge(it.defId))
-		distinction.add_child(UIKit.label("珍稀型号 · 穹铸工艺" if GameData.def(it.defId).get("tier")=="ultra" else "名贵型号 · 金饰徽章", 16, UIKit.RUST))
+		distinction.add_child(UIKit.tier_badge(UIKit.presentation_id(it)))
+		distinction.add_child(UIKit.label("珍稀型号 · 穹铸工艺" if UIKit.presentation_tier(it)=="ultra" else "名贵型号 · 金饰徽章", 16, UIKit.RUST))
 		hv.add_child(distinction)
 	var owner: String = {"shop": "店铺自有", "customer": "顾客委修", "pawn": "抵押保管"}[it.owner]
 	var loc: String = {"warehouse": "后仓", "display": "陈列架", "isolation": "隔离柜", "pawn": "抵押柜"}[it.location]
@@ -441,6 +447,7 @@ class StorageGrid extends Control:
 			var d := Model.dimensions(it)
 			tr.position = Vector2(it.x, it.y) * page.CELL + Vector2(4, 4)
 			tr.size = Vector2(d[0], d[1]) * page.CELL - Vector2(8, 8)
+			UIKit.decorate_item(tr, it, 20.0)
 			add_child(tr)
 			tiles[it.uid] = tr
 		queue_redraw()
@@ -529,12 +536,13 @@ class StorageGrid extends Control:
 			if not moved and mm.position.distance_to(press_pos) > 6:
 				moved = true
 				ghost = TextureRect.new()
-				ghost.texture = UIKit.item_icon(Game.item(drag_uid).defId)
+				ghost.texture = UIKit.physical_icon(Game.item(drag_uid))
 				ghost.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 				ghost.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 				ghost.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 				ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				ghost.modulate = Color(1, 1, 1, 0.85)
+				UIKit.decorate_item(ghost, Game.item(drag_uid), 20.0)
 				add_child(ghost)
 				tiles[drag_uid].modulate.a = 0.3
 			if moved:
