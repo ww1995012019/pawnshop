@@ -66,6 +66,7 @@ static func visitor_override(s: Dictionary, reserved_slot: int) -> String:
 	if Model.fnv(key) % 5 != 0: return ""
 	var ids := []
 	for id in case_state(s).wanted:
+		if case_state(s).caught.has(id): continue
 		var p := profile(id)
 		if p.get("npcId", "") != "": ids.append(p.npcId)
 	return "" if ids.is_empty() else String(ids[Model.fnv(key+"/person") % ids.size()])
@@ -109,6 +110,7 @@ static func report_reason(s: Dictionary) -> String:
 static func current_case(s: Dictionary) -> Dictionary:
 	if s.trade == null: return {}
 	for id in case_state(s).wanted:
+		if case_state(s).caught.has(id): continue
 		var p := profile(id)
 		if p.npcId != "" and p.npcId == s.trade.npcId: return p
 	return {}
@@ -179,6 +181,7 @@ static func reduce(previous: Dictionary, action: Dictionary):
 			reward = mini(int(wanted.reward),maxi(0,int(1000000000.0 - s.cash)))
 			Model.ledger(s,"bounty-"+wanted.id,"bounty","协查抓获 · "+wanted.name,reward)
 			s.police.caught.append(wanted.id)
+			NightCrime.arrest(s,wanted.id)
 			s.police.issued = false
 			s.police.wanted = []
 			s.police.paper.visible = false

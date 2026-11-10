@@ -242,6 +242,11 @@ func _detail() -> void:
 		detail.add_child(UIKit.note_card("库存登记簿", "选中一件货物查看详情。"))
 		_stock_summary()
 		return
+	var known_crime: bool = it.get("crimeRevealed", false)
+	for case in NightCrime.public_report(s).cases:
+		if case.revealed:
+			for row in case.items:
+				if row.uid == it.uid: known_crime = true
 	var def := GameData.def(it.defId)
 	var docket := UIKit.plate(UIKit.paper_style(16))
 	var record := UIKit.vbox(8)
@@ -272,8 +277,10 @@ func _detail() -> void:
 	record.add_child(head)
 	record.add_child(UIKit.label(Model.appraisal_text(it) + " · 成本 " + UIKit.money(it.cost), 18, UIKit.RUST, false, true))
 	record.add_child(UIKit.label(("来源已核验" if it.sourceVerified else "来源待核") + " · " + String(it.source), 16, Color("2f6b3a") if it.sourceVerified else UIKit.RUST, false, true))
-	if it.get("stolen", false):
-		record.add_child(UIKit.label("疑似赃物 · 已封存，只能移交站务", 17, UIKit.RUST, false, true))
+	if known_crime:
+		record.add_child(UIKit.label("已知涉案来源 · 请移交站务核对", 17, UIKit.RUST, false, true))
+	elif it.sealed and not it.sourceVerified:
+		record.add_child(UIKit.label("隔离保管 · 来源待核，可继续补证或移交核对", 17, UIKit.RUST, false, true))
 	if it.has("forgery"):
 		record.add_child(UIKit.label(WatchForgery.summary(it), 17, UIKit.RUST, false, true))
 	if it.owner == "pawn":
@@ -281,12 +288,28 @@ func _detail() -> void:
 	detail.add_child(docket)
 	detail.add_child(UIKit.module_header("出入库操作", "按保管权属办理", "CONTROL"))
 	var g := UIKit.grid(2, 10)
-	if t != null and t.kind == "sell" and it.owner == "shop":
-		var why = Model.sale_eligibility(it, t.npcId)
-		if Commerce.forgery_rejected(s,it): why = "这位顾客本轮已识破本件加工，请更换货物。"
-		_act(g, "推荐给顾客", "primary", func():
-			if Game.dispatch({"type": "SELECT_TRADE", "uid": it.uid}):
-				shell.go("counter"), why == null, why if why != null else "")
+	if t != null and (t.kind == "sell" or CounterDialogue.active(s)) and it.owner == "shop":
+		if not TradeSession.session(s).is_empty():
+			var problem := TradeSession._stock_problem(s,it,"sell")
+			var batch_uid: String=it.uid
+			_act(g,"灰色收售" if not it.sourceVerified else "推荐给顾客","danger" if not it.sourceVerified else "primary",func():
+				if CounterDialogue.active(Game.state):
+					if Game.dispatch({"type":"SELECT_TRADE","uid":batch_uid}): shell.go("counter")
+				elif Game.dispatch({"type":"TRADE_ADD","tradeId":t.id,"uid":batch_uid,"direction":"sell"}):
+					Game.dispatch({"type":"TRADE_FOCUS","tradeId":t.id,"uid":batch_uid,"return_list":true})
+					shell.go("counter"),problem=="",problem)
+		else:
+			if not it.sourceVerified and not it.sealed and it.location != "isolation" and not it.has("orderId") and not it.get("crimeRevealed", false):
+				var gray_uid: String = it.uid
+				_act(g, "灰色收售", "danger", func():
+					shell.confirm("确认灰色收售风险", "本件来源未核。完成交易增加 8 风险；警方可追索原物并处罚，登记不能洗白。确认为赃物不赔付，保费不退。此确认仅限本次交易。", "承担风险并选货", func():
+						Game.dispatch({"type":"GRAY_TRADE", "tradeId":t.id, "uid":gray_uid, "confirmed":true})
+						if Game.dispatch({"type":"SELECT_TRADE", "uid":gray_uid}): shell.go("counter")))
+			var why = Model.sale_eligibility(it, t.npcId)
+			if Commerce.forgery_rejected(s,it): why = "这位顾客本轮已识破本件加工，请更换货物。"
+			_act(g, "推荐给顾客", "primary", func():
+				if Game.dispatch({"type": "SELECT_TRADE", "uid": it.uid}):
+					shell.go("counter"), why == null, why if why != null else "")
 	var reserved := Model.trade_reserved(s, it)
 	var shelf_why := _shelf_block(it, reserved)
 	_act(g, "下架" if it.location == "display" else "上架陈列", "good", {"type": "DISPLAY", "uid": it.uid}, shelf_why == "", shelf_why)
@@ -305,7 +328,7 @@ func _detail() -> void:
 		var charge := StoreCosts.usage_quote(s, "scanner", 0.5)
 		detail.add_child(UIKit.label("新的有效来源扫描预计电费 +%s Cr，日结统一收取；查看旧结果不收费。" % Model.jnum(charge) if charge > 0 else "本日沿用旧版能源维护，不另计来源扫描电费。", 16, UIKit.CYAN, false, true))
 	var reg_why := ""
-	if it.get("stolen", false):
+	if known_crime:
 		reg_why = "疑似赃物不能办理普通来源登记"
 	elif it.owner == "pawn":
 		reg_why = "抵押保管物不需要登记"
@@ -314,7 +337,7 @@ func _detail() -> void:
 	elif Model.evidence_count(it) < 2:
 		reg_why = "先在鉴定台取得两条物证"
 	_act(g, "来源已登记" if it.sourceVerified else "来源登记 35Cr·1AP", "secondary", {"type": "REGISTER", "uid": it.uid}, not it.sourceVerified and reg_why == "", reg_why)
-	if it.get("stolen", false):
+	if known_crime or (it.sealed and not it.sourceVerified):
 		var report_uid: String = it.uid
 		_act(g, "移交站务", "primary", func():
 			shell.confirm("移交疑似赃物", "原物将从隔离柜移交站务，登记后风险下降、站务关系提升。", "确认移交", func():
@@ -342,7 +365,7 @@ func _detail() -> void:
 	var return_text := "原物会移交原主并从库存移除，不能撤回。"
 	if it.owner == "shop":
 		return_text = "这是店铺花 %s 收来的货。归还后不会退款，原物从库存移除，不能撤回。" % UIKit.money(it.cost)
-	if not it.get("stolen", false):
+	if not known_crime:
 		_act(g, "主动归还原主", "danger", func():
 			shell.confirm("主动归还原主", "「%s」：%s" % [item_name, return_text], "确认归还", func():
 				Game.dispatch({"type": "RETURN_ITEM", "uid": uid})), it.owner != "pawn" and not reserved, "正在柜台交易中" if reserved else "")

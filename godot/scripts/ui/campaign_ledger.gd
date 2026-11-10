@@ -7,7 +7,7 @@ const KIND_LABELS := {
 	"order": "订单收入", "service": "服务收入", "materials": "材料采购",
 	"material-sale": "材料出售", "maintenance": "旧版能源维护", "electricity": "店铺电费", "cleaning": "店铺清洁费", "rent": "租金",
 	"upgrade": "设备升级", "clearance": "应急清仓", "relief-window": "救济记录",
-	"station-event": "站务事件", "bounty": "协查赏金", "fine": "处罚支出"
+	"station-event": "站务事件", "bounty": "协查赏金", "fine": "处罚支出", "insurance-premium":"失窃保险保费", "insurance-payout":"失窃保险赔款"
 }
 
 static func summary(state: Dictionary) -> Dictionary:

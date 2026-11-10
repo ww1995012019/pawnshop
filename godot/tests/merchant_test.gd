@@ -171,7 +171,10 @@ func run() -> void:
 				visits_match = false
 				break
 			visited = visited or daily.trade.kind == "merchant"
-			daily = commerce.reduce(daily, {"type": "REFUSE"})
+			if daily.trade.get("inspectionVisit",false):
+				daily = commerce.reduce(daily,{"type":"RESOLVE_INSPECTION","tradeId":daily.trade.id})
+			else:
+				daily = commerce.reduce(daily, {"type": "REFUSE"})
 		if visited:
 			merchant_days += 1
 		else:

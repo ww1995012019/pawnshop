@@ -37,6 +37,8 @@ func _ready() -> void:
 		state = migrate_service_save(state)
 	StoreCosts.ensure(state)
 	Wanted.ensure(state)
+	NightCrime.ensure(state)
+	NightCrime.ensure_day(state)
 	if has_save:
 		if state.get("trade") is Dictionary and state.trade.get("kind","") in ["buy","sell"]: state=CounterDialogue.begin(state)
 		save()
@@ -83,6 +85,7 @@ func new_game(seed := "") -> void:
 	var prev := state
 	state = Model.create(seed if seed != "" else "ORBITAL-%08X" % randi())
 	Wanted.ensure(state)
+	NightCrime.ensure(state)
 	focus_uid = ""
 	save()
 	changed.emit(prev, state, {"type": "NEW_GAME"})
@@ -99,6 +102,7 @@ func dispatch(a: Dictionary) -> bool:
 	return true
 
 func save() -> void:
+	NightCrime.ensure(state)
 	StoreCosts.ensure(state)
 	if state.get("serviceVersion", 0) < 1:
 		state = migrate_service_save(state)

@@ -8,6 +8,7 @@ var status_label: Label
 var status_text := ""
 var status_tone := "info"
 var costs_expanded := false
+var insurance_expanded := false
 var columns: BoxContainer
 var upgrades_row: BoxContainer
 var totals_panel: PanelContainer
@@ -72,6 +73,8 @@ func relayout() -> void:
 	if is_instance_valid(columns): columns.vertical = narrow
 	if is_instance_valid(upgrades_row): upgrades_row.vertical = narrow
 	if is_instance_valid(totals_panel): totals_panel.custom_minimum_size.x = 0 if narrow else 390
+	var receipt_scroll := find_child("ledger_receipt_scroll", true, false) as ScrollContainer
+	if receipt_scroll != null: receipt_scroll.custom_minimum_size.y = 400 if r.size.y >= 750 and r.size.x >= 880 else 250
 	sheet.size = r.size
 
 func _row(g: GridContainer, k: String, v: String, color := UIKit.INK) -> void:
@@ -115,6 +118,7 @@ func _refresh() -> void:
 		return
 	body.add_child(UIKit.module_header("第 %d 天 · %s" % [day, "日结报告" if s.phase == "report" else "营业中"], "营业账目", "LEDGER / %02d" % day))
 	_add_status()
+	_add_night_controls(s)
 	var today := []
 	for r in s.ledger:
 		if r.day == s.day:
@@ -132,6 +136,7 @@ func _refresh() -> void:
 	left.add_child(UIKit.label("今日流水 / TRANSACTIONS", 18, UIKit.INK, true))
 	left.add_child(UIKit.label("第 %02d 营业日 · %02d 笔记录" % [day, today.size()], 15, Color("6b5a40")))
 	var sc := ScrollContainer.new()
+	sc.name = "ledger_receipt_scroll"
 	sc.custom_minimum_size = Vector2(0, 250)
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -190,7 +195,7 @@ func _refresh() -> void:
 	body.add_child(UIKit.rule())
 	if s.phase == "open":
 		var b := UIKit.button("打烊结算", "primary", Vector2(0, 64), 24)
-		b.disabled = s.trade != null
+		b.disabled = s.trade != null or bool(NightCrime.public_report(s).inspection.pending)
 		if s.trade != null:
 			body.add_child(UIKit.label("柜台还有客人：先交割或送客。", 18, UIKit.DANGER))
 		b.pressed.connect(func():
@@ -267,3 +272,51 @@ func _usage_label(key: String) -> String:
 func on_changed(_p: Dictionary, _n: Dictionary, _a: Dictionary) -> void:
 	_refresh()
 	call_deferred("relayout")
+
+## Exact values are published by the policy, without adding appraisal evidence.
+func _add_night_controls(s: Dictionary) -> void:
+	var q := NightCrime.insurance_quote(s)
+	var section := UIKit.vbox(10)
+	section.name = "night_insurance"
+	body.add_child(section)
+	section.add_child(UIKit.module_header("今晚失窃保险", "仅保今晚 · 每天主动购买，不自动续保", "NIGHT / %02d" % int(s.day)))
+	var history := UIKit.button("夜间失窃与查货记录", "secondary", Vector2(0, 52), 20)
+	history.pressed.connect(func(): shell.open_night_report())
+	section.add_child(history)
+	section.add_child(UIKit.label("第 %d 晚 · 当前报价 %s · 已付 %s · 本次补付 %s" % [q.day, UIKit.money(q.premium), UIKit.money(q.paid), UIKit.money(q.due)], 19, UIKit.TEXT, false, true))
+	var details := UIKit.vbox(10)
+	details.visible = insurance_expanded
+	var toggle := UIKit.button("收起保障明细" if insurance_expanded else "查看保障明细与承保清单", "secondary", Vector2(0,48), 18)
+	toggle.pressed.connect(func():
+		insurance_expanded = not insurance_expanded
+		details.visible = insurance_expanded
+		toggle.text = "收起保障明细" if insurance_expanded else "查看保障明细与承保清单")
+	section.add_child(toggle)
+	section.add_child(details)
+	details.add_child(UIKit.label("保费 = max(5，向上取整(总市价 × 0.5% + 最高单件 × 3%))。100% 核定市价赔付，每件不超过已确认承保值。", 17, UIKit.TEXT, false, true))
+	var paper := UIKit.plate(UIKit.paper_style(12))
+	var rows := UIKit.vbox(8)
+	paper.add_child(rows)
+	for item in q.items:
+		rows.add_child(UIKit.label("%s · %s\n当前核定 %s · %s" % [item.name, item.uid, UIKit.money(item.value), "已确认承保 " + UIKit.money(item.confirmedValue) if item.covered else "尚未承保，购买或更新后生效"], 18, UIKit.INK, false, true))
+	if q.items.is_empty(): rows.add_child(UIKit.label("暂无可承保库存。", 18, UIKit.INK))
+	details.add_child(paper)
+	details.add_child(UIKit.label("仅店铺自有、来源已核且可存放的手表可保。顾客原物、抵押、订单、隔离封存、未完工作不保。新增商品及维修增值须更新保障；移出或降值不退费。", 17, UIKit.TEXT, false, true))
+	details.add_child(UIKit.label(q.disclaimer, 17, UIKit.DANGER, false, true))
+	var reason := NightCrime.insurance_problem(s)
+	var needs_update: bool = not q.purchased
+	for item in q.items:
+		if not item.covered or item.value > item.confirmedValue: needs_update = true
+	var purchase := UIKit.button("更新保障" if q.purchased else "购买今晚保险", "primary", Vector2(0, 56), 21)
+	purchase.disabled = reason != "" or not needs_update
+	purchase.pressed.connect(func(): Game.dispatch({"type":"UPDATE_INSURANCE" if q.purchased else "BUY_INSURANCE"}))
+	section.add_child(purchase)
+	section.add_child(UIKit.label(reason if reason != "" else "保障已确认；目前无需更新。" if not needs_update else "确认后立即支付 " + UIKit.money(q.due) + "，不消耗 AP。", 17, UIKit.DANGER if reason != "" else UIKit.TEXT, false, true))
+	if bool(NightCrime.public_report(s).inspection.pending):
+		section.add_child(UIKit.label("打烊前须完成查货；接待与核对不消耗 AP。", 18, UIKit.DANGER, false, true))
+		var arrive := UIKit.button("接待查货警察", "primary", Vector2(0, 56), 21)
+		arrive.disabled = s.trade != null
+		arrive.pressed.connect(func():
+			Game.dispatch({"type":"ARRIVE_INSPECTION"})
+			shell.go("counter"))
+		section.add_child(arrive)

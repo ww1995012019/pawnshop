@@ -3,11 +3,11 @@ extends Object
 ## Ordinary counter verbs talk about one original; agreed originals stay remembered.
 const VERBS := ["SELECT_TRADE","OFFER","ACCEPT","DELIVER","REFUSE","COUNTER_NEXT","COUNTER_CANCEL","PAWN"]
 static func active(s: Dictionary) -> bool:
- return bool(TradeSession.session(s).get("dialogue",false))
+ return s.get("trade")!=null and not s.trade.get("inspectionVisit",false) and bool(TradeSession.session(s).get("dialogue",false))
 static func current(s: Dictionary) -> Dictionary:
  return TradeSession.row(s,String(TradeSession.session(s).get("focus","")))
 static func begin(s: Dictionary) -> Dictionary:
- if s.get("trade")==null or s.trade.kind not in ["buy","sell"]: return s
+ if s.get("trade")==null or s.trade.get("inspectionVisit",false) or s.trade.kind not in ["buy","sell"]: return s
  TradeSession.ensure(s)
  var se := TradeSession.session(s)
  se.dialogue=true;se.return_to_list=false
@@ -26,7 +26,7 @@ static func _sync(s: Dictionary,line: Dictionary) -> void:
  var se := TradeSession.session(s)
  se.focus=line.uid
  t.kind=line.direction
- t.item=TradeSession.item(s,line.uid) if line.direction=="buy" else null
+ t.item=null
  if line.direction=="sell": t.selectedUid=line.uid
  else: t.erase("selectedUid")
  for key in ["price","rounds","evidenceUsed","npcKnowledge","forgeryChecks"]: t[key]=line.context.get(key,{} if key in ["npcKnowledge","forgeryChecks"] else [] if key=="evidenceUsed" else 0)
@@ -114,7 +114,11 @@ static func reduce(previous: Dictionary,a: Dictionary):
   if a.get("tradeId","")!=s.trade.id or line.is_empty() or line.direction!="buy": return previous
   var totals := TradeSession.summary(s)
   if totals.sell_count+totals.buy_count>0: return Model.notice(s,"先交割或取消已经说定的货物，再单独办理这只表的抵押。")
-  var ctx: Dictionary=s.duplicate(true);ctx.trade.erase("session")
+  var ctx: Dictionary=s.duplicate(true)
+  TradeSession.persist_holdings(ctx)
+  ctx.trade.item=TradeSession.item(s,line.uid).duplicate(true)
+  ctx.npcTrade[s.trade.npcId].owned=ctx.npcTrade[s.trade.npcId].owned.filter(func(lot):return lot.uid!=line.uid)
+  ctx.trade.erase("session")
   var result := Model.reduce(ctx,a)
   if result.trade!=null: return Model.notice(s,result.notice)
   var record: Dictionary=result.npcTrade[s.trade.npcId]
@@ -122,8 +126,6 @@ static func reduce(previous: Dictionary,a: Dictionary):
   if se.get("had_deal",false):
    var faction: String=GameData.npc(s.trade.npcId).faction
    result.relations[faction]=Model.clampn(result.relations[faction]+2)
-  for lot in se.goods+se.acquired:
-   if lot.uid!=line.uid: record.owned.append(lot)
   return result
  if type=="DELIVER":
   if a.get("tradeId","")!=s.trade.id: return previous

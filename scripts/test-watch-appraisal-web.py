@@ -18,7 +18,7 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=os.environ.get('CHROMIUM_EXECUTABLE') or shutil.which('chromium'), args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
         try:
-            for width,height in ([(844,390)] if os.environ.get('APPRAISAL_PHONE_ONLY') else [(1600,900),(844,390)]):
+            for width,height in ([(844,390)] if os.environ.get('APPRAISAL_PHONE_ONLY') else [(1600,900)] if os.environ.get('APPRAISAL_DESKTOP_ONLY') else [(1600,900),(844,390)]):
                 mobile = width < 1000
                 context = browser.new_context(viewport={'width':390,'height':844} if mobile else {'width':width,'height':height}, has_touch=mobile,is_mobile=mobile,device_scale_factor=2 if mobile else 1)
                 page = context.new_page()
@@ -86,12 +86,18 @@ def main():
                 cmd({'type':'page','page':'warehouse'});phone.wait(page,"s.workspace==='warehouse'")
                 for _ in range(8):
                     target=phone.locate(page,'送到修表台 · 加工')
-                    if 60<target['y']<height-55:break
+                    # A visible node can still lie below its ScrollContainer clip.
+                    if height*.16<target['y']<height*.72:break
                     page.mouse.move(width*.74,height*.62)
-                    page.mouse.wheel(0,500 if target['y']>=height-55 else -500)
+                    page.mouse.wheel(0,500 if target['y']>=height*.72 else -500)
                     page.wait_for_timeout(200)
+                print('Forgery navigation target:',phone.locate(page,'送到修表台 · 加工'),flush=True)
                 click('送到修表台 · 加工')
-                phone.wait(page,"s.workspace==='repair' && s.repair_mode==='forge'")
+                try:phone.wait(page,"s.workspace==='repair' && s.repair_mode==='forge'")
+                except Exception:
+                    print('Forgery navigation state:',page.evaluate('OrbitalTouch.state'),flush=True)
+                    snapshot('failed-forgery-navigation')
+                    raise
                 snapshot('forgery-options')
                 before_ap=page.evaluate('OrbitalTouch.state.ap')
                 for _ in range(30):

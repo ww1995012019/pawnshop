@@ -829,7 +829,9 @@ func _refresh() -> void:
 				scr.line2.text = "来购：" + Model.customer_need(nid).left(22)
 		scr.line3.text = "按服务铃接客 · 每笔交割 1 AP"
 		offer_label.text = "—"
-		_act("接待下一位来客", "primary", func(): _ring(), s.phase == "open" and not closed and (s.ap >= 1 or Commerce.merchant_due(s) or Commerce.next_visitor(s) == WantedCases.OFFICER_ID))
+		_act("接待查货警察" if bool(NightCrime.public_report(s).inspection.pending) else "接待下一位来客", "primary", func():
+			if NightCrime.inspection_pending(Game.state): Game.dispatch({"type":"ARRIVE_INSPECTION"})
+			else: _ring(), NightCrime.can_arrive(s))
 		_act("打烊结算", "secondary", func(): shell.go("report"))
 		var shown := 0
 		for i in s.inventory:
@@ -845,7 +847,13 @@ func _refresh() -> void:
 		_act("领取通缉名单" if not WantedCases.has_notice(s) else "展开名单","primary",func():
 			if WantedCases.has_notice(Game.state): shell.toggle_wanted_notice()
 			else: Game.dispatch({"type":"ISSUE_WANTED","tradeId":t.id}))
-		_act("送警官离开","secondary",func(): Game.dispatch({"type":"REFUSE"}))
+		if t.get("inspectionVisit", false):
+			scr.head.text = "巡警到访 · 例行查货"
+			scr.line1.text = "核对来源与追索原物 · 不消耗 AP"
+			scr.line2.text = "有效协警 %d 次 · 宽容概率 %d%%" % [s.nightCrime.cooperation.count, NightCrime.leniency_chance(s.nightCrime.cooperation.count)]
+			_act("配合查货", "good", func(): Game.dispatch({"type":"RESOLVE_INSPECTION", "tradeId":t.id}))
+		else:
+			_act("送警官离开","secondary",func(): Game.dispatch({"type":"REFUSE"}))
 		footer.text="对照头像，不要只认一顶帽子。"
 	elif t.kind == "merchant":
 		var npc := GameData.npc(t.npcId)
@@ -909,9 +917,11 @@ func _refresh() -> void:
 			if chips.get_child_count() == 0:
 				chips.add_child(UIKit.label("物证插槽 · 先在鉴定仪取证", 13, Color("36463e")))
 			offer_button = _act("出价 " + UIKit.money(dial.value), "primary", func(): _offer(it.uid if dialogue else "",int(pending.version) if dialogue else -1), quote_problem == "", false, quote_problem)
-			_act("接受 " + UIKit.money(t.price), "good", func(): Game.dispatch(CounterDialogue.action_for(s,"ACCEPT") if dialogue else {"type":"ACCEPT"}), s.ap >= 1 and (dialogue or not buy or s.cash >= t.price) and quote_problem == "", false, quote_problem)
+			_act("接受 " + UIKit.money(t.price), "good", func(): _with_source_risk(CounterDialogue.action_for(s,"ACCEPT") if dialogue else {"type":"ACCEPT"}), s.ap >= 1 and (dialogue or not buy or s.cash >= t.price) and quote_problem == "", false, quote_problem)
 			_act("拿去鉴定", "secondary", func(): shell.go("inspect", it.uid))
-			if dialogue and pending_count>0:
+			if buy and NightCrime.lost_item_problem(s)=="":
+				_act("失物报警", "danger", _report_lost_original)
+			elif dialogue and pending_count>0:
 				_act("先交割%d件" % pending_count,"secondary",func(): Game.dispatch(delivery_action))
 			elif buy:
 				var pawn_ok := Model.evidence_count(it) >= 2
@@ -1073,7 +1083,7 @@ func _offer(expected_uid := "", expected_version := -1) -> void:
 	if expected_uid!="": a.uid=expected_uid;a.version=expected_version
 	if chosen_evidence != "" and (not CounterDialogue.active(Game.state) or a.uid==chosen_evidence_uid):
 		a.evidence = chosen_evidence
-	Game.dispatch(a)
+	_with_source_risk(a)
 
 ## Full list with prices; the crate offers the same choice by direct click.
 func _pick_goods() -> void:
@@ -1221,7 +1231,7 @@ func _ring() -> void:
 	if busy or _scene_blocked():
 		return
 	var s := Game.state
-	if s.trade != null or s.phase != "open" or (s.ap < 1 and not Commerce.merchant_due(s) and Commerce.next_visitor(s) != WantedCases.OFFICER_ID):
+	if not NightCrime.can_arrive(s):
 		return
 	bell.strike()
 	shell.sound("check", -2.0, 1.25)
@@ -1231,7 +1241,7 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 	var pt = prev.trade
 	var nt = next.trade
 	match a.type:
-		"ARRIVE":
+		"ARRIVE", "ARRIVE_INSPECTION":
 			if pt == null and nt != null:
 				busy = true
 				_refresh()
@@ -1240,9 +1250,10 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 				_spawn_customer(nt.npcId, true)
 				await customer.arrived
 				customer.lean_in()
-				if nt.kind == "buy" and nt.item != null:
+				var presented=Model.trade_item(next)
+				if nt.kind == "buy" and presented != null:
 					await get_tree().create_timer(0.2).timeout
-					_spawn_mat_item(nt.item, true, customer.hands())
+					_spawn_mat_item(presented, true, customer.hands())
 					await get_tree().create_timer(0.6).timeout
 				busy = false
 				_say(nt.line)
@@ -1297,6 +1308,14 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 				await _deal(pt, a.type == "PAWN", WatchForgery.sale_name(sold) if sold != null else "货物")
 		"ISSUE_WANTED", "ASK_VISITOR":
 			if nt != null: _say(nt.line,true,"focused")
+		"RESOLVE_INSPECTION":
+			if pt != null and nt == null:
+				await _leave_with_goods(pt, "focused")
+				shell.open_night_report()
+		"REPORT_LOST_ITEM":
+			if pt != null and nt == null:
+				await _leave_with_goods(pt, "focused")
+				shell.open_night_report()
 		"REPORT_VISITOR":
 			if pt != null and nt == null: await _police_response(pt)
 		"CHECK":
@@ -1673,3 +1692,29 @@ func _police_response(previous_trade: Dictionary) -> void:
 	_hide_bubble()
 	busy=false
 	_refresh()
+
+func _accept_with_source_risk() -> void:
+	_with_source_risk(CounterDialogue.action_for(Game.state,"ACCEPT") if CounterDialogue.active(Game.state) else {"type":"ACCEPT"})
+
+func _with_source_risk(action: Dictionary) -> void:
+	var t = Game.state.trade
+	var it = Model.trade_item(Game.state)
+	if t == null or it == null: return
+	var dialogue := CounterDialogue.active(Game.state)
+	var price = action.get("price",t.price)
+	var requires: bool = NightCrime.batch_gray_problem(Game.state,it,price)!="" if dialogue else int(Game.state.day)>=3 and not it.sourceVerified and it.get("grayAuthorized","")!=t.id
+	if requires:
+		var consent := {"type":"GRAY_TRADE","tradeId":t.id,"uid":it.uid,"confirmed":true}
+		if dialogue:
+			consent.merge({"price":price,"version":action.version,"quote":NightCrime.gray_quote(it,price)},true)
+		shell.confirm("确认灰色收售风险", "本件来源尚未核实。完成本次收售将增加 8 风险；来源登记不能改变真实归属，警方可能追回原物并处罚。保险受理资料不保证合法，确认为赃物会拒赔、保费不退。", "承担风险并锁价", func():
+			if Game.state.trade==null or Game.state.trade.id!=t.id: return
+			if dialogue and TradeSession.summary(Game.state).version!=action.version: return
+			Game.dispatch(consent)
+			Game.dispatch(action))
+	else: Game.dispatch(action)
+
+func _report_lost_original() -> void:
+	var t = Game.state.trade
+	if t == null or NightCrime.lost_item_problem(Game.state) != "": return
+	shell.confirm("这是本店失物，报警核对", "已取得本件原物编号证据，警方将与失窃记录核对。无需先付款购买。未赔付原物归还店铺；已赔付原物移交保险方。", "核对原编号并报警", func(): Game.dispatch({"type":"REPORT_LOST_ITEM", "tradeId":t.id}))

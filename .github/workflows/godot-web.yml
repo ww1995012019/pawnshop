@@ -11,7 +11,7 @@ permissions:
 jobs:
   godot-web:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -57,6 +57,7 @@ jobs:
           python scripts/test-mobile-gestures-web.py
           python scripts/test-watch-service-web.py --permissions-only
           python scripts/test-store-costs-web.py
+          NIGHT_WEB_VIEW=desktop python scripts/test-night-crime-web.py
           python scripts/test-premium-counterfeit-web.py
           python scripts/test-multi-item-trade-web.py
       - uses: actions/upload-artifact@v4

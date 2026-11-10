@@ -40,8 +40,13 @@ static func ensure(s: Dictionary) -> void:
   var working: bool=n%5==0 if String(npc.get("title","")).contains("维修") else n%3!=0
   var lot := Model.new_item(s,definition.id,{"owner":"npc","condition":0.45+float(n%46)/100.0,"authentic":n%5!=0,"working":working,"sourceVerified":n%8!=0,"source":"%s 随身旧物" % GameData.npc(t.npcId).name})
   goods.append(lot)
- for lot in goods: lot.owner="npc"
- t.session={"version":1,"lines":[],"goods":goods,"acquired":[],"cash":float(record.cash),"want_count":1+Model.fnv(String(s.seed)+String(t.id)+"/quantity")%6,"bought":0,"completed":[],"focus":"","had_sale":false,"original_kind":t.kind}
+ var prior_case_holders: Dictionary={}
+ for lot in goods:
+  lot.owner="npc"
+  var tracked := NightCrime._row(NightCrime._case(s,String(lot.get("crimeCaseId",""))),lot.uid)
+  if not tracked.is_empty():
+   prior_case_holders[lot.uid]=tracked.holder if tracked.holder!="trade" else ("case" if t.get("crimeCaseId","")==lot.get("crimeCaseId","") else "buyer")
+ t.session={"version":1,"lines":[],"goods":goods,"acquired":[],"cash":float(record.cash),"want_count":1+Model.fnv(String(s.seed)+String(t.id)+"/quantity")%6,"bought":0,"completed":[],"focus":"","had_sale":false,"original_kind":t.kind,"prior_case_holders":prior_case_holders}
  var existing = t.get("item") if t.kind=="buy" else Model.find_inventory(s,t.get("selectedUid",""))
  if existing!=null:
   var line := _new_row(s,existing,"buy" if t.kind=="buy" else "sell")
@@ -52,7 +57,24 @@ static func ensure(s: Dictionary) -> void:
   line.fingerprint=fingerprint(existing)
   t.session.lines.append(line)
   t.session.focus=existing.uid
+ t.item=null # The session is the sole live holder of visitor goods.
  t.locked=false
+static func persist_holdings(s: Dictionary) -> void:
+ # All visit-ending paths retain NPC originals, including police reports.
+ # Case originals return to the holder they had before entering this session.
+ var se := session(s)
+ if se.is_empty(): return
+ var record: Dictionary=s.npcTrade[s.trade.npcId]
+ record.cash=se.cash
+ for lot in se.goods+se.acquired:
+  var tracked := NightCrime._row(NightCrime._case(s,String(lot.get("crimeCaseId",""))),lot.uid)
+  if tracked.get("holder","")=="trade":
+   tracked.item=lot.duplicate(true)
+   var fallback := "case" if s.trade.get("crimeCaseId","")==lot.get("crimeCaseId","") else "buyer"
+   tracked.holder=se.get("prior_case_holders",{}).get(lot.uid,fallback)
+  if not tracked.get("resolved",false) and tracked.get("holder","")!="case":
+   if not record.owned.any(func(owned):return owned.uid==lot.uid): record.owned.append(lot)
+
 static func _new_row(s: Dictionary, it: Dictionary, direction: String) -> Dictionary:
  var context := {"id":s.trade.id,"npcId":s.trade.npcId,"kind":direction,"item":null,"price":0,"rounds":0,"locked":false,"evidenceUsed":[],"npcKnowledge":{},"forgeryChecks":{}}
  if s.trade.get("forgeryChecks",{}).has(it.uid): context.forgeryChecks[it.uid]=s.trade.forgeryChecks[it.uid].duplicate(true)
@@ -75,7 +97,9 @@ static func _stock_problem(s: Dictionary, it, direction: String) -> String:
   for lot in session(s).goods:
    if lot.uid==it.uid: return ""
   return "这件货不是该 NPC 本次带来的。"
- return String(Model.sale_eligibility(it,s.trade.npcId)) if Model.sale_eligibility(it,s.trade.npcId)!=null else ""
+ var candidate: Dictionary=it.duplicate(true)
+ if not candidate.sourceVerified and not candidate.get("crimeRevealed",false): candidate.graySale=true
+ return String(Model.sale_eligibility(candidate,s.trade.npcId)) if Model.sale_eligibility(candidate,s.trade.npcId)!=null else ""
 static func _check_forgery(s: Dictionary, line: Dictionary, it: Dictionary) -> bool:
  if line.direction!="sell": return false
  var commerce=load("res://scripts/model/commerce.gd")
@@ -127,13 +151,15 @@ static func checkout_problem(s: Dictionary) -> String:
   var it=item(s,line.uid)
   var why := _stock_problem(s,it,line.direction)
   if why!="": return why
+  var consent := NightCrime.batch_gray_problem(s,it,line.context.price)
+  if consent!="": return consent
   if fingerprint(it)!=line.fingerprint: return "原物状态已变化，请重新查看并确认该件。"
   if not Model.price_agreed(s,line.context,it): return "有一件约定价格已过期，请重新议价确认。"
  return ""
 static func reduce(previous: Dictionary, action: Dictionary):
  var type=action.get("type","")
  if type not in ACTIONS: return null
- if previous.get("trade")==null or previous.trade.get("kind","") not in ["buy","sell","merchant"]: return Model.notice(previous.duplicate(true),"请先接待普通买卖来客。")
+ if previous.get("trade")==null or previous.trade.get("inspectionVisit",false) or previous.trade.get("kind","") not in ["buy","sell","merchant"]: return Model.notice(previous.duplicate(true),"请先接待普通买卖来客。")
  if type!="TRADE_OPEN" and action.get("tradeId","")!=previous.trade.id: return Model.notice(previous.duplicate(true),"来访已变化，请重新打开当前来客的清单；钱货未变动。")
  var s: Dictionary=previous.duplicate(true)
  if s.phase!="open": return Model.notice(s,"打烊后不能买卖，请明日营业后再操作。")
@@ -149,9 +175,6 @@ static func reduce(previous: Dictionary, action: Dictionary):
   se.return_to_list=false
   return Model.notice(s,"多件清单已展开：逐件议价确认，再统一交割；结束接待才送客。")
  if type=="TRADE_END":
-  var record: Dictionary=s.npcTrade[s.trade.npcId]
-  record.cash=se.cash
-  for lot in se.goods+se.acquired: record.owned.append(lot)
   if se.get("had_deal",se.had_sale):
    var faction: String=GameData.npc(s.trade.npcId).faction
    s.relations[faction]=Model.clampn(s.relations[faction]+2)
@@ -205,6 +228,8 @@ static func reduce(previous: Dictionary, action: Dictionary):
   if line.is_empty() or not line.included or line.status=="done": return previous
   var why := _stock_problem(s,it,line.direction)
   if why!="": return Model.notice(s,why)
+  var consent := NightCrime.batch_gray_problem(s,it,action.get("price",line.context.price) if type=="TRADE_OFFER" else line.context.price)
+  if consent!="": return Model.notice(s,consent)
   if _check_forgery(s,line,it): se.version+=1;return Model.notice(s,line.reason)
   if type=="TRADE_OFFER":
    var price=action.get("price")
@@ -251,7 +276,7 @@ static func reduce(previous: Dictionary, action: Dictionary):
   for entry in incoming:
    var original: Dictionary=item(s,entry.uid)
    original.owner="shop";original.cost=entry.context.price
-   if not original.sourceVerified: s.risk=Model.clampn(s.risk+12)
+   if not original.sourceVerified and int(s.day)<3: s.risk=Model.clampn(s.risk+12)
    if not Model.put_in(s,original): return Model.notice(previous.duplicate(true),"后仓无法放下本批全部原物，请整理后重试；钱货与 AP 均未变动。")
    se.goods.erase(original)
   se.cash-=totals.net;se.bought+=totals.sell_count;se.had_sale=se.had_sale or totals.sell_count>0

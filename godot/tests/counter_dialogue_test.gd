@@ -35,9 +35,9 @@ func run():
  check(Model.find_inventory(s,first)!=null and Model.find_inventory(s,uid)==null and Model.find_inventory(s,second)==null,"bidirectional settlement transfers exact originals")
  var again=Commerce.reduce(s,delivery)
  check(again.ap==s.ap and again.cash==s.cash,"repeated normal delivery cannot duplicate charges or goods")
- var bad=Model.new_item(s,"WCH-001",{"sourceVerified":false});Model.put_in(s,bad)
+ var bad=Model.new_item(s,"WCH-001",{"sourceVerified":true,"sealed":true});Model.put_in(s,bad)
  var rejected=Commerce.reduce(s,{"type":"SELECT_TRADE","uid":bad.uid})
- check(rejected.trade.id==id and rejected.trade.line.contains("来源"),"unavailable recommendation is refused in the same conversation")
+ check(rejected.trade.id==id and rejected.trade.line.contains(TradeSession._stock_problem(s,bad,"sell")),"unavailable recommendation is refused in the same conversation")
  var ended=Commerce.reduce(s,{"type":"REFUSE"})
  check(ended.trade==null and ended.cursor==s.cursor+1,"explicit send-off is the only normal visit end")
  var old=Model.create("OLD-LIST");old=Model.reduce(old,{"type":"ARRIVE"});TradeSession.ensure(old)
@@ -72,4 +72,22 @@ func run():
   Model.put_in(many,offered);final_uid=offered.uid
   many=Commerce.reduce(many,{"type":"SELECT_TRADE","uid":offered.uid})
  check(TradeSession.session(many).focus==final_uid,"putting rejected proposals aside allows discussing a seventh original")
+ # Legacy pawn contract consumes the focused original while retaining other NPC goods.
+ var pawn=Model.create("DIALOGUE-PAWN");pawn.ap=12;pawn.cash=5000;pawn=Commerce.reduce(pawn,{"type":"ARRIVE"})
+ var pledged=Model.trade_item(pawn);var pledge_uid: String=pledged.uid
+ pledged.evidence=["TOL-001","TOL-002"]
+ var spare=Model.new_item(pawn,"WCH-002",{"owner":"npc","sourceVerified":true})
+ TradeSession.session(pawn).goods.append(spare)
+ var npc_id: String=pawn.trade.npcId
+ var unknown: Dictionary=pawn.duplicate(true);unknown.day=3
+ Model.trade_item(unknown).sourceVerified=false
+ var blocked_pawn=verb(unknown,"PAWN")
+ check(blocked_pawn.trade!=null and blocked_pawn.cash==unknown.cash and blocked_pawn.notice.contains("来源"),"unverified natural pawn requires provenance consent with no payment")
+ var tracked: Dictionary=pawn.duplicate(true)
+ Model.trade_item(tracked).crimeCaseId="NIGHT-OLD-CASE"
+ var blocked_case=verb(tracked,"PAWN")
+ check(blocked_case.trade!=null and blocked_case.cash==tracked.cash and blocked_case.notice.contains("案件"),"case original cannot enter pawn through an ordinary NPC visit")
+ pawn=verb(pawn,"PAWN")
+ check(pawn.trade==null and Model.find_inventory(pawn,pledge_uid)!=null and Model.find_inventory(pawn,pledge_uid).owner=="pawn","ordinary pawn contract transfers focused canonical original")
+ check(pawn.npcTrade[npc_id].owned.filter(func(lot):return lot.uid==spare.uid).size()==1 and not pawn.npcTrade[npc_id].owned.any(func(lot):return lot.uid==pledge_uid),"pawn visit retains other NPC stock once without duplicating pledged original")
  print("DIALOGUE failures=",failures);quit(1 if failures else 0)

@@ -26,30 +26,13 @@ func run() -> void:
 	var game = root.get_node("Game")
 	var theft := find_day(game, "CRIME-THEFT")
 	var goods := find_day(game, "CRIME-GOODS")
-	check(not theft.is_empty() and not goods.is_empty(), "both crime cases enter the daily event rotation")
-	if theft.is_empty() or goods.is_empty():
+	check(theft.is_empty() and not goods.is_empty(), "old daytime theft is removed while suspicious-goods event remains")
+	if goods.is_empty():
 		quit(1)
 		return
-	game.state = Model.create(theft.seed)
-	game.state.day = theft.day
-	var stock: int = game.state.inventory.size()
-	var ap: float = game.state.ap
-	game.dispatch({"type": "CHOOSE_EVENT", "eventId": theft.event.id, "choiceId": "CRIME-THEFT-secure"})
-	check(game.state.inventory.size() == stock and game.state.ap == ap - 1, "guarding the shop costs AP and prevents theft")
-	var once: Dictionary = game.state.duplicate(true)
-	game.dispatch({"type": "CHOOSE_EVENT", "eventId": theft.event.id, "choiceId": "CRIME-THEFT-ignore"})
-	check(game.state.inventory == once.inventory and game.state.ap == once.ap, "the same daily case cannot pay out twice")
-	game.state = Model.create(theft.seed)
-	game.state.day = theft.day
-	var protected_uid: String = game.state.inventory[0].uid
-	game.state.inventory[0].owner = "pawn"
-	stock = game.state.inventory.size()
-	game.dispatch({"type": "CHOOSE_EVENT", "eventId": theft.event.id, "choiceId": "CRIME-THEFT-ignore"})
-	check(game.state.inventory.size() == stock - 1 and Model.find_inventory(game.state, protected_uid) != null,
-		"the thief takes only an unreserved shop item")
 	game.state = Model.create(goods.seed)
 	game.state.day = goods.day
-	stock = game.state.inventory.size()
+	var stock: int = game.state.inventory.size()
 	game.dispatch({"type": "CHOOSE_EVENT", "eventId": goods.event.id, "choiceId": "CRIME-GOODS-hold"})
 	check(game.state.inventory.size() == stock + 1, "holding suspicious goods adds an actual item")
 	var item: Dictionary = game.state.inventory[-1]
@@ -66,6 +49,7 @@ func run() -> void:
 	game.dispatch({"type": "REPORT_STOLEN", "uid": uid})
 	check(game.item(uid) == null and game.state.risk < risk and game.state.relations.station > station,
 		"reporting stolen goods removes them and improves the shop's standing")
+	check(game.state.nightCrime.cooperation.count == 1,"active suspicious-goods case handover earns one cooperation credit")
 	var saved = JSON.parse_string(JSON.stringify(game.state))
 	check(saved.events.size() == 1 and saved.events[0].eventId == "CRIME-GOODS", "crime decisions survive JSON saves")
 	print("CRIME failures=", failures)
