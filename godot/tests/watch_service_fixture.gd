@@ -4,9 +4,10 @@ func _initialize() -> void: call_deferred("run")
 func run() -> void:
 	var state := Model.create("SERVICE-BROWSER-25")
 	var square_no_ap := OS.get_cmdline_user_args().has("--square-no-ap")
+	var permissions := OS.get_cmdline_user_args().has("--permissions")
 	state.inventory = []
 	state.trade = null
-	state.ap = 0 if square_no_ap else 100
+	state.ap = 0 if square_no_ap or permissions else 100
 	state.cash = 10000
 	for material in GameData.materials: state.materials[material.id] = 30
 	var mechanical := ""
@@ -26,6 +27,8 @@ func run() -> void:
 		WatchService.ensure(it,state.seed)
 		Model.put_in(state,it)
 		serial += 1
+	if permissions:
+		Model.put_in(state,Model.new_item(state,"WCH-033",{"owner":"customer","orderId":"BROWSER-REPAIR-ORDER","condition":0.55,"working":false}))
 	var out := FileAccess.open("res://../work/watch-repair/browser-fixture.json",FileAccess.WRITE)
 	out.store_string(JSON.stringify(state))
 	out.close()

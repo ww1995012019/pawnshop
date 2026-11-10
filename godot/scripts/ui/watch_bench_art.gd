@@ -42,6 +42,16 @@ var _font: Font
 var _mono: Font
 var _appearance: Dictionary = {}
 var _started_opened := false
+var interaction_allowed := true
+
+func set_interaction_allowed(allowed: bool) -> void:
+	interaction_allowed = allowed
+	if not allowed:
+		_pressed = false
+		_pointer_dragging = false
+	focus_mode = Control.FOCUS_ALL if allowed else Control.FOCUS_NONE
+	set_process(visible and allowed)
+	queue_redraw()
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -128,7 +138,7 @@ func _local_to_surface(p: Vector2) -> Vector2:
 	return (p - rect.position) * SURFACE.x / maxf(rect.size.x, 0.001)
 
 func interaction_targets() -> Array:
-	if _state.is_empty() or _state.complete or _plan.is_empty():
+	if not interaction_allowed or _state.is_empty() or _state.complete or _plan.is_empty():
 		return []
 	var a: Dictionary = _plan[mini(int(_state.step), _plan.size() - 1)]
 	var point := _v(a.at)
@@ -164,7 +174,7 @@ func _transfer_guide(a: Dictionary) -> Dictionary:
 	return {"part":parts.get(a.get("part", ""), "零件"), "destination":destinations.get(a.id, "对应工位")}
 
 func advance() -> void:
-	if _state.is_empty() or _state.complete or _state.phase != "idle" or _plan.is_empty(): return
+	if not interaction_allowed or _state.is_empty() or _state.complete or _state.phase != "idle" or _plan.is_empty(): return
 	_feedback = ""
 	var a: Dictionary = _plan[int(_state.step)]
 	_state.phase = "take"
@@ -177,7 +187,7 @@ func advance() -> void:
 	queue_redraw()
 
 func _gui_input(event: InputEvent) -> void:
-	if _state.is_empty() or _state.complete: return
+	if not interaction_allowed or _state.is_empty() or _state.complete: return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_ENTER, KEY_SPACE]:
 		advance()
 		accept_event()
@@ -234,7 +244,7 @@ func _gui_input(event: InputEvent) -> void:
 	queue_redraw()
 
 func _process(delta: float) -> void:
-	if _state.is_empty(): return
+	if not interaction_allowed or _state.is_empty(): return
 	if _state.phase == "idle":
 		if _task == "test" and float(_state.test) > 0.0:
 			queue_redraw()
@@ -898,6 +908,9 @@ func _draw_instrument() -> void:
 
 func _draw_rack() -> void:
 	_panel(Rect2(31, 398, 578, 47), Color("132320"), Color("52665c"), 5)
+	if not interaction_allowed:
+		_text(Vector2(49, 427), "暂不能操作 · 条件满足后可继续", 16, MUTED)
+		return
 	if _state.complete or _plan.is_empty():
 		_text(Vector2(49, 426), "本工序已完成 · 工具已收妥", 14, CYAN)
 		return
@@ -913,7 +926,7 @@ func _draw_rack() -> void:
 	_text(Vector2(154, 435), "自动取用 · 操作表上的标记，无需点击工具栏", 13, MUTED)
 
 func _draw_contact() -> void:
-	if _state.complete or _plan.is_empty() or _state.phase != "idle": return
+	if not interaction_allowed or _state.complete or _plan.is_empty() or _state.phase != "idle": return
 	var a: Dictionary = _plan[int(_state.step)]
 	var p := _v(a.at)
 	for i in range(4):
@@ -1049,6 +1062,8 @@ func _draw_labels() -> void:
 	_text(Vector2(469, 36), "%02d / %02d" % [mini(int(_state.step) + 1, _plan.size()), _plan.size()], 18, GOLD, true)
 	if _state.complete:
 		_text(Vector2(546, 52), "已落稳", 11, CYAN)
+	elif not interaction_allowed:
+		_text(Vector2(546, 52), "已暂停", 11, MUTED)
 	elif _state.phase != "idle":
 		var labels := {"take":"取工具", "contact":"对位", "act":"接触操作", "release":"移开工具", "result":"确认落稳"}
 		_text(Vector2(545, 52), labels.get(_state.phase, "操作中"), 11, CYAN)
