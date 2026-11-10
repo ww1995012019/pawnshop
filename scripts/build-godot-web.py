@@ -76,6 +76,8 @@ def package_web(pack, runtime, output):
               "previousAssets": previous_assets}
     html = (ROOT / "godot/web/shell.html").read_text()
     head = f'<link rel="icon" href="{engine}.icon.png">' if (runtime / "index.icon.png").exists() else ""
+    if (runtime / "index.apple-touch-icon.png").exists():
+        head += f'<link rel="apple-touch-icon" href="{engine}.apple-touch-icon.png">'
     for placeholder, value in {"$GODOT_CONFIG": json.dumps(config, separators=(",", ":")),
                                "$GODOT_THREADS_ENABLED": "false", "$GODOT_URL": engine + ".js",
                                "$GODOT_HEAD_INCLUDE": head}.items():

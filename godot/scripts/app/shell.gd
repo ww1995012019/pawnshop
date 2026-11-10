@@ -408,7 +408,23 @@ func counter_offset() -> Vector2:
 		return Vector2.ZERO
 	return ((get_viewport().get_visible_rect().size - Vector2(1920, 1080)) * 0.5).floor()
 
+## Wide phone screens leave blank wall at both sides while the shop itself is
+## limited by the screen height. Enlarge the whole picture there, hiding only
+## the ceiling and floor strips that carry no controls.
+const WIDE_SCREEN_ZOOM := 1080.0 / 1000.0
+
+func _fit_wide_screen() -> void:
+	var window := get_window()
+	var pixels := Vector2(window.size)
+	if pixels.x <= 0.0 or pixels.y <= 0.0:
+		return
+	var factor := clampf(pixels.x / pixels.y / (1920.0 / 1080.0), 1.0, WIDE_SCREEN_ZOOM)
+	if not is_equal_approx(window.content_scale_factor, factor):
+		window.content_scale_factor = factor
+
 func _fit() -> void:
+	if not workspace_mode:
+		_fit_wide_screen()
 	var vis := get_viewport().get_visible_rect().size
 	if workspace_mode:
 		cam.position = vis * 0.5
