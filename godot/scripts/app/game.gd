@@ -37,7 +37,9 @@ func _ready() -> void:
 		state = migrate_service_save(state)
 	StoreCosts.ensure(state)
 	Wanted.ensure(state)
-	if has_save: save()
+	if has_save:
+		if state.get("trade") is Dictionary and state.trade.get("kind","") in ["buy","sell"]: state=CounterDialogue.begin(state)
+		save()
 
 ## Preserve the exact pre-service save before interpreting its old repair counters.
 func migrate_service_save(previous: Dictionary) -> Dictionary:

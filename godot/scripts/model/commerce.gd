@@ -143,6 +143,8 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 	GameData.ensure()
 	var batch_result=TradeSession.reduce(previous,action)
 	if batch_result!=null: return batch_result
+	var dialogue_result=CounterDialogue.reduce(previous,action)
+	if dialogue_result!=null: return dialogue_result
 	var kind: String = action.get("type", "")
 	if not TradeSession.session(previous).is_empty():
 		if kind=="REFUSE": return TradeSession.reduce(previous,{"type":"TRADE_END","tradeId":previous.trade.id})
@@ -246,6 +248,7 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 					t.line = "%s 来路：%s。" % [greeting, String(t.item.source).split(" / ")[0]]
 				else:
 					t.line = "%s 这次采购：%s" % [greeting, Model.customer_need(npc_id)]
+		if previous.trade==null and next.trade!=null and next.trade.kind in ["buy","sell"]: return CounterDialogue.begin(next)
 		return next
 	if kind == "BUY_MATERIAL":
 		if not _merchant_present(previous):

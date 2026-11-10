@@ -142,6 +142,13 @@ func snapshot() -> Dictionary:
 						"price": Commerce.recovery_price(state, item)})
 			result.merchant_items = sellable
 	if not TradeSession.session(state).is_empty(): result.trade_session=TradeSession.summary(state)
+	if CounterDialogue.active(state):
+		result.dialogue=true
+		result.dialogue_line=state.trade.line
+		result.dialogue_uid=TradeSession.session(state).focus
+		var line:=CounterDialogue.current(state)
+		result.can_accept=not line.is_empty() and line.status in ["ready","counter"] and not state.trade.locked
+		result.can_deliver=TradeSession.summary(state).sell_count+TradeSession.summary(state).buy_count>0 and TradeSession.checkout_problem(state)==""
 	return result
 
 func command(data: Dictionary) -> void:
@@ -183,10 +190,6 @@ func command(data: Dictionary) -> void:
 				shell.page._open_instrument(target)
 			else:
 				shell.go(target)
-		return
-	if kind=="trade_list":
-		var active=shell.active_shell()
-		if active.page_name=="counter": active.page._open_trade_list()
 		return
 	if kind == "manual":
 		var active = shell.active_shell()

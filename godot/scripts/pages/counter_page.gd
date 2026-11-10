@@ -59,7 +59,7 @@ var tag_info: Label
 var idle_label: Label
 var idle_jobs: Label
 var offer_button: Button
-var multi_trade_button: Button
+var dialogue_next_goods: Button
 var stage_root: Node2D
 var back_root: Node2D
 var resident_window: Control
@@ -189,6 +189,7 @@ func enter() -> void:
 	# The till stands in front of the counter fixtures, like the illustration.
 	move_child(terminal, -1)
 	_build_bubble()
+	if not TradeSession.session(Game.state).is_empty() and not CounterDialogue.active(Game.state) and Game.state.trade.kind in ["buy","sell"]: Game.dispatch({"type":"DIALOGUE_RESUME"})
 	relayout()
 	_sync_world()
 	_refresh()
@@ -218,7 +219,7 @@ func workspace_state_changed(opened: bool) -> void:
 			mat_item.end_drag()
 	else:
 		_refresh()
-		if TradeSession.session(Game.state).get("return_to_list",false): call_deferred("_open_trade_list")
+
 
 func _crate_point() -> Vector2:
 	return get_viewport().get_canvas_transform().affine_inverse() * crate.get_global_rect().get_center() if is_instance_valid(crate) else Vector2(940, 860)
@@ -372,11 +373,6 @@ func _build_crate() -> void:
 		if not _scene_blocked():
 			shell.go("warehouse"))
 	head.add_child(open_stock)
-	multi_trade_button=UIKit.button("多件买卖清单","primary",Vector2(200,44),18)
-	multi_trade_button.name="multi_trade_open"
-	multi_trade_button.pressed.connect(func():
-		if not _scene_blocked(): call_deferred("_open_trade_list"))
-	head.add_child(multi_trade_button)
 	v.add_child(head)
 	var sc := ScrollContainer.new()
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -575,6 +571,7 @@ func _stock_slot(it: Dictionary, picking: bool, display := false) -> Button:
 	slot.tooltip_text = "%s · 品相 %s%s" % [def.name, UIKit.pct(it.condition), " · 陈列中" if it.location == "display" else ""]
 	slot.tooltip_text += ("\n点击推荐给顾客" if why == null else "\n" + String(why)) if picking else "\n点击在仓储查看"
 	var uid: String = it.uid
+	slot.name="stock_recommend_"+uid
 	var reason = why
 	slot.pressed.connect(func(): _stock_clicked(uid, picking, reason))
 	return slot
@@ -589,7 +586,7 @@ func _refresh_desk() -> void:
 	var items: Array = s.inventory
 	stock_count.text = "%d 件 · 点击选货" % (items.size()+ (1 if WantedCases.has_notice(s) else 0))
 	var t = s.trade
-	var picking: bool = t != null and t.kind == "sell" and not t.has("selectedUid") and not t.locked
+	var picking: bool = CounterDialogue.active(s) or (t != null and t.kind == "sell" and not t.has("selectedUid") and not t.locked)
 	var stock_total := items.size() + (1 if WantedCases.has_notice(s) else 0)
 	for i in maxi(CRATE_COLS * 3, ceili(stock_total / float(CRATE_COLS)) * CRATE_COLS):
 		if i < items.size():
@@ -792,7 +789,11 @@ func _refresh() -> void:
 	_refresh_desk()
 	var s := Game.state
 	var t = s.trade
-	multi_trade_button.visible=t!=null and t.get("kind","") in ["buy","sell","merchant"]
+	var dialogue := CounterDialogue.active(s)
+	var pending := TradeSession.summary(s)
+	var pending_count: int=pending.sell_count+pending.buy_count
+	dialogue_next_goods.visible=dialogue
+	dialogue_next_goods.disabled=busy or _scene_blocked()
 	offer_button = null
 	UIKit.clear(actions)
 	UIKit.clear(chips)
@@ -847,18 +848,6 @@ func _refresh() -> void:
 		_act("送客", "secondary", func(): Game.dispatch({"type": "REFUSE"}))
 		footer.text = "商人在店时才能购买维修材料"
 	else:
-		if not TradeSession.session(s).is_empty():
-			var totals=TradeSession.summary(s)
-			scr.head.text="双向买卖 · "+GameData.npc(t.npcId).name
-			scr.price.text="多件清单"
-			scr.line1.text="逐件议价与确认 · 统一交割"
-			scr.line2.text="已确认售出%d件 / 买入%d件" % [totals.sell_count,totals.buy_count]
-			scr.line3.text="收入%s · 支出%s · 差额%s Cr" % [Model.jnum(totals.income),Model.jnum(totals.expense),Model.jnum(totals.net)]
-			_act("打开多件清单", "primary", _open_trade_list)
-			_act("结束接待", "secondary", func(): Game.dispatch({"type":"TRADE_END","tradeId":t.id}))
-			offer_panel.visible=false
-			footer.text="交割后可继续商谈，结束接待才送客。"
-			return
 		var it = Model.trade_item(s)
 		var npc := GameData.npc(t.npcId)
 		var buy: bool = t.kind == "buy"
@@ -875,9 +864,11 @@ func _refresh() -> void:
 		scr.line3.text = "%s %s · 余 %s · 1 AP" % ["支出" if buy else "收入", UIKit.money(t.price), UIKit.money(cash_after)] if it != null else "选定货物后核对金额"
 		scr.line3.tooltip_text = scr.line3.text
 		if t.locked:
-			_act(("支付 " if buy else "收款 ") + UIKit.money(t.price) + " 并交割", "primary", func(): Game.dispatch({"type": "DELIVER", "tradeId": t.id}), s.ap >= 1)
-			_act("取消交易", "secondary", func(): Game.dispatch({"type": "REFUSE"}))
+			_act(("谈妥的 %d 件一起交割" % pending_count) if dialogue and pending_count>1 else (("支付 " if buy else "收款 ") + UIKit.money(t.price) + " 并交割"), "primary", func(): Game.dispatch({"type": "DELIVER", "tradeId": t.id}), s.ap >= 1)
+			_act("这件先不算" if dialogue else "取消交易", "secondary", func(): Game.dispatch({"type": "COUNTER_CANCEL" if dialogue else "REFUSE"}))
+			if dialogue: _act("送客", "secondary", func(): Game.dispatch({"type":"REFUSE"}))
 		elif it == null:
+			if dialogue and pending_count>0: _act("先交割谈妥的%d件" % pending_count,"primary",func(): Game.dispatch({"type":"DELIVER","tradeId":t.id}))
 			_act("挑选货物", "primary", _pick_goods)
 			_act("送客", "danger", func(): Game.dispatch({"type": "REFUSE"}))
 		else:
@@ -887,7 +878,8 @@ func _refresh() -> void:
 			dial.max_value = int(maxf(1, bnd.max))
 			var drafts: Dictionary = Game.get_meta("counter_offer_drafts", {})
 			var initial := int(t.price * (0.8 if buy else 1.15))
-			dial.set_value(int(drafts.get(t.id, initial)), false)
+			var draft_key: String=t.id+"/"+it.uid if dialogue else t.id
+			dial.set_value(int(drafts.get(draft_key, initial)), false)
 			_update_offer_value(dial.value)
 			for e in it.evidence:
 				if not GameData.relevant_tool(it.defId, e):
@@ -906,13 +898,22 @@ func _refresh() -> void:
 			offer_button = _act("出价 " + UIKit.money(dial.value), "primary", func(): _offer(), quote_problem == "", false, quote_problem)
 			_act("接受 " + UIKit.money(t.price), "good", func(): Game.dispatch({"type": "ACCEPT"}), s.ap >= 1 and (not buy or s.cash >= t.price) and quote_problem == "", false, quote_problem)
 			_act("拿去鉴定", "secondary", func(): shell.go("inspect", it.uid))
-			if buy:
+			if dialogue and pending_count>0:
+				_act("先交割%d件" % pending_count,"secondary",func(): Game.dispatch({"type":"DELIVER","tradeId":t.id}))
+			elif buy:
 				var pawn_ok := Model.evidence_count(it) >= 2
 				_act("签抵押合同" if pawn_ok else "抵押（需 2 条物证）", "secondary", func(): Game.dispatch({"type": "PAWN", "tradeId": t.id}), pawn_ok, false, "需两条物证；付估值约 40% 本金，3 天赎期")
 			else:
 				_act("换一件", "secondary", _pick_goods)
 			_act("送客", "danger", func(): Game.dispatch({"type": "REFUSE"}))
-		footer.text = Model.customer_need(t.npcId)
+		footer.text = ("谈妥%d件 · 可继续选货" % pending_count) if dialogue else Model.customer_need(t.npcId)
+		if dialogue:
+			var current := CounterDialogue.current(s)
+			if not current.is_empty() and current.status in ["blocked","rejected"]:
+				for key in actions.get_children():
+					if key==offer_button or String(key.text).begins_with("接受 "): key.disabled=true
+				scr.line3.text=current.reason
+				scr.line3.tooltip_text=current.reason
 	var alarm_reason := WantedCases.report_reason(s)
 	alarm_button.disabled = busy or alarm_reason != ""
 	alarm_button.tooltip_text = alarm_reason if alarm_reason != "" else "核对当前来客后呼叫巡警；错误报警会记录次数"
@@ -1049,7 +1050,9 @@ func _update_offer_value(value: int) -> void:
 	var t = Game.state.trade
 	if t != null:
 		var drafts: Dictionary = Game.get_meta("counter_offer_drafts", {})
-		drafts[t.id] = value
+		var focused=Model.trade_item(Game.state)
+		var key: String=t.id+"/"+focused.uid if CounterDialogue.active(Game.state) and focused!=null else t.id
+		drafts[key] = value
 		Game.set_meta("counter_offer_drafts", drafts)
 
 func _offer() -> void:
@@ -1127,6 +1130,11 @@ func _build_bubble() -> void:
 	bubble_label.mouse_filter = Control.MOUSE_FILTER_STOP
 	bubble.add_child(bubble_label)
 	footer.reparent(bubble)
+	dialogue_next_goods=UIKit.button("你还带了别的货吗？","secondary",Vector2(0,38),17)
+	dialogue_next_goods.name="dialogue_next_goods"
+	dialogue_next_goods.pressed.connect(func():
+		if not _scene_blocked() and not busy: Game.dispatch({"type":"COUNTER_NEXT"}))
+	bubble.add_child(dialogue_next_goods)
 
 func _layout_bubble_content() -> void:
 	if not is_instance_valid(bubble) or not is_instance_valid(bubble_label) or not is_instance_valid(footer):
@@ -1135,10 +1143,14 @@ func _layout_bubble_content() -> void:
 	# longer dialogue and retaining a bounded, scrollable text area.
 	var top := 43.0
 	var content_height := maxf(26.0, bubble_label.get_content_height())
-	var note_y := minf(bubble_rect.size.y - 56.0, top + content_height + 10.0)
+	var natural := CounterDialogue.active(Game.state)
+	var note_y := minf(bubble_rect.size.y - (94.0 if natural else 56.0), top + content_height + 10.0)
 	bubble_label.size.y = note_y - top - 8.0
 	footer.position.y = note_y
-	bubble.size.y = note_y + 56.0
+	bubble.size.y = note_y + (80.0 if natural else 56.0)
+	if natural:
+		dialogue_next_goods.position=Vector2(12,note_y+34)
+		dialogue_next_goods.size=Vector2(bubble_rect.size.x-24,38)
 
 func _say(text: String, type := true, mood := "") -> void:
 	# Leave time to read this line before the visitor volunteers another detail.
@@ -1211,10 +1223,10 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 					await get_tree().create_timer(0.6).timeout
 				busy = false
 				_say(nt.line)
-		"SELECT_TRADE":
+		"SELECT_TRADE", "COUNTER_NEXT":
 			var it = Model.trade_item(next)
 			if it != null:
-				_spawn_mat_item(it, true, _crate_point())
+				_spawn_mat_item(it, true, customer.hands() if nt.kind=="buy" else _crate_point())
 				_say(nt.line, true, "focused")
 			elif nt != null and customer != null and String(nt.line).contains("识破"):
 				if is_instance_valid(mat_item):
@@ -1248,7 +1260,13 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 			if pt != null:
 				await _leave_with_goods(pt, "tired")
 		"DELIVER", "PAWN":
-			if pt != null and nt == null:
+			if pt!=null and nt!=null and CounterDialogue.active(next) and TradeSession.session(next).completed.size()>TradeSession.session(prev).completed.size():
+				var receipt: Dictionary=TradeSession.session(next).last_receipt
+				var proxy: Dictionary=pt.duplicate(true)
+				proxy.kind="buy" if receipt.net<0 else "sell"
+				proxy.price=absf(float(receipt.net));proxy.batch_income=receipt.income;proxy.batch_expense=receipt.expense
+				await _deal(proxy,false,"本次说好的 %d 件原物" % int(receipt.count),true)
+			elif pt != null and nt == null:
 				var sold = Model.trade_item(prev)
 				await _deal(pt, a.type == "PAWN", WatchForgery.sale_name(sold) if sold != null else "货物")
 		"ISSUE_WANTED", "ASK_VISITOR":
@@ -1290,7 +1308,7 @@ func _leave_with_goods(t: Dictionary, mood: String) -> void:
 func _cash_point() -> Vector2:
 	return cash_tray.note_center()
 
-func _deal(t: Dictionary, pawn: bool, item_name: String) -> void:
+func _deal(t: Dictionary, pawn: bool, item_name: String, stay := false) -> void:
 	busy = true
 	_refresh()
 	var buy: bool = t.kind == "buy"
@@ -1307,7 +1325,7 @@ func _deal(t: Dictionary, pawn: bool, item_name: String) -> void:
 	_say("痛快！东西归你了。" if buy else "好东西，钱给你点清。", true, "happy")
 	var till := _cash_point()
 	var hand: Vector2 = shell.world_to_ui(customer.hands())
-	if not Game.prefs.reduced_motion:
+	if not Game.prefs.reduced_motion and price>0:
 		var bills := clampi(ceili(price / 50.0), 3, 8)
 		var last_bill: Tween
 		for i in bills:
@@ -1333,6 +1351,13 @@ func _deal(t: Dictionary, pawn: bool, item_name: String) -> void:
 			await tw.finished
 		item.queue_free()
 		mat_item = null
+	if stay:
+		busy=false
+		_refresh()
+		var following=Model.trade_item(Game.state)
+		if following!=null: _spawn_mat_item(following,false,customer.hands() if Game.state.trade.kind=="buy" else _crate_point())
+		_say(Game.state.trade.line,true,"focused")
+		return
 	_hide_bubble()
 	customer.walk_out(-500.0)
 	await customer.left
@@ -1367,7 +1392,7 @@ func _bill(from: Vector2, to: Vector2, i: int, landing_cash: float) -> Tween:
 ## A thermal-paper slip prints out of the till, gets stamped and is torn
 ## off. It belongs to this page, so leaving the counter takes it away too.
 func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> void:
-	var kind := "抵押凭据" if pawn else ("收购凭据" if t.kind == "buy" else "销售凭据")
+	var kind := "双方钱货回执" if t.has("batch_income") else "抵押凭据" if pawn else ("收购凭据" if t.kind == "buy" else "销售凭据")
 	var paper := UIKit.plate(UIKit.paper_style(20))
 	paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var v := UIKit.vbox(6)
@@ -1389,6 +1414,7 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 	row.add_child(UIKit.spacer(false))
 	row.add_child(UIKit.label(UIKit.money(price), 30, UIKit.RUST, true))
 	v.add_child(row)
+	if t.has("batch_income"): v.add_child(UIKit.label("卖出收入 %s · 买入支出 %s" % [UIKit.money(t.batch_income),UIKit.money(t.batch_expense)],15,UIKit.INK,false,true))
 	v.add_child(_dashes())
 	v.add_child(UIKit.label("来客  %s · 第 %d 天" % [GameData.npc(t.npcId).name, int(Game.state.day)], 15, Color("6b5a40")))
 	# Room for the stamp so it never lands on the text.
@@ -1608,6 +1634,3 @@ func _police_response(previous_trade: Dictionary) -> void:
 	_hide_bubble()
 	busy=false
 	_refresh()
-
-func _open_trade_list() -> void:
-	load("res://scripts/ui/trade_list.gd").open(shell)
