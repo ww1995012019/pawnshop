@@ -81,10 +81,12 @@ static func cost_text(method: String) -> String:
 const TARGET_METHODS := ["logo","case","serial","weight"]
 const EXTRA_TEMPLATES := [0,6,2,9,1,3,6,3,7,10,11,8,12,14,7,13,10,8]
 static func template(id: String) -> int:
+	var authored: Dictionary = WatchLogo.art(id)
+	if authored.has("template"): return int(authored.template)
 	var index := clampi(id.get_slice("-",1).to_int()-1,0,32)
 	return index if index < 15 else EXTRA_TEMPLATES[index-15]
 static func shape(id: String) -> String:
-	return "square" if template(id)==6 else "round"
+	return "square" if WatchLogo.art(id).get("shape","")=="square" or template(id)==6 else "round"
 static func compatible(it: Dictionary, id: String) -> bool:
 	GameData.ensure()
 	var source: Dictionary = GameData.items.get(it.get("defId",""),{})

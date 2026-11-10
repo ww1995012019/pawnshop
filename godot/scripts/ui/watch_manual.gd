@@ -37,10 +37,10 @@ static func populate_reference(content: VBoxContainer, id: String, paper := fals
 			nodes.append_array(node.get_children())
 	content.add_child(heading)
 	content.add_child(UIKit.label("型号档次：%s · 档次仅指型号行情，不代表本件真伪或品相。" % GameData.tier_label(id), 17, UIKit.RUST, false, true))
-	if GameData.def(id).get("tier") == "luxury":
+	if GameData.def(id).get("tier") in ["luxury","ultra"]:
 		var distinction := UIKit.hbox(8)
 		distinction.add_child(UIKit.tier_badge(id))
-		distinction.add_child(UIKit.label("名贵型号 · 金饰徽章", 18, UIKit.INK if paper else UIKit.AMBER))
+		distinction.add_child(UIKit.label("珍稀型号 · 穹铸工艺" if d.get("tier")=="ultra" else "名贵型号 · 金饰徽章", 18, UIKit.INK if paper else UIKit.AMBER))
 		content.add_child(distinction)
 	var art_card := UIKit.plate(UIKit.paper_style(12))
 	var art_body := UIKit.vbox(8)
@@ -53,7 +53,12 @@ static func populate_reference(content: VBoxContainer, id: String, paper := fals
 	for back in [false, true]:
 		var figure := UIKit.vbox(4)
 		var image := TextureRect.new()
-		image.texture = UIKit.item_icon(id, back)
+		if d.get("tier")=="ultra":
+			image.set_script(load("res://scripts/ui/watch_rare_preview.gd"))
+			image.configure(id,back)
+			image.name = "rare_reference_back" if back else "rare_reference_preview"
+		else:
+			image.texture = UIKit.item_icon(id, back)
 		image.custom_minimum_size = Vector2(140, 170)
 		image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED

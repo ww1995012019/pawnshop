@@ -264,10 +264,10 @@ func _detail() -> void:
 	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hv.add_child(UIKit.label(def.name, 26, UIKit.INK, false, true))
 	hv.add_child(UIKit.label("型号档次：%s" % GameData.tier_label(it.defId), 17, UIKit.RUST))
-	if GameData.def(it.defId).get("tier") == "luxury":
+	if GameData.def(it.defId).get("tier") in ["luxury","ultra"]:
 		var distinction := UIKit.hbox(8)
 		distinction.add_child(UIKit.tier_badge(it.defId))
-		distinction.add_child(UIKit.label("名贵型号 · 金饰徽章", 16, UIKit.RUST))
+		distinction.add_child(UIKit.label("珍稀型号 · 穹铸工艺" if GameData.def(it.defId).get("tier")=="ultra" else "名贵型号 · 金饰徽章", 16, UIKit.RUST))
 		hv.add_child(distinction)
 	var owner: String = {"shop": "店铺自有", "customer": "顾客委修", "pawn": "抵押保管"}[it.owner]
 	var loc: String = {"warehouse": "后仓", "display": "陈列架", "isolation": "隔离柜", "pawn": "抵押柜"}[it.location]

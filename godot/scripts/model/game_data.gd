@@ -112,4 +112,4 @@ static func material(id: String) -> Dictionary:
 
 ## Model tier is reference information, never an authentication verdict.
 static func tier_label(id: String) -> String:
-	return {"low": "低等", "mid": "中等", "luxury": "名贵"}.get(def(id).get("tier", ""), "未分类")
+	return {"low": "低等", "mid": "中等", "luxury": "名贵", "ultra": "珍稀"}.get(def(id).get("tier", ""), "未分类")

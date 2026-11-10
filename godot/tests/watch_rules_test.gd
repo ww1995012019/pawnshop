@@ -9,7 +9,7 @@ func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
 	GameData.ensure()
-	check(GameData.item_list.size() == 33 and GameData.items.size() == 33, "exactly 33 playable definitions")
+	check(GameData.item_list.size() == 78 and GameData.items.size() == 78, "exactly 78 playable definitions")
 	check(GameData.tool_ids == ["TOL-001", "TOL-002", "TOL-005"], "only three tools")
 	var s := Model.create("WATCH-RULES")
 	check(s.schema == 4 and s.inventory.all(func(it): return String(it.defId).begins_with("WCH-")), "v4 watch-only opening stock")

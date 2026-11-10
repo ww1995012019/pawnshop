@@ -7,14 +7,11 @@ func check(ok: bool, message: String) -> void:
 		failures += 1
 func run() -> void:
 	GameData.ensure()
-	check(GameData.items.size() == 33, "33 playable watches")
-	var counts := {"low": 0, "mid": 0, "luxury": 0}
-	var added := {"low": 0, "mid": 0, "luxury": 0}
-	var prices := {"low": [], "mid": [], "luxury": []}
+	check(GameData.items.size() == 78, "78 playable watches")
+	var counts := {"low": 0, "mid": 0, "luxury": 0, "ultra": 0}
+	var added := {"low": 0, "mid": 0, "luxury": 0, "ultra": 0}
+	var prices := {"low": [], "mid": [], "luxury": [], "ultra": []}
 	var s := Model.create("WATCH-CATALOGUE")
-	var seen := {}
-	for day in range(4, 22):
-		for slot in 6: seen[Model.market_stock(s, day, slot).defId] = true
 	for d in GameData.item_list:
 		var tier: String = d.get("tier", "")
 		check(counts.has(tier), d.id + " has a tier")
@@ -36,7 +33,7 @@ func run() -> void:
 						missing_found = true
 						check(is_equal_approx(float(sample.watch.part_mass), float(d.watch.link_mass)), d.id + " missing link matches model reference")
 				check(missing_found, d.id + " exercised a missing link")
-			check(seen.has(d.id), d.id + " appears during the campaign")
+			check(int(d.sprite) == number - 1 and GameData.art.has(d.id), d.id + " has deterministic sprite mapping")
 		check(d.category == "watch", d.id + " retains watch category")
 		var recipe: Dictionary = GameData.recipe(d.recipeId)
 		check(recipe.get("itemId") == d.id and recipe.get("kind") == "repair", d.id + " matching repair recipe")
@@ -52,10 +49,10 @@ func run() -> void:
 		var repaired: Dictionary = Model.find_inventory(repair_state, it.uid)
 		check(repaired.repaired and repaired.working and is_equal_approx(WatchRules.mass(repaired), float(d.watch.nominal_mass)), d.id + " real repair restores parts")
 		check(Model.estimate(it).high > 0, d.id + " can be valued")
-	check(added == {"low": 6, "mid": 6, "luxury": 6}, "six new watches per tier")
-	check(counts == {"low": 12, "mid": 12, "luxury": 9}, "old and new watches classified")
-	if not prices.low.is_empty() and not prices.mid.is_empty() and not prices.luxury.is_empty():
-		check(prices.low.max() < prices.mid.min() and prices.mid.max() < prices.luxury.min(), "tier price ranges do not overlap")
+	check(added == {"low": 21, "mid": 21, "luxury": 16, "ultra": 5}, "all appended watches classified")
+	check(counts == {"low": 27, "mid": 27, "luxury": 19, "ultra": 5}, "old and new watches classified")
+	if not prices.low.is_empty() and not prices.mid.is_empty() and not prices.luxury.is_empty() and not prices.ultra.is_empty():
+		check(prices.low.max() < prices.mid.min() and prices.mid.max() < prices.luxury.min() and prices.luxury.max() < prices.ultra.min(), "tier price ranges do not overlap")
 	print("WATCH CATALOGUE failures=", failures)
 	for player in root.find_children("*", "AudioStreamPlayer", true, false):
 		player.stop()

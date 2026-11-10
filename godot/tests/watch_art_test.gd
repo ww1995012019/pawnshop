@@ -1,5 +1,5 @@
 extends SceneTree
-## Art contract: all 33 physically distinct faces, safe atlas sampling and shared logo marks.
+## Art contract: all 78 physically distinct faces, safe atlas sampling and shared logo marks.
 var failures := 0
 func _initialize() -> void:
 	call_deferred("run_check")
@@ -13,16 +13,16 @@ func run_check() -> void:
 	var sprite_script = load("res://scripts/world/item_sprite.gd")
 	kit.ensure()
 	var signatures := {}
-	for i in range(33):
+	for i in range(78):
 		var id := "WCH-%03d" % (i + 1)
-		var luxury: bool = GameData.def(id).tier == "luxury"
+		var luxury: bool = GameData.def(id).tier in ["luxury", "ultra"]
 		check(not WatchLogo.art(id).get("crest", []).is_empty() if luxury else WatchLogo.art(id).get("crest", []).is_empty(), id + " model tier has the correct gold crest")
 		var prior: Image
 		for is_back in [false, true]:
 			var cell: Dictionary = kit.item_cell(id, is_back)
 			check(cell.key == ("watches-back" if is_back else "watches-front"), id + " atlas key")
 			var texture: Texture2D = kit.tex("res://assets/atlas/%s.png" % cell.key)
-			check(texture.get_size() == Vector2(1280, 1792), "5 × 7 cells of 256px")
+			check(texture.get_size() == Vector2(1280, 4096), "5 × 16 cells of 256px")
 			var face := texture.get_image().get_region(Rect2i(cell.region))
 			var used := face.get_used_rect()
 			check(used.size.y > 200 and used.size.x > 100, id + " recognizable silhouette")
@@ -85,5 +85,5 @@ func run_check() -> void:
 		check(physical.body.get_child_count() == 1, "no independently lit logo patch exists")
 		physical.free()
 	await process_frame
-	print("Watch art: 33 models, 66 faces, shared reference/altered marks; failures=", failures)
+	print("Watch art: 78 models, 156 faces, shared reference/altered marks; failures=", failures)
 	quit(1 if failures else 0)

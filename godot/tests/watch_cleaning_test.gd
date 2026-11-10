@@ -44,7 +44,7 @@ func run() -> void:
 		many.stroke(Vector2(0.2+i*0.05, 0.5), Vector2(0.25+i*0.05, 0.5), 0.08)
 	check(absf(one.remaining()-many.remaining()) < 0.025, "subdividing the same wipe across frames preserves cleaning amount")
 	var kit = load("res://scripts/app/ui_kit.gd")
-	for i in range(1, 34):
+	for i in range(1, 79):
 		var id := "WCH-%03d" % i
 		var texture: Texture2D = kit.item_icon(id)
 		var visible := texture.get_image()

@@ -28,7 +28,7 @@ func run() -> void:
 	var profiles := true
 	for d in GameData.item_list:
 		profiles = profiles and d.watch.has("movement") and d.watch.has("caseback") and d.watch.has("parts")
-	check(profiles,"all 33 models declare movement, cover and compatible parts")
+	check(profiles,"all 78 models declare movement, cover and compatible parts")
 	var quartz := Model.new_item(s,"WCH-001",{"working":false,"condition":0.6,"watch":{"mass":48.0,"serial":"Q TEST","logo_variant":0,"missing_part":"","part_mass":0}})
 	var mechanical := Model.new_item(s,"WCH-008",{"working":false,"condition":0.6,"watch":{"mass":72.0,"serial":"M TEST","logo_variant":0,"missing_part":"","part_mass":0}})
 	check(service.profile(quartz).movement == "quartz" and service.profile(mechanical).movement == "mechanical","model profiles choose distinct movements")

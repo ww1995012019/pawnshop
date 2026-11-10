@@ -593,7 +593,7 @@ func _stock_slot(it: Dictionary, picking: bool, display := false) -> Button:
 		slot.add_theme_stylebox_override("normal", _flat(Color(0.24, 0.48, 0.4, 0.3), Color("8db99d"), 2))
 	elif picking:
 		slot.modulate.a = 0.45
-	if def.get("tier") == "luxury":
+	if def.get("tier") in ["luxury","ultra"]:
 		if not picking:
 			slot.add_theme_stylebox_override("normal", _flat(Color(0.27, 0.22, 0.12, 0.25), Color("bd995b"), 2))
 		var crest := UIKit.tier_badge(it.defId, 18.0)

@@ -33,6 +33,7 @@ jobs:
           python scripts/subset-game-font.py
           python scripts/test-game-font.py
           godot --headless --editor --path godot --import
+          python scripts/test-watch-expansion-art.py
           python scripts/test-godot-native.py
           python scripts/test-godot-packaging.py
           python scripts/test-loading-layout.py

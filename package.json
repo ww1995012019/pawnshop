@@ -6,7 +6,7 @@
   "scripts": {
     "build:godot": "python3 scripts/build-godot-web.py",
     "preview:godot": "python3 scripts/serve-godot-web.py",
-    "test:godot": "python3 scripts/test-godot-native.py && python3 scripts/test-godot-packaging.py && python3 scripts/test-game-font.py && python3 scripts/test-loading-layout.py",
+    "test:godot": "python3 scripts/test-watch-expansion-art.py && python3 scripts/test-godot-native.py && python3 scripts/test-godot-packaging.py && python3 scripts/test-game-font.py && python3 scripts/test-loading-layout.py",
     "test:godot:web": "python3 scripts/test-godot-loading.py && python3 scripts/test-godot-web.py && python3 scripts/test-godot-phone.py && python3 scripts/test-merchant-phone.py && python3 scripts/test-watch-appraisal-web.py && python3 scripts/test-document-web.py && python3 scripts/test-mobile-gestures-web.py && python3 scripts/test-loading-screen.py",
     "test": "npm run test:godot",
     "build:web": "npm run build:godot",

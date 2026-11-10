@@ -9,6 +9,8 @@ uniform vec2 uv_pos = vec2(-9999.0);
 uniform float uv_r = 0.0;
 uniform vec2 seam_uv = vec2(0.62, 0.52);  // where the repaint seam is
 uniform float back_face = 0.0;
+uniform int rare_effect = 0;
+uniform float rare_time = 0.0;
 // Physical instance marks stay unreadable until a current loupe observation.
 // Catalogue/reference art does not use this material or enable this mask.
 uniform float logo_hidden = 0.0;
@@ -111,6 +113,22 @@ void fragment() {
 	base.rgb = min(vec3(1.0), base.rgb + refurb_finish.z * 0.025 * a);
 	// Loupe: micro-scratches everywhere, a bright repaint seam near seam_uv.
 	float in_lens = lens_r > 0.0 ? 1.0 - smoothstep(lens_r * 0.85, lens_r, distance(world, lens_pos)) : 0.0;
+	// Cosmetic light stays inside the paint, outside the physical mark and
+	// instrument footprint. Existing alpha/cleaning/part masks remain authoritative.
+	bool on_logo = all(greaterThanEqual(luv, logo_rect.xy)) && all(lessThan(luv, logo_rect.xy + logo_rect.zw));
+	if (rare_effect > 0 && back_face < 0.5 && !on_logo) {
+		vec2 q = luv - vec2(0.5, 0.53);
+		float angle = atan(q.y, q.x);
+		float mask = smoothstep(0.14, 0.18, length(q)) * (1.0 - smoothstep(0.27, 0.30, length(q)));
+		float pulse = 0.0;
+		vec3 tint = vec3(1.0, 0.77, 0.38);
+		if (rare_effect == 1) pulse = pow(max(0.0, cos(angle - rare_time * 0.5)), 12.0);
+		if (rare_effect == 2) { pulse = 0.5 + 0.5 * sin(q.y * 45.0 + rare_time * 0.7); tint = vec3(0.40, 0.91, 0.82); }
+		if (rare_effect == 3) { pulse = pow(max(0.0, sin(angle * 6.0 + rare_time * 0.4)), 8.0); tint = vec3(0.56, 0.71, 1.0); }
+		if (rare_effect == 4) { pulse = pow(max(0.0, cos(angle * 3.0 - rare_time * 0.6)), 6.0); tint = vec3(1.0, 0.43, 0.34); }
+		if (rare_effect == 5) { pulse = pow(max(0.0, cos(angle + rare_time * 0.3)), 16.0); tint = vec3(0.72, 0.77, 1.0); }
+		base.rgb += tint * pulse * mask * 0.10 * a * (1.0 - in_lens);
+	}
 	if (logo_hidden > 0.5 && back_face < 0.5 && all(greaterThanEqual(luv, logo_rect.xy)) && all(lessThan(luv, logo_rect.xy + logo_rect.zw))) {
 		// A fixed coarse mosaic hides the shape, rather than downsampling the
 		// distinctive mark. Only the circular lens exposes original pixels.

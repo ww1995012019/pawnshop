@@ -144,10 +144,10 @@ func _refresh_info() -> void:
 	var def := GameData.def(it.defId)
 	info.add_child(UIKit.module_header(def.name, String(def.description).split("。")[0] + "。", "实物档案"))
 	info.add_child(UIKit.label("型号档次：%s" % GameData.tier_label(it.defId), 17, UIKit.RUST))
-	if GameData.def(it.defId).get("tier") == "luxury":
+	if GameData.def(it.defId).get("tier") in ["luxury","ultra"]:
 		var distinction := UIKit.hbox(8)
 		distinction.add_child(UIKit.tier_badge(it.defId))
-		distinction.add_child(UIKit.label("名贵型号 · 金饰徽章", 16, UIKit.AMBER))
+		distinction.add_child(UIKit.label("珍稀型号 · 穹铸工艺" if GameData.def(it.defId).get("tier")=="ultra" else "名贵型号 · 金饰徽章", 16, UIKit.AMBER))
 		info.add_child(distinction)
 	var appraisal := Model.estimate(it)
 	var price_text := "估价 %s–%s Cr" % [Model.jnum(appraisal.low), Model.jnum(appraisal.high)]

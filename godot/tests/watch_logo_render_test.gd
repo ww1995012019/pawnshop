@@ -21,12 +21,13 @@ func run() -> void:
 	kit.ensure()
 	var game = root.get_node("Game")
 	game.new_game("LOGO-RENDER")
+	game.prefs.reduced_motion = false
 	var viewport := SubViewport.new()
 	viewport.size = Vector2i(512, 256)
 	viewport.world_2d = World2D.new()
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	root.add_child(viewport)
-	for index in 33:
+	for index in 78:
 		var model := "WCH-%03d" % (index + 1)
 		game.state = Model.create("LOGO-RENDER-" + model)
 		game.state.inventory.clear()
@@ -41,6 +42,9 @@ func run() -> void:
 			sprite.setup(model, it.uid, 238.08)
 			sprite.position = Vector2(128 + 256*variant, 128)
 			viewport.add_child(sprite)
+			# Freeze the cosmetic clock so whole-image optical comparisons isolate the lens.
+			# Rare shaders remain enabled and their mark exclusion is still exercised.
+			sprite.set_process(false)
 			sprites.append(sprite)
 		var masked := await capture(viewport)
 		var indistinguishable := true
@@ -68,6 +72,7 @@ func run() -> void:
 		check(removed.get_data() == masked.get_data(), model + " removing lens restores complete mosaic")
 		for uid in uids:
 			game.state = Model.reduce(game.state, {"type":"CHECK", "uid":uid, "tool":"TOL-001"})
+		for sprite in sprites: sprite._process(0.0)
 		var observed := await capture(viewport)
 		var distinct := 0
 		for y in range(89, 120):

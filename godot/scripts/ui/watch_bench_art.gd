@@ -72,11 +72,10 @@ func configure(it: Dictionary, task: String, progress: Dictionary = {}) -> void:
 	_glyph = WatchLogo.pixels(WatchForgery.target_id(it) if task=="forge_logo" and WatchForgery.target_id(it)!="" else WatchForgery.logo_id(it),0)
 	var definition: Dictionary = GameData.def(id)
 	_reference = GameData.def(WatchForgery.target_id(it)).watch if task.begins_with("forge_") and WatchForgery.target_id(it)!="" else definition.get("watch", {})
-	var index := clampi(id.get_slice("-", 1).to_int() - 1, 0, 32)
 	var template: int = WatchForgery.template(id)
-	_appearance = {"template":template, "case_shape":"square" if template == 6 else "round",
-		"strap":STRAP_TYPES[WatchForgery.template(WatchForgery.strap_id(it))], "strap_color":_strap_color(WatchForgery.strap_id(it)),
-		"case_color":"bda064" if template == 13 or definition.get("tier", "") == "luxury" else "b6c0c0"}
+	_appearance = {"template":template, "case_shape":_art.get("shape","square" if template == 6 else "round"),
+		"strap":WatchLogo.art(WatchForgery.strap_id(it)).get("strap",STRAP_TYPES[WatchForgery.template(WatchForgery.strap_id(it))]), "strap_color":_strap_color(WatchForgery.strap_id(it)),
+		"case_color":_art.get("case_color", "bda064" if template == 13 or definition.get("tier", "") in ["luxury","ultra"] else "b6c0c0")}
 	_started_opened = bool(it.get("service", {}).get("opened", false))
 	if progress.get("version", 0) == 1 and progress.get("task", "") == task:
 		# The reducer updates service.opened during this operation. Its original
@@ -1108,8 +1107,25 @@ func _draw_ballast(p: Vector2) -> void:
 		_draw_screw(p + Vector2(13, 9), 3, 0.1, STEEL)
 
 func _case_shape(p: Vector2, radius: float, fill: Color) -> void:
-	if _appearance.get("case_shape", "round") == "square":
-		_panel(Rect2(p - Vector2.ONE * radius, Vector2.ONE * radius * 2), fill, fill, 5)
+	var shape: String = _appearance.get("case_shape", "round")
+	if shape in ["square","cushion"]:
+		_panel(Rect2(p - Vector2.ONE * radius, Vector2.ONE * radius * 2), fill, fill, 5 if shape=="square" else int(radius*0.35))
+	elif shape in ["octagon","sun"]:
+		var points := PackedVector2Array()
+		var sides := 16 if shape=="sun" else 8
+		for k in sides:
+			points.append(p+Vector2.from_angle(float(k)*TAU/sides)*radius*(0.88 if shape=="sun" and k%2 else 1.0))
+		draw_colored_polygon(points,fill)
+	elif shape == "tonneau":
+		var points := PackedVector2Array()
+		for point in [Vector2(-0.78,-1),Vector2(0.78,-1),Vector2(1,-0.55),Vector2(1,0.55),Vector2(0.78,1),Vector2(-0.78,1),Vector2(-1,0.55),Vector2(-1,-0.55)]:
+			points.append(p+point*radius)
+		draw_colored_polygon(points,fill)
+	elif shape in ["oval","crescent"]:
+		var points := PackedVector2Array()
+		for k in 64:
+			points.append(p+Vector2.from_angle(float(k)*TAU/64)*Vector2(0.85 if shape=="oval" else 1.08,1.05 if shape=="oval" else 1.0)*radius)
+		draw_colored_polygon(points,fill)
 	else:
 		draw_circle(p, radius, fill)
 
@@ -1133,5 +1149,7 @@ func _text(at: Vector2, text: String, font_size: int, color: Color, mono := fals
 	draw_string(_mono if mono else _font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
 
 func _strap_color(id: String) -> String:
+	var authored: Dictionary = WatchLogo.art(id)
+	if authored.has("strap_color"): return String(authored.strap_color)
 	var index := clampi(id.get_slice("-",1).to_int()-1,0,32)
 	return STRAP_COLORS[index] if index<15 else EXTRA_STRAP_COLORS[index-15]

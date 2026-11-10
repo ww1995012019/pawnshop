@@ -7,6 +7,10 @@ static func open(shell: Node) -> void:
 	scroll.custom_minimum_size = Vector2(0,560)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var nav := HFlowContainer.new()
+	nav.add_theme_constant_override("h_separation",8)
+	nav.add_theme_constant_override("v_separation",8)
+	body.add_child(nav)
 	body.add_child(scroll)
 	var index := UIKit.vbox(16)
 	index.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -24,8 +28,18 @@ static func open(shell: Node) -> void:
 		scroll.remove_child(detail)
 		scroll.add_child(index)
 		scroll.set_deferred("scroll_vertical",saved_scroll[0]))
-	for tier in ["low","mid","luxury"]:
-		index.add_child(UIKit.module_header({"low":"低等手表","mid":"中等手表","luxury":"名贵手表"}[tier],"点击手表查看标准参考资料","CATALOGUE"))
+	for tier in ["low","mid","luxury","ultra"]:
+		var section := UIKit.module_header({"low":"低等手表","mid":"中等手表","luxury":"名贵手表","ultra":"珍稀手表"}[tier],"点击手表查看标准参考资料","CATALOGUE")
+		section.name = "catalogue_section_"+tier
+		index.add_child(section)
+		var jump := UIKit.button({"low":"低等","mid":"中等","luxury":"名贵","ultra":"珍稀"}[tier],"secondary",Vector2(100,48),18)
+		jump.name = "catalogue_tier_"+tier
+		jump.pressed.connect(func():
+			if detail.get_parent()==scroll:
+				scroll.remove_child(detail)
+				scroll.add_child(index)
+			scroll.set_deferred("scroll_vertical",int(section.position.y)))
+		nav.add_child(jump)
 		var grid := GridContainer.new()
 		grid.columns = 4
 		grid.add_theme_constant_override("h_separation",10)

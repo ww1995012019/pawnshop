@@ -26,5 +26,5 @@ func run() -> void:
     print("REFURB ART FAIL saved completion ",definition.id," ",job)
     failures += 1
    art.free()
- print("REFURB ART ","PASS all 33 models × 5 independent jobs" if failures == 0 else "FAIL", " failures=",failures)
+ print("REFURB ART ","PASS all 78 models × 5 independent jobs" if failures == 0 else "FAIL", " failures=",failures)
  quit(1 if failures else 0)

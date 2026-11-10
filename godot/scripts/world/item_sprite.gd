@@ -31,6 +31,7 @@ var land_tween: Tween
 var logo_variant := 0
 var finish_signature := ""
 var physical_signature := ""
+var rare_time := 0.0
 
 ## height: on-screen height in px for the front face.
 func setup(id: String, item_uid := "", height := 300.0, start_back := false) -> void:
@@ -90,6 +91,15 @@ func _apply_face() -> void:
 	# The mark occupies the same 48 × 32 pixel field in every authored watch.
 	mat.set_shader_parameter("logo_rect", Vector4(0.5 - 24.0 / r.size.x, 0.5 - 40.0 / r.size.y, 48.0 / r.size.x, 32.0 / r.size.y))
 	_sync_logo_observation()
+	_sync_rare_effect(0.0)
+
+func _sync_rare_effect(delta: float) -> void:
+	var it = Game.item(uid) if not uid.is_empty() else null
+	var appearance: String = WatchForgery.appearance_id(it) if it != null else def_id
+	var effect := int(WatchLogo.art(appearance).get("animation",0)) if not back and not Game.prefs.reduced_motion else 0
+	if effect > 0: rare_time += delta
+	mat.set_shader_parameter("rare_effect",effect)
+	mat.set_shader_parameter("rare_time",rare_time)
 
 func _sync_logo_observation() -> void:
 	var it = Game.item(uid) if not uid.is_empty() else null
@@ -198,6 +208,7 @@ func flip() -> void:
 		flip_finished.emit(back))
 
 func _process(delta: float) -> void:
+	_sync_rare_effect(delta)
 	var it = Game.item(uid) if not uid.is_empty() else null
 	if it != null and (logo_variant != WatchRules.logo_variant(it) or physical_signature!=WatchForgery.signature(it)):
 		_apply_face()

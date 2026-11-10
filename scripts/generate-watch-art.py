@@ -20,6 +20,7 @@ NEW_STRAPCOL=['#8b694b','#655442','#737b63','#827c60','#a7b2af','#9eaaa6',
               '#54463e','#c4b87e','#473a57','#6b4939','#b4bba7','#c3b591']
 
 def glyph(i,v=0):
+    if i>=33: return expanded_glyph(i,v)
     im=Image.new('1',(24,16)); d=ImageDraw.Draw(im)
     def line(p,w=1): d.line(p,fill=1,width=w)
     if i>=15:
@@ -88,6 +89,7 @@ def crest():
     return [[x,y] for y in range(16) for x in range(16) if im.getpixel((x,y))]
 
 def watch(i,back=False,luxury=False):
+    if i>=33: return expanded_watch(i,back,luxury)
     model_index=i
     if i>=15:
         extra=i-15; i=NEW_TEMPLATES[extra]
@@ -179,17 +181,128 @@ def watch(i,back=False,luxury=False):
         for x,y in crest(): d.point((56+x,100+y),fill='#e4c375')
     return im.resize((256,256),Image.Resampling.NEAREST)
 
+# New families are authored independently; the shipped renderer below is untouched.
+EXPANDED_FACES=['#d9dfba','#b9c3c4','#d1c7a2','#d7d2b6','#c1c9bb', '#a0b9c8','#8b9d9e','#495662','#c0b99f','#697c82', '#bdc7b4','#ddbd85','#aec8cc','#344c64','#697774', '#e3d9b7','#a2bcb5','#334e62','#c6bd93','#719a97', '#cbdbe1','#adb7ca','#bfc5ac','#415b6e','#b6d1cb', '#2a495c','#34576a','#223d56','#59788b','#172e43', '#dbb875','#c5aa89','#35484e','#cfc0a6','#69544c', '#e2c390','#8d5968','#d2dbda','#263b52','#426777', '#e6b866','#629eaa','#263b63','#892f3d','#292d43']
+EXPANDED_STRAPS=['#68714e','#a1a79d','#7d7358','#8c9a9d','#394a44', '#71615a','#9aa4ad','#66676e','#a5aca8','#343a43', '#71533c','#aaa38b','#7d8e85','#a8b6b4','#33434e', '#795a41','#afb5a5','#687b76','#b4bba5','#3c5c5c', '#565775','#bbc5d1','#697487','#a5adb9','#3e4a65', '#384858','#8198a6','#334557','#7c9aa0','#1d354a', '#71533e','#c1aa75','#645c50','#c6ba99','#544031', '#8b5c3e','#b9a69d','#697d83','#9babbc','#36585e', '#513b2c','#8abbb4','#3b496d','#9e6671','#4b4f65']
+CASE_COLORS=['#a9b3a0','#9dabb5','#b4a78c','#c6c2a5','#b9c8d6','#809da7','#d0b06c','#d4c0a2','#e6be76']
+
+def expanded_metadata(i):
+    n=i-33; family=n//5; model=n%5
+    shape=['round','square','round','octagon','oval','cushion','tonneau','octagon','sun'][family]
+    if family==8: shape=['sun','oval','octagon','cushion','crescent'][model]
+    return {'face':EXPANDED_FACES[n], 'ink':LIGHT if family in [5,7,8] and not (family==8 and model<2) else INK,
+            'strap':['leather','metal','cloth','metal','rubber'][model], 'strap_color':EXPANDED_STRAPS[n][1:],
+            'case_color':(['#e6be76','#bbded2','#b4c6e4','#ca7984','#adb6d2'][model] if family==8 else CASE_COLORS[family])[1:],
+            'shape':shape,'template':6 if shape=='square' else [0,1,9,10,4][model], 'animation':model+1 if family==8 else 0}
+
+def expanded_glyph(i,v):
+    family=(i-33)//5; marks=(i-33)%5+1
+    im=Image.new('1',(24,16)); d=ImageDraw.Draw(im)
+    def line(p):d.line(p,fill=1,width=1)
+    if family==0:
+        for x in [5,10,15]:line([(10,13),(x,3),(x-2,1)])
+        line([(3,14),(17,14)])
+    elif family==1:line([(2,12),(6,3),(10,9),(13,1),(17,12),(2,12)])
+    elif family==2:
+        line([(9,1),(16,7),(9,12),(2,7),(9,1)]);line([(9,12),(9,14),(3,14),(16,14)])
+    elif family==3:
+        d.arc((2,1,16,14),180,360,fill=1);line([(9,2),(9,14)]);line([(2,8),(16,8)])
+    elif family==4:
+        d.ellipse((2,1,16,13),outline=1);d.ellipse((5,4,13,10),outline=1);line([(3,15),(16,15)])
+    elif family==5:
+        for y in [3,7,11]:line([(2,y+1),(6,y-1),(10,y+1),(14,y-1),(17,y+1)])
+        line([(18,1),(18,14)])
+    elif family==6:
+        d.polygon([(9,0),(11,5),(17,7),(11,9),(9,14),(7,9),(1,7),(7,5)],outline=1);line([(3,15),(16,15)])
+    elif family==7:
+        line([(6,1),(13,1),(17,7),(13,13),(6,13),(2,7),(6,1)]);line([(3,15),(16,15)])
+    else:
+        d.arc((1,1,17,15),180,360,fill=1);line([(1,9),(17,9)])
+        d.polygon([(9,3),(10,6),(13,7),(10,8),(9,11),(8,8),(5,7),(8,6)],fill=1)
+    for mark in range(marks-v):line([(20,1+mark*2),(22,1+mark*2)])
+    return [[x,y] for y in range(16) for x in range(24) if im.getpixel((x,y))]
+
+def expanded_watch(i,back,luxury):
+    m=expanded_metadata(i); n=i-33; f=n//5; v=n%5
+    im=Image.new('RGBA',(128,128));d=ImageDraw.Draw(im)
+    strap=m['strap'];left,right=(47-v%2*2,81+v%2*2)
+    d.rectangle((left,7,right,120),fill=INK);d.rectangle((left+2,9,right-2,118),fill='#'+m['strap_color'])
+    for y in range(12,119,5):
+        if strap=='metal':d.line((left+2,y,right-2,y),fill=SHADE);d.line((58,y+1,70,y+1),fill=LIGHT)
+        elif strap=='rubber':d.line((left+4,y,right-4,y),fill=INK,width=2)
+        elif strap=='cloth':
+            for x in range(left+4,right-3,4):d.point((x,y),fill=LIGHT)
+        else:d.point((left+3,y),fill=LIGHT);d.point((right-3,y),fill=LIGHT)
+    d.rectangle((45,28,83,100),fill=INK);d.rectangle((48,29,80,99),fill='#'+m['case_color'])
+    shape=m['shape'];radius=32+v%3
+    def shell(inset,color):
+        l,t,r,b=64-radius+inset,64-radius+inset,64+radius-inset,64+radius-inset
+        if shape=='square':d.rectangle((l,t,r,b),fill=color)
+        elif shape in ['octagon','sun']:
+            pts=[(round(64+math.cos(k*math.pi/(8 if shape=='sun' else 4))*(radius-inset)*(0.88 if shape=='sun' and k%2 else 1)),round(64+math.sin(k*math.pi/(8 if shape=='sun' else 4))*(radius-inset)*(0.88 if shape=='sun' and k%2 else 1))) for k in range(16 if shape=='sun' else 8)]
+            d.polygon(pts,fill=color)
+        elif shape=='tonneau':d.polygon([(l+7,t),(r-7,t),(r,t+15),(r,b-15),(r-7,b),(l+7,b),(l,b-15),(l,t+15)],fill=color)
+        elif shape=='cushion':d.rounded_rectangle((l,t,r,b),radius=12,fill=color)
+        elif shape=='oval':d.ellipse((l+5,t-3,r-5,b+3),fill=color)
+        elif shape=='crescent':d.ellipse((l-3,t,r+3,b),fill=color)
+        else:d.ellipse((l,t,r,b),fill=color)
+    shell(0,INK);shell(2,SHADE);shell(3,'#'+m['case_color']);shell(7,'#94a3a4' if back else m['face'])
+    d.rectangle((95,59,102,68),fill=INK);d.rectangle((96,60,101,66),fill='#'+m['case_color'])
+    if back:
+        for a in [45,135,225,315]:
+            x=round(64+math.cos(math.radians(a))*24);y=round(64+math.sin(math.radians(a))*24)
+            d.ellipse((x-2,y-2,x+2,y+2),fill=INK);d.line((x-1,y,x+1,y),fill=LIGHT)
+        # Fixed-size 6x4 manufacturing code stays inside the back plate.
+        for bit in range(12):
+            if (i+1)&(1<<bit):d.rectangle((51+bit%6*4,77+bit//6*4,52+bit%6*4,78+bit//6*4),fill=SHADE)
+        d.line((52,69,76,69),fill=SHADE)
+    else:
+        for h in range(12):
+            a=h*math.pi/6;x=round(64+math.sin(a)*23);y=round(64-math.cos(a)*23)
+            d.rectangle((x,y,x+1,y+1),fill=m['ink'])
+        # Each family carries a different dial construction below the mark.
+        if f in [0,3]:d.line((46,79,82,79),fill=SHADE);d.line((49,82,79,82),fill=SHADE)
+        elif f in [1,4]:d.rectangle((53,73,75,82),outline=SHADE);d.line((64,73,64,82),fill=SHADE)
+        elif f in [2,5]:
+            for x in [52,76]:d.ellipse((x-5,68,x+5,78),outline=SHADE)
+        elif f==6:d.arc((47,66,81,88),0,180,fill='#f5d99b',width=2)
+        elif f==7:
+            for x in range(49,80,4):d.line((x,64,x,82),fill=SHADE)
+        elif v==0:
+            d.ellipse((47,64,81,88),outline='#f4d78d',width=2);d.ellipse((59,70,69,80),fill='#f4d78d')
+        elif v==1:
+            for y in range(66,85,4):d.line((45,y,56,y-2,70,y+1,82,y-4),fill=['#91e0cf','#9bb8df','#c0a7d8'][y%3],width=2)
+        elif v==2:
+            for r in [8,14]:d.ellipse((64-r,76-r,64+r,76+r),outline='#a9c6f1')
+            d.line((48,76,80,76),fill='#baab79');d.line((64,62,64,89),fill='#baab79')
+        elif v==3:
+            for k in range(9):
+                a=k*math.pi/8;d.line((64,77,round(64+math.cos(a)*21),round(77-math.sin(a)*15)),fill='#ec9e72')
+        else:
+            d.ellipse((50,65,78,88),fill='#c7d2ed');d.ellipse((56,62,82,83),fill=m['face'])
+        d.line((64,68,53-v,64),fill=INK,width=3);d.line((64,68,75,80-v),fill=INK,width=3)
+        d.line((64,68,53-v,63),fill=LIGHT);d.line((64,68,75,79-v),fill=LIGHT)
+        d.ellipse((62,66,66,70),fill='#'+m['case_color'],outline=INK)
+    d.rectangle((52,44,75,59),fill='#94a3a4' if back else m['face'])
+    for x,y in glyph(i):d.point((52+x,44+y),fill=INK if back else m['ink'])
+    if luxury:
+        d.rectangle((54,99,73,117),fill=INK);d.rectangle((55,100,72,116),fill='#514735')
+        for x,y in crest():d.point((56+x,100+y),fill='#e4c375')
+    return im.resize((256,256),Image.Resampling.NEAREST)
+
 def main():
     OUT.mkdir(parents=True,exist_ok=True)
     definitions=json.loads((ROOT/'godot/data/game_data.json').read_text())['itemDefs']
     count=len(definitions); rows=math.ceil(count/5)
     for side in ['front','back']:
         atlas=Image.new('RGBA',(1280,rows*256))
-        for i in range(count): atlas.paste(watch(i,side=='back',definitions[i].get('tier')=='luxury'),(i%5*256,i//5*256))
+        for i in range(count): atlas.paste(watch(i,side=='back',definitions[i].get('tier') in ['luxury','ultra']),(i%5*256,i//5*256))
         atlas.save(OUT/f'watches-{side}.png')
         normal=Image.new('RGBA',atlas.size,(128,128,255,0)); normal.putalpha(atlas.getchannel('A'));normal.save(OUT/f'watches-{side}_n.png')
-    payload={f'WCH-{i+1:03}':{'face':(FACES[i] if i<15 else NEW_FACES[i-15]),'ink':('#e2e5d9' if (i if i<15 else NEW_TEMPLATES[i-15]) in [2,3,4,5,7,8,9,10,14] else INK),'pixels':[glyph(i),glyph(i,1)]} for i in range(count)}
+    payload={}
     for i,definition in enumerate(definitions):
-        payload[definition['id']]['crest']=crest() if definition.get('tier')=='luxury' else []
+        meta=expanded_metadata(i) if i>=33 else {'face':FACES[i] if i<15 else NEW_FACES[i-15], 'ink':LIGHT if (i if i<15 else NEW_TEMPLATES[i-15]) in [2,3,4,5,7,8,9,10,14] else INK}
+        meta.update(pixels=[glyph(i),glyph(i,1)],crest=crest() if definition.get('tier') in ['luxury','ultra'] else [])
+        payload[definition['id']]=meta
     (ROOT/'godot/data/watch_art.json').write_text(json.dumps(payload,separators=(',',':'))+'\n')
 if __name__=='__main__': main()

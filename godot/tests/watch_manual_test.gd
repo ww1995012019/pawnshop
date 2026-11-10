@@ -35,7 +35,30 @@ func run() -> void:
 		shell.open_watch_catalogue()
 		await process_frame
 		var cards: Array = shell.modal_layer.find_children("catalogue_model_*","Button",true,false)
-		check(cards.size()==33,"catalogue displays all 33 watch icons")
+		check(cards.size()==78,"catalogue displays all 78 watch icons")
+		var tier_nav: Button = shell.modal_layer.find_child("catalogue_tier_ultra",true,false)
+		check(tier_nav != null,"mobile tier navigation includes rare section")
+		for card in cards:
+			check(card.material == null,"catalogue cards stay static")
+		for number in range(74,79):
+			var rare: Button = shell.modal_layer.find_child("catalogue_model_WCH-%03d" % number,true,false)
+			if rare == null: continue
+			game.prefs.reduced_motion = false
+			rare.pressed.emit()
+			await process_frame
+			var preview = shell.modal_layer.find_child("rare_reference_preview",true,false)
+			check(preview != null,"selected rare reference has animated preview")
+			if preview != null:
+				preview._process(0.25)
+				check(int(preview.material.get_shader_parameter("rare_effect"))==number-73,"selected rare reference uses its authored effect")
+				check(float(preview.material.get_shader_parameter("rare_time"))>0,"selected preview clock runs")
+				game.prefs.reduced_motion = true
+				preview._process(0.25)
+				check(int(preview.material.get_shader_parameter("rare_effect"))==0,"reference obeys reduced motion")
+			check(text_in(shell.modal_layer).contains("型号档次：珍稀"),"rare reference has its fourth tier label")
+			var back: Button = shell.modal_layer.find_child("catalogue_back",true,false)
+			back.pressed.emit()
+			await process_frame
 		check(shell.modal_layer.find_child("manual_model",true,false)==null,"no dropdown model selector")
 		var last: Button = shell.modal_layer.find_child("catalogue_model_WCH-033",true,false)
 		last.pressed.emit()
