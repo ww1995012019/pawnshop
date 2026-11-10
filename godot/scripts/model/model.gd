@@ -222,6 +222,7 @@ static func _order_state(s: Dictionary, id: String):
 	return null
 
 static func finish_trade(s: Dictionary, text: String) -> Dictionary:
+	TradeSession.persist_holdings(s)
 	s.trade = null
 	s.cursor += 1
 	s.tutorial = maxf(s.tutorial, 1)

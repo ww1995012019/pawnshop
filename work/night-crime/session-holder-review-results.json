@@ -1,0 +1,47 @@
+[
+  {
+    "test": "session_crime_integration_test",
+    "pass": true,
+    "log": "work/night-crime/session_crime_integration_test-holder-review-final.log"
+  },
+  {
+    "test": "session_crime_integration_ui_test",
+    "pass": true,
+    "log": "work/night-crime/session_crime_integration_ui_test-holder-review-final.log"
+  },
+  {
+    "test": "night_crime_test",
+    "pass": true,
+    "log": "work/night-crime/night_crime_test-holder-review-final.log"
+  },
+  {
+    "test": "night_crime_ui_test",
+    "pass": true,
+    "log": "work/night-crime/night_crime_ui_test-holder-review-final.log"
+  },
+  {
+    "test": "multi_item_trade_test",
+    "pass": true,
+    "log": "work/night-crime/multi_item_trade_test-holder-review-final.log"
+  },
+  {
+    "test": "multi_item_trade_ui_test",
+    "pass": true,
+    "log": "work/night-crime/multi_item_trade_ui_test-holder-review-final.log"
+  },
+  {
+    "test": "wanted_cases_test",
+    "pass": true,
+    "log": "work/night-crime/wanted_cases_test-holder-review-final.log"
+  },
+  {
+    "test": "merchant_test",
+    "pass": true,
+    "log": "work/night-crime/merchant_test-holder-review-final.log"
+  },
+  {
+    "test": "crime_event_test",
+    "pass": true,
+    "log": "work/night-crime/crime_event_test-holder-review-final.log"
+  }
+]

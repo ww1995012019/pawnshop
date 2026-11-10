@@ -13,6 +13,37 @@ func return_seed() -> String:
   if Model.fnv("%s/night/theft/3" % seed)%10000<300 and Model.fnv("%s/fence/return/5" % seed)%100<20 and Model.fnv("%s/police/inspection/6" % seed)%100<8:
    return seed
  return ""
+func police_session_stock_test(report_type: String) -> void:
+ var state:=find_fence(theft_campaign(false))
+ var lost: String=state.trade.item.uid
+ var seller: String=state.trade.npcId
+ var legal:=Model.new_item(state,"WCH-002",{"sourceVerified":true,"authentic":true,"working":true,"condition":1.0})
+ Model.put_in(state,legal)
+ state=batch(state,"TRADE_OPEN");TradeSession.session(state).cash=5000;TradeSession.session(state).want_count=6
+ state=batch(state,"TRADE_ADD",{"uid":legal.uid,"direction":"sell"});state=batch(state,"TRADE_REVIEW")
+ state=batch(state,"TRADE_CONFIRM",{"uid":legal.uid});state=checkout(state,"police-end-legal-sale")
+ check(TradeSession.session(state).acquired.any(func(lot):return lot.uid==legal.uid),report_type+" fixture actually completed legal batch sale")
+ state=batch(state,"TRADE_FOCUS",{"uid":lost});state=act(state,"CHECK",{"uid":lost,"tool":"TOL-002"})
+ var expected_cash: float=state.cash
+ var expected_relations: Dictionary=state.relations.duplicate(true)
+ if report_type=="REPORT_VISITOR":
+  # Existing wanted fixture identifies the real culprit of the generated theft.
+  state.police.issued=true;state.police.wanted=[state.nightCrime.cases[0].culprit]
+  expected_cash+=WantedCases.profile(state.nightCrime.cases[0].culprit).reward
+  expected_relations.station=Model.clampn(expected_relations.station+3)
+ var npc_cash: float=TradeSession.session(state).cash
+ var cursor: int=state.cursor
+ var ap: float=state.ap
+ var visit_id: String=state.trade.id
+ state=JSON.parse_string(JSON.stringify(state))
+ state=batch(state,report_type)
+ check(state.trade==null and state.npcTrade[seller].owned.filter(func(lot):return lot.uid==legal.uid).size()==1 and Model.find_inventory(state,legal.uid)==null,report_type+" preserves completed legal sale in one NPC stock holder")
+ check(state.npcTrade[seller].owned.all(func(lot):return lot.uid!=lost) and state.inventory.filter(func(lot):return lot.uid==lost).size()==1,report_type+" excludes recovered original from persisted NPC holdings")
+ check(state.cursor==cursor+1 and state.cash==expected_cash and state.npcTrade[seller].cash==npc_cash,report_type+" finalization preserves cash pool and advances visitor once")
+ check(state.ap==ap and expected_relations.keys().all(func(faction):return float(state.relations[faction])==float(expected_relations[faction])),report_type+" stock finalization adds no action cost or relationship reward")
+ var replay:=act(state,report_type,{"tradeId":visit_id})
+ check(replay.cash==state.cash and replay.cursor==state.cursor and replay.npcTrade[seller].owned.filter(func(lot):return lot.uid==legal.uid).size()==1,report_type+" replay cannot repeat payment, visitor advance or stock persistence")
+
 func run() -> void:
  var s:=find_fence(theft_campaign(false))
  var uid: String=s.trade.item.uid
@@ -101,6 +132,25 @@ func run() -> void:
   s.trade={"id":later_id,"npcId":"CHR-004","kind":"sell","item":null,"price":0,"rounds":0,"locked":false,"evidenceUsed":[]}
   s=batch(s,"TRADE_OPEN")
  check(TradeSession.session(s).goods.filter(func(lot):return lot.uid==uid).size()==1 and s.nightCrime.cases[0].items[0].holder=="trade","NPC resale reloads same insured UID into one canonical trade holder")
+ # Ending an ordinary NPC resale after reload must retain that NPC's original stock/title.
+ var unsold: Dictionary=JSON.parse_string(JSON.stringify(s))
+ var title: Dictionary=unsold.nightCrime.cases[0].items[0].duplicate(true)
+ unsold=batch(unsold,"TRADE_OPEN") # Reopening the same list must not overwrite its return holder.
+ unsold=batch(unsold,"TRADE_END")
+ var returned: Dictionary=unsold.nightCrime.cases[0].items[0]
+ check(returned.holder=="buyer" and unsold.npcTrade["CHR-004"].owned.filter(func(lot):return lot.uid==uid).size()==1,"reloaded unsold NPC resale returns one original to buyer stock rather than thief case")
+ check(returned.paid and returned.payout==title.payout and returned.get("originalLawful",false)==title.get("originalLawful",false) and not returned.resolved,"unsold NPC resale preserves canonical insurer title and unresolved original")
+ for n in 10:
+  unsold.trade={"id":"insured-unsold-return-%d" % n,"npcId":"CHR-004","kind":"sell","item":null,"price":0,"rounds":0,"locked":false,"evidenceUsed":[]}
+  unsold=batch(unsold,"TRADE_OPEN")
+  if TradeSession.session(unsold).goods.any(func(lot):return lot.uid==uid): break
+  unsold=batch(unsold,"TRADE_END")
+ check(TradeSession.session(unsold).get("goods",[]).filter(func(lot):return lot.uid==uid).size()==1 and unsold.nightCrime.cases[0].items[0].holder=="trade","later NPC visit offers the same unsold insured original once")
+ unsold=JSON.parse_string(JSON.stringify(unsold))
+ if unsold.trade!=null: unsold=batch(unsold,"TRADE_END")
+ var copies:=0
+ for record in unsold.npcTrade.values(): copies+=record.owned.filter(func(lot):return lot.uid==uid).size()
+ check(unsold.nightCrime.cases[0].items[0].holder=="buyer" and copies==1 and Model.find_inventory(unsold,uid)==null,"later reloaded visit end keeps one NPC holder and no inventory or case reassignment")
  NightCrime.arrest(s,s.nightCrime.cases[0].culprit)
  check(Model.find_inventory(s,uid)==null and s.nightCrime.cases[0].items[0].holder=="insurer" and not TradeSession.session(s).goods.any(func(it):return it.uid==uid),"insurer recovers bought original without duplicated live session copy")
  # Premium appearance affects buyer belief, never insurance's true market valuation.
@@ -112,5 +162,7 @@ func run() -> void:
  it.forgery={"version":2,"targetId":targets[-1],"methods":{}}
  WatchForgery.apply(it,"case");WatchForgery.apply(it,"logo");WatchForgery.apply(it,"serial")
  check(WatchForgery.appearance_id(it)!=it.defId and NightCrime.insurance_quote(s).total==value,"premium external appearance cannot inflate insurance true value")
+ police_session_stock_test("REPORT_LOST_ITEM")
+ police_session_stock_test("REPORT_VISITOR")
  print("SESSION CRIME failures=",failures)
  quit(1 if failures else 0)

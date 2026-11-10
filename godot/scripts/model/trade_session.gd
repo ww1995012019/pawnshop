@@ -40,8 +40,13 @@ static func ensure(s: Dictionary) -> void:
   var working: bool=n%5==0 if String(npc.get("title","")).contains("维修") else n%3!=0
   var lot := Model.new_item(s,definition.id,{"owner":"npc","condition":0.45+float(n%46)/100.0,"authentic":n%5!=0,"working":working,"sourceVerified":n%8!=0,"source":"%s 随身旧物" % GameData.npc(t.npcId).name})
   goods.append(lot)
- for lot in goods: lot.owner="npc"
- t.session={"version":1,"lines":[],"goods":goods,"acquired":[],"cash":float(record.cash),"want_count":1+Model.fnv(String(s.seed)+String(t.id)+"/quantity")%6,"bought":0,"completed":[],"focus":"","had_sale":false,"original_kind":t.kind}
+ var prior_case_holders: Dictionary={}
+ for lot in goods:
+  lot.owner="npc"
+  var tracked := NightCrime._row(NightCrime._case(s,String(lot.get("crimeCaseId",""))),lot.uid)
+  if not tracked.is_empty():
+   prior_case_holders[lot.uid]=tracked.holder if tracked.holder!="trade" else ("case" if t.get("crimeCaseId","")==lot.get("crimeCaseId","") else "buyer")
+ t.session={"version":1,"lines":[],"goods":goods,"acquired":[],"cash":float(record.cash),"want_count":1+Model.fnv(String(s.seed)+String(t.id)+"/quantity")%6,"bought":0,"completed":[],"focus":"","had_sale":false,"original_kind":t.kind,"prior_case_holders":prior_case_holders}
  var existing = t.get("item") if t.kind=="buy" else Model.find_inventory(s,t.get("selectedUid",""))
  if existing!=null:
   var line := _new_row(s,existing,"buy" if t.kind=="buy" else "sell")
@@ -54,6 +59,22 @@ static func ensure(s: Dictionary) -> void:
   t.session.focus=existing.uid
  t.item=null # The session is the sole live holder of visitor goods.
  t.locked=false
+static func persist_holdings(s: Dictionary) -> void:
+ # All visit-ending paths retain NPC originals, including police reports.
+ # Case originals return to the holder they had before entering this session.
+ var se := session(s)
+ if se.is_empty(): return
+ var record: Dictionary=s.npcTrade[s.trade.npcId]
+ record.cash=se.cash
+ for lot in se.goods+se.acquired:
+  var tracked := NightCrime._row(NightCrime._case(s,String(lot.get("crimeCaseId",""))),lot.uid)
+  if tracked.get("holder","")=="trade":
+   tracked.item=lot.duplicate(true)
+   var fallback := "case" if s.trade.get("crimeCaseId","")==lot.get("crimeCaseId","") else "buyer"
+   tracked.holder=se.get("prior_case_holders",{}).get(lot.uid,fallback)
+  if not tracked.get("resolved",false) and tracked.get("holder","")!="case":
+   if not record.owned.any(func(owned):return owned.uid==lot.uid): record.owned.append(lot)
+
 static func _new_row(s: Dictionary, it: Dictionary, direction: String) -> Dictionary:
  var context := {"id":s.trade.id,"npcId":s.trade.npcId,"kind":direction,"item":null,"price":0,"rounds":0,"locked":false,"evidenceUsed":[],"npcKnowledge":{},"forgeryChecks":{}}
  if s.trade.get("forgeryChecks",{}).has(it.uid): context.forgeryChecks[it.uid]=s.trade.forgeryChecks[it.uid].duplicate(true)
@@ -154,14 +175,6 @@ static func reduce(previous: Dictionary, action: Dictionary):
   se.return_to_list=false
   return Model.notice(s,"多件清单已展开：逐件议价确认，再统一交割；结束接待才送客。")
  if type=="TRADE_END":
-  var record: Dictionary=s.npcTrade[s.trade.npcId]
-  record.cash=se.cash
-  for lot in se.goods+se.acquired:
-   var case_row := NightCrime._row(NightCrime._case(s,String(lot.get("crimeCaseId",""))),lot.uid)
-   if case_row.get("holder","")=="trade":
-    case_row.item=lot.duplicate(true);case_row.holder="case"
-   elif not case_row.get("resolved",false):
-    if not record.owned.any(func(owned):return owned.uid==lot.uid): record.owned.append(lot)
   if se.get("had_deal",se.had_sale):
    var faction: String=GameData.npc(s.trade.npcId).faction
    s.relations[faction]=Model.clampn(s.relations[faction]+2)
