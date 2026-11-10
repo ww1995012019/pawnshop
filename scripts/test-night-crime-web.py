@@ -53,7 +53,12 @@ def main():
                 def boot():
                     page.wait_for_function('window.OrbitalTouch?.state?.ready',timeout=90000);cmd({'type':'start'});phone.wait(page,'!s.title && !s.busy')
                 def load_state(state):
-                    row=saved();page.evaluate(WRITE_SAVE,{'key':row['key'],'state':state});page.reload();boot()
+                    row=saved()
+                    # Unload the running game before replacing WebFS: a queued
+                    # sync from the old page must not overwrite the fixture.
+                    page.goto('http://127.0.0.1:4174/godot-license.txt')
+                    page.evaluate(WRITE_SAVE,{'key':row['key'],'state':state})
+                    page.goto('http://127.0.0.1:4174/');boot()
                     page.wait_for_function('(e)=>OrbitalTouch.state.day===e.day && OrbitalTouch.state.ap===e.ap && OrbitalTouch.state.cash===e.cash',arg={k:state[k] for k in ('day','ap','cash')},timeout=20000)
                 try:
                     page.goto('http://127.0.0.1:4174/');boot();cmd({'type':'page','page':'repair'});phone.wait(page,"s.workspace==='repair'");saved()

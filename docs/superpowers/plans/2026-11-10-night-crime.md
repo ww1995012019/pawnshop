@@ -29,5 +29,5 @@ Files report_page, counter_page, warehouse_page, shell, web_touch, campaign_ledg
 - [x] Run native UI/layout tests, commitownedfiles and report.
 
 ### Task3 Review verify and publication
-- [ ] Per-task review clean, integrated wholebranch review, full npm test, webbuild, desktop+mobile actualinput tests with deterministic realrules fixtures, reload/ack idempotence.
+- [x] Per-task review clean, integrated wholebranch review, full npm test, webbuild, desktop+mobile actualinput tests with deterministic realrules fixtures, reload/ack idempotence.
 - [ ] Reconcile concurrentremote withoutforce, commit, publish source and fingerprintedwebpackage, verifybytes/retainedpreviouspack, wait Pages success.
