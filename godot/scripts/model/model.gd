@@ -433,25 +433,6 @@ static func counter_price(s: Dictionary, t: Dictionary, it: Dictionary) -> float
 static func daily_visit_limit() -> int:
 	return 6
 
-static func _shuffled(seed: String, cycle: int) -> Array:
-	var ids := []
-	for d in GameData.item_list:
-		ids.append(d.id)
-	var n := fnv("%s/stock-v1/%d" % [seed, cycle])
-	for i in range(ids.size() - 1, 0, -1):
-		n = lcg(n)
-		var j := n % (i + 1)
-		var tmp = ids[i]
-		ids[i] = ids[j]
-		ids[j] = tmp
-	return ids
-
-static func _seeded_id(s: Dictionary, day: int, slot: int) -> String:
-	var count := GameData.item_list.size()
-	var index := 54 + day - 1 if day <= 3 else (day - 4) * 3 + slot / 2
-	var cycle := index / count
-	return _shuffled(s.seed, cycle)[index % count]
-
 static func market_stock(s: Dictionary, day = null, slot = null) -> Dictionary:
 	var dd: int = int(s.day if day == null else day)
 	var sl: int = int(s.cursor if slot == null else slot)
@@ -461,12 +442,13 @@ static func market_stock(s: Dictionary, day = null, slot = null) -> Dictionary:
 		var unverified := dd == 3 and sl == 0
 		return {"defId": def_id, "condition": 0.65 if sl == 0 else 0.8, "working": sl != 0, "authentic": not (dd == 2 and sl == 2), "sourceVerified": not unverified,
 			"source": "封签批次与旧港注销清单待比对" if unverified else "供货人登记回执 / 旧港回收批次", "price": jround(D(def_id).value * (0.42 if sl == 0 else 0.7))}
-	var def_id := _seeded_id(s, dd, sl)
+	var supply_key := "market/%d/%d" % [dd,sl]
+	var def_id := WatchSupply.pick(s.seed, supply_key)
 	var key := "%s/%d/%d/physical-v1" % [s.seed, dd, sl]
 	var draw := func(tag: String) -> float: return fnv(key + "/" + tag) / 4294967296.0
 	var condition := jround((0.45 + draw.call("wear") * 0.5) * 100) / 100.0
 	var working: bool = draw.call("working") >= 0.35
-	var authentic: bool = draw.call("authentic") >= 0.2
+	var authentic := WatchSupply.authentic(s.seed, supply_key)
 	var verified: bool = draw.call("source") >= 0.28
 	var origins := ["港务退役设备清单", "拾荒船舱回收批次", "维修工备件清库", "居民搬舱转让回执"]
 	var origin: String = origins[int(floor(draw.call("origin") * origins.size()))]

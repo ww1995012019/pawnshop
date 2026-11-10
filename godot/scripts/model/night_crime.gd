@@ -23,8 +23,37 @@ static func credit(s: Dictionary, case_id: String, target := "") -> void:
 	if target != "" and not c.targets.has(target): c.targets.append(target)
 	if not duplicate and (case_id != "" or target != ""): c.count += 1
 
-static func theft_draw(seed: String, day: int) -> bool:
-	return day >= 3 and day <= 20 and Model.fnv("%s/night/theft/%d" % [seed,day]) % 10000 < 300
+static func theft_draw(seed: String, day: int, threshold := 300) -> bool:
+	return day >= 3 and day <= 20 and Model.fnv("%s/night/theft/%d" % [seed,day]) % 10000 < threshold
+
+static func theft_chance_bp(s: Dictionary) -> int:
+	var chance := 300
+	for item in s.inventory:
+		if not stealable(s,item): continue
+		match GameData.def(WatchForgery.appearance_id(item)).get("tier",""):
+			"luxury": chance += 8
+			"ultra": chance += 10
+	return mini(10000,chance)
+
+static func _take_weighted(seed: String, day: int, index: int, candidates: Array) -> Dictionary:
+	# Select a present tier first; its inventory count never changes its weight.
+	var buckets := {"low":[],"mid":[],"luxury":[],"ultra":[]}
+	var weights := {"low":80,"mid":15,"luxury":4,"ultra":1}
+	for position in candidates.size():
+		var tier: String = GameData.def(WatchForgery.appearance_id(candidates[position])).get("tier","low")
+		buckets[tier].append(position)
+	var total := 0
+	for tier in buckets:
+		if not buckets[tier].is_empty(): total += int(weights[tier])
+	var roll := Model.fnv("%s/night/tier/%d/%d" % [seed,day,index])%total
+	for tier in buckets:
+		if buckets[tier].is_empty(): continue
+		roll -= int(weights[tier])
+		if roll < 0:
+			var slots: Array=buckets[tier]
+			var position: int=slots[Model.fnv("%s/night/item/%d/%d" % [seed,day,index])%slots.size()]
+			return candidates.pop_at(position)
+	return {}
 
 static func inspection_chance(risk: float) -> int:
 	return 8 if risk < 30 else 15 if risk < 60 else 25
@@ -87,15 +116,16 @@ static func settle(s: Dictionary) -> void:
 	var candidates := []
 	for item in s.inventory:
 		if stealable(s,item): candidates.append(item.duplicate(true))
-	var n := {"day":day,"settled":true,"applied":false,"losses":[],"policy":s.nightCrime.policies.get(key,{}).duplicate(true),"inventory":candidates.duplicate(true)}
+	var chance := theft_chance_bp(s)
+	var n := {"chanceBp":chance,"day":day,"settled":true,"applied":false,"losses":[],"policy":s.nightCrime.policies.get(key,{}).duplicate(true),"inventory":candidates.duplicate(true)}
 	s.nightCrime.nights[key] = n
 	var active := thieves(s)
-	if not theft_draw(s.seed,day) or candidates.is_empty() or active.is_empty(): return
+	n.effectiveChanceBp = chance if not candidates.is_empty() and not active.is_empty() else 0
+	if not theft_draw(s.seed,day,chance) or candidates.is_empty() or active.is_empty(): return
 	var culprit: String = active[Model.fnv("%s/night/culprit/%d" % [s.seed,day]) % active.size()]
 	var count := 2 if candidates.size() >= 2 and Model.fnv("%s/night/count/%d" % [s.seed,day]) % 100 < 10 else 1
 	for index in count:
-		var pos := Model.fnv("%s/night/item/%d/%d" % [s.seed,day,index]) % candidates.size()
-		n.losses.append(candidates.pop_at(pos))
+		n.losses.append(_take_weighted(s.seed,day,index,candidates))
 	n.culprit = culprit
 
 static func morning(s: Dictionary, previous_day: int) -> void:
@@ -103,7 +133,7 @@ static func morning(s: Dictionary, previous_day: int) -> void:
 	var n: Dictionary = s.nightCrime.nights.get(str(previous_day),{})
 	if n.is_empty() or n.applied: return
 	n.applied = true
-	var receipt := {"day":int(s.day),"night":previous_day,"losses":[],"payout":0.0,"acknowledged":n.losses.is_empty()}
+	var receipt := {"chanceBp":n.get("chanceBp",300),"effectiveChanceBp":n.get("effectiveChanceBp",n.get("chanceBp",300)),"day":int(s.day),"night":previous_day,"losses":[],"payout":0.0,"acknowledged":n.losses.is_empty()}
 	var case_id := "NIGHT-%d" % previous_day
 	var case_record := {"id":case_id,"origin":"shop","lossDay":previous_day,"culprit":n.get("culprit",""),"revealed":false,"arrested":false,"items":[]}
 	for snapshot in n.losses:
@@ -381,7 +411,8 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 		if not active.has(d.fence.culprit): return null
 		var c := _case(s,d.fence.caseId)
 		if c.is_empty():
-			var item := Model.new_item(s,"WCH-002",{"sourceVerified":false,"source":"朋友托售，回执暂缺","stolen":true,"crimeCaseId":d.fence.caseId,"cost":0})
+			var supply_key := "external/%s" % d.fence.caseId
+			var item := Model.new_item(s,WatchSupply.pick(s.seed,supply_key),{"authentic":WatchSupply.authentic(s.seed,supply_key),"sourceVerified":false,"source":"朋友托售，回执暂缺","stolen":true,"crimeCaseId":d.fence.caseId,"cost":0})
 			c = {"id":d.fence.caseId,"origin":"external","lossDay":int(s.day)-2,"culprit":d.fence.culprit,"revealed":false,"arrested":false,"items":[{"uid":item.uid,"item":item,"holder":"case","paid":false,"payout":0,"handled":false,"resolved":false,"recovery":""}]}
 			s.nightCrime.cases.append(c)
 			d.fence.uid = item.uid

@@ -1627,6 +1627,8 @@ func open_night_report(manual := true) -> void:
 		var rows := UIKit.vbox(10)
 		card.add_child(rows)
 		rows.add_child(UIKit.label("第 %d 天开门 · 昨夜%s" % [morning.day, "无失窃" if morning.losses.is_empty() else "失窃 %d 件" % morning.losses.size()], 22, UIKit.INK, true, true))
+		if morning.has("chanceBp"):
+			rows.add_child(UIKit.label("结算时失窃概率 %.2f%% · 按当晚可被盗库存计算。" % (int(morning.get("effectiveChanceBp",morning.chanceBp))/100.0),18,UIKit.INK,false,true))
 		for loss in morning.losses:
 			var row := UIKit.hbox(12)
 			var image := TextureRect.new()

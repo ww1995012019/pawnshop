@@ -38,6 +38,17 @@ func run() -> void:
 	game.state=fixture.before_insurance.duplicate(true)
 	var shell = load("res://main.tscn").instantiate(); root.add_child(shell); await frames(); shell._close_title(); await frames()
 	shell.go("report"); await frames()
+	var original_state: Dictionary=game.state.duplicate(true)
+	game.state.inventory=[]
+	for id in ["WCH-015","WCH-074"]: game.state.inventory.append(Model.new_item(game.state,id))
+	shell.active_shell().page._refresh(); await frames()
+	check(text_of(shell.active_shell().page).contains("3.18%"),"insurance shows inventory-sensitive 3.18% theft chance")
+	game.state.day=2
+	shell.active_shell().page._refresh(); await frames()
+	var grace := text_of(shell.active_shell().page)
+	check(grace.contains("保护") and not grace.contains("当前失窃概率 3.18%"),"grace nights explain protection without actionable formula exposure")
+	game.state=original_state
+	shell.active_shell().page._refresh(); await frames()
 	var buy := button(shell, "购买今晚保险")
 	check(buy != null, "ledger provides real insurance purchase control")
 	if buy == null:
@@ -73,6 +84,7 @@ func run() -> void:
 	game.dispatch({"type":"NEXT"}); await create_timer(3).timeout; await frames()
 	check(shell.modal_open(), "actual NEXT automatically opens unread loss report")
 	var printed := text_of(shell.modal_layer)
+	check(printed.contains("结算时失窃概率 3.00%"),"morning report shows the saved previous-night chance")
 	for uid in fixture.meta.lossUIDs: check(printed.contains(uid), "morning lists each physical loss UID "+uid)
 	check(printed.contains("陈列架") or printed.contains("后仓"), "location is human readable")
 	check(not printed.contains("culprit") and not printed.contains("stolen"), "report prints public records without hidden truth")

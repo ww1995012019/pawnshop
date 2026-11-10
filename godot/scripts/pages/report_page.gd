@@ -280,6 +280,19 @@ func _add_night_controls(s: Dictionary) -> void:
 	section.name = "night_insurance"
 	body.add_child(section)
 	section.add_child(UIKit.module_header("今晚失窃保险", "仅保今晚 · 每天主动购买，不自动续保", "NIGHT / %02d" % int(s.day)))
+	var risk_text := "当前失窃概率 %.2f%%。" % (NightCrime.theft_chance_bp(s)/100.0)
+	if int(s.day)<3:
+		risk_text="前两晚享受保护，今晚不会发生夜间失窃。"
+	elif int(s.day)>20:
+		risk_text="夜间失窃时段已结束。"
+	elif not s.inventory.any(func(item):return NightCrime.stealable(s,item)):
+		risk_text="暂无可被盗的店铺自有库存，今晚无失窃损失。"
+	elif NightCrime.thieves(s).is_empty():
+		risk_text="在逃窃贼均已落网，今晚无失窃损失。"
+	elif s.phase!="open":
+		var snapshot: Dictionary=s.get("nightCrime",{}).get("nights",{}).get(str(int(s.day)),{})
+		risk_text="今晚已结算，结算时失窃概率 %.2f%%。" % (int(snapshot.get("effectiveChanceBp",snapshot.get("chanceBp",NightCrime.theft_chance_bp(s))))/100.0)
+	section.add_child(UIKit.label(risk_text+" 基础 3% + 每件名贵 0.08% + 每件珍稀 0.10%（最高 100%）；仅计可被盗库存，按可见型号档次计算。",17,UIKit.TEXT,false,true))
 	var history := UIKit.button("夜间失窃与查货记录", "secondary", Vector2(0, 52), 20)
 	history.pressed.connect(func(): shell.open_night_report())
 	section.add_child(history)

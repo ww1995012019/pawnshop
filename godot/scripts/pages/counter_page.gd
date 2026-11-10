@@ -887,7 +887,7 @@ func _refresh() -> void:
 		scr.head.text = "流动商人 · " + npc.name
 		scr.price.text = "物资买卖"
 		scr.line1.text = "常用维修材料"
-		scr.line2.text = "稀有货物有概率出现"
+		scr.line2.text = "随行货物有概率出现"
 		scr.line3.text = "可买材料，也可出售闲置物资"
 		offer_label.text = "—"
 		_act("查看商品", "primary", _merchant_shop)
@@ -1052,10 +1052,10 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 	if rare is Dictionary and rare.get("available", false):
 		var rare_row := UIKit.hbox(10)
 		var rare_name: String = GameData.def(rare.defId).name
-		var label := UIKit.label("稀有货：%s · 入后仓" % rare_name, 19, UIKit.AMBER)
+		var label := UIKit.label("随行货：%s · 入后仓" % rare_name, 19, UIKit.AMBER)
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		rare_row.add_child(label)
-		var buy_rare := UIKit.button("购买稀有货 · %s · 1 AP" % UIKit.money(rare.price), "good", Vector2(270, 50), 17)
+		var buy_rare := UIKit.button("购买随行货 · %s · 1 AP" % UIKit.money(rare.price), "good", Vector2(270, 50), 17)
 		buy_rare.set_meta("merchant_focus", "rare")
 		focus_targets["rare"] = buy_rare
 		buy_rare.disabled = s.cash < rare.price or s.ap < 1
@@ -1063,7 +1063,7 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 		rare_row.add_child(buy_rare)
 		contents.add_child(rare_row)
 	else:
-		contents.add_child(UIKit.label("本次没有可购买的稀有货。", 18, UIKit.MUTED))
+		contents.add_child(UIKit.label("本次没有可购买的随行货。", 18, UIKit.MUTED))
 	contents.add_child(UIKit.rule())
 	contents.add_child(UIKit.label("出售手表 · 商人按自己的判断报价，每件消耗1 AP", 19, UIKit.TEXT))
 	var eligible := 0

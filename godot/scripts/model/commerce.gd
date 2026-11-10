@@ -44,8 +44,9 @@ static func _new_merchant(s: Dictionary) -> Dictionary:
 	var roll := Model.fnv("%s/merchant-stock/%s" % [s.seed, Model.jnum(s.day)])
 	var rare = null
 	if roll % 100 < 40:
-		var item_id: String = RARE_ITEMS[int((roll >> 8) % RARE_ITEMS.size())]
-		rare = {"defId": item_id, "price": maxi(1, int(round(GameData.def(item_id).value * 0.85))), "available": true}
+		var supply_key := "merchant/%s" % Model.jnum(s.day)
+		var item_id := WatchSupply.pick(s.seed, supply_key)
+		rare = {"defId": item_id, "authentic": WatchSupply.authentic(s.seed, supply_key), "price": maxi(1, int(round(GameData.def(item_id).value * 0.85))), "available": true}
 	return {"id": Model.next_id(s, "merchant"), "npcId": MERCHANT_ID, "kind": "merchant",
 		"item": null, "price": 0, "rounds": 0, "locked": false, "evidenceUsed": [],
 		"line": "这趟带了常用耗材，也收多余零件。稀罕货要看运气。", "stock": stock, "rare": rare}
@@ -302,22 +303,22 @@ static func _reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 		return Model.notice(s, "售出 %s×%d，收到 %d Cr。" % [material.name, qty, price])
 	if kind == "BUY_RARE_ITEM":
 		if not _merchant_present(previous):
-			return _message(previous, "商人不在店里，暂时不能购买稀有货物。")
+			return _message(previous, "商人不在店里，暂时不能购买随行货物。")
 		var rare = previous.trade.get("rare", null)
 		if not rare is Dictionary or not rare.get("available", false):
-			return _message(previous, "本次没有可购买的稀有货物。")
+			return _message(previous, "本次没有可购买的随行货物。")
 		var price: float = rare.price
 		if previous.cash < price or not Model.has_ap(previous, 1):
-			return _message(previous, "现金或行动点不足，稀有货物未成交。")
+			return _message(previous, "现金或行动点不足，随行货物未成交。")
 		var s: Dictionary = previous.duplicate(true)
 		var item := Model.new_item(s, rare.defId, {"condition": 1.0, "working": true,
-			"authentic": true, "sourceVerified": true, "source": "流动商人的已登记货品", "cost": price})
+			"authentic": rare.get("authentic", true), "sourceVerified": true, "source": "流动商人的已登记货品", "cost": price})
 		if not Model.put_in(s, item):
-			return _message(previous, "后仓没有足够空间，稀有货物未成交。")
+			return _message(previous, "后仓没有足够空间，随行货物未成交。")
 		Model.ledger(s, Model.next_id(s, "merchant-purchase"), "purchase", "商人购入 %s" % GameData.def(item.defId).name, -price, price)
 		Model.spend(s, 1)
 		s.trade.rare.available = false
-		return Model.notice(s, "稀有货物已入后仓，钱货同步交割。")
+		return Model.notice(s, "随行货物已入后仓，钱货同步交割。")
 	if kind == "SELL_MERCHANT_ITEM":
 		if not _merchant_present(previous):
 			return _message(previous, "商人不在店里，暂时不能回收物品。")

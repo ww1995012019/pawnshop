@@ -26,7 +26,7 @@ static func ensure(s: Dictionary) -> void:
  var count := int(Model.fnv(String(s.seed)+String(t.id)+"/goods")%4)
  if t.kind=="buy" and t.get("item") is Dictionary: goods.append(t.item);count=maxi(1,count)
  if t.kind=="merchant" and t.get("rare") is Dictionary and t.rare.get("available",false):
-  goods.append(Model.new_item(s,t.rare.defId,{"owner":"npc","authentic":true,"working":true,"condition":0.8,"sourceVerified":true,"source":"流动商人的已登记货品"}))
+  goods.append(Model.new_item(s,t.rare.defId,{"owner":"npc","authentic":t.rare.get("authentic",true),"working":true,"condition":0.8,"sourceVerified":true,"source":"流动商人的已登记货品"}))
   count=maxi(1,count)
   t.rare.available=false
  while goods.size()<count and not record.owned.is_empty(): goods.append(record.owned.pop_front())
@@ -36,9 +36,10 @@ static func ensure(s: Dictionary) -> void:
   var pool: Array=GameData.item_list
   if String(npc.get("title","")).contains("收藏"):
    pool=GameData.item_list.filter(func(d):return float(d.value)>=337)
-  var definition: Dictionary=pool[n%pool.size()]
+  var supply_key := "counter/%s/%d" % [t.id,goods.size()]
+  var definition_id := WatchSupply.pick(s.seed,supply_key,pool)
   var working: bool=n%5==0 if String(npc.get("title","")).contains("维修") else n%3!=0
-  var lot := Model.new_item(s,definition.id,{"owner":"npc","condition":0.45+float(n%46)/100.0,"authentic":n%5!=0,"working":working,"sourceVerified":n%8!=0,"source":"%s 随身旧物" % GameData.npc(t.npcId).name})
+  var lot := Model.new_item(s,definition_id,{"owner":"npc","condition":0.45+float(n%46)/100.0,"authentic":WatchSupply.authentic(s.seed,supply_key),"working":working,"sourceVerified":n%8!=0,"source":"%s 随身旧物" % GameData.npc(t.npcId).name})
   goods.append(lot)
  var prior_case_holders: Dictionary={}
  for lot in goods:

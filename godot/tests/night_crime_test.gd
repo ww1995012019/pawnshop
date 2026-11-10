@@ -271,6 +271,7 @@ func return_terminal_test() -> void:
 	NightCrime.arrest(s,c.culprit)
 	check(Model.find_inventory(s,uid) == null and s.nightCrime.cooperation.count == 1,"later arrest cannot resurrect returned original or duplicate handover credit")
 func run() -> void:
+	weighted_theft_tests()
 	var s := fresh()
 	check(s.has("nightCrime"),"new games have saved night state")
 	var night = load("res://scripts/model/night_crime.gd")
@@ -390,3 +391,101 @@ func run() -> void:
 	return_terminal_test()
 	print("NIGHT failures=",failures)
 	quit(1 if failures else 0)
+
+# These fixtures catch per-item weighting, hidden-tier use and protected-stock risk.
+func weighted_theft_tests() -> void:
+	var night = load("res://scripts/model/night_crime.gd")
+	check(night.has_method("theft_chance_bp"),"inventory-sensitive theft threshold exists")
+	if not night.has_method("theft_chance_bp"): return
+	var s := fresh("RISK-FORMULA")
+	s.inventory=[]
+	check(night.theft_chance_bp(s)==300,"empty stock formula is 300 bp")
+	var luxury := Model.new_item(s,"WCH-015")
+	var ultra := Model.new_item(s,"WCH-074")
+	s.inventory=[luxury]
+	check(night.theft_chance_bp(s)==308,"one luxury adds 8 bp")
+	s.inventory=[ultra]
+	check(night.theft_chance_bp(s)==310,"one ultra adds 10 bp")
+	s.inventory=[luxury,ultra]
+	check(night.theft_chance_bp(s)==318,"luxury and ultra total 318 bp")
+	var overflow: Dictionary=s.duplicate(true)
+	overflow.inventory=[]
+	for i in 1000: overflow.inventory.append(Model.new_item(overflow,"WCH-074"))
+	check(night.theft_chance_bp(overflow)==10000,"inventory formula caps probability at 10000 bp")
+	var protected := []
+	for options in [{"sealed":true},{"orderId":"customer"},{"owner":"customer"},{"service":{"opened":true}},{"refurbishment":{"active_case":true}},{"location":"isolation"}]:
+		protected.append(Model.new_item(s,"WCH-074",options))
+	s.inventory.append_array(protected)
+	check(night.theft_chance_bp(s)==318,"protected originals never raise exposure")
+	var boundary_seed := ""
+	for i in 10000:
+		var candidate := "BOUNDARY-%d" % i
+		var draw := Model.fnv("%s/night/theft/3" % candidate)%10000
+		if draw>=300 and draw<318: boundary_seed=candidate; break
+	check(boundary_seed!="" and not night.theft_draw(boundary_seed,3) and night.theft_draw(boundary_seed,3,318),"custom threshold activates additional 300..317 basis-point draws")
+	var guarded := {"seed":theft_seed(),"day":3,"inventory":protected.duplicate(true),"police":{"caught":[]},"trade":null}
+	night.settle(guarded)
+	check(guarded.nightCrime.nights["3"].losses.is_empty(),"successful theft draw cannot take protected inventory")
+	check(guarded.nightCrime.nights["3"].get("effectiveChanceBp",-1)==0,"settled protected inventory records zero actual exposure")
+	var safe := {"seed":theft_seed(),"day":3,"inventory":[luxury],"police":{"caught":NightCrime.thieves(s)},"trade":null}
+	night.settle(safe)
+	check(safe.nightCrime.nights["3"].losses.is_empty() and safe.nightCrime.nights["3"].get("effectiveChanceBp",-1)==0,"all thieves caught records zero actual exposure")
+	var disguised := Model.new_item(s,"WCH-008",{"forgery":{"targetId":"WCH-074","methods":{"case":{"targetId":"WCH-074","active":true}}}})
+	if WatchForgery.appearance_id(disguised)!="WCH-074":
+		check(false,"visible-tier fixture is valid")
+	else:
+		s.inventory=[disguised]
+		check(night.theft_chance_bp(s)==310,"risk follows visible appearance instead of underlying truth")
+		var apparent_ultra := 0
+		var low := Model.new_item(s,"WCH-001")
+		for i in 10000:
+			var visible_pool := [low,disguised]
+			if night._take_weighted("APPEARANCE-%d" % i,3,0,visible_pool).uid==disguised.uid: apparent_ultra+=1
+		check(apparent_ultra>90 and apparent_ultra<160,"theft weights follow disguised visible ultra tier")
+	var pool := []
+	for id in ["WCH-001","WCH-008","WCH-015","WCH-074"]: pool.append(Model.new_item(s,id))
+	var weights := {"low":0,"mid":0,"luxury":0,"ultra":0}
+	for i in 20000:
+		var candidates: Array=pool.duplicate(true)
+		var picked: Dictionary=night._take_weighted("TIER-SAMPLE-%d" % i,3,0,candidates)
+		weights[GameData.def(picked.defId).tier]+=1
+	check(weights.low>15600 and weights.low<16400 and weights.mid>2700 and weights.mid<3300 and weights.luxury>650 and weights.luxury<950 and weights.ultra>130 and weights.ultra<270,"large deterministic tier cohort follows 80/15/4/1")
+	print("NIGHT tier cohort ",weights)
+	var counts := {"low":0,"mid":0,"luxury":0,"ultra":0}
+	var duplicate := false
+	var eligible := true
+	var snapshots := true
+	for i in 10000:
+		var seed := "WEIGHTED-%d" % i
+		# Force a successful draw through real settlement by retaining only winning seeds.
+		if Model.fnv("%s/night/theft/3" % seed)%10000>=318: continue
+		var fixture := {"seed":seed,"day":3,"inventory":pool.duplicate(true),"police":{"caught":[]},"trade":null}
+		night.settle(fixture)
+		var n: Dictionary=fixture.nightCrime.nights["3"]
+		snapshots=snapshots and int(n.get("chanceBp",0))==318
+		if n.losses.is_empty(): continue
+		counts[GameData.def(n.losses[0].defId).tier]+=1
+		if n.losses.size()==2: duplicate=duplicate or n.losses[0].uid==n.losses[1].uid
+		for lot in n.losses: eligible=eligible and not protected.has(lot)
+	check(counts.low>210 and counts.mid>20 and counts.luxury>2 and counts.ultra>0,"tier-first draws approximately 80/15/4/1")
+	check(not duplicate and eligible,"second selection cannot duplicate the first original")
+	check(snapshots,"settled nights store actual formula threshold")
+	# Adding many lows cannot increase their aggregate tier chance for the same seed.
+	var stable := true
+	var renormalized := 0
+	for i in 2000:
+		var seed := "DILUTION-%d" % i
+		if Model.fnv("%s/night/theft/3" % seed)%10000>=318: continue
+		var a := {"seed":seed,"day":3,"inventory":pool.duplicate(true),"police":{"caught":[]},"trade":null}
+		var b: Dictionary=a.duplicate(true)
+		for j in 60: b.inventory.append(Model.new_item(s,"WCH-001"))
+		night.settle(a);night.settle(b)
+		stable=stable and GameData.def(a.nightCrime.nights["3"].losses[0].defId).tier==GameData.def(b.nightCrime.nights["3"].losses[0].defId).tier
+	check(stable,"many low items cannot dilute luxury or ultra tier weight")
+	for i in 10000:
+		var seed := "ABSENT-%d" % i
+		if Model.fnv("%s/night/theft/3" % seed)%10000>=318: continue
+		var fixture := {"seed":seed,"day":3,"inventory":[luxury.duplicate(true),ultra.duplicate(true)],"police":{"caught":[]},"trade":null}
+		night.settle(fixture)
+		if fixture.nightCrime.nights["3"].losses[0].defId=="WCH-015": renormalized+=1
+	check(renormalized>200 and renormalized<280,"absent low/mid tiers renormalize luxury/ultra to 4:1")
