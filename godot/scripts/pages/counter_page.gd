@@ -38,7 +38,7 @@ var busy := false
 var _workspace_suspended := false
 var _last_offer_value := 100
 var alarm_button: Button
-var talk_button: Button
+var _conversation_wait := 6.0
 var cash_tray: Control
 var terminal: PanelContainer
 var offer_panel: PanelContainer
@@ -816,7 +816,6 @@ func _refresh() -> void:
 		_act("领取通缉名单" if not WantedCases.has_notice(s) else "展开名单","primary",func():
 			if WantedCases.has_notice(Game.state): shell.toggle_wanted_notice()
 			else: Game.dispatch({"type":"ISSUE_WANTED","tradeId":t.id}))
-		_act("聊聊案情","secondary",_open_conversation)
 		_act("送警官离开","secondary",func(): Game.dispatch({"type":"REFUSE"}))
 		footer.text="对照头像，不要只认一顶帽子。"
 	elif t.kind == "merchant":
@@ -888,7 +887,6 @@ func _refresh() -> void:
 	var alarm_reason := WantedCases.report_reason(s)
 	alarm_button.disabled = busy or alarm_reason != ""
 	alarm_button.tooltip_text = alarm_reason if alarm_reason != "" else "核对当前来客后呼叫巡警；错误报警会记录次数"
-	talk_button.disabled = busy or t == null
 	dial.enabled = dial_on and not busy and not _scene_blocked()
 	for k in nudge_keys:
 		(k as Button).disabled = not dial.enabled
@@ -1110,6 +1108,8 @@ func _layout_bubble_content() -> void:
 	bubble.size.y = note_y + 56.0
 
 func _say(text: String, type := true, mood := "") -> void:
+	# Leave time to read this line before the visitor volunteers another detail.
+	_conversation_wait = maxf(6.0, text.length() * 0.16 + 3.0)
 	if customer == null or not is_instance_valid(customer):
 		return
 	if mood != "":
@@ -1469,12 +1469,13 @@ func _over_customer(p: Vector2) -> bool:
 	var local := customer.to_local(p)
 	return absf(local.x) < customer.size.x * 0.4 and local.y < -customer.size.y * 0.4 and local.y > -customer.size.y
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_align_stage()
 	if _scene_blocked():
 		if is_instance_valid(mat_item) and mat_item.dragging:
 			mat_item.end_drag()
 		return
+	_advance_conversation(delta)
 	var p: Vector2 = shell.world_mouse()
 	if is_instance_valid(mat_item):
 		if mat_item.dragging:
@@ -1491,12 +1492,6 @@ func _build_police_controls() -> void:
 	alarm_button.pressed.connect(func():
 		if not busy and not _scene_blocked(): _confirm_alarm())
 	add_child(alarm_button)
-	talk_button=UIKit.button("交谈 · 留意细节","secondary",Vector2(280,44),18,"speech")
-	talk_button.name="talk_button"
-	talk_button.position=Vector2(946,673)
-	talk_button.pressed.connect(func():
-		if not busy and not _scene_blocked(): _open_conversation())
-	add_child(talk_button)
 
 func _confirm_alarm() -> void:
 	var reason:=WantedCases.report_reason(Game.state)
@@ -1524,31 +1519,20 @@ func _confirm_alarm() -> void:
 		Game.dispatch({"type":"REPORT_VISITOR","tradeId":trade_id}))
 	body.add_child(confirm)
 
-func _open_conversation() -> void:
-	if Game.state.trade==null:return
-	var trade_id: String=Game.state.trade.id
-	var npc:=GameData.npc(Game.state.trade.npcId)
-	var modal: Array=shell.modal("与%s交谈" % npc.name,1000)
-	var body: VBoxContainer=modal[0]
-	var answer:=UIKit.label("问问姓名、来路、物品来源和去向。记住话里的细节，再与名单和实物核对。",21,UIKit.TEXT,false,true)
-	answer.name="conversation_answer"
-	answer.custom_minimum_size=Vector2(0,140)
-	body.add_child(answer)
-	var questions:=UIKit.grid(2,10)
+func _advance_conversation(delta: float) -> void:
+	var trade = Game.state.trade
+	if busy or _scene_blocked() or trade == null or not is_instance_valid(customer):
+		return
+	if Game.state.phase != "open" or trade.get("locked", false):
+		return
+	_conversation_wait -= delta
+	if _conversation_wait > 0.0:
+		return
+	var log: Array = trade.get("talkLog", [])
 	for topic in WantedCases.TOPICS:
-		var key: String=topic
-		var button:=UIKit.button(WantedCases.TOPICS[topic],"secondary",Vector2(0,50),19)
-		button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-		button.pressed.connect(func():
-			if Game.state.trade==null or Game.state.trade.id!=trade_id:return
-			Game.dispatch({"type":"ASK_VISITOR","tradeId":trade_id,"topic":key})
-			answer.text=Game.state.trade.line)
-		questions.add_child(button)
-	body.add_child(questions)
-	var log:=UIKit.label("交谈不消耗AP。照片和口供是线索，不会自动给来客贴罪犯标签。",16,UIKit.MUTED,false,true)
-	body.add_child(log)
-	if not Game.state.trade.get("talkLog",[]).is_empty():
-		answer.text=Game.state.trade.talkLog[-1].answer
+		if not log.any(func(entry): return entry.topic == topic):
+			Game.dispatch({"type":"ASK_VISITOR", "tradeId":trade.id, "topic":topic})
+			return
 
 func _police_response(previous_trade: Dictionary) -> void:
 	busy=true
