@@ -59,7 +59,7 @@ static func reading(it: Dictionary, tool: String) -> String:
 		"TOL-002": text = "后盖紫外编号：%s。" % serial(it)
 		"TOL-005": text = "稳定质量：%.1f g。按实际表带配置与说明书比较。" % mass(it)
 	var trace := WatchForgery.trace(it, tool)
-	return text + (" " + trace if trace != "" else "")
+	return text + (" " + trace if trace != "" else "") + (" " + WatchRefurbishment.trace(it) if tool == "TOL-001" else "")
 
 static func restore_parts(it: Dictionary) -> void:
 	initialize(it)

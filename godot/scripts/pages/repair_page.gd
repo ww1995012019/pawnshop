@@ -2,7 +2,7 @@ extends Page
 ## Persistent watch work orders; each tool touches the same physical watch.
 const Service = preload("res://scripts/model/watch_service.gd")
 const Cleaning = preload("res://scripts/model/watch_cleaning.gd")
-const BenchArt = preload("res://scripts/ui/watch_bench_art.gd")
+const BenchArt = preload("res://scripts/ui/watch_refurb_art.gd")
 const Commerce = preload("res://scripts/model/commerce.gd")
 var it_uid := ""
 var mode := "service"
@@ -54,7 +54,7 @@ func enter() -> void:
 	list_panel.add_child(left)
 	left.add_child(UIKit.module_header("修表台", "逐件记录 · 随时续修", "SERVICE"))
 	var modes := UIKit.vbox(6)
-	for spec in [["维修保养", open_service, "service"], ["伪装加工", open_forgery, "forge"]]:
+	for spec in [["维修保养", open_service, "service"], ["独立翻新", open_refurb, "refurb"], ["伪装加工", open_forgery, "forge"]]:
 		var b := UIKit.button(spec[0], "secondary", Vector2(0, 48), 18)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.toggle_mode = true
@@ -137,6 +137,9 @@ func _select(uid: String) -> void:
 		cleaning.configure(alpha, uid, it.get("service", {}).get("operations", {}).get("dust", {}))
 		mask_tex = ImageTexture.create_from_image(cleaning.image())
 		item.mat.set_shader_parameter("grime_mask",mask_tex)
+	if it != null and it.get("refurbishment",{}).get("active_case",false):
+		mode = "refurb"
+		task = "refurb_case"
 	_fill_list()
 	_stage_ui()
 	_refresh_info()
@@ -179,8 +182,19 @@ func _refresh_info() -> void:
 	if it == null:
 		info.add_child(UIKit.label("选择左侧手表。",20,UIKit.MUTED))
 		return
-	info.add_child(UIKit.record_card(Game.def_name(it.defId),repair_status(it),("伪装加工 / " if mode == "forge" else "维修工单 / ") + it_uid))
-	if mode == "forge":
+	info.add_child(UIKit.record_card(Game.def_name(it.defId),repair_status(it) + ("\n当前品相：" + UIKit.pct(it.condition) if mode == "refurb" else ""),({"service":"维修工单 / ","refurb":"独立翻新 / ","forge":"伪装加工 / "}[mode]) + it_uid))
+	if mode == "refurb":
+		info.add_child(UIKit.module_header("独立翻新项目","自由选择 · 完成时单独结算","REFURBISH"))
+		for job in WatchRefurbishment.JOBS:
+			var done: bool = it.get("refurbishment",{}).get("done",[]).has(job)
+			var button := UIKit.button(("✓ " if done else "")+WatchRefurbishment.LABELS[job],"primary" if task == "refurb_"+job else "secondary",Vector2(0,48),18)
+			var candidate: String = job
+			button.pressed.connect(func(): call_deferred("open_refurb",candidate))
+			info.add_child(button)
+			info.add_child(UIKit.label(WatchRefurbishment.DESCRIPTIONS[job],16,UIKit.MUTED,false,true))
+			info.add_child(UIKit.label(_cost_text(WatchRefurbishment.cost(job)),16,UIKit.CYAN,false,true))
+		info.add_child(UIKit.label("品相 %s · 不修复机芯故障，不改变真伪。" % UIKit.pct(it.condition),17,UIKit.TEXT,false,true))
+	elif mode == "forge":
 		info.add_child(UIKit.note_card("伪装加工", "只改变标识、编号或读数；真实故障、缺件与真伪仍保留。被识破会影响交易与关系。"))
 		for method in WatchForgery.METHODS:
 			var selected: bool = task == "forge_" + method
@@ -224,6 +238,7 @@ func _cost_text(cost: Dictionary) -> String:
 func _current_problem() -> String:
 	var it = Game.item(it_uid)
 	if it == null: return "请选择手表"
+	if mode == "refurb": return WatchRefurbishment.problem(Game.state,it,task.trim_prefix("refurb_"))
 	if mode == "forge": return Commerce.forgery_problem(Game.state,it,task.trim_prefix("forge_"))
 	return Service.problem(Game.state,it,task)
 
@@ -237,6 +252,7 @@ func _stage_ui() -> void:
 		art.hide()
 		return
 	if mode == "service": task = Service.current(it)
+	elif mode == "refurb" and not task.begins_with("refurb_"): task = "refurb_blow"
 	stage = it.get("service",{}).get("done",[]).size()
 	var dust := mode == "service" and task == "dust"
 	if is_instance_valid(item):
@@ -246,10 +262,12 @@ func _stage_ui() -> void:
 	art.visible = not dust and task != ""
 	art.set_process(art.visible)
 	var title: String = WatchForgery.LABELS.get(task.trim_prefix("forge_"),"伪装加工") if mode == "forge" else Service.label(task,it)
+	if mode == "refurb": title = WatchRefurbishment.LABELS.get(task.trim_prefix("refurb_"),"独立翻新")
 	if task == "": title = "本次工单已完成" if not Service.tasks(it).is_empty() and Service.finished(it) else "本件无需维修"
-	var mode_title := "伪装加工" if mode == "forge" else "维修保养"
+	var mode_title := "独立翻新" if mode == "refurb" else ("伪装加工" if mode == "forge" else "维修保养")
 	guidance_body.add_child(UIKit.label(mode_title + "  /  " + title,22,UIKit.AMBER))
 	instruction = UIKit.label("",18,UIKit.TEXT,false,true)
+	instruction.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	guidance_body.add_child(instruction)
 	var row := UIKit.hbox(10)
 	action_button = UIKit.button("","primary",Vector2(0,50),20)
@@ -263,7 +281,8 @@ func _stage_ui() -> void:
 		_update_cleaning_controls()
 	else:
 		if task != "":
-			art.configure(it,task,it.get("service",{}).get("operations",{}).get(task,{}))
+			var saved: Dictionary = it.get("refurbishment",{}).get("operations",{}).get(task.trim_prefix("refurb_"),{}) if mode == "refurb" else it.get("service",{}).get("operations",{}).get(task,{})
+			art.configure(it,task,saved)
 			instruction.text = art.hint_text()
 			action_button.text = art.action_text()
 		else:
@@ -289,12 +308,19 @@ func _sync_modes() -> void:
 		if id == "forge": button.visible = forgery_stock
 		var selected: bool = id == mode
 		button.set_pressed_no_signal(selected)
-		button.text = ("✓ " if selected else "") + ("维修保养" if id == "service" else "伪装加工")
+		button.text = ("✓ " if selected else "") + {"service":"维修保养","refurb":"独立翻新","forge":"伪装加工"}[id]
 		for state in ["normal", "hover", "pressed", "hover_pressed"]:
 			button.add_theme_stylebox_override(state, UIKit.key_style("primary" if selected else "secondary", "normal" if state == "hover_pressed" else state, false))
 
 func _update_guidance() -> void:
 	if not is_instance_valid(instruction): return
+	var current = Game.item(it_uid)
+	if mode == "refurb" and current != null and current.get("refurbishment",{}).get("done",[]).has(task.trim_prefix("refurb_")):
+		instruction.text = "本项翻新已完成 · 当前品相 %s；可选择其他独立项目。" % UIKit.pct(current.condition)
+		instruction.add_theme_color_override("font_color",UIKit.GOOD)
+		if is_instance_valid(art): art.set_interaction_allowed(false)
+		if is_instance_valid(action_button): action_button.disabled = true
+		return
 	var why := _cleaning_problem() if task == "dust" and cleaning != null and not cleaning.complete() else _current_problem()
 	if is_instance_valid(art): art.set_interaction_allowed(why == "")
 	if task == "dust" and why != "":
@@ -311,7 +337,30 @@ func _update_guidance() -> void:
 func _open_inspection() -> void:
 	if it_uid != "": shell.go("inspect",it_uid)
 
+func _resume_case() -> bool:
+	var current = Game.item(it_uid)
+	if current != null and current.get("refurbishment",{}).get("active_case",false):
+		open_refurb("case")
+		shell.toast("请先完成换壳并封盖，再切换其他操作。")
+		return true
+	return false
+
+func open_refurb(job := "") -> void:
+	_sync_modes()
+	_save_cleaning()
+	_save_operation()
+	var current = Game.item(it_uid)
+	if current == null: return
+	if current.get("refurbishment",{}).get("active_case",false): job = "case"
+	if job == "": job = "blow"
+	mode = "refurb"
+	task = "refurb_"+job
+	_fill_list()
+	_stage_ui()
+	_refresh_info()
+
 func open_service() -> void:
+	if _resume_case(): return
 	_save_cleaning()
 	_save_operation()
 	mode = "service"
@@ -320,6 +369,7 @@ func open_service() -> void:
 	_refresh_info()
 
 func open_forgery(method := "") -> void:
+	if _resume_case(): return
 	_sync_modes()
 	_save_cleaning()
 	_save_operation()
@@ -374,7 +424,8 @@ func _primary_action() -> void:
 	if task == "":
 		confirm_repair()
 		return
-	var operation: Dictionary = Game.item(it_uid).get("service",{}).get("operations",{}).get(task,{})
+	var selected = Game.item(it_uid)
+	var operation: Dictionary = selected.get("refurbishment",{}).get("operations",{}).get(task.trim_prefix("refurb_"),{}) if mode == "refurb" else selected.get("service",{}).get("operations",{}).get(task,{})
 	if operation.get("complete",false): _operation_completed()
 	else: art.advance()
 
@@ -394,7 +445,10 @@ func _save_operation() -> void:
 	var progress := pending_operation
 	pending_operation = {}
 	operation_clock = 0.0
-	Game.dispatch({"type":"SERVICE_PROGRESS","uid":it_uid,"task":pending_task,"progress":progress})
+	if pending_task.begins_with("refurb_"):
+		Game.dispatch({"type":"REFURB_PROGRESS","uid":it_uid,"job":pending_task.trim_prefix("refurb_"),"progress":progress})
+	else:
+		Game.dispatch({"type":"SERVICE_PROGRESS","uid":it_uid,"task":pending_task,"progress":progress})
 
 func _art_completed() -> void:
 	if not art.visible or art.progress_snapshot().get("task", "") != task: return
@@ -407,6 +461,11 @@ func _operation_completed() -> void:
 	_save_operation()
 	var it = Game.item(it_uid)
 	if it == null or task == "": return
+	if mode == "refurb":
+		var job := task.trim_prefix("refurb_")
+		Game.dispatch({"type":"REFURB_COMPLETE","uid":it_uid,"job":job})
+		_request_refresh()
+		return
 	var progress: Dictionary = it.get("service",{}).get("operations",{}).get(task,{}).duplicate(true)
 	progress.complete = true
 	Game.dispatch({"type":"SERVICE_PROGRESS","uid":it_uid,"task":task,"progress":progress})
@@ -554,7 +613,7 @@ func toast_rect() -> Rect2:
 	return Rect2(guidance.position + Vector2(0,48), Vector2(guidance.size.x, guidance.size.y - 48))
 
 func on_changed(_prev: Dictionary,_next: Dictionary,action: Dictionary) -> void:
-	if action.type == "SERVICE_PROGRESS" or action.type == "SERVICE_BEGIN": return
+	if action.type in ["SERVICE_PROGRESS","SERVICE_BEGIN","REFURB_PROGRESS"]: return
 	_update_guidance()
 	if action.type == "BUY_MATERIAL":
 		call_deferred("_refresh_info")
@@ -593,6 +652,7 @@ func snapshot() -> Dictionary:
 		object_rect = {"x":a.x,"y":a.y,"width":b.x-a.x,"height":b.y-a.y}
 	return {"repair_uid":it_uid,"repair_mode":mode,"repair_task":task,"repair_tasks":Service.tasks(it),
 		"forge_uid":it_uid,"forge_name":Game.def_name(it.defId),"forge_done":not WatchForgery.treatments(it).is_empty(),
+		"refurb_done":it.get("refurbishment",{}).get("done",[]),"refurb_condition":it.condition,
 		"repair_done":service.get("done",[]),"repair_opened":service.get("opened",false),
 		"repair_grime":dirty if task == "dust" else 0.0,"repair_reason":_current_problem(),
 		"repair_action":action_button.text if is_instance_valid(action_button) else "",

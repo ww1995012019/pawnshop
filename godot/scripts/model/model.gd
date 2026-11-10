@@ -164,7 +164,10 @@ static func logo_revision(it: Dictionary) -> String:
 
 static func appraisal_revision(it: Dictionary) -> String:
 	WatchRules.initialize(it)
-	return JSON.stringify([String(it.defId), snappedf(float(it.condition), 0.000001), bool(it.working), bool(it.authentic), int(it.watch.logo_variant), String(it.watch.serial), snappedf(float(it.watch.mass), 0.1), String(it.watch.get("missing_part", "")), snappedf(float(it.watch.get("part_mass", 0)), 0.1), WatchForgery.active(it,"logo"), WatchForgery.active(it,"serial"), WatchForgery.active(it,"weight"), WatchRules.serial(it), snappedf(WatchRules.mass(it), 0.1)])
+	var signature := [String(it.defId), snappedf(float(it.condition), 0.000001), bool(it.working), bool(it.authentic), int(it.watch.logo_variant), String(it.watch.serial), snappedf(float(it.watch.mass), 0.1), String(it.watch.get("missing_part", "")), snappedf(float(it.watch.get("part_mass", 0)), 0.1), WatchForgery.active(it,"logo"), WatchForgery.active(it,"serial"), WatchForgery.active(it,"weight"), WatchRules.serial(it), snappedf(WatchRules.mass(it), 0.1)]
+	var refurbished: Array = it.get("refurbishment",{}).get("done",[])
+	if not refurbished.is_empty(): signature.append(refurbished)
+	return JSON.stringify(signature)
 
 static func estimate(it: Dictionary) -> Dictionary:
 	var base: float = D(it.defId).value
@@ -178,10 +181,10 @@ static func estimate(it: Dictionary) -> Dictionary:
 		if it.evidence.has(tool) and facts.get("appraisalRevision", "") == revision and facts.has("appraisalValue"):
 			count += 1
 			value = facts.appraisalValue
-	if count == 3: return {"low":value, "high":value, "exact":true, "count":3}
 	# Binary buckets are nested, include the recorded value, and never use
 	# hidden price information before the first current inspection.
 	for step in count:
+		if high - low <= 1: break
 		var midpoint: float = floor((low + high) * 0.5)
 		if value <= midpoint: high = midpoint
 		else: low = midpoint + 1
@@ -189,7 +192,7 @@ static func estimate(it: Dictionary) -> Dictionary:
 
 static func appraisal_text(it: Dictionary) -> String:
 	var appraisal := estimate(it)
-	return ("参考市价 %s Cr · 已完成3/3项" % jnum(appraisal.low)) if appraisal.exact else "估价 %s–%s Cr · 当前检验%d/3项" % [jnum(appraisal.low), jnum(appraisal.high), appraisal.count]
+	return "估价 %s–%s Cr · 当前检验%d/3项" % [jnum(appraisal.low), jnum(appraisal.high), appraisal.count]
 
 static func available_orders(s: Dictionary) -> Array:
 	var out := []
@@ -812,7 +815,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			it.evidence.append(a.tool)
 			record_inspection(it, a.tool)
 			s.tutorial = maxf(s.tutorial, 1)
-			var extra := appraisal_text(it) + ("；这是参考市价，成交价仍需议定。" if estimate(it).exact else "；三项当前检验完成后显示准确参考市价。")
+			var extra := appraisal_text(it) + "；鉴定仅提供参考范围，成交价仍需议定。"
 			return notice(s, "%s %s" % [item_clue(it, a.tool), extra])
 		"OFFER":
 			var t = s.trade
@@ -1078,6 +1081,15 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			if inspection_ready(s):
 				s.inspection = "cleared"
 			return notice(s, "已打印返还凭证，原物移交。未伪造来源或额外收取报酬。")
+		"REFURB_PROGRESS", "REFURB_COMPLETE":
+			var it = find_inventory(s,a.get("uid",""))
+			if it == null: return previous
+			WatchService.ensure(it,s.seed)
+			var job := String(a.get("job",""))
+			if it.get("refurbishment",{}).get("done",[]).has(job): return previous
+			var why := WatchRefurbishment.save_progress(s,it,job,a.get("progress")) if a.type == "REFURB_PROGRESS" else WatchRefurbishment.commit(s,it,job)
+			if why != "": return notice(s,why)
+			return s if a.type == "REFURB_PROGRESS" else notice(s,"已完成：%s。外观变化已记录，旧鉴定需复测。" % WatchRefurbishment.LABELS[job])
 		"SERVICE_BEGIN":
 			var it = find_inventory(s, a.get("uid", ""))
 			if it == null: return previous

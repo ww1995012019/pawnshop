@@ -69,10 +69,10 @@ def main():
                     click('空秤归零');click('放到秤上')
                     page.wait_for_function('OrbitalTouch.state.scale_stable',timeout=10000)
                     final=appraisal(3)
-                    assert final['exact'] and final['low']==final['high']
-                    assert second['low']<=final['low']<=second['high']
+                    assert not final['exact'] and final['low'] < final['high']
+                    assert second['low']<=final['low']<final['high']<=second['high']
                     snapshot('three-tools')
-                    return final['low']
+                    return (final['low'],final['high'])
                 cmd({'type':'start'});phone.wait(page,'!s.title && !s.busy')
                 cmd({'type':'page','page':'inspect'});phone.wait(page,"s.workspace==='inspect'")
                 assert appraisal(0)['exact'] is False
@@ -138,9 +138,9 @@ def main():
                 page.wait_for_function('OrbitalTouch?.state?.ready && OrbitalTouch.state.has_save',timeout=90000)
                 page.wait_for_timeout(800);click('继续营业');phone.wait(page,'!s.title && !s.busy')
                 cmd({'type':'page','page':'inspect'});phone.wait(page,"s.workspace==='inspect'")
-                assert appraisal(3)['low']==reference,'recorded appraisal lost on reload'
+                assert (appraisal(3)['low'],appraisal(3)['high'])==reference,'recorded appraisal lost on reload'
                 assert not errors,errors[:8]
-                print(width,'progressive exact appraisal, concrete forge, stale recheck and saved result pass',flush=True)
+                print(width,'progressive range appraisal, concrete forge, stale recheck and saved result pass',flush=True)
                 context.close()
         finally:browser.close()
 

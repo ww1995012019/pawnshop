@@ -103,6 +103,7 @@ static func progress_problem(state: Dictionary, it: Dictionary, task := "") -> S
 	ensure(it)
 	var unavailable := available(state,it)
 	if unavailable != "": return unavailable
+	if it.get("refurbishment",{}).get("active_case",false): return "请先完成换壳并封盖，再继续维修。"
 	if it.service.get("forge_task","") != "": return "请先收妥当前伪装加工并封盖。"
 	if task == "": task = current(it)
 	if task == "": return "" if not it.service.opened else "后盖尚未封回。"

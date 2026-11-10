@@ -16,6 +16,7 @@ uniform vec4 logo_rect = vec4(0.0);
 uniform float hover = 0.0;
 uniform float found_seam = 0.0;
 uniform vec4 region = vec4(0.0, 0.0, 1.0, 1.0); // atlas UV rect of this face
+uniform vec3 refurb_finish = vec3(0.0); // case finish, replacement strap, surface cleaning
 uniform float grime = 0.0;            // repair: dirt still to scrub off
 uniform sampler2D grime_mask : filter_linear;
 // Original sprite regions may move as separate inspection parts.
@@ -101,6 +102,13 @@ void fragment() {
 	if (inspection_mask_2_on > 0.5 && all(greaterThanEqual(luv, inspection_mask_2.xy)) && all(lessThan(luv, inspection_mask_2.xy + inspection_mask_2.zw))) a = 0.0;
 	if (inspection_poly_0_on > 0.5 && all(greaterThanEqual(luv, inspection_mask_0.xy)) && all(lessThan(luv, inspection_mask_0.xy + inspection_mask_0.zw)) && inside_inspection_poly(luv, inspection_poly_0_a, inspection_poly_0_b, inspection_poly_0_c, inspection_poly_0_d, inspection_poly_0_e, inspection_poly_0_f, inspection_poly_0_g, inspection_poly_0_h)) a = 0.0;
 	if (inspection_poly_1_on > 0.5 && all(greaterThanEqual(luv, inspection_mask_1.xy)) && all(lessThan(luv, inspection_mask_1.xy + inspection_mask_1.zw)) && inside_inspection_poly(luv, inspection_poly_1_a, inspection_poly_1_b, inspection_poly_1_c, inspection_poly_1_d, inspection_poly_1_e, inspection_poly_1_f, inspection_poly_1_g, inspection_poly_1_h)) a = 0.0;
+	// Visible exterior work remains on the physical sprite outside the bench.
+	float radial = length(luv - vec2(0.5));
+	float rim = smoothstep(0.18, 0.22, radial) * (1.0 - smoothstep(0.29, 0.33, radial));
+	float band = 1.0 - smoothstep(0.23, 0.31, luv.y) + smoothstep(0.69, 0.77, luv.y);
+	base.rgb = mix(base.rgb, min(vec3(1.0), base.rgb * 1.24 + vec3(0.035)), rim * refurb_finish.x * a);
+	base.rgb = mix(base.rgb, min(vec3(1.0), base.rgb * 1.17 + vec3(0.025)), band * refurb_finish.y * a);
+	base.rgb = min(vec3(1.0), base.rgb + refurb_finish.z * 0.025 * a);
 	// Loupe: micro-scratches everywhere, a bright repaint seam near seam_uv.
 	float in_lens = lens_r > 0.0 ? 1.0 - smoothstep(lens_r * 0.85, lens_r, distance(world, lens_pos)) : 0.0;
 	if (logo_hidden > 0.5 && back_face < 0.5 && all(greaterThanEqual(luv, logo_rect.xy)) && all(lessThan(luv, logo_rect.xy + logo_rect.zw))) {

@@ -29,6 +29,7 @@ var busy := false
 var draggable := true
 var land_tween: Tween
 var logo_variant := 0
+var finish_signature := ""
 
 ## height: on-screen height in px for the front face.
 func setup(id: String, item_uid := "", height := 300.0, start_back := false) -> void:
@@ -86,6 +87,11 @@ func _apply_face() -> void:
 
 func _sync_logo_observation() -> void:
 	var it = Game.item(uid) if not uid.is_empty() else null
+	var done: Array = it.get("refurbishment",{}).get("done",[]) if it != null else []
+	var signature := str(done)
+	if finish_signature != signature:
+		finish_signature = signature
+		mat.set_shader_parameter("refurb_finish",Vector3(1.0 if done.has("case") else (0.6 if done.has("polish") else 0.0),1.0 if done.has("strap") else 0.0,1.0 if done.has("clean") else (0.3 if done.has("blow") else 0.0)))
 	var observed := false
 	if it != null:
 		var facts: Dictionary = it.get("inspectionFacts", {}).get("TOL-001", {})
