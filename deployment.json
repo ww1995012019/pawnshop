@@ -1,8 +1,8 @@
 {
-  "source_commit": "4c0cd12f34f9c98905ac3396a638316ca10bee9c",
-  "release_id": "2b733eda675fcf60",
-  "pack": "workbench-060015600e32ce94.pck",
-  "html_sha256": "c46fe58d91df9624693237c43cdb7754da40578004f298489f0cb6df804dae2e",
+  "source_commit": "d85b1586d40a5cf1383cb8231a5ebf105f9cccba",
+  "release_id": "a3c1e208cf674f8b",
+  "pack": "workbench-2863b1f3adb4da8d.pck",
+  "html_sha256": "c0e23f746e0363867bf32221ce1e9ab73174cc34d10b320f7f1e9b603e60ed3e",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -19,5 +19,6 @@
   "premium_counterfeit_version": 1,
   "natural_dialogue_version": 1,
   "counter_table_version": 1,
-  "theft_only_popup_version": 1
+  "theft_only_popup_version": 1,
+  "gold_selection_version": 1
 }
