@@ -93,6 +93,8 @@ func run() -> void:
 	check(game.state.trade != null and game.state.trade.get("inspectionVisit",false), "native arrival summons late inspector at 0 AP")
 	await click(button(shell,"配合查货")); await idle(shell.page)
 	check(game.state.trade==null and game.state.ap==0 and not game.state.nightCrime.lastInspection.is_empty(), "native inspection completes without AP")
+	check(not shell.modal_open(), "inspection completion does not auto-open night history")
+	shell.open_night_report(); await frames()
 	check(text_of(shell).contains("查货回执") and text_of(shell).contains("有效协警"), "inspection receipt prints actual outcome and cooperation")
 	if shell.modal_open(): await click(button(shell,"确认夜间记录"))
 	# A real unverified offer remains unchanged until the explicit risk confirmation.
@@ -155,6 +157,8 @@ func run() -> void:
 	before=game.state.cash
 	await click(button(shell,"失物报警")); await click(button(shell,"核对原编号并报警")); await idle(shell.page)
 	check(game.state.trade==null and Model.find_inventory(game.state,recovered_uid)!=null and game.state.cash==before, "native loss report returns original without buying")
+	check(not shell.modal_open(), "lost-original recovery does not auto-open previous-night history")
+	shell.open_night_report(); await frames()
 	check(game.state.nightCrime.cooperation.count==1 and text_of(shell).contains("有效协警"), "actual arrest grants one cooperation credit and visible case history")
 	if shell.modal_open(): await click(button(shell,"确认夜间记录"))
 	# The bounded sheet leaves its confirmation within desktop/short/mobile logical bounds.

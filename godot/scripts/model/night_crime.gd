@@ -134,7 +134,8 @@ static func morning(s: Dictionary, previous_day: int) -> void:
 		receipt.payout += payout
 	if not case_record.items.is_empty(): s.nightCrime.cases.append(case_record)
 	s.nightCrime.mornings.append(receipt)
-	if not receipt.losses.is_empty(): s.nightCrime.reportOpen = true
+	receipt.acknowledged=receipt.losses.is_empty()
+	s.nightCrime.reportOpen=not receipt.acknowledged
 
 static func _merchant_slot(s: Dictionary) -> int:
 	var day := int(s.day)
@@ -317,6 +318,12 @@ static func lost_item_problem(s: Dictionary) -> String:
 	if physical.get("crimeCaseId","")!=c.id: return "请先选择案件中的本店失物。"
 	if not physical.evidence.has("TOL-002"): return "先用编号检测取得这件原物的编号证据，再与案件记录核对。"
 	return ""
+
+static func pending_morning(s: Dictionary) -> Dictionary:
+	if s.get("phase","")!="open": return {}
+	for receipt in s.get("nightCrime",{}).get("mornings",[]):
+		if int(receipt.get("day",0))==int(s.day) and int(receipt.get("night",0))==int(s.day)-1 and not receipt.get("losses",[]).is_empty() and not receipt.get("acknowledged",true): return receipt
+	return {}
 
 static func public_report(s: Dictionary) -> Dictionary:
 	ensure(s)

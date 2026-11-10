@@ -1580,7 +1580,7 @@ func toggle_wanted_notice() -> void:
 # Suppress repeated automatic opening after X for this session; ACK is saved.
 var night_report_seen := ""
 func _poll_night_report() -> void:
-	if workspace_mode or not Game.state.get("nightCrime", {}).get("reportOpen", false): return
+	if workspace_mode or NightCrime.pending_morning(Game.state).is_empty(): return
 	if is_instance_valid(title) and not title.is_queued_for_deletion(): return
 	if modal_open() or workspace_open(): return
 	for effect in fx.get_children():
@@ -1611,15 +1611,16 @@ func open_night_report(manual := true) -> void:
 	if workspace_mode:
 		workspace_parent.open_night_report(manual)
 		return
+	if not manual and NightCrime.pending_morning(Game.state).is_empty(): return
 	if manual: Game.dispatch({"type":"OPEN_NIGHT_REPORT"})
 	night_report_seen = String(Game.state.seed) + "/" + str(Game.state.day)
 	var report := NightCrime.public_report(Game.state)
-	var m := modal("夜间失窃与查货记录", 940)
+	var m := modal("夜间失窃与查货记录" if manual else "昨夜失窃记录", 940)
 	var body: VBoxContainer = m[0]
 	var records := night_scroll(body)
-	records.add_child(UIKit.label("有效协警 %d 次 · 本次查货宽容概率 %d%%" % [report.cooperation, report.leniencyChance], 21, UIKit.TEXT, true, true))
+	if manual: records.add_child(UIKit.label("有效协警 %d 次 · 本次查货宽容概率 %d%%" % [report.cooperation, report.leniencyChance], 21, UIKit.TEXT, true, true))
 	if report.mornings.is_empty(): records.add_child(UIKit.label("尚无夜间记录。", 19, UIKit.TEXT))
-	var mornings: Array = report.mornings.duplicate()
+	var mornings: Array = report.mornings.duplicate() if manual else [NightCrime.pending_morning(Game.state)]
 	mornings.reverse()
 	for morning in mornings:
 		var card := UIKit.plate(UIKit.paper_style(14))
@@ -1640,12 +1641,12 @@ func open_night_report(manual := true) -> void:
 			rows.add_child(row)
 		rows.add_child(UIKit.label("保险赔款 %s 已自动入账；重开记录不会重复理赔。已赔付原物追回后移交保险方。" % UIKit.money(morning.payout), 18, UIKit.INK, false, true))
 		records.add_child(card)
-	for case in report.cases:
+	for case in report.cases if manual else []:
 		var details := "案件 %s · 第 %d 天 · %s" % [case.id, case.lossDay, "已抓获" if case.arrested else "待核对线索"]
 		if case.has("suspect"): details += " · " + String(case.suspect)
 		for item in case.items: details += "\n%s · %s · %s%s" % [item.name, item.uid, item.recovery if item.recovery != "" else "尚未追回", " · 曾获赔，追回归保险方" if item.paid else ""]
 		records.add_child(UIKit.label(details, 18, UIKit.TEXT, false, true))
-	if not report.lastInspection.is_empty():
+	if manual and not report.lastInspection.is_empty():
 		var receipt: Dictionary = report.lastInspection
 		records.add_child(UIKit.label("第 %d 天查货回执\n%s\n追回编号：%s\n应罚 %s · 实缴 %s · %s\n有效协警 %d 次" % [receipt.day, receipt.text, "、".join(receipt.confiscated) if not receipt.confiscated.is_empty() else "无", UIKit.money(receipt.fineDue), UIKit.money(receipt.finePaid), "本次宽容免罚" if receipt.waived else "按规定处置", receipt.cooperation], 19, UIKit.TEXT, false, true))
 	var ack := UIKit.button("确认夜间记录", "primary", Vector2(0,56), 22)

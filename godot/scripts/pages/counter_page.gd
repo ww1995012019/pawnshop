@@ -1337,11 +1337,9 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 		"RESOLVE_INSPECTION":
 			if pt != null and nt == null:
 				await _leave_with_goods(pt, "focused")
-				shell.open_night_report()
 		"REPORT_LOST_ITEM":
 			if pt != null and nt == null:
 				await _leave_with_goods(pt, "focused")
-				shell.open_night_report()
 		"REPORT_VISITOR":
 			if pt != null and nt == null: await _police_response(pt)
 		"CHECK":
