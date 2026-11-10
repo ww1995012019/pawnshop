@@ -3,9 +3,10 @@ extends SceneTree
 func _initialize() -> void: call_deferred("run")
 func run() -> void:
 	var state := Model.create("SERVICE-BROWSER-25")
+	var square_no_ap := OS.get_cmdline_user_args().has("--square-no-ap")
 	state.inventory = []
 	state.trade = null
-	state.ap = 100
+	state.ap = 0 if square_no_ap else 100
 	state.cash = 10000
 	for material in GameData.materials: state.materials[material.id] = 30
 	var mechanical := ""
@@ -14,7 +15,7 @@ func run() -> void:
 			mechanical = def.id
 			break
 	var serial := 0
-	for spec in [["WCH-001",true,0.6], ["WCH-002",false,0.8], [mechanical,false,0.8], ["WCH-015",false,0.8]]:
+	for spec in [["WCH-007" if square_no_ap else "WCH-001",true,0.6], ["WCH-002",false,0.8], [mechanical,false,0.8], ["WCH-015",false,0.8]]:
 		var ref := WatchRules.model_reference(spec[0])
 		var it := Model.new_item(state,spec[0],{"condition":spec[2],"working":spec[1],"authentic":false if serial == 3 else true,"sourceVerified":true})
 		it.watch.mass = ref.nominal_mass - (6.2 if serial == 3 else 0.0)

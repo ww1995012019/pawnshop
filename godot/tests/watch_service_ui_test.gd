@@ -32,6 +32,49 @@ func run() -> void:
 	var page = shell.active_shell().page
 	check(page.it_uid == uid and page.has_method("snapshot"), "bench keeps requested physical identity and accessible status")
 	if page.task == "dust":
+		var active_shell = shell.active_shell()
+		var before_wipe: float = page.cleaning.remaining()
+		var from_world: Vector2 = page.item.uv_global(Vector2(0.4, 0.5))
+		var to_world: Vector2 = page.item.uv_global(Vector2(0.6, 0.5))
+		var start: Vector2 = root.get_final_transform() * (shell.workspace_container.global_position + active_shell.world_to_ui(from_world))
+		var finish: Vector2 = root.get_final_transform() * (shell.workspace_container.global_position + active_shell.world_to_ui(to_world))
+		var down := InputEventMouseButton.new()
+		down.button_index = MOUSE_BUTTON_LEFT
+		down.pressed = true
+		down.position = start
+		Input.parse_input_event(down)
+		await settle()
+		var motion := InputEventMouseMotion.new()
+		motion.position = finish
+		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+		Input.parse_input_event(motion)
+		await settle()
+		check(page.cleaning.remaining() < before_wipe, "real held pointer movement removes grime along the cloth path")
+		var after_motion: float = page.cleaning.remaining()
+		# The original cloth keeps polishing its contact area each frame.
+		for frame in 12: page._process(1.0 / 60.0)
+		check(page.cleaning.remaining() < after_motion, "held cloth continuously fades the remaining grime at its contact area")
+		down.pressed = false
+		# GUI controls consume releases before _unhandled_input sees them.
+		down.position = root.get_final_transform() * (shell.workspace_container.global_position + page.action_button.get_global_rect().get_center())
+		Input.parse_input_event(down)
+		await settle()
+		check(not page.scrubbing, "releasing over a toolbar control also stops the held cloth")
+		down.pressed = true
+		down.position = finish
+		Input.parse_input_event(down)
+		await settle()
+		down.pressed = false
+		down.position = root.get_final_transform() * Vector2(20, 20)
+		Input.parse_input_event(down)
+		await settle()
+		check(not page.scrubbing, "releasing outside the workspace stops the held cloth")
+		motion.button_mask = 0
+		Input.parse_input_event(motion)
+		await settle()
+		var released: float = page.cleaning.remaining()
+		for frame in 12: page._process(1.0 / 60.0)
+		check(page.cleaning.remaining() == released, "releasing the cloth stops contact cleaning")
 		page._wipe_uv(Vector2(0.05,0.25),Vector2(0.95,0.25))
 		page._save_cleaning()
 		var saved: Dictionary = game.item(uid).service.operations.get("dust", {}).duplicate(true)
