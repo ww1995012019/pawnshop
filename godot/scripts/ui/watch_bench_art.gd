@@ -75,7 +75,7 @@ func configure(it: Dictionary, task: String, progress: Dictionary = {}) -> void:
 	var index := clampi(id.get_slice("-", 1).to_int() - 1, 0, 32)
 	var template: int = WatchForgery.template(id)
 	_appearance = {"template":template, "case_shape":"square" if template == 6 else "round",
-		"strap":STRAP_TYPES[template], "strap_color":STRAP_COLORS[index] if index < 15 else EXTRA_STRAP_COLORS[index - 15],
+		"strap":STRAP_TYPES[WatchForgery.template(WatchForgery.strap_id(it))], "strap_color":_strap_color(WatchForgery.strap_id(it)),
 		"case_color":"bda064" if template == 13 or definition.get("tier", "") == "luxury" else "b6c0c0"}
 	_started_opened = bool(it.get("service", {}).get("opened", false))
 	if progress.get("version", 0) == 1 and progress.get("task", "") == task:
@@ -1131,3 +1131,7 @@ func _panel(rect: Rect2, fill: Color, border: Color, radius := 4) -> void:
 func _text(at: Vector2, text: String, font_size: int, color: Color, mono := false) -> void:
 	if font_size <= 0: return
 	draw_string(_mono if mono else _font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
+
+func _strap_color(id: String) -> String:
+	var index := clampi(id.get_slice("-",1).to_int()-1,0,32)
+	return STRAP_COLORS[index] if index<15 else EXTRA_STRAP_COLORS[index-15]

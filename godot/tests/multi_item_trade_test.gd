@@ -6,7 +6,7 @@ func check(ok, label):
  print("MULTI ","PASS " if ok else "FAIL ",label)
  if not ok: failures+=1
 func action(s: Dictionary, type: String, extra: Dictionary={}) -> Dictionary:
- return Commerce.reduce(s,{"type":type}.merged(extra,true))
+ return Commerce.reduce(s,{"type":type,"tradeId":s.trade.id if s.get("trade") is Dictionary else ""}.merged(extra,true))
 func run():
  var s=Model.create("MULTI")
  s.inventory.clear();s.ap=10;s.cash=500
@@ -108,5 +108,33 @@ func run():
  check(poor.cash==0 and poor.ap==no_cash.ap and poor.notice.contains("现金"),"insufficient net funds reject complete batch")
  var focused=action(packing,"TRADE_FOCUS",{"uid":purchase.uid})
  check(Model.find_item(focused,purchase.uid)!=null and Model.trade_item(focused).uid==purchase.uid,"NPC's actual item is reachable by the existing inspection workbench")
+ # A checkout belongs to its original visitor, even when another visit has the same list version.
+ var next_visit=packing.duplicate(true);next_visit.inventory=[];next_visit.trade.id="different-visit"
+ var wrong_visit=action(next_visit,"TRADE_CHECKOUT",{"tradeId":"packing-visit","version":TradeSession.summary(next_visit).version,"batch":"replayed"})
+ check(wrong_visit.cash==next_visit.cash and wrong_visit.ap==next_visit.ap and wrong_visit.inventory.is_empty(),"a replay from another visit cannot settle a matching-version list")
+ var risky=packing.duplicate(true);risky.inventory=[]
+ var risky_lot=TradeSession.session(risky).goods[0];risky_lot.sourceVerified=false
+ var risky_row=TradeSession.row(risky,risky_lot.uid);risky_row.fingerprint=TradeSession.fingerprint(risky_lot)
+ var before_risk=risky.risk
+ var unverified=action(risky,"TRADE_CHECKOUT",{"version":TradeSession.summary(risky).version,"batch":"unverified"})
+ check(unverified.risk==minf(100,before_risk+12),"batch purchase preserves existing unverified-source risk")
+ # Merchant material payments share the same cash pool as watch recommendations.
+ var merchant=Model.create("MATERIAL-POOL");merchant.trade={"id":"material-pool","npcId":"CHR-010","kind":"merchant","stock":{"MAT-001":5},"rare":null,"item":null,"price":0,"rounds":0,"locked":false,"evidenceUsed":[]}
+ merchant=action(merchant,"TRADE_OPEN")
+ var before_pool=TradeSession.session(merchant).cash
+ var material=Commerce.reduce(merchant,{"type":"BUY_MATERIAL","id":"MAT-001","qty":1})
+ check(TradeSession.session(material).cash==before_pool+GameData.material("MAT-001").price,"material sale proceeds increase the same NPC cash pool")
+ var reward_before=unverified.relations.salvage
+ var ended=action(unverified,"TRADE_END")
+ check(ended.relations.salvage==minf(100,reward_before+2),"buying-only visit earns one normal relationship reward")
+ var funded=packing.duplicate(true);funded.inventory=[];TradeSession.session(funded).cash=0
+ var to_sell=Model.new_item(funded,"WCH-001",{"condition":0.8,"working":true,"authentic":true})
+ Model.put_in(funded,to_sell)
+ funded=action(funded,"TRADE_ADD",{"uid":to_sell.uid,"direction":"sell"})
+ funded=action(funded,"TRADE_REVIEW")
+ funded=action(funded,"TRADE_CONFIRM",{"uid":to_sell.uid})
+ check(TradeSession.row(funded,to_sell.uid).selected,"confirmed purchase can fund an accepted sale in the same atomic batch")
+ funded=action(funded,"TRADE_REMOVE",{"uid":purchase.uid})
+ check(not TradeSession.row(funded,to_sell.uid).selected and TradeSession.row(funded,to_sell.uid).reason.contains("资金分配"),"removing funding marks the affected sale for explicit reconfirmation")
  print("MULTI failures=",failures)
  quit(1 if failures else 0)

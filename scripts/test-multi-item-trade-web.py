@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import sys
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1]
 def module(name,path):
@@ -22,7 +23,7 @@ def main():
  fixture=json.loads((ROOT/'work/multi-item-trade/fixture.json').read_text())
  with sync_playwright() as p:
   browser=p.chromium.launch(executable_path=shutil.which('chromium'),args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
-  for mobile,width,height in [(False,1440,900),(True,844,390)]:
+  for mobile,width,height in ([(True,844,390)] if "--phone-only" in sys.argv else [(False,1440,900),(True,844,390)]):
    label='phone' if mobile else 'desktop'
    context=browser.new_context(viewport={'width':width,'height':height},has_touch=mobile,is_mobile=mobile,device_scale_factor=2 if mobile else 1)
    page=context.new_page();errors=[]
@@ -34,14 +35,18 @@ def main():
    def click(text):
     for attempt in range(12):
      target=phone.locate(page,text)
-     if height*.16 < target['y'] < height*.87:break
+     in_list=text.startswith('@') or text.startswith('推荐 ') or text.startswith('购买 ')
+     low,high=(height*.36,height*.67) if in_list else (height*.10,height*.94)
+     if low < target['y'] < high:break
      x=max(20,min(width-20,target["x"]))
      if mobile:
-      a,b=(height*.73,height*.37) if target['y']>=height*.87 else (height*.37,height*.73)
+      a,b=(height*.62,height*.44) if target['y']>=high else (height*.44,height*.62)
       phone.touch_drag(context,page,[(x,a),(x,(a+b)/2),(x,b)])
      else:
-      page.mouse.move(x,height*.58);page.mouse.wheel(0,300 if target['y']>=height*.87 else -300)
-     page.wait_for_timeout(180)
+      page.mouse.move(x,height*.58);page.mouse.wheel(0,height*.18 if target['y']>=high else -height*.18)
+     page.wait_for_timeout(600 if mobile else 180)
+    page.wait_for_timeout(200)
+    target=phone.locate(page,text)
     assert not target['disabled'],(text,status())
     if mobile:page.touchscreen.tap(target['x'],target['y'])
     else:page.mouse.click(target['x'],target['y'])
@@ -49,6 +54,12 @@ def main():
    try:
     page.goto('http://127.0.0.1:4174/')
     page.wait_for_function('window.OrbitalTouch?.state?.ready',timeout=90000)
+    cmd({'type':'start'});phone.wait(page,'!s.title && !s.busy')
+    cmd({"type":"arrive"});phone.wait(page,"!s.busy && s.has_save")
+    row=page.evaluate(service.READ_SAVE)
+    assert row,'initial save must exist'
+    page.evaluate('''async input=>{const db=await new Promise(r=>{const q=indexedDB.open('/userfs');q.onsuccess=()=>r(q.result)});await new Promise((r,j)=>{const tx=db.transaction('FILE_DATA','readwrite');tx.objectStore('FILE_DATA').put({timestamp:new Date(),mode:33206,contents:new TextEncoder().encode(JSON.stringify(input.state))},input.key);tx.oncomplete=r;tx.onerror=j});db.close()}''',{'key':row['key'],'state':fixture})
+    page.reload();page.wait_for_function('window.OrbitalTouch?.state?.ready && OrbitalTouch.state.has_save',timeout=90000)
     cmd({'type':'start'});phone.wait(page,'!s.title && !s.busy')
     click('多件买卖清单');page.wait_for_timeout(400)
     before_ap=status()['ap'];before_cash=status()['cash']
@@ -59,10 +70,28 @@ def main():
     click('请 NPC 看看推荐清单');page.wait_for_timeout(250)
     snapshot=status()['trade_session']
     assert len(snapshot['lines'])==5,snapshot
+    visitor=next(row for row in snapshot['lines'] if row['direction']=='buy')
+    click('@trade_detail_'+visitor['uid']);page.wait_for_timeout(200)
+    click('@trade_inspect_'+visitor['uid']);phone.wait(page,"s.workspace==='inspect'")
+    assert status()['inspection_uid']==visitor['uid']
+    cmd({'type':'tool','tool':'TOL-001'})
+    phone.wait(page,"s.inspection_current==='TOL-001' && !s.inspection_busy")
+    click('定位并固定标识');page.wait_for_function('OrbitalTouch.state.appraisal?.count>=1')
+    snap('actual-visitor-inspection')
+    click('回柜台');phone.wait(page,"s.workspace==='' && s.blocked")
+    page.wait_for_timeout(350)
+    before_ap=status()['ap'];before_cash=status()['cash']
+    assert len(status()['trade_session']['lines'])==5
+    snap('returned-list')
     # Confirm using each original's actual in-scene button.
     for row in snapshot['lines']:
      assert row['status'] in ['ready','counter'],row
-     click('@trade_confirm_'+row['uid']);page.wait_for_timeout(180)
+     for attempt in range(3):
+      click('@trade_confirm_'+row['uid']);page.wait_for_timeout(400)
+      actual=next(line for line in status()['trade_session']['lines'] if line['uid']==row['uid'])
+      if actual['selected']:break
+      snap('tap-not-yet-confirmed-'+row['uid']);page.wait_for_timeout(700)
+     assert actual['selected'],actual
     summary=status()['trade_session']
     assert summary['sell_count']==3 and summary['buy_count']==2,summary
     snap('confirmed-two-directions')
@@ -88,6 +117,8 @@ def main():
     assert 'trade_session' not in status(),status()
     assert not errors,errors
     print(label,'MULTI real recommendation, both directions, independent confirmations, atomic batch and reload pass',flush=True)
+   except Exception:
+    snap("failure");raise
    finally:context.close()
   browser.close()
 if __name__=='__main__':main()

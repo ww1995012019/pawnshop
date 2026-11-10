@@ -57,6 +57,8 @@ jobs:
           python scripts/test-mobile-gestures-web.py
           python scripts/test-watch-service-web.py --permissions-only
           python scripts/test-store-costs-web.py
+          python scripts/test-premium-counterfeit-web.py
+          python scripts/test-multi-item-trade-web.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

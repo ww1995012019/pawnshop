@@ -59,6 +59,7 @@ var tag_info: Label
 var idle_label: Label
 var idle_jobs: Label
 var offer_button: Button
+var multi_trade_button: Button
 var stage_root: Node2D
 var back_root: Node2D
 var resident_window: Control
@@ -217,6 +218,7 @@ func workspace_state_changed(opened: bool) -> void:
 			mat_item.end_drag()
 	else:
 		_refresh()
+		if TradeSession.session(Game.state).get("return_to_list",false): call_deferred("_open_trade_list")
 
 func _crate_point() -> Vector2:
 	return get_viewport().get_canvas_transform().affine_inverse() * crate.get_global_rect().get_center() if is_instance_valid(crate) else Vector2(940, 860)
@@ -370,6 +372,11 @@ func _build_crate() -> void:
 		if not _scene_blocked():
 			shell.go("warehouse"))
 	head.add_child(open_stock)
+	multi_trade_button=UIKit.button("多件买卖清单","primary",Vector2(200,44),18)
+	multi_trade_button.name="multi_trade_open"
+	multi_trade_button.pressed.connect(func():
+		if not _scene_blocked(): call_deferred("_open_trade_list"))
+	head.add_child(multi_trade_button)
 	v.add_child(head)
 	var sc := ScrollContainer.new()
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -785,6 +792,7 @@ func _refresh() -> void:
 	_refresh_desk()
 	var s := Game.state
 	var t = s.trade
+	multi_trade_button.visible=t!=null and t.get("kind","") in ["buy","sell","merchant"]
 	offer_button = null
 	UIKit.clear(actions)
 	UIKit.clear(chips)
@@ -836,12 +844,9 @@ func _refresh() -> void:
 		scr.line3.text = "可买材料，也可出售闲置物资"
 		offer_label.text = "—"
 		_act("查看商品", "primary", _merchant_shop)
-		_act("手表多件买卖", "secondary", _open_trade_list)
 		_act("送客", "secondary", func(): Game.dispatch({"type": "REFUSE"}))
 		footer.text = "商人在店时才能购买维修材料"
 	else:
-		var multi_button := _act("多件买卖清单", "primary", _open_trade_list)
-		multi_button.name="multi_trade_open"
 		if not TradeSession.session(s).is_empty():
 			var totals=TradeSession.summary(s)
 			scr.head.text="双向买卖 · "+GameData.npc(t.npcId).name
@@ -849,7 +854,8 @@ func _refresh() -> void:
 			scr.line1.text="逐件议价与确认 · 统一交割"
 			scr.line2.text="已确认售出%d件 / 买入%d件" % [totals.sell_count,totals.buy_count]
 			scr.line3.text="收入%s · 支出%s · 差额%s Cr" % [Model.jnum(totals.income),Model.jnum(totals.expense),Model.jnum(totals.net)]
-			_act("结束接待", "secondary", func(): Game.dispatch({"type":"TRADE_END"}))
+			_act("打开多件清单", "primary", _open_trade_list)
+			_act("结束接待", "secondary", func(): Game.dispatch({"type":"TRADE_END","tradeId":t.id}))
 			offer_panel.visible=false
 			footer.text="交割后可继续商谈，结束接待才送客。"
 			return

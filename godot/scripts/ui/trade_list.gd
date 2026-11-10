@@ -10,6 +10,7 @@ var checkout: Button
 var expanded := ""
 var refresh_pending := false
 var first_refresh := true
+var visit_id := ""
 static func open(owner_shell: Node) -> void:
  if Game.state.trade==null: return
  Game.dispatch({"type":"TRADE_OPEN"})
@@ -19,7 +20,8 @@ static func open(owner_shell: Node) -> void:
  modal[0].add_child(content)
  content.setup(owner_shell,modal[1])
 func setup(owner_shell: Node, closer: Callable) -> void:
- shell=owner_shell;close_dialog=closer
+ shell=owner_shell;close_dialog=closer;visit_id=String(Game.state.trade.id)
+ expanded=String(TradeSession.session(Game.state).get("view_expanded",""))
  name="multi_trade_list"
  add_theme_constant_override("separation",10)
  notice=UIKit.label("",18,UIKit.AMBER,false,true);add_child(notice)
@@ -29,7 +31,7 @@ func setup(owner_shell: Node, closer: Callable) -> void:
  review.pressed.connect(func(): _send({"type":"TRADE_REVIEW"}))
  top.add_child(review)
  var end=UIKit.button("结束接待","danger",Vector2(160,48),18);end.name="trade_end_visit"
- end.pressed.connect(func(): Game.dispatch({"type":"TRADE_END"});close_dialog.call())
+ end.pressed.connect(func(): Game.dispatch({"type":"TRADE_END","tradeId":visit_id});close_dialog.call())
  top.add_child(end)
  scroll=ScrollContainer.new()
  scroll.custom_minimum_size=Vector2(0,minf(510,get_viewport_rect().size.y*0.48))
@@ -46,6 +48,7 @@ func setup(owner_shell: Node, closer: Callable) -> void:
  Game.changed.connect(_changed)
  _refresh()
 func _send(action: Dictionary) -> void:
+ action.tradeId=visit_id
  Game.dispatch(action)
 func _changed(_before: Dictionary,_after: Dictionary,_action: Dictionary) -> void:
  if refresh_pending: return
@@ -119,6 +122,7 @@ func _line(line: Dictionary) -> void:
  confirm.disabled=line.status not in ["ready","counter"]
  confirm.pressed.connect(func(): _send({"type":"TRADE_CONFIRM","uid":uid}));buttons.add_child(confirm)
  var detail=UIKit.button("议价 / 物证","secondary",Vector2(170,44),18)
+ detail.name="trade_detail_"+uid
  detail.pressed.connect(func(): expanded="" if expanded==uid else uid;_refresh());buttons.add_child(detail)
  if line.direction=="sell":
   var up=UIKit.button("上移","secondary",Vector2(86,44),17)
@@ -135,6 +139,7 @@ func _line(line: Dictionary) -> void:
   _send({"type":"TRADE_OFFER","uid":uid,"price":price.text.to_int()}))
  edit.add_child(submit)
  var inspect=UIKit.button("送这件到鉴定台","secondary",Vector2(0,46),18)
+ inspect.name="trade_inspect_"+uid
  inspect.pressed.connect(func(): _inspect(uid));col.add_child(inspect)
  var estimate=Model.estimate(it)
  col.add_child(UIKit.label("本件估值区间 %s–%s Cr；私人检查不会自动传给对方。" % [Model.jnum(estimate.low),Model.jnum(estimate.high)],17,UIKit.MUTED,false,true))
@@ -144,7 +149,7 @@ func _line(line: Dictionary) -> void:
   show.pressed.connect(func(): _send({"type":"TRADE_OFFER","uid":uid,"price":line.context.price,"evidence":tool}))
   col.add_child(show)
 func _inspect(uid: String) -> void:
- Game.dispatch({"type":"TRADE_FOCUS","uid":uid,"scroll":scroll.scroll_vertical})
+ Game.dispatch({"type":"TRADE_FOCUS","uid":uid,"scroll":scroll.scroll_vertical,"expanded":expanded,"return_list":true,"tradeId":visit_id})
  Game.focus_uid=uid
  close_dialog.call()
  shell.call_deferred("go","inspect",uid)

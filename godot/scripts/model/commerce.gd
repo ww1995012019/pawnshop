@@ -145,7 +145,20 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 	if batch_result!=null: return batch_result
 	var kind: String = action.get("type", "")
 	if not TradeSession.session(previous).is_empty():
-		if kind=="REFUSE": return TradeSession.reduce(previous,{"type":"TRADE_END"})
+		if kind=="REFUSE": return TradeSession.reduce(previous,{"type":"TRADE_END","tradeId":previous.trade.id})
+		if kind in ["BUY_MATERIAL","SELL_MATERIAL"]:
+			var base: Dictionary=previous.duplicate(true)
+			var pending_session: Dictionary=base.trade.session
+			base.trade.erase("session")
+			var material_result: Dictionary=reduce(base,action)
+			var delta: float=float(material_result.cash)-float(previous.cash)
+			if float(pending_session.cash)-delta<0: return _message(previous,"商人的可用资金不足，本次材料未出售。")
+			pending_session.cash-=delta
+			pending_session.version+=1
+			material_result.trade.session=pending_session
+			material_result.npcTrade[material_result.trade.npcId].cash=pending_session.cash
+			TradeSession._rebalance(material_result)
+			return material_result
 		if kind in ["SELECT_TRADE","OFFER","ACCEPT","DELIVER","PAWN","SELL_MERCHANT_ITEM"]:
 			return _message(previous,"本次使用多件清单，请在清单逐件确认并统一交割，或结束接待。")
 	var wanted_result = Wanted.reduce(previous, action)

@@ -32,8 +32,13 @@ static func ensure(s: Dictionary) -> void:
  while goods.size()<count and not record.owned.is_empty(): goods.append(record.owned.pop_front())
  while goods.size()<count:
   var n := int(Model.fnv("%s/%s/%d" % [s.seed,t.id,goods.size()]))
-  var definition: Dictionary=GameData.item_list[n%GameData.item_list.size()]
-  var lot := Model.new_item(s,definition.id,{"owner":"npc","condition":0.45+float(n%46)/100.0,"authentic":n%5!=0,"working":n%3!=0,"sourceVerified":n%8!=0,"source":"%s 随身旧物" % GameData.npc(t.npcId).name})
+  var npc := GameData.npc(t.npcId)
+  var pool: Array=GameData.item_list
+  if String(npc.get("title","")).contains("收藏"):
+   pool=GameData.item_list.filter(func(d):return float(d.value)>=337)
+  var definition: Dictionary=pool[n%pool.size()]
+  var working: bool=n%5==0 if String(npc.get("title","")).contains("维修") else n%3!=0
+  var lot := Model.new_item(s,definition.id,{"owner":"npc","condition":0.45+float(n%46)/100.0,"authentic":n%5!=0,"working":working,"sourceVerified":n%8!=0,"source":"%s 随身旧物" % GameData.npc(t.npcId).name})
   goods.append(lot)
  for lot in goods: lot.owner="npc"
  t.session={"version":1,"lines":[],"goods":goods,"acquired":[],"cash":float(record.cash),"want_count":1+Model.fnv(String(s.seed)+String(t.id)+"/quantity")%6,"bought":0,"completed":[],"focus":"","had_sale":false,"original_kind":t.kind}
@@ -129,6 +134,7 @@ static func reduce(previous: Dictionary, action: Dictionary):
  var type=action.get("type","")
  if type not in ACTIONS: return null
  if previous.get("trade")==null or previous.trade.get("kind","") not in ["buy","sell","merchant"]: return Model.notice(previous.duplicate(true),"请先接待普通买卖来客。")
+ if type!="TRADE_OPEN" and action.get("tradeId","")!=previous.trade.id: return Model.notice(previous.duplicate(true),"来访已变化，请重新打开当前来客的清单；钱货未变动。")
  var s: Dictionary=previous.duplicate(true)
  if s.phase!="open": return Model.notice(s,"打烊后不能买卖，请明日营业后再操作。")
  var device_problem := StoreCosts.device_problem(s,"quote_terminal")
@@ -139,12 +145,14 @@ static func reduce(previous: Dictionary, action: Dictionary):
  if not uid is String: return previous
  var line := row(s,uid)
  var it=item(s,uid)
- if type=="TRADE_OPEN": return Model.notice(s,"多件清单已展开：逐件议价确认，再统一交割；结束接待才送客。")
+ if type=="TRADE_OPEN":
+  se.return_to_list=false
+  return Model.notice(s,"多件清单已展开：逐件议价确认，再统一交割；结束接待才送客。")
  if type=="TRADE_END":
   var record: Dictionary=s.npcTrade[s.trade.npcId]
   record.cash=se.cash
   for lot in se.goods+se.acquired: record.owned.append(lot)
-  if se.had_sale:
+  if se.get("had_deal",se.had_sale):
    var faction: String=GameData.npc(s.trade.npcId).faction
    s.relations[faction]=Model.clampn(s.relations[faction]+2)
   return Model.finish_trade(s,"本次接待已结束，未成交商品仍归原主。")
@@ -152,6 +160,8 @@ static func reduce(previous: Dictionary, action: Dictionary):
   if it==null: return previous
   se.focus=uid
   se.view_scroll=maxi(0,int(action.get("scroll",se.get("view_scroll",0))))
+  se.view_expanded=String(action.get("expanded",se.get("view_expanded","")))
+  se.return_to_list=bool(action.get("return_list",false))
   return s
  if type=="TRADE_ADD":
   var direction=action.get("direction","")
@@ -180,6 +190,7 @@ static func reduce(previous: Dictionary, action: Dictionary):
  if type=="TRADE_REMOVE":
   if line.is_empty() or line.status=="done": return previous
   line.included=false;line.selected=false;se.version+=1
+  _rebalance(s)
   return s
  if type=="TRADE_REVIEW":
   _review(s);se.version+=1
@@ -209,6 +220,7 @@ static func reduce(previous: Dictionary, action: Dictionary):
    if Model.price_agreed(s,line.context,it): line.status="ready";line.reason="此价可以，等待逐件确认。"
    else: line.context.price=Model.counter_price(s,line.context,it);line.status="counter";line.reason="对方还价，可接受当前价或继续谈。"
    line.fingerprint=fingerprint(it);se.version+=1
+   _rebalance(s)
    return s
   if line.status not in ["ready","counter","confirmed"]: return Model.notice(s,"这件尚未获接受，请先请 NPC 查看或调整报价。")
   if not Model.price_agreed(s,line.context,it): return Model.notice(s,"当前价尚未达成约定，请先议价。")
@@ -239,6 +251,7 @@ static func reduce(previous: Dictionary, action: Dictionary):
   for entry in incoming:
    var original: Dictionary=item(s,entry.uid)
    original.owner="shop";original.cost=entry.context.price
+   if not original.sourceVerified: s.risk=Model.clampn(s.risk+12)
    if not Model.put_in(s,original): return Model.notice(previous.duplicate(true),"后仓无法放下本批全部原物，请整理后重试；钱货与 AP 均未变动。")
    se.goods.erase(original)
   se.cash-=totals.net;se.bought+=totals.sell_count;se.had_sale=se.had_sale or totals.sell_count>0
@@ -251,7 +264,18 @@ static func reduce(previous: Dictionary, action: Dictionary):
    var label := ("售出 " if entry.direction=="sell" else "购入 ")+WatchForgery.sale_name(item(s,entry.uid) if entry.direction=="buy" else se.acquired.filter(func(lot):return lot.uid==entry.uid)[0])
    Model.ledger(s,"%s/%s/%s" % [s.trade.id,batch,entry.uid],"sale" if entry.direction=="sell" else "purchase",label,float(entry.context.price)*(1 if entry.direction=="sell" else -1),cost)
    entry.status="done";entry.selected=false;entry.reason="已交割 · 原物归属已保存"
+  se.had_deal=true
   Model.spend(s,1);se.completed.append(batch);se.version+=1
   s.npcTrade[s.trade.npcId].cash=se.cash
-  return Model.notice(s,"批次交割完成：售出%d件、买入%d件，实收差额 %s Cr；可继续商谈或结束接待。" % [totals.sell_count,totals.buy_count,Model.jnum(totals.net)])
+  return Model.notice(s,"批次交割完成：售出%d件、买入%d件，%s差额 %s Cr；可继续商谈或结束接待。" % [totals.sell_count,totals.buy_count,"实收" if totals.net>=0 else "实付",Model.jnum(absf(totals.net))])
  return previous
+
+static func _rebalance(s: Dictionary) -> void:
+ var se := session(s)
+ var available: float=float(se.cash)+float(summary(s).expense)
+ var used := 0.0
+ for line in se.lines:
+  if not line.included or not line.selected or line.status!="confirmed" or line.direction!="sell": continue
+  if used+float(line.context.price)>available:
+   line.status="ready";line.selected=false;line.reason="资金分配变化，待重新确认。"
+  else: used+=float(line.context.price)

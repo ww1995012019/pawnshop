@@ -161,3 +161,6 @@ static func resolve_link(it: Dictionary) -> void:
 	var service: Dictionary=it.get("service",{})
 	if not service.is_empty() and service.faults.all(func(f): return f.resolved or not f.id in ["battery","movement_part","missing_link","missing_fixing"]):
 		if service.tasks.has("replace") and not service.done.has("replace"): service.done.append("replace")
+
+static func strap_id(it: Dictionary) -> String:
+	return target_id(it) if target_active(it,"case") and not treatments(it).case.get("strap_removed",false) else String(it.defId)

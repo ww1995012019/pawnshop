@@ -37,6 +37,12 @@ func run():
  var bench=load("res://scripts/ui/watch_refurb_art.gd").new();page.add_child(bench)
  bench.configure(physical,"forge_case",{})
  check(bench._plan.size()>5,"counterfeit shell uses real disassembly and installation actions")
+ var exterior=Model.new_item(game.state,"WCH-023",{"condition":0.8,"working":true,"authentic":true})
+ exterior.forgery={"targetId":"WCH-028","methods":{}}
+ WatchForgery.apply(exterior,"case")
+ WatchForgery.restore_exterior(exterior,"strap")
+ bench.configure(exterior,"open",{})
+ check(bench._appearance.strap==bench.STRAP_TYPES[WatchForgery.template(exterior.defId)],"bench renders restored strap independently from target shell")
  shell.queue_free();await frames()
  print("PREMIUM UI failures=",failures)
  quit(1 if failures else 0)
