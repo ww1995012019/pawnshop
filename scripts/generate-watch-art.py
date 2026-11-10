@@ -19,6 +19,12 @@ NEW_STRAPCOL=['#8b694b','#655442','#737b63','#827c60','#a7b2af','#9eaaa6',
               '#585060','#a4b4bf','#48536c','#96a9a0','#465d53','#a6a8b6',
               '#54463e','#c4b87e','#473a57','#6b4939','#b4bba7','#c3b591']
 
+def dial_ink(model, face):
+    template=model if model<15 else NEW_TEMPLATES[model-15]
+    if model<15: return LIGHT if template in [2,3,4,5,7,8,9,10,14] else INK
+    r,g,b=tuple(bytes.fromhex(face.lstrip('#')))
+    return LIGHT if r*.299+g*.587+b*.114<140 else INK
+
 def glyph(i,v=0):
     im=Image.new('1',(24,16)); d=ImageDraw.Draw(im)
     def line(p,w=1): d.line(p,fill=1,width=w)
@@ -87,6 +93,40 @@ def crest():
         for y in [8,11,14]: d.point((x,y),fill=1)
     return [[x,y] for y in range(16) for x in range(16) if im.getpixel((x,y))]
 
+def dial_detail(d, model, radius, face, ink):
+    """Six structural dial layouts; retain the shared, unobstructed logo field."""
+    style=(model-15)%6
+    gold='#bda064' if model>=27 else ink
+    if style==0:
+        d.ellipse((64-radius+4,64-radius+4,64+radius-4,64+radius-4),outline=gold)
+        for x in [47,80]: d.rectangle((x,61,x+2,69),fill=gold)
+        d.rectangle((62,84,66,87),fill=gold)
+    elif style==1:
+        for r in [16,22]: d.arc((64-r,70-r,64+r,70+r),5,175,fill=gold,width=1)
+        for x,y in [(42,66),(84,66),(48,82),(80,82)]:
+            d.line((x-2,y,x+2,y),fill=gold);d.line((x,y-2,x,y+2),fill=gold)
+    elif style==2:
+        d.ellipse((53,73,75,91),fill='#182537',outline=gold)
+        d.ellipse((59,76,69,86),fill='#e4d598')
+        d.ellipse((63,74,72,83),fill='#182537')
+        for x in [55,72]: d.point((x,80),fill='#e4d598')
+    elif style==3:
+        for x in [40,43,84,87]: d.line((x,60,x,68),fill=gold,width=1)
+        for x in [60,64,68]: d.line((x,84,x,90),fill=gold,width=1)
+        d.ellipse((55,65,73,80),outline=gold);d.line((64,72,68,69),fill=gold)
+    elif style==4:
+        for x,y in [(40,64),(88,64),(64,88)]:
+            d.polygon([(x,y-4),(x+3,y),(x,y+4),(x-3,y)],fill=gold)
+        for h in range(60):
+            a=h*math.pi/30
+            x=round(64+math.sin(a)*(radius-2));y=round(64-math.cos(a)*(radius-2))
+            d.point((x,y),fill=gold)
+    else:
+        for x,y in [(49,70),(79,70),(64,84)]:
+            d.ellipse((x-8,y-7,x+8,y+7),fill='#253437',outline=gold)
+            d.ellipse((x-4,y-4,x+4,y+4),outline='#b69e67')
+            d.line((x-5,y,x+5,y),fill='#b69e67');d.line((x,y-4,x,y+4),fill='#b69e67')
+
 def watch(i,back=False,luxury=False):
     model_index=i
     if i>=15:
@@ -145,7 +185,7 @@ def watch(i,back=False,luxury=False):
     else:
         dial=r-7
         drawshape((64-dial,64-dial,64+dial,64+dial),face,INK)
-        tick=LIGHT if i in [2,3,4,5,7,8,9,10,14] else SHADE
+        tick=dial_ink(model_index,face) if model_index>=15 else (LIGHT if i in [2,3,4,5,7,8,9,10,14] else SHADE)
         for h in range(12):
             a=h*math.pi/6; rr=dial-3
             x=round(64+math.sin(a)*rr);y=round(64-math.cos(a)*rr)
@@ -153,17 +193,18 @@ def watch(i,back=False,luxury=False):
         if i==4:
             for h in range(12):
                 a=h*math.pi/6; x=round(64+math.sin(a)*(r-4));y=round(64-math.cos(a)*(r-4));rect((x,y,x+1,y+1),INK)
-        if i in [2,10]:
+        if model_index<15 and i in [2,10]:
             for x in [51,77]: ellipse((x-7,64,x+7,78),SHADE,INK); d.line((x,71,x+3,68),fill=LIGHT)
-        if i==7:
+        if model_index<15 and i==7:
             ellipse((54,73,74,88),'#142332',SHADE); ellipse((62,75,70,83),'#d5c997'); ellipse((65,73,72,80),'#142332')
-        if i==8:
+        if model_index<15 and i==8:
             for x,y in [(51,69),(75,75),(64,83)]: ellipse((x-7,y-7,x+7,y+7),'#a58d56',INK);ellipse((x-3,y-3,x+3,y+3),SHADE)
         if i==1: rect((76,62,87,71),LIGHT,INK); d.text((78,62),'2',fill=INK)
+        if model_index>=15: dial_detail(d,model_index,dial,face,tick)
         d.line((64,67,53,62),fill=INK,width=3); d.line((64,67,75,77),fill=INK,width=3)
         d.line((64,67,54,61),fill=LIGHT);d.line((64,67,76,77),fill=LIGHT)
         ellipse((62,65,66,69),'#b19b66',INK)
-        logo_col=LIGHT if i in [2,3,4,5,7,8,9,10,14] else INK
+        logo_col=dial_ink(model_index,face)
     # Exact pixel glyph shared with runtime and manual. Clean solid field behind it.
     bg='#a1aaa0' if back else face
     rect((52,44,75,59),bg)
@@ -188,8 +229,9 @@ def main():
         for i in range(count): atlas.paste(watch(i,side=='back',definitions[i].get('tier')=='luxury'),(i%5*256,i//5*256))
         atlas.save(OUT/f'watches-{side}.png')
         normal=Image.new('RGBA',atlas.size,(128,128,255,0)); normal.putalpha(atlas.getchannel('A'));normal.save(OUT/f'watches-{side}_n.png')
-    payload={f'WCH-{i+1:03}':{'face':(FACES[i] if i<15 else NEW_FACES[i-15]),'ink':('#e2e5d9' if (i if i<15 else NEW_TEMPLATES[i-15]) in [2,3,4,5,7,8,9,10,14] else INK),'pixels':[glyph(i),glyph(i,1)]} for i in range(count)}
+    payload={f'WCH-{i+1:03}':{'face':(FACES[i] if i<15 else NEW_FACES[i-15]),'ink':dial_ink(i,FACES[i] if i<15 else NEW_FACES[i-15]),'pixels':[glyph(i),glyph(i,1)]} for i in range(count)}
     for i,definition in enumerate(definitions):
         payload[definition['id']]['crest']=crest() if definition.get('tier')=='luxury' else []
+        payload[definition['id']]['dial_style']=(i-15)%6 if i>=15 else -1
     (ROOT/'godot/data/watch_art.json').write_text(json.dumps(payload,separators=(',',':'))+'\n')
 if __name__=='__main__': main()

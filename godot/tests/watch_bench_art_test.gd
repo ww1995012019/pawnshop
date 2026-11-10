@@ -284,7 +284,8 @@ func run() -> void:
 		check(privacy.mark_visibility() == "observed","current observation reveals the physical mark")
 		WatchForgery.apply(physical,"logo")
 		privacy.configure(physical,"forge_logo",{})
-		check(privacy.mark_visibility() == "hidden","repainting requires a new observation after merge")
+		check(privacy.mark_visibility() == "crafted","player can see their completed painted logo without new inspection")
+		check(physical.inspectionFacts["TOL-001"].logoRevision != Model.logo_revision(physical),"seeing own paint does not grant fresh inspection evidence")
 	privacy.queue_free()
 	var weighing = bench(item(), "forge_weight")
 	for n in range(30):

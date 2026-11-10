@@ -102,7 +102,8 @@ func run():
 	check(game.item(inspected_uid).inspectionFacts["TOL-001"].has("logoRevision"), "new loupe snapshot stores logo-specific revision")
 	WatchForgery.apply(game.item(inspected_uid), "logo")
 	await process_frame
-	check(page.item.mat.get_shader_parameter("logo_hidden") == 1.0, "logo forgery invalidates prior observed revision")
+	check(page.item.mat.get_shader_parameter("logo_hidden") == 0.0, "player sees their own painted logo immediately")
+	check(game.item(inspected_uid).inspectionFacts["TOL-001"].logoRevision != Model.logo_revision(game.item(inspected_uid)), "own paint still invalidates prior inspection revision")
 	check(game.item(inspected_uid).evidence.has("TOL-001"), "stale recorded evidence is retained for retest")
 	for player in root.find_children("*", "AudioStreamPlayer", true, false):
 		player.stop()
