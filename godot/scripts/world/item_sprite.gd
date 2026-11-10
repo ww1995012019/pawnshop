@@ -119,6 +119,7 @@ func _sync_logo_observation() -> void:
 			if prior is Array and prior.size() >= 10:
 				recorded = JSON.stringify([prior[0], int(prior[4]), bool(prior[9])])
 		observed = it.get("evidence", []).has("TOL-001") and recorded == Model.logo_revision(it)
+	if it != null and it.get("owner","")=="shop" and WatchForgery.active(it,"logo"): observed=true
 	mat.set_shader_parameter("logo_hidden", 1.0 if def_id.begins_with("WCH-") and not observed else 0.0)
 
 func logo_world_position() -> Vector2:

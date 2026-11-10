@@ -836,6 +836,7 @@ func _mark_observed() -> bool:
 
 func mark_visibility() -> String:
 	if _task == "forge_logo" and float(_state.get("logo",0)) > 0 and not _state.get("complete",false): return "painting"
+	if WatchForgery.active(_item,"logo") and _item.get("owner","")=="shop": return "crafted"
 	return "observed" if _mark_observed() else "hidden"
 
 func _draw_dial() -> void:
@@ -850,14 +851,15 @@ func _draw_dial() -> void:
 		if i in [0, 3, 6, 9]:
 			var offset := _case_offset(77,float(i)*TAU/12-PI*0.5)
 			_text(CENTER + offset - Vector2(6, -4), str(12 if i == 0 else i), 13, dial_ink, true)
+	_draw_model_dial(dial_ink)
 	draw_line(CENTER, CENTER + Vector2(-43, -29), dial_ink.darkened(0.2), 7, true)
 	draw_line(CENTER, CENTER + Vector2(38, -61), dial_ink, 4, true)
 	draw_line(CENTER, CENTER + Vector2(18, 65), Color("ac6a4a"), 1.5, true)
 	draw_circle(CENTER, 5, Color("c0aa6e"))
-	var fraction := float(_state.logo) if _task == "forge_logo" else 1.0
+	var fraction := float(_state.logo) if _task == "forge_logo" and not WatchForgery.active(_item,"logo") else 1.0
 	var variant := int(_item.get("watch", {}).get("logo_variant", 1))
 	if WatchForgery.active(_item, "logo"): variant = 0
-	var observed := _mark_observed()
+	var observed := mark_visibility() in ["observed","crafted"]
 	if observed:
 		for pixel in WatchLogo.pixels(WatchForgery.logo_id(_item), variant):
 			draw_rect(Rect2(Vector2(200 + pixel[0] * 4,125 + pixel[1] * 4),Vector2(3.7,3.7)),Color(dial_ink,0.28))
@@ -879,6 +881,43 @@ func _draw_dial() -> void:
 	draw_arc(CENTER, 99, -2.8, -2.25, 25, Color(1, 1, 0.9, 0.28), 5, true)
 	if fraction >= 1.0 and _task == "forge_logo":
 		_text(Vector2(152, 370), "漆层厚差 / 重描纹保留", 11, GOLD)
+
+func _draw_model_dial(ink: Color) -> void:
+	var style := int(_art.get("dial_style",-1))
+	if style < 0: return
+	var accent := GOLD if _reference.get("brand","")=="星冕" else ink.lightened(0.15)
+	match style:
+		0:
+			draw_arc(CENTER,83,0,TAU,72,accent,1.2,true)
+			for offset in [Vector2(-70,0),Vector2(70,0),Vector2(0,70)]: draw_rect(Rect2(CENTER+offset-Vector2(2,6),Vector2(4,12)),accent)
+		1:
+			for radius in [47,65]: draw_arc(CENTER+Vector2(0,18),radius,0.1,PI-0.1,42,accent,1.3,true)
+			for offset in [Vector2(-65,0),Vector2(65,0),Vector2(-48,54),Vector2(48,54)]:
+				draw_line(CENTER+offset-Vector2(5,0),CENTER+offset+Vector2(5,0),accent,1.5)
+				draw_line(CENTER+offset-Vector2(0,5),CENTER+offset+Vector2(0,5),accent,1.5)
+		2:
+			var p := CENTER+Vector2(0,56)
+			draw_circle(p,24,Color("182537"))
+			draw_arc(p,24,0,TAU,36,accent,1.2,true)
+			draw_circle(p,13,Color("e4d598"))
+			draw_circle(p+Vector2(7,-5),12,Color("182537"))
+		3:
+			for x in [-73,-65,65,73]: draw_line(CENTER+Vector2(x,-8),CENTER+Vector2(x,8),accent,2)
+			for x in [-8,0,8]: draw_line(CENTER+Vector2(x,66),CENTER+Vector2(x,80),accent,2)
+			draw_arc(CENTER+Vector2(0,25),22,0,TAU,36,accent,1.3,true)
+			draw_line(CENTER+Vector2(0,25),CENTER+Vector2(11,16),accent,1.5)
+		4:
+			for offset in [Vector2(-74,0),Vector2(74,0),Vector2(0,74)]:
+				var p: Vector2 = CENTER+offset
+				draw_colored_polygon(PackedVector2Array([p+Vector2(0,-8),p+Vector2(5,0),p+Vector2(0,8),p+Vector2(-5,0)]),accent)
+		5:
+			for offset in [Vector2(-43,18),Vector2(43,18),Vector2(0,61)]:
+				var p: Vector2 = CENTER+offset
+				draw_circle(p,21,Color("253437"))
+				draw_arc(p,21,0,TAU,32,accent,1.6,true)
+				draw_arc(p,11,0,TAU,24,accent,1.2,true)
+				draw_line(p-Vector2(14,0),p+Vector2(14,0),accent,1.2)
+				draw_line(p-Vector2(0,14),p+Vector2(0,14),accent,1.2)
 
 func _draw_serial(p: Vector2) -> void:
 	var fraction := float(_state.serial)

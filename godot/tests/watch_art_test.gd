@@ -12,6 +12,26 @@ func run_check() -> void:
 	var kit = load("res://scripts/app/ui_kit.gd")
 	var sprite_script = load("res://scripts/world/item_sprite.gd")
 	kit.ensure()
+	var paint_game = root.get_node("Game")
+	paint_game.state=Model.create("CRAFTED-LOGO-VISIBILITY")
+	var crafted := Model.new_item(paint_game.state,"WCH-002",{"authentic":false,"owner":"shop"})
+	Model.put_in(paint_game.state,crafted)
+	var painted_sprite = sprite_script.new()
+	root.add_child(painted_sprite)
+	painted_sprite.setup(crafted.defId,crafted.uid,200)
+	check(float(painted_sprite.mat.get_shader_parameter("logo_hidden"))==1.0,"untested original logo stays masked")
+	WatchForgery.apply(crafted,"logo")
+	painted_sprite._apply_face()
+	check(float(painted_sprite.mat.get_shader_parameter("logo_hidden"))==0.0,"player's finished logo is visible on actual item sprite")
+	check(not crafted.evidence.has("TOL-001"),"visible own paint grants no inspection evidence")
+	crafted.owner="npc"
+	painted_sprite._apply_face()
+	check(float(painted_sprite.mat.get_shader_parameter("logo_hidden"))==1.0,"NPC-held paint still requires inspection")
+	crafted.owner="shop"
+	crafted.forgery.methods.logo.removed=true
+	painted_sprite._apply_face()
+	check(float(painted_sprite.mat.get_shader_parameter("logo_hidden"))==1.0,"removed paint does not expose the underlying untested mark")
+	painted_sprite.free()
 	var signatures := {}
 	for i in range(78):
 		var id := "WCH-%03d" % (i + 1)

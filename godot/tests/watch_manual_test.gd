@@ -36,7 +36,7 @@ func run() -> void:
 		await process_frame
 		var cards: Array = shell.modal_layer.find_children("catalogue_model_*","Button",true,false)
 		check(cards.size()==78,"catalogue displays all 78 watch icons")
-		var tier_nav: Button = shell.modal_layer.find_child("catalogue_tier_ultra",true,false)
+		var tier_nav: Button = shell.modal_layer.find_child("catalogue_group_ultra",true,false)
 		check(tier_nav != null,"mobile tier navigation includes rare section")
 		for card in cards:
 			check(card.material == null,"catalogue cards stay static")

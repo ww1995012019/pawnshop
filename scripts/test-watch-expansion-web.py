@@ -78,8 +78,8 @@ def main():
                     command({'type': 'settings'})
                     phone.wait(page, 's.blocked')
                     click('全图鉴 · 全部手表')
-                    for tier, number in [('low', '034'), ('mid', '049'), ('luxury', '064'), ('ultra', '074')]:
-                        click('@catalogue_tier_'+tier)
+                    for tier, number in [('low', '034'), ('mid', '049'), ('luxury', '064'), ('star', '028'), ('ultra', '074')]:
+                        click('@catalogue_group_'+tier)
                         assert locate('@catalogue_model_WCH-'+number)['found'], (label, tier)
                     page.screenshot(path=str(output / f'{label}-ultra-grid.png'))
                     for definition in rare:
@@ -97,7 +97,7 @@ def main():
                     phone.wait(page, 's.blocked')
                     click('减少动态效果')
                     click('全图鉴 · 全部手表')
-                    click('@catalogue_tier_ultra')
+                    click('@catalogue_group_ultra')
                     click('@catalogue_model_WCH-074')
                     page.screenshot(path=str(output / f'{label}-rare-reduced-motion.png'))
                     command({'type': 'close'})

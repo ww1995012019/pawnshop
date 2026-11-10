@@ -54,6 +54,16 @@ func run() -> void:
 		var cards: Array = shell.modal_layer.find_children("catalogue_model_*","Button",true,false)
 		check(cards.size()==GameData.item_list.size(), "catalogue lays out every watch as an icon card")
 		check(shell.modal_layer.find_child("manual_model",true,false)==null,"catalogue uses no model dropdown")
+		var star_tab = shell.modal_layer.find_child("catalogue_group_star",true,false)
+		check(star_tab != null,"Star has a direct standalone catalogue category")
+		if star_tab != null:
+			star_tab.pressed.emit()
+			await frames()
+			var star_cards = shell.modal_layer.find_children("catalogue_model_*","Button",true,false).filter(func(c): return c.is_visible_in_tree())
+			check(star_cards.size()==6,"Star category displays its six models only")
+			check(star_cards.all(func(c):return c.text.contains("星冕") and c.text.contains("Cr")),"Star cards show series name and catalogue price")
+			shell.modal_layer.find_child("catalogue_group_all",true,false).pressed.emit()
+			await frames()
 		if not cards.is_empty():
 			cards[-1].pressed.emit()
 			await frames()

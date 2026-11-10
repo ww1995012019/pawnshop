@@ -3,14 +3,17 @@ extends RefCounted
 static func open(shell: Node) -> void:
 	var modal: Array = shell.modal("全图鉴 · 全部手表",1080)
 	var body: VBoxContainer = modal[0]
+	var navigation := HFlowContainer.new()
+	navigation.add_theme_constant_override("h_separation",8)
+	navigation.add_theme_constant_override("v_separation",8)
+	navigation.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(navigation)
+	var selection := ButtonGroup.new()
+	var sections := {}
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0,560)
+	scroll.custom_minimum_size = Vector2(0,500)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	var nav := HFlowContainer.new()
-	nav.add_theme_constant_override("h_separation",8)
-	nav.add_theme_constant_override("v_separation",8)
-	body.add_child(nav)
 	body.add_child(scroll)
 	var index := UIKit.vbox(16)
 	index.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -26,31 +29,40 @@ static func open(shell: Node) -> void:
 	var saved_scroll := [0]
 	back.pressed.connect(func():
 		scroll.remove_child(detail)
+		navigation.show()
 		scroll.add_child(index)
 		scroll.set_deferred("scroll_vertical",saved_scroll[0]))
-	for tier in ["low","mid","luxury","ultra"]:
-		var section := UIKit.module_header({"low":"低等手表","mid":"中等手表","luxury":"名贵手表","ultra":"珍稀手表"}[tier],"点击手表查看标准参考资料","CATALOGUE")
-		section.name = "catalogue_section_"+tier
+	for group in ["all","low","mid","luxury","star","ultra"]:
+		var title: String = {"all":"全部 · %d款" % GameData.item_list.size(),"low":"低等手表","mid":"中等手表","luxury":"名贵手表","star":"超名贵 · 星冕","ultra":"珍稀手表"}[group]
+		var tab := UIKit.button(title,"secondary",Vector2(120,46),18)
+		tab.name="catalogue_group_"+group
+		tab.toggle_mode=true
+		tab.add_theme_stylebox_override("pressed",UIKit.key_style("primary","pressed"))
+		tab.button_group=selection
+		tab.button_pressed=group=="all"
+		tab.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		navigation.add_child(tab)
+		tab.pressed.connect(func():
+			for key in sections: sections[key].visible=group=="all" or key==group
+			scroll.scroll_vertical=0)
+	for tier in ["low","mid","luxury","star","ultra"]:
+		var section := UIKit.vbox(12)
+		section.name="catalogue_section_"+tier
+		sections[tier]=section
 		index.add_child(section)
-		var jump := UIKit.button({"low":"低等","mid":"中等","luxury":"名贵","ultra":"珍稀"}[tier],"secondary",Vector2(100,48),18)
-		jump.name = "catalogue_tier_"+tier
-		jump.pressed.connect(func():
-			if detail.get_parent()==scroll:
-				scroll.remove_child(detail)
-				scroll.add_child(index)
-			scroll.set_deferred("scroll_vertical",int(section.position.y)))
-		nav.add_child(jump)
+		section.add_child(UIKit.module_header({"low":"低等手表","mid":"中等手表","luxury":"名贵手表","star":"超名贵手表 · 星冕系列","ultra":"珍稀手表 · 穹铸系列"}[tier],"标准参考价 · 实物估价受品相、故障与真伪影响","CATALOGUE"))
 		var grid := GridContainer.new()
 		grid.columns = 4
 		grid.add_theme_constant_override("h_separation",10)
 		grid.add_theme_constant_override("v_separation",10)
 		grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		index.add_child(grid)
+		section.add_child(grid)
 		grid.resized.connect(func(): grid.columns = maxi(1,mini(4,int(grid.size.x/180))))
 		for definition in GameData.item_list:
-			if definition.get("tier","") != tier: continue
+			var category: String = "star" if definition.get("watch",{}).get("brand","")=="星冕" else String(definition.get("tier",""))
+			if category != tier: continue
 			var id: String = definition.id
-			var card := UIKit.button(definition.name,"secondary",Vector2(170,165),17)
+			var card := UIKit.button("%s\n参考价 %s Cr" % [definition.name, str(int(definition.value))],"secondary",Vector2(170,178),19)
 			card.name = "catalogue_model_"+id
 			card.icon = UIKit.item_icon(id)
 			card.expand_icon = true
@@ -61,6 +73,7 @@ static func open(shell: Node) -> void:
 			card.pressed.connect(func():
 				saved_scroll[0] = scroll.scroll_vertical
 				scroll.remove_child(index)
+				navigation.hide()
 				scroll.add_child(detail)
 				UIKit.clear(reference)
 				load("res://scripts/ui/watch_manual.gd").populate_reference(reference,id)

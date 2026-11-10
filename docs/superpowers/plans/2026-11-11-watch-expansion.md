@@ -9,7 +9,7 @@
 
 ## Global Constraints
 
-- Preserve original 33 definitions, identities, cropped art pixels, evidence and old saves, except the six explicitly repriced Star values from concurrent approved main7642914. Append WCH-034..078: low 15, mid 15, luxury 10, ultra 5. Totals 27/27/19/5.
+- Preserve original 33 definitions, identities, cropped art pixels, evidence and old saves, except the six explicitly repriced Star values from concurrent approved main7642914 and the approved legacy dial/contrast refresh from main629df69. Append WCH-034..078: low 15, mid 15, luxury 10, ultra 5. Totals 27/27/19/5.
 - Ultra rarity is 0.5% per procedural fresh physical item, all five combined; counterfeit generation approximately 20%, independently sampled, including merchant luxury/ultra stock.
 - Theft risk is 300 + 8 × luxury + 10 × ultra basis points; 1 each yields 318 basis points. Tier-first theft weights 80/15/4/1, absent tiers excluded.
 - Protect customer/service/sealed goods and existing insurance/provenance/police/counter sessions. No rerolls of existing physical goods.
