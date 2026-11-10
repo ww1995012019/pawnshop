@@ -34,7 +34,7 @@ var scale_pan: ScalePan
 var scale_label: Label
 var tare_button: Button
 var place_button: Button
-var record_button: Button
+var scale_attempt_revision := ""
 var remove_button: Button
 var optical_fixed := false
 var optical_position := Vector2.ZERO
@@ -44,7 +44,7 @@ func scene_name() -> String:
 	return "workbench"
 
 func hint_text() -> String:
-	return "放大镜看标识，紫外线读编号；称重先空秤归零，再放表、等待稳定并记录。可随时查说明书。"
+	return "放大镜看标识，紫外线读编号；称重先空秤归零，再放表，稳定后自动记录。可随时查说明书。"
 
 func enter() -> void:
 	_build_panels()
@@ -291,17 +291,16 @@ func _scale() -> void:
 	add_world(scale_pan,"fg")
 	scale_label = UIKit.label("0.0 g · 请先空秤归零",22,UIKit.CYAN)
 	bench_body.add_child(scale_label)
-	var grid := UIKit.grid(4,8)
+	var grid := UIKit.grid(3,8)
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for entry in [["空秤归零",_scale_tare],["放到秤上",_scale_place],["记录克数",_scale_record],["取回手表",_scale_remove]]:
+	for entry in [["空秤归零",_scale_tare],["放到秤上",_scale_place],["取回手表",_scale_remove]]:
 		var b := UIKit.button(entry[0],"secondary",Vector2(0,44),18)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(entry[1])
 		grid.add_child(b)
 	tare_button = grid.get_child(0)
 	place_button = grid.get_child(1)
-	record_button = grid.get_child(2)
-	remove_button = grid.get_child(3)
+	remove_button = grid.get_child(2)
 	bench_body.add_child(grid)
 	_scale_controls()
 
@@ -320,6 +319,7 @@ func _scale_place() -> bool:
 	scale_occupied = true
 	scale_stable = false
 	scale_elapsed = 0.0
+	scale_attempt_revision = ""
 	scale_reading = 0.0
 	_scale_controls()
 	return true
@@ -329,6 +329,7 @@ func _scale_remove() -> void:
 	scale_occupied = false
 	scale_stable = false
 	scale_elapsed = 0.0
+	scale_attempt_revision = ""
 	scale_reading = 0.0
 	item.draggable = true
 	item.position = scale_origin
@@ -345,7 +346,6 @@ func _scale_controls() -> void:
 	if not is_instance_valid(scale_label): return
 	tare_button.disabled = scale_occupied
 	place_button.disabled = not tared or scale_occupied
-	record_button.disabled = not scale_occupied or not scale_stable
 	remove_button.disabled = not scale_occupied
 	scale_label.text = "%.1f g · %s" % [scale_reading,"稳定 ✓" if scale_stable else "正在稳定…" if scale_occupied else "空秤已归零" if tared else "请先空秤归零"]
 
@@ -407,6 +407,13 @@ func _process(delta: float) -> void:
 		scale_reading = mass if scale_stable else maxf(0.0,mass * (1.0 + .08*sin(f*23.0)*(1.0-f)))
 		scale_pan.depression = 6.0*f
 		scale_pan.queue_redraw()
+		if scale_stable:
+			var revision := Model.appraisal_revision(it)+":"+str(Game.state.ap)
+			if revision != scale_attempt_revision:
+				scale_attempt_revision = revision
+				_scale_record()
+				var current = Game.item(it_uid)
+				if current != null: scale_attempt_revision = Model.appraisal_revision(current)+":"+str(Game.state.ap)
 		_scale_controls()
 	elif tool == "TOL-001" or tool == "TOL-002":
 		var node: Node2D = lens if tool == "TOL-001" else wand

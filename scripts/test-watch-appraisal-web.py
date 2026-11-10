@@ -68,7 +68,7 @@ def main():
                     cmd({'type':'tool','tool':'TOL-005'});page.wait_for_function("OrbitalTouch.state.inspection_current==='TOL-005'")
                     click('空秤归零');click('放到秤上')
                     page.wait_for_function('OrbitalTouch.state.scale_stable',timeout=10000)
-                    click('记录克数');final=appraisal(3)
+                    final=appraisal(3)
                     assert final['exact'] and final['low']==final['high']
                     assert second['low']<=final['low']<=second['high']
                     snapshot('three-tools')
