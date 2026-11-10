@@ -17,6 +17,7 @@ const CYAN := Color("86c9bc")
 const GOLD := Color("c9ae72")
 const STEEL := Color("a4b4b0")
 const DARK := Color("182326")
+const TOOL_NAMES := {"driver":"螺丝刀", "tweezers":"镊子", "oiler":"点油笔", "brush":"清洗刷", "pen":"描绘笔", "probe":"检测探针", "blower":"吹气球", "opener":"双爪开盖器", "caseknife":"开盖刀", "uv":"紫外灯", "swab":"清洁棉签", "press":"压盖器", "fingers":"手部操作", "springbar":"生耳批"}
 # Keep the established atlas identity from generate-watch-art.py; these are
 # physical model palettes/silhouettes, independent of true or forged markings.
 const EXTRA_TEMPLATES := [0, 6, 2, 9, 1, 3, 6, 3, 7, 10, 11, 8, 12, 14, 7, 13, 10, 8]
@@ -148,8 +149,19 @@ func hint_text() -> String:
 	if _plan.is_empty(): return "当前没有可操作的工序。"
 	var a: Dictionary = _plan[mini(int(_state.step), _plan.size() - 1)]
 	if _state.phase != "idle":
-		return "工具接触中 · 请等零件落稳"
-	return String(a.hint) + " · 可点按部件，或使用下方操作键"
+		return "正在" + String(a.label) + " · 等工具移开后再进行下一步"
+	if a.has("part"):
+		var guide := _transfer_guide(a)
+		if _v(a.at).distance_to(_v(a.to)) <= 68.0:
+			return "点按%s或下方按钮，工具会将%s放到%s。" % [guide.part, guide.part, guide.destination]
+		return "拖动%s → %s；也可点按%s或下方按钮，工具会自动代放。" % [guide.part, guide.destination, guide.part]
+	return "点按标记处，使用%s：%s。%s" % [TOOL_NAMES.get(a.tool, "工具"), a.label, a.hint]
+
+func _transfer_guide(a: Dictionary) -> Dictionary:
+	var mech: bool = _profile.get("movement", "quartz") == "mechanical"
+	var parts := {"cover":"后盖", "old_part":"旧齿轮" if mech else "旧电池", "new_part":"新齿轮" if mech else "新电池", "component":"金属部件", "fixing":"固定件", "link":"表节", "ballast":"配重片", "watch":"手表"}
+	var destinations := {"lift_cover":"右上后盖格", "return_cover":"表壳座", "remove_fault":"旧件格", "place_replacement":"轮轴座" if mech else "电池座", "remove_washable":"清洗篮", "return_bridge":"定位柱", "place_fixing":"固定孔", "place_link":"表带缺口", "place_ballast":"后盖内侧槽", "move_to_scale":"称盘中央"}
+	return {"part":parts.get(a.get("part", ""), "零件"), "destination":destinations.get(a.id, "对应工位")}
 
 func advance() -> void:
 	if _state.is_empty() or _state.complete or _state.phase != "idle" or _plan.is_empty(): return
@@ -190,6 +202,7 @@ func _gui_input(event: InputEvent) -> void:
 		motion = true
 	else: return
 	if _state.phase != "idle": return
+	var previous_feedback := _feedback
 	var at := _local_to_surface(pos)
 	var a: Dictionary = _plan[int(_state.step)]
 	if down:
@@ -200,6 +213,8 @@ func _gui_input(event: InputEvent) -> void:
 		_pointer_dragging = false
 		if not _pressed:
 			_feedback = "请对准标出的接触点：" + String(a.label)
+		else:
+			_feedback = ""
 	elif motion and _pressed:
 		_drag_at = at.clamp(Vector2(18, 65), SURFACE - Vector2(18, 30))
 		_pointer_dragging = _drag_origin.distance_to(at) > 8.0
@@ -208,11 +223,14 @@ func _gui_input(event: InputEvent) -> void:
 		# A tap is the accessible snap-to-contact equivalent. Dragged transfers
 		# must land on the tray/seat, so a misplaced part never teleports away.
 		if _pointer_dragging and a.has("part") and at.distance_to(_v(a.to)) > 65.0:
-			_feedback = "零件未对准工位，已安全留在原位。请拖到标出的落点。"
+			var guide := _transfer_guide(a)
+			_feedback = "%s还未放入%s，已留在原位。请按箭头重试。" % [guide.part, guide.destination]
 		else:
 			advance()
 		_pointer_dragging = false
 	accept_event()
+	if _feedback != previous_feedback:
+		progressed.emit(progress_snapshot())
 	queue_redraw()
 
 func _process(delta: float) -> void:
@@ -450,9 +468,8 @@ func _close_actions() -> void:
 		"snap": _action("press_snap", "均匀压合压入式后盖", "沿盖缘均匀施力，确认后盖完全落座", "press", CENTER, "press", 1.0)
 		_: _action("tighten_cover", "顺时针旋紧后盖", "双爪卡住槽口，顺时针旋至盖缘齐平", "opener", CENTER, "turn", 1.15)
 
-func _rack(tool: String) -> Vector2:
-	var index := ["driver", "tweezers", "oiler", "brush", "pen", "probe", "blower", "opener", "caseknife", "uv", "swab", "press", "fingers", "springbar"].find(tool)
-	return Vector2(56 + (maxi(index, 0) % 14) * 39, 413)
+func _rack(_tool: String) -> Vector2:
+	return Vector2(91, 430)
 
 func _screw_pos(index: int) -> Vector2:
 	return CENTER + Vector2.from_angle(-PI * 0.75 + index * PI * 0.5) * 91.0
@@ -873,16 +890,24 @@ func _draw_instrument() -> void:
 		draw_polyline(PackedVector2Array([Vector2(445, 364), Vector2(420, 364), Vector2(412, 301), Vector2(360, 227)]), Color("d1b16d"), 2, true)
 
 func _draw_rack() -> void:
-	_panel(Rect2(31, 399, 578, 31), Color("162621"), Color("4e6657"), 5)
-	for x in range(47, 593, 39):
-		draw_line(Vector2(x, 409), Vector2(x + 18, 409), Color("516a56"), 2)
-	_text(Vector2(43, 444), "软垫表座 · 工具接触后操作 · 零件留在原工位", 10, MUTED)
-	# Resting implements are small, but still drawn as physical tools.
-	for tool in ["driver", "tweezers", "oiler", "brush", "pen", "probe", "blower", "opener"]:
-		if _state.tool.kind == tool: continue
-		var p := _rack(tool)
-		draw_line(p, p + Vector2(8, -27), Color("7e9587"), 2, true)
-		draw_line(p + Vector2(8, -27), p + Vector2(11, -35), Color("8e7656"), 5, true)
+	_panel(Rect2(31, 398, 578, 47), Color("132320"), Color("52665c"), 5)
+	if _state.complete or _plan.is_empty():
+		_text(Vector2(49, 426), "本工序已完成 · 工具已收妥", 14, CYAN)
+		return
+	var a: Dictionary = _plan[mini(int(_state.step), _plan.size() - 1)]
+	_panel(Rect2(40, 404, 100, 35), Color("263932"), Color("607467"), 4)
+	# Show the actual tool silhouette. This is an automatic tool rest, not
+	# a row of indistinguishable objects suggesting a tool-selection puzzle.
+	if _state.phase == "idle":
+		var rect := stage_working_rect()
+		var unit := rect.size.x / SURFACE.x
+		draw_set_transform(rect.position + Vector2(91, 430) * unit, 0, Vector2.ONE * unit * 0.40)
+		_draw_implement(String(a.tool), Vector2.ZERO, 0.0, false)
+		draw_set_transform(rect.position, 0, Vector2.ONE * unit)
+	else:
+		_text(Vector2(64, 427), "使用中", 13, CYAN)
+	_text(Vector2(154, 418), "本步工具  " + String(TOOL_NAMES.get(a.tool, "工具")), 17, INK)
+	_text(Vector2(154, 435), "自动取用 · 操作表上的标记，无需点击工具栏", 13, MUTED)
 
 func _draw_contact() -> void:
 	if _state.complete or _plan.is_empty() or _state.phase != "idle": return
@@ -892,22 +917,59 @@ func _draw_contact() -> void:
 		var angle := float(i) * PI * 0.5 + 0.18
 		draw_arc(p, 17, angle, angle + 0.90, 10, CYAN, 1.7, true)
 	draw_circle(p, 2.5, CYAN)
-	if a.has("part"):
+	if a.has("part") and p.distance_to(_v(a.to)) > 68.0:
 		var to := _v(a.to)
-		draw_arc(to, 22, 0, TAU, 40, Color(0.53, 0.76, 0.65, 0.5), 1.5, true)
-		draw_line(p.lerp(to, 0.18), p.lerp(to, 0.77), Color(0.53, 0.76, 0.65, 0.3), 1, true)
-		_text(to + Vector2(-12, 36), "落点", 10, MUTED)
+		var guide := _transfer_guide(a)
+		_draw_part_outline(to, String(a.part), GOLD)
+		var direction := (to - p).normalized()
+		var from := p + direction * 29
+		var end := to - direction * 39
+		draw_dashed_line(from, end, Color(0.79, 0.68, 0.45, 0.8), 2, 7, true)
+		for sign_value in [-1.0, 1.0]:
+			draw_line(end, end - direction.rotated(sign_value * 0.55) * 11, GOLD, 2, true)
+		_draw_guide_tag(p + Vector2(0, 43 if p.x > 420 else -43), "① 拖动" + String(guide.part), CYAN)
+		_draw_guide_tag(to + Vector2(0, 45), "② " + String(guide.destination), GOLD)
+	else:
+		var label := "点按此处 · " + String(TOOL_NAMES.get(a.tool, "工具"))
+		if a.has("part"):
+			var guide := _transfer_guide(a)
+			label = "点按" + String(guide.part) + " · 移至" + String(guide.destination)
+		_draw_guide_tag(p + Vector2(0, 43 if p.x > 420 else -43), label, CYAN)
 	if _pressed:
-		draw_arc(_drag_at, 22, 0, TAU, 30, GOLD, 1.6, true)
-		if _pointer_dragging: draw_line(p, _drag_at, Color(0.79, 0.68, 0.45, 0.6), 2, true)
+		if _pointer_dragging and a.has("part"):
+			_draw_part_outline(_drag_at, String(a.part), Color("d9dfce"))
+		else:
+			draw_arc(_drag_at, 22, 0, TAU, 30, GOLD, 1.6, true)
+
+func _draw_guide_tag(at: Vector2, text: String, color: Color) -> void:
+	var width := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 20
+	var box := Rect2(Vector2(clampf(at.x - width * 0.5, 20, SURFACE.x - width - 20), at.y - 15), Vector2(width, 31))
+	_panel(box, Color("142322"), color.darkened(0.35), 4)
+	_text(box.position + Vector2(10, 22), text, 16, color)
+
+func _draw_part_outline(at: Vector2, part: String, color: Color) -> void:
+	if part in ["cover", "watch"] and _appearance.case_shape == "square":
+		draw_rect(Rect2(at - Vector2(32, 32), Vector2(64, 64)), Color(color, 0.10))
+		draw_rect(Rect2(at - Vector2(32, 32), Vector2(64, 64)), color, false, 2)
+	elif part in ["ballast", "link", "component"]:
+		draw_rect(Rect2(at - Vector2(23, 12), Vector2(46, 24)), Color(color, 0.10))
+		draw_rect(Rect2(at - Vector2(23, 12), Vector2(46, 24)), color, false, 2)
+	else:
+		var radius := 32.0 if part in ["cover", "watch"] else 19.0
+		draw_circle(at, radius, Color(color, 0.10))
+		draw_arc(at, radius, 0, TAU, 48, color, 2, true)
+	draw_line(at - Vector2(5, 0), at + Vector2(5, 0), Color(color, 0.65), 1)
+	draw_line(at - Vector2(0, 5), at + Vector2(0, 5), Color(color, 0.65), 1)
 
 func _draw_tool() -> void:
 	if _state.tool.kind == "": return
 	var tip := _v(_state.tool.position)
 	var angle := float(_state.tool.angle)
+	_draw_implement(String(_state.tool.kind), tip, angle, _state.phase == "act")
+
+func _draw_implement(tool: String, tip: Vector2, angle: float, acting: bool) -> void:
 	var axis := Vector2(0.46, -0.89).rotated(angle)
 	var side := axis.orthogonal()
-	var tool := String(_state.tool.kind)
 	# Every implement is constructed from its physical contact tip. All motion
 	# uses this same anchor, so a screw turn cannot drift off the screw head.
 	var shadow := tip + Vector2(5, 7)
@@ -928,7 +990,7 @@ func _draw_tool() -> void:
 			draw_line(tip, tip + axis * 27, Color("899f8e"), 5, true)
 			draw_circle(tip + axis * 52, 20, Color("634f3d"))
 			draw_arc(tip + axis * 52, 17, -2.6, -0.6, 20, Color("a38a64"), 2, true)
-			if _state.phase == "act":
+			if acting:
 				for i in range(3):
 					var p := tip - axis * (8 + i * 7)
 					draw_line(p - side * (2 + i * 2), p + side * (2 + i * 2), Color(0.74, 0.86, 0.79, 0.5 - i * 0.12), 1.2, true)
@@ -955,8 +1017,8 @@ func _draw_tool() -> void:
 				for i in range(-3, 4): draw_line(tip + side * i * 1.5, tip + axis * 10 + side * i, Color("c6c09c"), 1.5, true)
 			if tool == "caseknife":
 				draw_colored_polygon(PackedVector2Array([tip, tip + axis * 20 + side * 5, tip + axis * 24 - side * 4]), Color("b9c9bc"))
-			if tool == "oiler" and _state.phase == "act": draw_circle(tip, 2.5, Color("e7d591"))
-			if tool == "uv" and _state.phase == "act":
+			if tool == "oiler" and acting: draw_circle(tip, 2.5, Color("e7d591"))
+			if tool == "uv" and acting:
 				draw_colored_polygon(PackedVector2Array([tip, tip - axis * 42 - side * 35, tip - axis * 42 + side * 35]), Color(0.47, 0.37, 0.85, 0.14))
 
 func _draw_labels() -> void:

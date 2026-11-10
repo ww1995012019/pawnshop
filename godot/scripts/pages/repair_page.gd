@@ -346,9 +346,9 @@ func confirm_repair() -> void:
 	Game.dispatch({"type":"SERVICE_FINISH","uid":it_uid})
 	_request_refresh()
 
-func _wipe_uv(from_uv: Vector2,to_uv: Vector2) -> void:
+func _wipe_uv(from_uv: Vector2,to_uv: Vector2,elapsed := 0.0) -> void:
 	if cleaning == null or task != "dust" or _current_problem() != "": return
-	if cleaning.stroke(from_uv,to_uv):
+	if cleaning.stroke(from_uv,to_uv,0.075,elapsed):
 		mask_tex.update(cleaning.image())
 		dirty = cleaning.remaining()
 		cleaning_unsaved = true
@@ -357,7 +357,8 @@ func _wipe_uv(from_uv: Vector2,to_uv: Vector2) -> void:
 			scrubbing = false
 			_save_cleaning()
 			_operation_completed()
-	cloth_direction = (to_uv-from_uv).normalized()
+	if from_uv.distance_squared_to(to_uv) > 0.000001:
+		cloth_direction = (to_uv-from_uv).normalized()
 	cloth_uv = to_uv
 	queue_redraw()
 
@@ -389,11 +390,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif not event.pressed:
 			scrubbing = false
 			_save_cleaning()
-	elif event is InputEventMouseMotion and scrubbing:
-		_wipe_uv(last_uv,uv)
-		last_uv = uv
 
 func _process(delta: float) -> void:
+	if scrubbing and task == "dust" and mode == "service" and is_instance_valid(item):
+		if shell.modal_open():
+			scrubbing = false
+		else:
+			var world: Vector2 = shell.world_mouse()
+			var uv: Vector2 = item.body.to_local(world) / item.tex_size() + Vector2(0.5,0.5)
+			_wipe_uv(last_uv,uv,delta)
+			last_uv = uv
 	save_clock += delta
 	operation_clock += delta
 	if save_clock >= 0.4:

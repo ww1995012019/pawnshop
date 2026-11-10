@@ -33,8 +33,8 @@ func configure(alpha: Image, seed: String, saved: Dictionary) -> void:
 			initial_total += initial[index] * weights[index]
 	_measure()
 
-func stroke(from_uv: Vector2, to_uv: Vector2, radius := 0.075) -> bool:
-	if from_uv.distance_squared_to(to_uv) < 0.000001 or complete():
+func stroke(from_uv: Vector2, to_uv: Vector2, radius := 0.075, elapsed := 0.0) -> bool:
+	if (elapsed <= 0.0 and from_uv.distance_squared_to(to_uv) < 0.000001) or complete():
 		return false
 	var changed := false
 	var start := (from_uv.min(to_uv) - Vector2.ONE * radius) * GRID
@@ -45,7 +45,10 @@ func stroke(from_uv: Vector2, to_uv: Vector2, radius := 0.075) -> bool:
 			if pixels[i] == 0: continue
 			var uv := (Vector2(x, y) + Vector2(0.5, 0.5)) / GRID
 			var distance := uv.distance_to(Geometry2D.get_closest_point_to_segment(uv, from_uv, to_uv))
-			var value := roundi(initial[i] * smoothstep(radius * 0.45, radius, distance))
+			var edge := smoothstep(radius * 0.45, radius, distance)
+			# Restore the original cloth's continuous contact fade, measured in
+			# seconds so slow frames cannot change the polishing speed.
+			var value := roundi(maxf(0.0, pixels[i] - initial[i] * (1.0 - edge) * elapsed * 21.0)) if elapsed > 0.0 else roundi(initial[i] * edge)
 			if value < pixels[i]:
 				pixels[i] = value
 				changed = true

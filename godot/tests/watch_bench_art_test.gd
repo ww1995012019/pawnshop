@@ -105,6 +105,9 @@ func run() -> void:
 	finish_action(lifted)
 	check(lifted.progress_snapshot().opened, "releasing caseback immediately marks unsafe opened work")
 	var lift_target: Dictionary = lifted.interaction_targets()[0]
+	check(lifted.hint_text().contains("拖动后盖") and lifted.hint_text().contains("后盖格"), "cover transfer explains the gesture and named destination before input")
+	var recovery := {"text":""}
+	lifted.progressed.connect(func(_progress): recovery.text = lifted.hint_text())
 	var pickup := InputEventMouseButton.new()
 	pickup.button_index = MOUSE_BUTTON_LEFT
 	pickup.pressed = true
@@ -119,6 +122,8 @@ func run() -> void:
 	bad_drop.position = Vector2(20, 20)
 	lifted._gui_input(bad_drop)
 	check(lifted.progress_snapshot().phase == "idle" and lifted.progress_snapshot().parts.cover == [248.0,227.0], "misplaced dragged cover remains safely at its original seat")
+	check(lifted.hint_text().contains("后盖格"), "misplaced cover recovery identifies its actual compartment instead of an unnamed drop point")
+	check(recovery.text.contains("还未放入") and recovery.text.contains("后盖格"), "misplaced part immediately refreshes the visible page instruction")
 	lifted.advance()
 	lifted._process(0.86)
 	var floating: Dictionary = lifted.progress_snapshot()
@@ -269,6 +274,13 @@ func run() -> void:
 		privacy.configure(physical,"forge_logo",{})
 		check(privacy.mark_visibility() == "hidden","repainting requires a new observation after merge")
 	privacy.queue_free()
+	var weighing = bench(item(), "forge_weight")
+	for n in range(30):
+		if weighing.interaction_targets()[0].id == "move_to_scale": break
+		weighing.advance()
+		finish_action(weighing)
+	check(weighing.hint_text().contains("点按手表") and not weighing.hint_text().contains("拖动"), "placing a watch onto the nearby scale uses an explicit tap instead of overlapping drag markers")
+	weighing.queue_free()
 
 	game.prefs.reduced_motion = true
 	var reduced = bench(item("mechanical", "snap"), "forge_weight")

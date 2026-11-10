@@ -43,6 +43,7 @@ def main():
     parser.add_argument('--output',type=Path,default=ROOT/'work/watch-repair/browser')
     parser.add_argument('--phone-only',action='store_true')
     parser.add_argument('--desktop-only',action='store_true')
+    parser.add_argument('--cleaning-only',action='store_true')
     parser.add_argument('--forgery-only',action='store_true')
     parser.add_argument('--mechanical-only',action='store_true')
     args=parser.parse_args()
@@ -148,7 +149,28 @@ def main():
                     forged_name=next(d['name'] for d in definitions if d['id']==forged['defId'])
                     click(forged_name)
                 if not args.forgery_only:
-                    before=status()['repair_grime'];sweep(partial=True)
+                    before=status()['repair_grime']
+                    box=status()['repair_object']
+                    x,y=box['x']+box['width']*.5,box['y']+box['height']*.5
+                    if mobile:
+                        touch=context.new_cdp_session(page)
+                        touch.send('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[{'x':x,'y':y}]})
+                    else:
+                        page.mouse.move(x,y);page.mouse.down()
+                    page.wait_for_timeout(200)
+                    contact=status()['repair_grime']
+                    page.wait_for_timeout(700)
+                    polished=status()['repair_grime']
+                    assert polished < contact < before,('held cloth stopped fading grime',before,contact,polished)
+                    snap('cloth-contact-fade')
+                    if mobile:
+                        touch.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]});touch.detach()
+                    else:page.mouse.up()
+                    page.wait_for_timeout(200)
+                    released=status()['repair_grime']
+                    page.wait_for_timeout(400)
+                    assert status()['repair_grime']==released,'cloth keeps wiping after release'
+                    sweep(partial=True)
                     after=status()['repair_grime'];assert 0<after<before,(before,after)
                     snap('cleaning-partial')
                     uid=status()['repair_uid']
@@ -161,6 +183,10 @@ def main():
                     cmd({'type':'page','page':'repair'});phone.wait(page,"s.workspace==='repair'")
                     assert abs(status()['repair_grime']-after)<.001,'reload reset cleaning'
                     run_task_job('cleaning');snap('cleaning-finished')
+                    if args.cleaning_only:
+                        assert not errors,errors
+                        print(label,'continuous cloth fade, release, partial/page/reload and cleaning completion PASS',flush=True)
+                        continue
                     click('北辰 N02 日历');phone.wait(page,"s.repair_task==='open'")
                     run_task_job('quartz');snap('quartz-finished')
                     if not mobile:
