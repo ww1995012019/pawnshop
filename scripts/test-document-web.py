@@ -27,8 +27,15 @@ def run(url='http://127.0.0.1:4174/'):
             command({'type':'start'});page.wait_for_function('!OrbitalTouch.state.title && !OrbitalTouch.state.busy',timeout=15000)
             command({'type':'manual'});page.wait_for_timeout(600)
             original=locate('X');assert not page.evaluate('OrbitalTouch.state.blocked')
-            tap('+');larger=locate('X');assert larger['width']>original['width'],'zoom button grows paper'
-            tap('−');tap('−');small=locate('X');assert small['width']<larger['width'],'zoom out shrinks paper'
+            # Top-right corner: shrink diagonally toward its opposite anchor.
+            x=original['x']+original['width']/2+7;y=original['y']-original['height']/2-7
+            page.mouse.move(x,y);page.mouse.down();page.mouse.move(x-65,y+70,steps=12);page.mouse.up()
+            small=locate('X');assert small['width']<original['width']-2,'top-right corner shrinks paper'
+            # Reverse the gesture to enlarge again, then shrink for drag/pinch checks.
+            x=small['x']+small['width']/2+7;y=small['y']-small['height']/2-7
+            page.mouse.move(x,y);page.mouse.down();page.mouse.move(x+30,y-30,steps=8);page.mouse.up()
+            larger=locate('X');assert larger['width']>small['width']+1,'top-right corner enlarges paper'
+            small=larger
             # Drag using an empty piece of the header to the left of its action buttons.
             start=(small['x']-small['width']*4,small['y'])
             page.mouse.move(*start);page.mouse.down();page.mouse.move(start[0]-80,start[1]+35,steps=8);page.mouse.up()
@@ -38,6 +45,13 @@ def run(url='http://127.0.0.1:4174/'):
             restored=locate('X');assert abs(restored['width']-moved['width'])<2,'reopen preserves zoom'
             # Real two-finger gesture on reference content. Both contacts stay off buttons.
             cdp=context.new_cdp_session(page)
+            tx=restored['x']+restored['width']/2+7;ty=restored['y']-restored['height']/2-7
+            cdp.send('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[{'x':tx,'y':ty,'id':0}]})
+            for step in range(1,7):
+                cdp.send('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':[{'x':tx-step*4,'y':ty+step*4,'id':0}]});page.wait_for_timeout(30)
+            cdp.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]});page.wait_for_timeout(300)
+            touched=locate('X');assert touched['width']<restored['width']-1,'one finger drags the paper corner'
+            restored=touched
             cx=restored['x']-restored['width']*5; cy=restored['y']+restored['height']*3
             before=restored['width']
             for kind,gap in [('touchStart',25),('touchMove',38),('touchMove',50)]:
@@ -49,7 +63,7 @@ def run(url='http://127.0.0.1:4174/'):
             tap('北辰 N01');page.screenshot(path=str(output/'catalogue-detail.png'))
             tap('返回全部手表');assert locate('北辰 N01')['found']
             command({'type':'close'});assert not errors,errors
-            print('DOCUMENT WEB guide zoom/drag/pinch/reopen and icon catalogue pass')
+            print('DOCUMENT WEB guide corner resize/drag/pinch/reopen and icon catalogue pass')
         finally:browser.close()
 if __name__=='__main__':
     import sys

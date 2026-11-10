@@ -44,8 +44,12 @@ func run():
 		await create_timer(0.7).timeout
 		check(page.scale_stable, "reading settles between one and one and a half seconds")
 		var mass: float = page.scale_reading
-		check(page._scale_record(), "stable reading can record")
+		check(game.item(page.it_uid).evidence.has("TOL-005"), "stable reading automatically records without a button")
+		check(page.bench_body.find_children("*","Button",true,false).all(func(button): return button.text != "记录克数"), "scale has no manual record button")
 		check(game.item(page.it_uid).evidence.has("TOL-005"), "recorded stable scale evidence")
+		var after_auto: float = game.state.ap
+		await create_timer(0.3).timeout
+		check(game.state.ap==after_auto,"stable item does not repeatedly charge AP")
 		page._scale_remove()
 		check(not page.scale_occupied and page.item == original and page.item.position.is_equal_approx(start), "return restores same physical item")
 		page._scale_place()

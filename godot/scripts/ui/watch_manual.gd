@@ -14,7 +14,7 @@ static func open(shell: Node, def_id := "") -> void:
 	if paper.get_meta("model") != id:
 		paper.set_meta("model",id)
 		UIKit.clear(paper.content)
-		paper.content.add_child(UIKit.note_card("工具操作", "放大镜：照住表盘标识并完成观察。紫外灯：翻到背面核对编号。电子秤：空秤归零，再放表，稳定后记录。仅打开说明书不会完成检验。"))
+		paper.content.add_child(UIKit.note_card("工具操作", "放大镜：照住表盘标识并完成观察。紫外灯：翻到背面核对编号。电子秤：空秤归零，再放表，稳定后自动记录。仅打开说明书不会完成检验。"))
 		var catalogue := UIKit.button("浏览全部手表图鉴", "secondary", Vector2(0,48),18)
 		catalogue.pressed.connect(func(): host.open_watch_catalogue())
 		paper.content.add_child(catalogue)

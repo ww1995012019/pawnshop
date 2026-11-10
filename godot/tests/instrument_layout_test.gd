@@ -65,7 +65,7 @@ func run():
 				await button(active, world, true)
 				await button(active, world, false)
 			check(page.tared and page.scale_occupied, "real pointer tares empty scale and places the actual watch")
-			check(not page.scale_stable and page.record_button.disabled, "real placement cannot record an unsettled reading")
+			check(not page.scale_stable and not game.item(page.it_uid).evidence.has("TOL-005"), "real placement cannot record an unsettled reading")
 			await create_timer(1.3).timeout
 			var record_point: Vector2 = active.ui_to_world(page.record_button.get_global_rect().get_center())
 			await move(active, record_point)

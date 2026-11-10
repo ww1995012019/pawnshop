@@ -46,7 +46,7 @@ func store_position() -> void:
 
 func _build() -> void:
 	UIKit.clear(content)
-	content.add_child(UIKit.label("照片、衣着与口供一起核对 · 拖动标题移动 · 右下角缩放",16,UIKit.INK,false,true))
+	content.add_child(UIKit.label("照片、衣着与口供一起核对 · 拖动标题移动 · 拖动四角缩放",16,UIKit.INK,false,true))
 	var grid := UIKit.grid(3,10)
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_child(grid)
