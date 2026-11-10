@@ -965,9 +965,26 @@ func _input(e: InputEvent) -> void:
 ## Godot controls choose their own cursor on hover. Only select a world cursor
 ## when the pointer is over the world, so panels and modals retain precedence.
 func _workspace_pointer_inside() -> bool:
-	return workspace_open() and workspace_container.get_global_rect().has_point(last_screen) and not modal_open()
+	if not workspace_open() or not workspace_container.get_global_rect().has_point(last_screen) or modal_open(): return false
+	var hovered := get_viewport().gui_get_hovered_control()
+	# Root floating papers sit above the drawer and own their own cursors.
+	return hovered == null or hovered == workspace_container or workspace_container.is_ancestor_of(hovered)
+
+func _active_document_cursor() -> int:
+	if modal_open(): return -1
+	for child in root_ui.get_children():
+		if child is FloatingDocument and child.is_visible_in_tree():
+			if child.resizing: return child.resize_cursor_shape()
+			if child.dragging: return Input.CURSOR_DRAG
+	return -1
 
 func _update_cursor() -> void:
+	var document_cursor := _active_document_cursor()
+	if document_cursor >= 0:
+		world_cursor = document_cursor
+		Input.set_default_cursor_shape(document_cursor)
+		DisplayServer.cursor_set_shape(document_cursor)
+		return
 	if _workspace_pointer_inside():
 		return
 	if workspace_mode and not workspace_parent._workspace_pointer_inside():
