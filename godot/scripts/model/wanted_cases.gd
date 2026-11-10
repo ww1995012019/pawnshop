@@ -18,12 +18,15 @@ static func profile(id: String) -> Dictionary:
 
 static func default_state() -> Dictionary:
 	return {"issued":false,"wanted":[],"caught":[],"reports":[],"falseReports":0,"revision":0,
-		"paper":{"visible":false,"position":[0.08,0.12]},"lastResult":{}}
+		"paper":{"visible":false,"position":[0.08,0.12],"scale":1.0},"lastResult":{}}
 
 static func ensure(s: Dictionary) -> void:
 	if not s.has("police") or not s.police is Dictionary: s.police = default_state()
 	for key in default_state():
 		if not s.police.has(key): s.police[key] = default_state()[key]
+	if not s.police.paper is Dictionary: s.police.paper = default_state().paper
+	for key in default_state().paper:
+		if not s.police.paper.has(key): s.police.paper[key] = default_state().paper[key]
 	if not s.has("documents") or not s.documents is Array: s.documents = []
 
 static func case_state(s: Dictionary) -> Dictionary:
@@ -113,7 +116,7 @@ static func current_case(s: Dictionary) -> Dictionary:
 static func dialogue(s: Dictionary, topic: String) -> String:
 	var npc := GameData.npc(s.trade.npcId)
 	if s.trade.kind == "police":
-		return {"identity":"衡岚，旧港巡警。失窃案卷和报警回执都由我核对。", "origin":"刚查过二号栈桥。照片、衣着和口供要交叉看，相似的帽子不是证据。", "goods":"名单是协查线索，不是见人就定罪。认对有报酬，前两次误报提醒，多次误报要处罚。", "destination":"接到报警会回来核对。抓到谁就替换谁的档案，其余五人的照片别丢。"}.get(topic, "有细节不确定，可以多问来客几句。")
+		return {"identity":"衡岚，旧港巡警。失窃案卷和报警回执都由我核对。", "origin":"刚查过二号栈桥。照片、衣着和口供要交叉看，相似的帽子不是证据。", "goods":"名单是协查线索，不是见人就定罪。认对有报酬，前两次误报提醒，多次误报要处罚。", "destination":"接到报警会回来核对。确认抓获后会收回整份名单；下次巡查再给你一份新的六人名单，已抓获的人不会再列入。"}.get(topic, "有细节不确定，可以多问来客几句。")
 	var wanted := current_case(s)
 	if not wanted.is_empty():
 		match topic:
@@ -127,12 +130,18 @@ static func dialogue(s: Dictionary, topic: String) -> String:
 
 static func reduce(previous: Dictionary, action: Dictionary):
 	var type: String = action.get("type", "")
-	if type not in ["ISSUE_WANTED","REPORT_VISITOR","ASK_VISITOR","TOGGLE_NOTICE","MOVE_NOTICE"]: return null
+	if type not in ["ISSUE_WANTED","REPORT_VISITOR","ASK_VISITOR","TOGGLE_NOTICE","MOVE_NOTICE","RESIZE_NOTICE"]: return null
 	var s := previous.duplicate(true)
 	ensure(s)
 	if type == "TOGGLE_NOTICE":
 		if not has_notice(s): return previous
 		s.police.paper.visible = bool(action.get("visible",not s.police.paper.visible))
+		return s
+	if type == "RESIZE_NOTICE":
+		if not has_notice(s): return previous
+		var zoom = action.get("scale",null)
+		if not (zoom is int or zoom is float) or not is_finite(float(zoom)): return previous
+		s.police.paper.scale = clampf(float(zoom),0.35,1.6)
 		return s
 	if type == "MOVE_NOTICE":
 		if not has_notice(s): return previous
@@ -170,17 +179,13 @@ static func reduce(previous: Dictionary, action: Dictionary):
 			reward = mini(int(wanted.reward),maxi(0,int(1000000000.0 - s.cash)))
 			Model.ledger(s,"bounty-"+wanted.id,"bounty","协查抓获 · "+wanted.name,reward)
 			s.police.caught.append(wanted.id)
-			var index: int = s.police.wanted.find(wanted.id)
-			var remaining: Array = s.police.wanted.duplicate()
-			remaining.remove_at(index)
-			var mode := "any" if remaining.any(func(id): return profile(id).npcId != "") else "live"
-			var replacement := _choose(s,remaining,"replace-"+wanted.id,mode)
-			if replacement == "": replacement = _choose(s,remaining,"fallback-"+wanted.id)
-			s.police.wanted[index] = replacement
-			s.police.revision += 1
+			s.police.issued = false
+			s.police.wanted = []
+			s.police.paper.visible = false
+			s.documents = s.documents.filter(func(doc): return doc.get("uid","") != DOCUMENT_ID)
 			s.relations.station = Model.clampn(s.relations.station + 3)
 			s.risk = Model.clampn(s.risk - 3)
-			text = "衡岚：照片、特征和案卷核对一致，已带走%s。协查报酬%d Cr已入账，只替换被捕者这一条名单。" % [wanted.name,reward]
+			text = "衡岚：照片、特征和案卷核对一致，已带走%s。协查报酬%d Cr已入账。这份名单已收回，下次巡查会送来新的六人协查名单。" % [wanted.name,reward]
 		else:
 			s.police.falseReports += 1
 			if int(s.police.falseReports) >= 3:

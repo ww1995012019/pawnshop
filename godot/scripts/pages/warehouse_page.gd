@@ -145,6 +145,9 @@ func _document_inventory() -> void:
 	var row:=UIKit.hbox(8)
 	row.add_child(UIKit.label("纸质档案 / 1",16,UIKit.AMBER))
 	var open:=UIKit.button("通缉名单 · 取出 / 收起","secondary",Vector2(0,48),17)
+	open.icon = load("res://assets/ui/wanted-document.svg")
+	open.expand_icon = true
+	open.add_theme_constant_override("icon_max_width",40)
 	open.name="wanted_inventory"
 	open.pressed.connect(func(): shell.toggle_wanted_notice())
 	row.add_child(open)

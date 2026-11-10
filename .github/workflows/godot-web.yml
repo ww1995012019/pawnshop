@@ -51,6 +51,7 @@ jobs:
           python scripts/test-godot-phone.py http://127.0.0.1:4174/
           python scripts/test-merchant-phone.py http://127.0.0.1:4174/
           python scripts/test-watch-appraisal-web.py
+          python scripts/test-document-web.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

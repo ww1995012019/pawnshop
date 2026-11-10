@@ -4,7 +4,7 @@ var cash := 0.0
 var single_bill := false
 
 func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if name != "cash_tray": mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 func set_cash(amount: float) -> void:

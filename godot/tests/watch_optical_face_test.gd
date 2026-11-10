@@ -46,7 +46,9 @@ func run():
 	page.optical_position = page.item.reveal_center()
 	await create_timer(1.0).timeout
 	check(game.item(page.it_uid).evidence.has("TOL-002"), "back serial records after fresh full observation")
+	check(page.item.mat.get_shader_parameter("logo_hidden") == 1.0, "unobserved physical logo remains mosaicked")
 	page._set_tool("TOL-001")
+	check(page.item.mat.get_shader_parameter("logo_hidden") == 1.0, "selecting magnifier alone does not unlock logo")
 	check(not page.item.back, "magnifier automatically presents the dial")
 	page.flip_item()
 	page.optical_fixed = true
@@ -59,14 +61,49 @@ func run():
 	page.optical_position = page.item.logo_world_position()
 	await create_timer(.3).timeout
 	check(page.progress > .1, "front lens starts observing visible logo")
+	check(float(page.item.mat.get_shader_parameter("lens_r")) > 0.0, "active dial magnifier reveals actual texture within lens")
+	check(page.item.mat.get_shader_parameter("logo_hidden") == 1.0, "partial observation keeps logo masked outside lens")
 	page.flip_item()
 	check(is_zero_approx(page.progress), "flip immediately clears lens progress")
+	check(is_zero_approx(float(page.item.mat.get_shader_parameter("lens_r"))), "flip immediately clears magnifier reveal")
 	await create_timer(1.0).timeout
 	check(not game.item(page.it_uid).evidence.has("TOL-001") and is_zero_approx(page.progress), "fixed lens cannot finish after turning away")
 	page.flip_item()
 	page.optical_position = page.item.logo_world_position()
 	await create_timer(1.0).timeout
 	check(game.item(page.it_uid).evidence.has("TOL-001"), "front logo records after fresh full observation")
+	await process_frame
+	page._set_tool("")
+	check(page.item.mat.get_shader_parameter("logo_hidden") == 0.0, "successful observation permanently reveals this physical logo")
+	var inspected_uid: String = page.it_uid
+	game.save()
+	game.state = JSON.parse_string(FileAccess.get_file_as_string(game.SAVE_PATH))
+	page._load_item()
+	check(page.it_uid == inspected_uid and page.item.mat.get_shader_parameter("logo_hidden") == 0.0, "saved current logo evidence preserves reveal")
+	var other = Model.new_item(game.state, game.item(inspected_uid).defId)
+	Model.put_in(game.state, other)
+	var other_sprite = load("res://scripts/world/item_sprite.gd").new()
+	other_sprite.setup(other.defId, other.uid, 300.0)
+	root.add_child(other_sprite)
+	check(other_sprite.mat.get_shader_parameter("logo_hidden") == 1.0, "another instance of same model remains masked")
+	other_sprite.queue_free()
+	# Old saves recorded the broader appraisal fingerprint, before logoRevision.
+	game.item(inspected_uid).inspectionFacts["TOL-001"].erase("logoRevision")
+	var inspected = game.item(inspected_uid)
+	WatchRules.restore_parts(inspected)
+	inspected.condition = .95 if inspected.condition < .9 else .8
+	await process_frame
+	check(page.item.mat.get_shader_parameter("logo_hidden") == 0.0, "repair preserves observed logo from legacy saved snapshot")
+	for method in ["serial", "weight"]:
+		WatchForgery.apply(game.item(inspected_uid), method)
+		await process_frame
+		check(page.item.mat.get_shader_parameter("logo_hidden") == 0.0, method + " treatment preserves observed logo")
+	game.state = Model.reduce(game.state, {"type":"CHECK","uid":inspected_uid,"tool":"TOL-001"})
+	check(game.item(inspected_uid).inspectionFacts["TOL-001"].has("logoRevision"), "new loupe snapshot stores logo-specific revision")
+	WatchForgery.apply(game.item(inspected_uid), "logo")
+	await process_frame
+	check(page.item.mat.get_shader_parameter("logo_hidden") == 1.0, "logo forgery invalidates prior observed revision")
+	check(game.item(inspected_uid).evidence.has("TOL-001"), "stale recorded evidence is retained for retest")
 	for player in root.find_children("*", "AudioStreamPlayer", true, false):
 		player.stop()
 		player.stream = null

@@ -80,6 +80,24 @@ func _apply_face() -> void:
 	var r: Rect2 = body.region_rect
 	mat.set_shader_parameter("region", Vector4(r.position.x / asz.x, r.position.y / asz.y, r.size.x / asz.x, r.size.y / asz.y))
 	mat.set_shader_parameter("back_face", 1.0 if back else 0.0)
+	# The mark occupies the same 48 × 32 pixel field in every authored watch.
+	mat.set_shader_parameter("logo_rect", Vector4(0.5 - 24.0 / r.size.x, 0.5 - 40.0 / r.size.y, 48.0 / r.size.x, 32.0 / r.size.y))
+	_sync_logo_observation()
+
+func _sync_logo_observation() -> void:
+	var it = Game.item(uid) if not uid.is_empty() else null
+	var observed := false
+	if it != null:
+		var facts: Dictionary = it.get("inspectionFacts", {}).get("TOL-001", {})
+		var recorded: String = facts.get("logoRevision", "")
+		if recorded.is_empty():
+			# Earlier saves already contain these physical mark facts inside the
+			# full appraisal fingerprint. Preserve their observed logo too.
+			var prior = JSON.parse_string(facts.get("appraisalRevision", "")) if facts.has("appraisalRevision") else null
+			if prior is Array and prior.size() >= 10:
+				recorded = JSON.stringify([prior[0], int(prior[4]), bool(prior[9])])
+		observed = it.get("evidence", []).has("TOL-001") and recorded == Model.logo_revision(it)
+	mat.set_shader_parameter("logo_hidden", 1.0 if def_id.begins_with("WCH-") and not observed else 0.0)
 
 func logo_world_position() -> Vector2:
 	return body.to_global(Vector2(0, -24))
@@ -168,6 +186,11 @@ func flip() -> void:
 		flip_finished.emit(back))
 
 func _process(delta: float) -> void:
+	var it = Game.item(uid) if not uid.is_empty() else null
+	if it != null and logo_variant != WatchRules.logo_variant(it):
+		_apply_face()
+	else:
+		_sync_logo_observation()
 	if dragging:
 		var prev := position
 		position = position.lerp(target, 1.0 - exp(-delta * 16.0))

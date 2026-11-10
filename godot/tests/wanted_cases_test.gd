@@ -21,6 +21,7 @@ func run() -> void:
 	cases.ensure(s)
 	check(not s.police.issued and s.documents.is_empty(), "old or new watch save starts without magically owned notice")
 	check(cases.reduce(s,{"type":"ISSUE_WANTED","tradeId":"none"}) == s, "only a present officer can give a notice")
+	check(cases.reduce(s,{"type":"RESIZE_NOTICE","scale":0.5}) == s, "paper cannot be resized before ownership")
 	s.trade = cases.new_officer_trade(s)
 	var old_json := JSON.stringify(s)
 	var issued: Dictionary = cases.reduce(s,{"type":"ISSUE_WANTED","tradeId":s.trade.id})
@@ -29,13 +30,27 @@ func run() -> void:
 	check(issued.documents.size() == 1 and issued.inventory == s.inventory, "paper is inventory document without consuming or corrupting watch slots")
 	var again: Dictionary = cases.reduce(issued,{"type":"ISSUE_WANTED","tradeId":issued.trade.id})
 	check(again.documents.size() == 1 and again.police.wanted == issued.police.wanted, "repeated issue never duplicates or reshuffles the paper")
+	var legacy: Dictionary = JSON.parse_string(JSON.stringify(issued))
+	legacy.police.paper.erase("scale")
+	cases.ensure(legacy)
+	check(legacy.police.paper.get("scale",0) == 1.0, "old paper saves gain a usable default scale")
+	var resized = cases.reduce(issued,{"type":"RESIZE_NOTICE","scale":0.6})
+	check(resized is Dictionary, "resize action accepts owned paper")
+	if resized == null: resized = issued.duplicate(true)
+	check(resized.police.paper.get("scale",0) == 0.6, "paper zoom is stored in police state")
+	var largest = cases.reduce(resized,{"type":"RESIZE_NOTICE","scale":99})
+	var smallest = cases.reduce(resized,{"type":"RESIZE_NOTICE","scale":0.01})
+	check(largest is Dictionary and smallest is Dictionary and largest.police.paper.get("scale",0) == 1.6 and smallest.police.paper.get("scale",0) == 0.35, "paper zoom clamps to supported readable bounds")
+	for invalid in [NAN,INF,"large",null]:
+		check(cases.reduce(resized,{"type":"RESIZE_NOTICE","scale":invalid}) == resized, "invalid paper zoom leaves state unchanged")
+	issued = resized
 	var faces: Array = issued.police.wanted.duplicate()
 	issued = cases.reduce(issued,{"type":"TOGGLE_NOTICE","visible":true})
 	issued = cases.reduce(issued,{"type":"MOVE_NOTICE","position":[0.32,0.21]})
 	issued = cases.reduce(issued,{"type":"TOGGLE_NOTICE","visible":false})
 	var loaded: Dictionary = JSON.parse_string(JSON.stringify(issued))
 	cases.ensure(loaded)
-	check(loaded.police.wanted == faces and is_equal_approx(float(loaded.police.paper.position[0]),.32) and loaded.documents.size() == 1, "reopen and save preserve the same six people and placement")
+	check(loaded.police.wanted == faces and is_equal_approx(float(loaded.police.paper.position[0]),.32) and loaded.documents.size() == 1 and loaded.police.paper.get("scale",0) == 0.6, "reopen and save preserve the same six people and placement")
 	var target := ""
 	for id in faces:
 		if cases.profile(id).npcId != "": target = id; break
@@ -45,19 +60,30 @@ func run() -> void:
 		var before: float = loaded.cash
 		var arrested: Dictionary = cases.reduce(loaded,{"type":"REPORT_VISITOR","tradeId":"arrest-1"})
 		check(arrested.cash > before and arrested.trade == null and arrested.police.caught.has(target), "correct identification pays bounty and ends the encounter")
-		var kept := 0
-		for id in faces: if arrested.police.wanted.has(id): kept += 1
-		check(kept == 5 and arrested.police.wanted.size() == 6 and not arrested.police.wanted.has(target), "arrest replaces exactly one entry and keeps the other five")
+		check(not arrested.police.issued and arrested.police.wanted.is_empty() and not arrested.police.paper.visible, "arrest withdraws the entire current wanted paper")
+		check(arrested.documents.filter(func(doc): return doc.uid == "DOC-WANTED").is_empty(), "arrest removes the withdrawn paper from document inventory")
+		var saved_arrest: Dictionary = JSON.parse_string(JSON.stringify(arrested))
+		cases.ensure(saved_arrest)
+		check(not cases.has_notice(saved_arrest) and saved_arrest.police.caught.has(target) and saved_arrest.police.reports.size() == 1, "save round trip preserves withdrawal and case history")
 		var repeated: Dictionary = cases.reduce(arrested,{"type":"REPORT_VISITOR","tradeId":"arrest-1"})
-		check(repeated.cash == arrested.cash and repeated.police.wanted == arrested.police.wanted, "retry cannot pay twice or replace another entry")
+		check(repeated.cash == arrested.cash and repeated.police.wanted == arrested.police.wanted, "retry cannot pay twice or issue another paper")
 		loaded = arrested
+		loaded.trade = cases.new_officer_trade(loaded)
+		loaded = cases.reduce(loaded,{"type":"ISSUE_WANTED","tradeId":loaded.trade.id})
+		check(loaded.police.issued and loaded.police.wanted.size() == 6 and Model.uniq(loaded.police.wanted).size() == 6 and not loaded.police.wanted.has(target), "next officer delivers a new six excluding the arrested person")
+		check(loaded.police.caught == arrested.police.caught and loaded.police.reports == arrested.police.reports and loaded.cash == arrested.cash, "new paper preserves arrest history and bounty")
+		check(loaded.documents.filter(func(doc): return doc.uid == "DOC-WANTED").size() == 1, "next officer restores one inventory document")
+		var replay := loaded.duplicate(true)
+		replay.trade = visitor("arrest-1", cases.profile(target).npcId)
+		var rejected: Dictionary = cases.reduce(replay,{"type":"REPORT_VISITOR","tradeId":"arrest-1"})
+		check(rejected == replay, "persisted report guard rejects replay after a new paper is issued")
 	for i in 4:
 		loaded.trade = visitor("false-%d" % i,"CHR-004")
 		var before_cash: float = loaded.cash
 		var old_faces: Array = loaded.police.wanted.duplicate()
 		loaded = cases.reduce(loaded,{"type":"REPORT_VISITOR","tradeId":loaded.trade.id})
 		check(loaded.cash == before_cash if i < 2 else loaded.cash < before_cash, "false report %d warning/penalty threshold" % (i+1))
-		check(loaded.police.wanted == old_faces, "false report never changes the wanted list")
+		check(loaded.police.wanted == old_faces and loaded.police.issued and loaded.documents.size() == 1, "false report keeps the existing wanted paper")
 	loaded.cash = 5
 	loaded.trade = visitor("false-poor","CHR-004")
 	loaded = cases.reduce(loaded,{"type":"REPORT_VISITOR","tradeId":loaded.trade.id})

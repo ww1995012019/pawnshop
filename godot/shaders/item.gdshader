@@ -9,6 +9,10 @@ uniform vec2 uv_pos = vec2(-9999.0);
 uniform float uv_r = 0.0;
 uniform vec2 seam_uv = vec2(0.62, 0.52);  // where the repaint seam is
 uniform float back_face = 0.0;
+// Physical instance marks stay unreadable until a current loupe observation.
+// Catalogue/reference art does not use this material or enable this mask.
+uniform float logo_hidden = 0.0;
+uniform vec4 logo_rect = vec4(0.0);
 uniform float hover = 0.0;
 uniform float found_seam = 0.0;
 uniform vec4 region = vec4(0.0, 0.0, 1.0, 1.0); // atlas UV rect of this face
@@ -99,6 +103,14 @@ void fragment() {
 	if (inspection_poly_1_on > 0.5 && all(greaterThanEqual(luv, inspection_mask_1.xy)) && all(lessThan(luv, inspection_mask_1.xy + inspection_mask_1.zw)) && inside_inspection_poly(luv, inspection_poly_1_a, inspection_poly_1_b, inspection_poly_1_c, inspection_poly_1_d, inspection_poly_1_e, inspection_poly_1_f, inspection_poly_1_g, inspection_poly_1_h)) a = 0.0;
 	// Loupe: micro-scratches everywhere, a bright repaint seam near seam_uv.
 	float in_lens = lens_r > 0.0 ? 1.0 - smoothstep(lens_r * 0.85, lens_r, distance(world, lens_pos)) : 0.0;
+	if (logo_hidden > 0.5 && back_face < 0.5 && all(greaterThanEqual(luv, logo_rect.xy)) && all(lessThan(luv, logo_rect.xy + logo_rect.zw))) {
+		// A fixed coarse mosaic hides the shape, rather than downsampling the
+		// distinctive mark. Only the circular lens exposes original pixels.
+		vec2 tile = floor((luv - logo_rect.xy) / logo_rect.zw * vec2(6.0, 4.0));
+		vec3 paper = texture(TEXTURE, region.xy + region.zw * (logo_rect.xy + vec2(0.001))).rgb;
+		vec3 mosaic = paper * (0.55 + 0.35 * hash(tile + vec2(17.0, 31.0)));
+		base.rgb = mix(mosaic, base.rgb, in_lens);
+	}
 	float sc = scratches(luv * 1.6) * in_lens;
 	float seam_line = 1.0 - smoothstep(0.0, 0.006, abs((luv.x - seam_uv.x) * 0.8 + (luv.y - seam_uv.y) * 0.6));
 	float seam_zone = 1.0 - smoothstep(0.05, 0.16, distance(luv, seam_uv));

@@ -455,6 +455,11 @@ func _touch_root() -> Control:
 
 ## Where a touch at `point` (this shell's viewport) should land.
 func place_touch(point: Vector2) -> Vector2:
+	if not modal_open():
+		for key in ["inspection_guide","wanted_notice"]:
+			var paper := root_ui.find_child(key,false,false) as Control
+			if is_instance_valid(paper) and paper.is_visible_in_tree() and paper.get_global_rect().has_point(point):
+				return TouchAssist.snap(point,paper,touch_scale())
 	if not workspace_mode and workspace_open() and not modal_open():
 		# The drawer is its own viewport: decide there, in its coordinates.
 		var to_screen := workspace_container.get_global_transform_with_canvas()
@@ -767,12 +772,15 @@ func toast(text: String, tone := "info") -> void:
 		if not last.is_queued_for_deletion() and (last.get_child(0) as Label).text == text:
 			return
 	var p := UIKit.plate(UIKit.paper_style(14))
-	var l := UIKit.label(text, 20, UIKit.INK if tone == "info" else UIKit.RUST, false, true)
+	var l := UIKit.label(text, 18, UIKit.INK if tone == "info" else UIKit.RUST, false, true)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.max_lines_visible = 2
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	l.tooltip_text = text
 	l.custom_minimum_size = Vector2(toast_box.size.x - 36, 0)
 	p.add_child(l)
 	toast_box.add_child(p)
-	while toast_box.get_child_count() > 2:
+	while toast_box.get_child_count() > 1:
 		var old := toast_box.get_child(0)
 		toast_box.remove_child(old)
 		old.queue_free()
@@ -1238,6 +1246,15 @@ func open_people(npc_id := "") -> void:
 func open_watch_manual(def_id := "") -> void:
 	load("res://scripts/ui/watch_manual.gd").open(self, def_id)
 
+func open_watch_catalogue() -> void:
+	if workspace_mode:
+		workspace_parent.open_watch_catalogue()
+		return
+	load("res://scripts/ui/watch_catalogue.gd").open(self)
+
+func open_campaign_ledger() -> void:
+	load("res://scripts/ui/campaign_ledger.gd").open(self)
+
 func export_legacy_backup() -> void:
 	var text: String = Game.legacy_save_text()
 	if text == "":
@@ -1322,6 +1339,12 @@ func open_settings() -> void:
 		var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN))
 	body.add_child(fs)
+	var catalogue := UIKit.button("全图鉴 · 全部手表", "secondary", Vector2(0,56))
+	catalogue.name = "all_watch_catalogue"
+	catalogue.pressed.connect(func():
+		m[1].call()
+		open_watch_catalogue())
+	body.add_child(catalogue)
 	var reset := UIKit.button("新开一家店（清除当前进度）", "danger", Vector2(0, 56))
 	reset.pressed.connect(func():
 		m[1].call()
