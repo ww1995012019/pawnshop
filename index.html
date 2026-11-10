@@ -29,47 +29,29 @@ body { color: var(--paper); font-family: var(--sans); -webkit-user-select: none;
 	transition: opacity .35s ease;
 }
 #loader.opening { opacity: 0; pointer-events: none; }
-.panel {
-	position: relative; width: min(500px, 88vw); padding: 17px;
-	background: #3b3a40; border: 5px solid #88766b;
-	box-shadow: 0 0 0 4px #251e29, 0 8px 0 #1c1a23, inset 0 2px #b3a08c;
-}
-.panel::before, .panel::after {
-	content: ""; position: absolute; top: 7px; width: 7px; height: 7px;
-	background: #d1ad7c; box-shadow: 1px 1px #312630;
-}
-.panel::before { left: 7px; } .panel::after { right: 7px; }
-.plate { display: flex; align-items: center; gap: 12px; padding: 3px 5px 12px; }
-.plate i { display: none; }
-.station { color: var(--muted); font-size: 12px; letter-spacing: .08em; }
-h1 { margin: 0; color: var(--paper); font-size: clamp(24px, 4.5vw, 31px); letter-spacing: .06em; }
-.motto { margin-left: auto; color: var(--amber); font-size: 13px; white-space: nowrap; }
-.gauge {
-	background: var(--screen); border: 4px solid #1a2025; outline: 2px solid #718578;
-	padding: 16px 18px 14px;
-}
-.screen-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.screen-heading span { color: #a9c6b3; font-size: 13px; }
-.screen-heading strong { color: var(--amber); font: 22px var(--mono); }
-.track { height: 15px; padding: 3px; background: #101c20; border: 1px solid #5f796d; }
-.fill { width: 0; height: 100%; background: repeating-linear-gradient(90deg,#e5bd7e 0 11px,#826b4f 11px 13px); transition: width .2s ease-out; }
-.track.indeterminate .fill { width: 28% !important; animation: sweep 1.4s steps(16,end) infinite; }
-@keyframes sweep { from { transform: translateX(0); } to { transform: translateX(255%); } }
-.readout { display: flex; justify-content: space-between; margin-top: 7px; color: var(--muted); font: 12px var(--mono); }
-.readout b { color: var(--amber); font-weight: 600; }
-#stage { margin-top: 12px; color: var(--paper); font-size: 15px; min-height: 1.5em; }
-#tip { margin: 15px 4px 0; color: #b8b7a6; font-size: 13px; line-height: 1.6; min-height: 3.2em; transition: opacity .25s; }
-#tip::before { content: "店内须知 · "; color: var(--amber); }
-#fail { display: none; margin: 15px 4px 0; }
-#loader.failed #fail { display: block; }
-#loader.failed .gauge, #loader.failed #tip { display: none; }
-#fail p { color: #f1caa0; font-size: 15px; line-height: 1.6; margin: 0 0 14px; white-space: pre-line; }
-#retry { font: inherit; min-width: 156px; min-height: 42px; cursor: pointer; color: #f7e9cc; background: #856b4e; border: 2px solid #c8a879; box-shadow: 0 3px #27202a; }
-#retry:hover, #retry:focus-visible { background: #a1825a; outline: 2px solid var(--paper); }
-#retry:active { transform: translateY(2px); box-shadow: 0 1px #27202a; }
-@media (max-width: 440px) { .panel { padding: 14px; } .motto { display: none; } }
-@media (max-height: 520px) { .panel { padding: 12px 16px; } .plate { padding-bottom: 7px; } .gauge { padding: 9px 14px; } #tip { display: none; } }
-@media (prefers-reduced-motion: reduce) { #loader, .fill, #tip { transition: none; } .track.indeterminate .fill { animation: none; width: 100% !important; opacity: .6; } }
+
+.loading-title { position:absolute; top:max(20px,env(safe-area-inset-top)); left:clamp(20px,4vw,64px); margin:0; font-size:clamp(18px,2.4vw,26px); letter-spacing:.12em; color:#d7c7ac; font-weight:500; }
+#loading-cast { display:flex; flex-direction:column; align-items:center; justify-content:center; width:min(680px,84%); gap:12px; padding-bottom:48px; text-align:center; transition:opacity .3s; }
+#loading-portrait { width:clamp(130px,24vh,230px); aspect-ratio:1; background-image:url("loading-cast-304d0dab753f9614.webp"); background-size:600% 600%; image-rendering:pixelated; animation:breathe 3.2s ease-in-out infinite; }
+@keyframes breathe { 0%,100% { transform:translateY(0) rotate(-.5deg); } 50% { transform:translateY(-5px) rotate(.5deg); } }
+#loading-name { margin:0; color:var(--amber); font-size:clamp(14px,2vw,18px); letter-spacing:.15em; }
+#loading-line { margin:0; max-width:100%; min-height:3em; font-size:clamp(16px,2.2vw,23px); line-height:1.7; text-wrap:balance; color:#f0e5cf; text-shadow:0 2px 4px #17131c; }
+#loading-bottom { position:absolute; left:clamp(16px,3vw,48px); right:clamp(16px,3vw,48px); bottom:max(14px,env(safe-area-inset-bottom)); }
+#pct { display:block; margin-bottom:8px; color:var(--paper); text-align:right; font:14px var(--mono); }
+.track { height:7px; background:#181e20; overflow:hidden; }
+.fill { width:0; height:100%; background:#dfbc80; transition:width .2s ease-out; }
+#fail { display:none; position:absolute; inset:20%; place-content:center; text-align:center; }
+#loader.failed #fail { display:grid; }
+#loader.failed #loading-cast, #loader.failed #loading-bottom { display:none; }
+#fail p { color:#f1caa0; font-size:16px; line-height:1.7; white-space:pre-line; }
+#retry { justify-self:center; font:inherit; min-width:156px; min-height:44px; cursor:pointer; color:#f7e9cc; background:#856b4e; border:2px solid #c8a879; }
+#retry:hover, #retry:focus-visible { background:#a1825a; outline:2px solid var(--paper); }
+@media (max-height:520px) { #loading-cast { gap:6px; padding-bottom:26px; } #loading-portrait { width:clamp(80px,30vh,145px); } .loading-title { top:14px; } #loading-line { min-height:2.8em; font-size:16px; } }
+html.turned #loading-cast { gap:6px; padding-bottom:26px; }
+html.turned #loading-portrait { width:clamp(80px,30vw,145px); }
+html.turned #loading-line { min-height:2.8em; font-size:16px; }
+html.turned .loading-title { top:14px; }
+@media (prefers-reduced-motion:reduce) { #loader, .fill, #loading-cast { transition:none; } #loading-portrait { animation:none; } }
 
 	</style>
 	<link rel="stylesheet" href="touch-bdbde4a14119ce55.css">
@@ -80,29 +62,24 @@ h1 { margin: 0; color: var(--paper); font-size: clamp(24px, 4.5vw, 31px); letter
 	<noscript><div style="position:fixed;inset:0;display:grid;place-items:center;color:#ece7d9">需要开启 JavaScript 才能开门营业。</div></noscript>
 
 	<div id="loader" role="status" aria-live="polite">
-		<div class="panel">
-			<div class="plate">
-				<i></i><i></i><i></i><i></i>
-				<div><div class="station">回环九号 · 下层旧港</div>
-				<h1>轨道旧货局</h1></div>
-				<div class="motto">每件旧物，都有下一程。</div>
-			</div>
-			<div class="gauge">
-				<div class="screen-heading"><span>店铺系统 · 正在连接</span><strong aria-hidden="true">◦ ◦ ◦</strong></div>
-				<div class="track" id="track" role="progressbar" aria-label="加载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div>
-				<div class="readout"><span id="bytes">0.0 / — MB</span><b id="pct">0%</b></div>
-				<div id="stage">正在整理柜台…</div>
-			</div>
-			<div id="tip"></div>
-			<div id="fail"><p id="fail-text"></p><button id="retry" type="button">重新开门</button></div>
+		<h1 class="loading-title">轨道旧货局</h1>
+		<div id="loading-cast" aria-live="off">
+			<div id="loading-portrait" role="img" aria-label="旧港来客"></div>
+			<p id="loading-name"></p>
+			<p id="loading-line"></p>
 		</div>
+		<div id="loading-bottom">
+			<span id="pct">0%</span>
+			<div class="track" id="track" role="progressbar" aria-label="加载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div>
+		</div>
+		<div id="fail"><p id="fail-text"></p><button id="retry" type="button">重新开门</button></div>
 	</div>
 
 	<script src="assets-533fed85b3ac376a.js"></script>
 	<script src="touch-cb2645cc92d5fca1.js"></script>
 	<script src="engine-309843874cfdebe8.js"></script>
 	<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":0,"executable":"engine-309843874cfdebe8","mainPack":"workbench-830b253d4179bf06.pck","fileSizes":{"workbench-830b253d4179bf06.pck":3175012,"engine-309843874cfdebe8.wasm":37700666},"focusCanvas":true,"gdextensionLibs":[],"ensureCrossOriginIsolationHeaders":false,"transport":{"workbench-830b253d4179bf06.pck":{"sha256":"830b253d4179bf068fbf7f6bdd40651b5c472ad6fc956c30608f3ddcac6f5c70","bytes":3175012,"type":"application/octet-stream","gzip":"workbench-830b253d4179bf06.pck.gz","gzipBytes":2893574},"engine-309843874cfdebe8.wasm":{"sha256":"26b61ce95247012ab3dca3ff51e96d1cdbff44ee91a8c20a83e150afca83f1b6","bytes":37700666,"type":"application/wasm","gzip":"engine-309843874cfdebe8.wasm.gz","gzipBytes":9382282},"music-8ad9f8f323428f98.ogg":{"sha256":"8ad9f8f323428f98804c867c2ca5c00c4e16885b804aa64650471b6b6d005b9c","bytes":846727,"type":"audio/ogg","gzip":null,"gzipBytes":846727},"music-73c915ee8894b734.ogg":{"sha256":"73c915ee8894b734dc255384aaf0c1ae2834b3d1fee00a62025bb5954849d7f3","bytes":654520,"type":"audio/ogg","gzip":null,"gzipBytes":654520},"music-f06ef4243f86b03f.ogg":{"sha256":"f06ef4243f86b03f6f7ed0719e450a193c826c1d94988d9eb357f73a6c296570","bytes":809644,"type":"audio/ogg","gzip":null,"gzipBytes":809644},"music-30ff78a0e0f53f91.ogg":{"sha256":"30ff78a0e0f53f91658c4ebd0a6c827c92dffdc59803f270ed0689288766778d","bytes":397829,"type":"audio/ogg","gzip":null,"gzipBytes":397829}},"music":{"shop":"music-8ad9f8f323428f98.ogg","workbench":"music-73c915ee8894b734.ogg","storeroom":"music-f06ef4243f86b03f.ogg","ledger":"music-30ff78a0e0f53f91.ogg"},"previousAssets":["workbench-ad0fb999df57bbac.pck","engine-309843874cfdebe8.wasm","music-8ad9f8f323428f98.ogg","music-73c915ee8894b734.ogg","music-f06ef4243f86b03f.ogg","music-30ff78a0e0f53f91.ogg"]};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":0,"executable":"engine-309843874cfdebe8","mainPack":"workbench-ec22d9ef24f55d51.pck","fileSizes":{"workbench-ec22d9ef24f55d51.pck":3193108,"engine-309843874cfdebe8.wasm":37700666},"focusCanvas":true,"gdextensionLibs":[],"ensureCrossOriginIsolationHeaders":false,"transport":{"workbench-ec22d9ef24f55d51.pck":{"sha256":"ec22d9ef24f55d51a469eac6ec29e865218d8f63430e3bf37da7de3395438068","bytes":3193108,"type":"application/octet-stream","gzip":"workbench-ec22d9ef24f55d51.pck.gz","gzipBytes":2911000},"engine-309843874cfdebe8.wasm":{"sha256":"26b61ce95247012ab3dca3ff51e96d1cdbff44ee91a8c20a83e150afca83f1b6","bytes":37700666,"type":"application/wasm","gzip":"engine-309843874cfdebe8.wasm.gz","gzipBytes":9382282},"music-8ad9f8f323428f98.ogg":{"sha256":"8ad9f8f323428f98804c867c2ca5c00c4e16885b804aa64650471b6b6d005b9c","bytes":846727,"type":"audio/ogg","gzip":null,"gzipBytes":846727},"music-73c915ee8894b734.ogg":{"sha256":"73c915ee8894b734dc255384aaf0c1ae2834b3d1fee00a62025bb5954849d7f3","bytes":654520,"type":"audio/ogg","gzip":null,"gzipBytes":654520},"music-f06ef4243f86b03f.ogg":{"sha256":"f06ef4243f86b03f6f7ed0719e450a193c826c1d94988d9eb357f73a6c296570","bytes":809644,"type":"audio/ogg","gzip":null,"gzipBytes":809644},"music-30ff78a0e0f53f91.ogg":{"sha256":"30ff78a0e0f53f91658c4ebd0a6c827c92dffdc59803f270ed0689288766778d","bytes":397829,"type":"audio/ogg","gzip":null,"gzipBytes":397829}},"music":{"shop":"music-8ad9f8f323428f98.ogg","workbench":"music-73c915ee8894b734.ogg","storeroom":"music-f06ef4243f86b03f.ogg","ledger":"music-30ff78a0e0f53f91.ogg"},"previousAssets":["workbench-830b253d4179bf06.pck","engine-309843874cfdebe8.wasm","music-8ad9f8f323428f98.ogg","music-73c915ee8894b734.ogg","music-f06ef4243f86b03f.ogg","music-30ff78a0e0f53f91.ogg"]};
 const GODOT_THREADS_ENABLED = false;
 window.OrbitalAssets.install(GODOT_CONFIG);
 const engine = new Engine(GODOT_CONFIG);
@@ -112,52 +89,51 @@ const engine = new Engine(GODOT_CONFIG);
 	const track = document.getElementById('track');
 	const fill = document.getElementById('fill');
 	const pct = document.getElementById('pct');
-	const bytes = document.getElementById('bytes');
-	const stage = document.getElementById('stage');
-	const tip = document.getElementById('tip');
+	const cast = [{"id": "CHR-001", "name": "岑舟", "line": "先把物证放在光下，再谈它值多少钱。", "slot": 0}, {"id": "CHR-002", "name": "阿篁", "line": "螺丝我排好了，坏接口就在这里。", "slot": 1}, {"id": "CHR-003", "name": "饶静", "line": "先核箱号和来源，再决定是否放行。", "slot": 2}, {"id": "CHR-004", "name": "栗叔", "line": "旧航道捞回来的，给它找个能用上的人。", "slot": 3}, {"id": "CHR-005", "name": "澄九", "line": "不确定的地方就写未知，别为了成交把话说满。", "slot": 4}, {"id": "CHR-006", "name": "季棠", "line": "诊所里的每次稳定响应，背后都有人能安心睡一觉。", "slot": 5}, {"id": "CHR-007", "name": "桑禾", "line": "有些东西跨过半座站才找到主人，我负责把最后一段跑完。", "slot": 6}, {"id": "CHR-008", "name": "洛弥", "line": "苗长得慢，仪表偏一点也要早一点发现。", "slot": 7}, {"id": "CHR-009", "name": "闻铎", "line": "一件旧物的故事可以很长，票据上的事实要很短，也很准。", "slot": 8}, {"id": "CHR-010", "name": "绫舟", "line": "常用材料都带了，稀罕货得看这趟运气。", "slot": 9}, {"id": "CHR-011", "name": "阿砾", "line": "坏了也有能再用的零件，先让我看看。", "slot": 10}, {"id": "CHR-012", "name": "苏镜", "line": "外表会骗人，读数和细节不会。", "slot": 11}, {"id": "CHR-013", "name": "拓野", "line": "能不能修好，比外壳亮不亮更重要。", "slot": 12}, {"id": "CHR-014", "name": "衡岚", "line": "旧港有几宗失窃案，给你留一份带照片的名单。", "slot": 13}, {"id": "CHR-015", "name": "祁洵", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 14}, {"id": "CHR-016", "name": "塔莎", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 15}, {"id": "CHR-017", "name": "柏尧", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 16}, {"id": "CHR-018", "name": "穆恩", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 17}, {"id": "CHR-019", "name": "温茵", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 18}, {"id": "CHR-020", "name": "陆珩", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 19}, {"id": "CHR-021", "name": "茉婆", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 20}, {"id": "CHR-022", "name": "贺铎", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 21}, {"id": "CHR-023", "name": "禾青", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 22}, {"id": "CHR-024", "name": "卓岩", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 23}, {"id": "CHR-025", "name": "岑绫", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 24}, {"id": "CHR-026", "name": "周砚", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 25}, {"id": "CHR-027", "name": "伊莎", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 26}, {"id": "CHR-028", "name": "白澈", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 27}, {"id": "CHR-029", "name": "夏葵", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 28}, {"id": "CHR-030", "name": "阿鲁", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 29}, {"id": "CHR-031", "name": "宁素", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 30}, {"id": "CHR-032", "name": "罗翊", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 31}, {"id": "CHR-033", "name": "珂琳", "line": "路过旧货局，想看看有没有合适的手表。", "slot": 32}];
+	const speaker = document.getElementById('loading-cast');
+	const portrait = document.getElementById('loading-portrait');
+	const name = document.getElementById('loading-name');
+	const line = document.getElementById('loading-line');
 	const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-	const TIPS = [
-		'放大镜看标识，紫外线读编号，称重核对配置；对照说明书再出价。',
-		'接受报价只是锁价，确认交割才真正付钱拿货，花 1 点行动。',
-		'来源不明的货要先扫描、登记，或者放进隔离柜。',
-		'维修的三道工序做完后才扣材料与行动点，中途离开不吃亏。',
-		'第 7、14、21 天要交租金，留够现金再打烊。',
-		'委修单必须交还顾客的原物，别拿店里的同款顶替。',
-	];
-	let tipIndex = Math.floor(Math.random() * TIPS.length);
-	function nextTip() {
-		tip.style.opacity = 0;
-		setTimeout(() => {
-			tip.textContent = TIPS[tipIndex % TIPS.length];
-			tipIndex += 1;
-			tip.style.opacity = 1;
-		}, reduced ? 0 : 350);
+	let queue = [], lastId = null, swapTimer;
+	function nextSpeaker() {
+		if (!queue.length) {
+			queue = [...cast];
+			for (let i=queue.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [queue[i],queue[j]]=[queue[j],queue[i]]; }
+			if (queue.length>1 && queue[queue.length-1].id===lastId) [queue[0],queue[queue.length-1]]=[queue[queue.length-1],queue[0]];
+		}
+		const person = queue.pop(); lastId = person.id;
+		speaker.style.opacity = '0';
+		swapTimer = setTimeout(() => {
+			portrait.style.backgroundPosition = `${person.slot%6*20}% ${Math.floor(person.slot/6)*20}%`;
+			portrait.setAttribute('aria-label', person.name);
+			name.textContent = person.name;
+			line.textContent = '“' + person.line + '”';
+			speaker.style.opacity = '1';
+		}, reduced ? 0 : 300);
 	}
-	nextTip();
-	const tipTimer = setInterval(nextTip, 5200);
-
-	const mb = (n) => (n / 1048576).toFixed(1);
+	nextSpeaker();
+	const castTimer = setInterval(nextSpeaker, 5200);
 	let finished = false;
 
 	function fail(err) {
 		console.error(err);
 		finished = true;
-		clearInterval(tipTimer);
+		clearInterval(castTimer);
+		clearTimeout(swapTimer);
 		const msg = err instanceof Error ? err.message : (typeof err === 'string' ? err : '');
 		document.getElementById('fail-text').textContent = '店铺暂时没有接通。\n请检查网络后重试。' + (msg ? '\n（' + msg + '）' : '');
 		loader.classList.add('failed');
-		stage.textContent = '';
 	}
 	document.getElementById('retry').addEventListener('click', () => location.reload());
 
 	function open() {
 		finished = true;
-		clearInterval(tipTimer);
+		clearInterval(castTimer);
+		clearTimeout(swapTimer);
 		fill.style.width = '100%';
 		pct.textContent = '100%';
 		track.setAttribute('aria-valuenow', '100');
-		stage.textContent = '开门营业';
 		// Gently reveal the same shop behind the loading panel.
 		setTimeout(() => {
 			if (reduced) { loader.remove(); return; }
@@ -174,12 +150,11 @@ const engine = new Engine(GODOT_CONFIG);
 
 	let downloaded = false;
 	window.OrbitalAssets.onProgress = (current, total) => {
-		const p = Math.min(100, Math.floor(current / total * 100));
+		if (finished || !Number.isFinite(total) || total <= 0) return;
+		const p = Math.min(95, Math.floor(current / total * 95));
 		fill.style.width = p + '%'; pct.textContent = p + '%';
 		track.setAttribute('aria-valuenow', String(p));
-		bytes.textContent = mb(current) + ' / ' + mb(total) + ' MB';
 		downloaded = current >= total;
-		stage.textContent = downloaded ? '正在通电、点亮柜台…' : '正在读取压缩货架与库存…';
 	};
 	Promise.all([
 		// Observe the public load Promise too: vendor init does not forward WASM failures.
@@ -187,7 +162,7 @@ const engine = new Engine(GODOT_CONFIG);
 		engine.startGame({
 		'onProgress': function (current, total) {
 			if (finished) return;
-			if (downloaded) stage.textContent = '正在通电、点亮柜台…';
+			if (downloaded) { fill.style.width = '98%'; pct.textContent = '98%'; track.setAttribute('aria-valuenow', '98'); }
 		},
 	})]).then(open, fail);
 }());

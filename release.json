@@ -1,6 +1,6 @@
 {
-  "release_id": "9ee03512a5a93396",
-  "pack": "workbench-830b253d4179bf06.pck",
+  "release_id": "70d04e697a3df5b7",
+  "pack": "workbench-ec22d9ef24f55d51.pck",
   "engine": "engine-309843874cfdebe8",
   "current_files": [
     ".nojekyll",
@@ -18,6 +18,7 @@
     "engine-309843874cfdebe8.wasm.gz",
     "godot-license.txt",
     "index.html",
+    "loading-cast-304d0dab753f9614.webp",
     "loading-shop-c50ece6927cc5cbd.png",
     "music-30ff78a0e0f53f91.ogg",
     "music-73c915ee8894b734.ogg",
@@ -27,14 +28,12 @@
     "touch-bdbde4a14119ce55.css.gz",
     "touch-cb2645cc92d5fca1.js",
     "touch-cb2645cc92d5fca1.js.gz",
-    "workbench-830b253d4179bf06.pck",
-    "workbench-830b253d4179bf06.pck.gz"
+    "workbench-ec22d9ef24f55d51.pck",
+    "workbench-ec22d9ef24f55d51.pck.gz"
   ],
   "previous_files": [
-    "touch-5942295f04a3c516.js",
-    "touch-5942295f04a3c516.js.gz",
-    "workbench-ad0fb999df57bbac.pck",
-    "workbench-ad0fb999df57bbac.pck.gz"
+    "workbench-830b253d4179bf06.pck",
+    "workbench-830b253d4179bf06.pck.gz"
   ],
   "files": {
     ".nojekyll": {
@@ -94,8 +93,12 @@
       "sha256": "05a526849e266fb2a134ec06fac0cfa4e40b9f9eb68ef6bcb9280dd1156a0ce8"
     },
     "index.html": {
-      "bytes": 11402,
-      "sha256": "ac94cc763e81d342270a1144bcd8e3634a345c7778d64815f5ba1c7d51a020e2"
+      "bytes": 14498,
+      "sha256": "5835c99aa84ba0e2742d077dce63e867cfb9ef04258cc818aeb93569377d8c77"
+    },
+    "loading-cast-304d0dab753f9614.webp": {
+      "bytes": 484134,
+      "sha256": "304d0dab753f96147798ab46577e4946ab5fa47fcfd32343a5d51a371cde9b1c"
     },
     "loading-shop-c50ece6927cc5cbd.png": {
       "bytes": 266052,
@@ -116,14 +119,6 @@
     "music-f06ef4243f86b03f.ogg": {
       "bytes": 809644,
       "sha256": "f06ef4243f86b03f6f7ed0719e450a193c826c1d94988d9eb357f73a6c296570"
-    },
-    "touch-5942295f04a3c516.js": {
-      "bytes": 3914,
-      "sha256": "5942295f04a3c516a2871f9e94c5666f739fa72354663c049c85ead1bf119490"
-    },
-    "touch-5942295f04a3c516.js.gz": {
-      "bytes": 1558,
-      "sha256": "9af76798de14b341a4fc532eefc6b2e453fdbe1c5f2c0defe10d4efcf059a3b2"
     },
     "touch-bdbde4a14119ce55.css": {
       "bytes": 337,
@@ -149,22 +144,22 @@
       "bytes": 2893574,
       "sha256": "f496498f1fb8bcc5fa1de1b883cc743ec9b132399d153993c22719b30e763e15"
     },
-    "workbench-ad0fb999df57bbac.pck": {
-      "bytes": 3170948,
-      "sha256": "ad0fb999df57bbac09215a42645568a57614cf0054afc5a69db1d9705a30cc22"
+    "workbench-ec22d9ef24f55d51.pck": {
+      "bytes": 3193108,
+      "sha256": "ec22d9ef24f55d51a469eac6ec29e865218d8f63430e3bf37da7de3395438068"
     },
-    "workbench-ad0fb999df57bbac.pck.gz": {
-      "bytes": 2890260,
-      "sha256": "6798eebad9e8789ee4be7715e15ac976c39ec847ddfa94eb6f6164c0780f0a21"
+    "workbench-ec22d9ef24f55d51.pck.gz": {
+      "bytes": 2911000,
+      "sha256": "bf4110949def7bb6e4a02efa9470be24a73c5f9e18ed2781167707a349ff0fbf"
     }
   },
   "transport": {
-    "workbench-830b253d4179bf06.pck": {
-      "sha256": "830b253d4179bf068fbf7f6bdd40651b5c472ad6fc956c30608f3ddcac6f5c70",
-      "bytes": 3175012,
+    "workbench-ec22d9ef24f55d51.pck": {
+      "sha256": "ec22d9ef24f55d51a469eac6ec29e865218d8f63430e3bf37da7de3395438068",
+      "bytes": 3193108,
       "type": "application/octet-stream",
-      "gzip": "workbench-830b253d4179bf06.pck.gz",
-      "gzipBytes": 2893574
+      "gzip": "workbench-ec22d9ef24f55d51.pck.gz",
+      "gzipBytes": 2911000
     },
     "engine-309843874cfdebe8.wasm": {
       "sha256": "26b61ce95247012ab3dca3ff51e96d1cdbff44ee91a8c20a83e150afca83f1b6",
@@ -209,13 +204,13 @@
     "ledger": "music-30ff78a0e0f53f91.ogg"
   },
   "previous_assets": [
-    "workbench-ad0fb999df57bbac.pck",
+    "workbench-830b253d4179bf06.pck",
     "engine-309843874cfdebe8.wasm",
     "music-8ad9f8f323428f98.ogg",
     "music-73c915ee8894b734.ogg",
     "music-f06ef4243f86b03f.ogg",
     "music-30ff78a0e0f53f91.ogg"
   ],
-  "initial_raw_bytes": 40875678,
-  "initial_gzip_bytes": 12275856
+  "initial_raw_bytes": 40893774,
+  "initial_gzip_bytes": 12293282
 }
