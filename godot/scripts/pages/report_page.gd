@@ -1,9 +1,16 @@
 extends Page
-## Day end: today's ledger, settle (maintenance and rent), the first equipment
+## Day end: today's ledger, electricity/cleaning receipts, the first equipment
 ## upgrade from day 3, the next day, and the 21-day outcome.
 
 var body: VBoxContainer
 var sheet: PanelContainer
+var status_label: Label
+var status_text := ""
+var status_tone := "info"
+var costs_expanded := false
+var columns: BoxContainer
+var upgrades_row: BoxContainer
+var totals_panel: PanelContainer
 
 func scene_name() -> String:
 	return "counter"
@@ -11,14 +18,26 @@ func scene_name() -> String:
 func hint_text() -> String:
 	var s := Game.state
 	if s.phase == "open":
-		return "处理完今天的客人与订单后，打烊结算维护费与租金。"
+		return "处理完今天的客人与订单后，打烊结算电费、清洁费与租金。"
 	if s.phase == "report":
 		return "日结完成：选择升级（第 3 天起），然后迎接明天。"
 	return "经营结束。可以回看账目，或新开一家店。"
 
-func toast_rect() -> Rect2:
-	var r: Rect2 = shell.content_rect()
-	return Rect2(r.position.x, r.end.y - 160.0, 640, 140)
+## Results belong to the scrollable ledger, directly below its title.
+func show_status(text: String, tone := "info") -> void:
+	status_text = text
+	status_tone = tone
+	if is_instance_valid(status_label):
+		status_label.text = text
+		status_label.visible = text != ""
+		status_label.add_theme_color_override("font_color", UIKit.TEXT if tone == "info" else UIKit.DANGER)
+
+func _add_status() -> void:
+	status_label = UIKit.label(status_text, 18, UIKit.TEXT if status_tone == "info" else UIKit.DANGER, false, true)
+	status_label.name = "report_status"
+	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status_label.visible = status_text != ""
+	body.add_child(status_label)
 
 func enter() -> void:
 	sheet = UIKit.plate()
@@ -48,10 +67,18 @@ func relayout() -> void:
 	# The outer equipment drawer already defines the usable area. Filling it
 	# avoids a second, smaller fixed-width window floating inside the drawer.
 	sheet.position = r.position
+	# Stack paperwork in narrow viewports instead of forcing the sheet wider.
+	var narrow := r.size.x < 880
+	if is_instance_valid(columns): columns.vertical = narrow
+	if is_instance_valid(upgrades_row): upgrades_row.vertical = narrow
+	if is_instance_valid(totals_panel): totals_panel.custom_minimum_size.x = 0 if narrow else 390
 	sheet.size = r.size
 
 func _row(g: GridContainer, k: String, v: String, color := UIKit.INK) -> void:
-	g.add_child(UIKit.label(k, 20, Color("6b5a40")))
+	var caption := UIKit.label(k, 18, Color("6b5a40"), false, true)
+	caption.custom_minimum_size.x = 160
+	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	g.add_child(caption)
 	var l := UIKit.label(v, 22, color, true)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -59,10 +86,14 @@ func _row(g: GridContainer, k: String, v: String, color := UIKit.INK) -> void:
 
 func _refresh() -> void:
 	UIKit.clear(body)
+	columns = null
+	upgrades_row = null
+	totals_panel = null
 	var s := Game.state
 	var day := int(s.day)
 	if s.phase == "ending":
 		body.add_child(UIKit.module_header("经营结束 · 第 %d 天" % day, "最终经营账目", "CLOSE / 21"))
+		_add_status()
 		body.add_child(UIKit.record_card("结业记录", String(s.get("outcome", "旧货局的灯熄了。")), "FINAL"))
 		var final_sheet := UIKit.plate(UIKit.paper_style(18))
 		var g := UIKit.grid(2, 10)
@@ -83,11 +114,14 @@ func _refresh() -> void:
 		body.add_child(again)
 		return
 	body.add_child(UIKit.module_header("第 %d 天 · %s" % [day, "日结报告" if s.phase == "report" else "营业中"], "营业账目", "LEDGER / %02d" % day))
+	_add_status()
 	var today := []
 	for r in s.ledger:
 		if r.day == s.day:
 			today.append(r)
-	var cols := UIKit.hbox(16)
+	var cols := BoxContainer.new()
+	cols.add_theme_constant_override("separation", 16)
+	columns = cols
 	cols.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var receipt := UIKit.plate(UIKit.paper_style(16))
 	receipt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -123,24 +157,34 @@ func _refresh() -> void:
 	left.add_child(sc)
 	cols.add_child(receipt)
 	var totals := UIKit.plate(UIKit.paper_style(16))
+	totals_panel = totals
 	totals.custom_minimum_size = Vector2(390, 0)
 	var right := UIKit.vbox(10)
 	totals.add_child(right)
 	right.add_child(UIKit.label("结算联 / TOTALS", 18, UIKit.INK, true))
 	var g := UIKit.grid(2, 8)
 	var due := Model.rent_due(s.day)
-	if s.phase == "report" and s.report != null:
+	var paid: bool = s.phase == "report" and s.report != null
+	# Historic reports preserve the old single charge; never recalculate them.
+	var costs: Dictionary = s.report.get("costs", {"legacy":true,"maintenance":s.report.get("maintenance",20),"electricity":0,"cleaning":0,"total":s.report.get("maintenance",20),"details":{}}) if paid else StoreCosts.quote(s)
+	if paid:
 		_row(g, "收入", UIKit.money(s.report.income), Color("2f6b3a"))
-		_row(g, "支出", UIKit.money(s.report.expenses), UIKit.RUST)
-		_row(g, "能源维护", UIKit.money(s.report.maintenance))
-		_row(g, "租金", UIKit.money(s.report.rent))
-		_row(g, "结余现金", UIKit.money(s.report.cash), UIKit.RUST)
+		_row(g, "营业支出\n不含本次日结费用", UIKit.money(s.report.expenses), UIKit.RUST)
 	else:
 		_row(g, "当前现金", UIKit.money(s.cash), UIKit.RUST)
-		_row(g, "今晚维护", UIKit.money(20))
-		_row(g, "今晚租金", UIKit.money(due) if due > 0 else "无（第 7/14/21 天收取）")
+	if costs.legacy:
+		_row(g, "旧版能源维护", UIKit.money(costs.maintenance))
+	else:
+		_row(g, "店铺电费" if paid else "预计电费", UIKit.money(costs.electricity))
+		_row(g, "店铺清洁费" if paid else "固定清洁费", UIKit.money(costs.cleaning))
+	var rent: float = s.report.rent if paid else due
+	_row(g, "租金" if paid else "今晚租金", UIKit.money(rent))
+	_row(g, "本次支付" if paid else "预计合计", UIKit.money(costs.total + rent), UIKit.RUST)
+	_row(g, "结余现金" if paid else "支付后现金", UIKit.money(s.report.cash if paid else s.cash - costs.total - rent), UIKit.RUST)
+	if not paid:
 		_row(g, "剩余行动点", "%d AP" % int(s.ap))
 	right.add_child(g)
+	_add_cost_details(right, costs)
 	cols.add_child(totals)
 	body.add_child(cols)
 	body.add_child(UIKit.rule())
@@ -155,8 +199,10 @@ func _refresh() -> void:
 		body.add_child(b)
 	elif s.phase == "report":
 		if day >= 3 and not s.report.upgraded:
-			var up := UIKit.hbox(14)
-			for spec in [["lamp", "可变焦工作灯 · 120 Cr", "每天第一次鉴定不耗 AP", s.upgrades.lamp], ["shelf", "模组陈列架 · 160 Cr", "合法货物陈列价提高 5%", s.upgrades.shelf]]:
+			var up := BoxContainer.new()
+			up.add_theme_constant_override("separation", 14)
+			upgrades_row = up
+			for spec in [["lamp", "可变焦工作灯 · 120 Cr", "每天第一次鉴定不耗 AP；次日起用电 +1 Cr/日", s.upgrades.lamp], ["shelf", "模组陈列架 · 160 Cr", "合法货物陈列价提高 5%", s.upgrades.shelf]]:
 				var card := UIKit.plate(UIKit.inset_style(14))
 				card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				var cv := UIKit.vbox(6)
@@ -174,6 +220,49 @@ func _refresh() -> void:
 			if Game.dispatch({"type": "NEXT"}) and Game.state.phase == "open":
 				shell.go("counter"))
 		body.add_child(next)
+
+func _add_cost_details(parent: VBoxContainer, costs: Dictionary) -> void:
+	if costs.legacy:
+		parent.add_child(UIKit.label("旧版账单保留原 20 Cr 能源维护；新费率从存档记录的启用日生效。", 16, UIKit.MUTED, false, true))
+		return
+	var toggle := UIKit.button(("收起" if costs_expanded else "展开") + "电费明细", "secondary", Vector2(0, 48), 18)
+	toggle.name = "electricity_details_toggle"
+	parent.add_child(toggle)
+	var details := UIKit.vbox(6)
+	details.name = "electricity_details"
+	details.visible = costs_expanded
+	parent.add_child(details)
+	toggle.pressed.connect(func():
+		costs_expanded = not costs_expanded
+		details.visible = costs_expanded
+		toggle.text = ("收起" if costs_expanded else "展开") + "电费明细")
+	var receipt: Dictionary = costs.get("details", {})
+	details.add_child(UIKit.label("设备每日费用 · 按首次启用时状态留存", 16, UIKit.INK, false, true))
+	var groups := {}
+	for entry in receipt.get("devices", []):
+		var key: String = String(entry.get("type", "")) + ":" + String(entry.get("status", "normal"))
+		if not groups.has(key): groups[key] = {"name":entry.name,"status":entry.status,"count":0,"cents":0}
+		groups[key].count += int(entry.get("count", 1))
+		groups[key].cents += int(entry.cents)
+	for group in groups.values():
+		details.add_child(UIKit.label("%s ×%d · %s · %s Cr/日" % [group.name, group.count, _device_status(group.status), Model.jnum(float(group.cents) / 100.0)], 16, UIKit.INK, false, true))
+	details.add_child(UIKit.label("有效作业用电", 16, UIKit.INK, false, true))
+	var usage_groups := {}
+	for entry in receipt.get("usage", []):
+		var key: String = String(entry.get("type", "")) + ":" + String(entry.get("key", "")).get_slice("|", 0) + ":" + String(entry.get("status", "normal"))
+		if not usage_groups.has(key): usage_groups[key] = {"name":entry.name,"key":entry.get("key", ""),"status":entry.status,"count":0,"cents":0}
+		usage_groups[key].count += int(entry.get("count", 1))
+		usage_groups[key].cents += int(entry.get("cents", round(float(entry.get("cr", 0)) * 100)))
+	for group in usage_groups.values():
+		details.add_child(UIKit.label("%s · %s ×%d · %s Cr" % [group.name, _usage_label(group.key), group.count, Model.jnum(float(group.cents) / 100.0)], 16, UIKit.INK, false, true))
+	if usage_groups.is_empty(): details.add_child(UIKit.label("今天尚无有效用电作业。", 16, UIKit.MUTED, false, true))
+	details.add_child(UIKit.label("设备 %s + 作业 %s = %s Cr；仅电费总额向上取整一次，日结统一支付。清洁费固定 8 Cr/营业日。" % [Model.jnum(float(receipt.get("dailyCents", 0)) / 100.0), Model.jnum(float(receipt.get("usageCents", 0)) / 100.0), Model.jnum(float(receipt.get("totalCents", 0)) / 100.0)], 16, UIKit.MUTED, false, true))
+
+func _device_status(status: String) -> String:
+	return {"normal":"正常", "maintenance":"待维护（+20%）", "broken":"故障停机", "repair":"送修"}.get(status, status)
+
+func _usage_label(key: String) -> String:
+	return {"check":"检验", "scan":"来源扫描", "service":"维修复核", "forge":"加工复核"}.get(key.get_slice("|", 0), "有效读数/复核")
 
 func on_changed(_p: Dictionary, _n: Dictionary, _a: Dictionary) -> void:
 	_refresh()

@@ -74,6 +74,9 @@ static func forgery_problem(s: Dictionary, item, method := "") -> String:
 			if forgery_problem(s, item, candidate) == "": return ""
 		return "暂无可用加工方式，请核对材料、行动点和加工记录。"
 	if not WatchForgery.METHODS.has(method): return "请选择标识、编号或配重加工。"
+	if method in ["serial","weight"]:
+		var problem := StoreCosts.device_problem(s,"uv" if method == "serial" else "scale")
+		if problem != "": return problem
 	if WatchForgery.treatments(item).has(method): return "本件已做过这项加工，不能重复。"
 	if method == "weight" and float(item.watch.mass) >= float(GameData.def(item.defId).watch.nominal_mass):
 		return "当前质量不低于参考值，添加配重不能减轻手表。"
@@ -162,6 +165,7 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 			item.cost += GameData.material(id).price * WatchForgery.COSTS[method][id]
 		Model.spend(s, 1)
 		WatchForgery.apply(item, method)
+		if method in ["serial","weight"]: StoreCosts.record(s,"uv" if method == "serial" else "scale","forge|%s|%s" % [item.uid,method],0.5)
 		item.service.opened = false
 		item.service.erase("forge_task")
 		return Model.notice(s, "%s完成：对应实物读数已改变，留下加工痕迹；故障、缺件与真实价值未改变，请复测更新记录。" % WatchForgery.LABELS[method])

@@ -109,6 +109,7 @@ static func progress_problem(state: Dictionary, it: Dictionary, task := "") -> S
 	if task == "": return "" if not it.service.opened else "后盖尚未封回。"
 	if it.service.done.has(task): return "这道工序已完成，不能重复扣料或修复。"
 	if task != current(it): return "请先完成：" + label(current(it),it)
+	if task == "test": return StoreCosts.device_problem(state,"repair_tester")
 	return ""
 
 static func problem(state: Dictionary, it: Dictionary, task := "") -> String:

@@ -80,6 +80,8 @@ func _select_status(key: String) -> void:
 		"active": "逐项核对品相与维修要求，交付消耗 1 行动点。",
 		"closed": "查看已交付和已过期的委托记录。"
 	}[key]
+	var terminal_problem := StoreCosts.device_problem(Game.state, "order_terminal")
+	if terminal_problem != "": status_note.text = terminal_problem
 	var closed := Model.business_hours_problem(Game.state)
 	if closed != "": status_note.text = "已打烊 · 不能接单或交付。请收起终端，先开始下一营业日。" if Game.state.phase != "ending" else closed
 	status_note.add_theme_color_override("font_color",UIKit.AMBER if closed != "" else UIKit.MUTED)
@@ -198,10 +200,12 @@ func _refresh() -> void:
 	for k in cols:
 		UIKit.clear(cols[k])
 	var s := Game.state
+	var terminal_problem := StoreCosts.device_problem(s, "order_terminal")
 	for def in Model.available_orders(s):
 		var v := _card(def)
 		var closed: bool = s.phase != "open"
 		var b := UIKit.button("已打烊 · 不能接单" if closed else "接取订单", "secondary" if closed else "primary", Vector2(0, 56), 22)
+		b.disabled = terminal_problem != ""
 		var id: String = def.id
 		b.pressed.connect(func(): _take_order(id))
 		v.add_child(b)
@@ -235,6 +239,11 @@ func _refresh() -> void:
 				if closed != "":
 					why.text = closed
 					b.disabled = false
+					return
+				if terminal_problem != "":
+					why.text = terminal_problem
+					b.disabled = true
+					opt.disabled = true
 					return
 				if opt.item_count == 0:
 					why.text = "库存里还没有这件货。"

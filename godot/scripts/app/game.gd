@@ -35,6 +35,7 @@ func _ready() -> void:
 		state = Model.create()
 	else:
 		state = migrate_service_save(state)
+	StoreCosts.ensure(state)
 	Wanted.ensure(state)
 	if has_save: save()
 
@@ -96,6 +97,7 @@ func dispatch(a: Dictionary) -> bool:
 	return true
 
 func save() -> void:
+	StoreCosts.ensure(state)
 	if state.get("serviceVersion", 0) < 1:
 		state = migrate_service_save(state)
 		if state.get("serviceVersion", 0) < 1: return
