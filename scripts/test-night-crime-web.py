@@ -41,7 +41,7 @@ def main():
                     for _ in range(14):
                         if r['found'] and ch*.12<r['y']<ch*.82:break
                         direction=1 if not r['found'] or r.get('y',ch)>ch*.82 else -1
-                        if mobile:phone.touch_drag(context,page,[physical(cw*.85,ch*(.70-direction*i*.045)) for i in range(9)])
+                        if mobile:phone.touch_drag(context,page,[physical(cw*.85,ch*((.70 if direction>0 else .30)-direction*i*.045)) for i in range(9)])
                         else:page.mouse.move(cw*.85,ch*.65);page.mouse.wheel(0,direction*300)
                         page.wait_for_timeout(250);r=find()
                     assert r['found'] and not r['disabled'],(text,r)
@@ -54,6 +54,7 @@ def main():
                     page.wait_for_function('window.OrbitalTouch?.state?.ready',timeout=90000);cmd({'type':'start'});phone.wait(page,'!s.title && !s.busy')
                 def load_state(state):
                     row=saved();page.evaluate(WRITE_SAVE,{'key':row['key'],'state':state});page.reload();boot()
+                    page.wait_for_function('(e)=>OrbitalTouch.state.day===e.day && OrbitalTouch.state.ap===e.ap && OrbitalTouch.state.cash===e.cash',arg={k:state[k] for k in ('day','ap','cash')},timeout=20000)
                 try:
                     page.goto('http://127.0.0.1:4174/');boot();cmd({'type':'page','page':'repair'});phone.wait(page,"s.workspace==='repair'");saved()
                     load_state(fixture['before_insurance']);cmd({'type':'page','page':'report'});phone.wait(page,"s.workspace==='report'")
@@ -65,13 +66,13 @@ def main():
                     loss=saved(lambda s:all(uid not in [it['uid'] for it in s['inventory']] for uid in meta['lossUIDs']))['state']
                     assert loss['cash']==initial-meta['premium']-meta['closingFee']+meta['payout'],loss['cash']
                     snap('morning-losses');click(meta.get('ackButton','已核对失窃记录'));phone.wait(page,'!s.blocked')
-                    acknowledged=saved()['state'];cash=acknowledged['cash'];crime=acknowledged['nightCrime']
+                    acknowledged=saved(lambda s:not s['nightCrime']['reportOpen'] and all(m['acknowledged'] for m in s['nightCrime']['mornings']))['state'];cash=acknowledged['cash'];crime=acknowledged['nightCrime']
                     page.reload();boot();phone.wait(page,'!s.blocked');after=saved()['state']
                     assert after['cash']==cash and after['nightCrime']==crime,'reload changed acknowledged losses/payment'
                     cmd({'type':'page','page':'report'});phone.wait(page,"s.workspace==='report'");click(meta.get('historyButton','失窃与案件记录'));snap('reopened-history')
                     cmd({'type':'close'});page.wait_for_timeout(200)
                     load_state(fixture['inspection_pending']);assert page.evaluate('OrbitalTouch.state.ap')==0
-                    click(meta.get('inspectionButton','接待查货警察'));phone.wait(page,'s.trade')
+                    click(meta.get('inspectionButton','接待查货警察'));phone.wait(page,'s.trade && !s.busy')
                     click(meta.get('resolveButton','配合查货'));saved(lambda s:s['trade'] is None);assert page.evaluate('OrbitalTouch.state.ap')==0
                     snap('inspection-zero-ap');assert not errors,errors
                     print(label,'insurance/losses/ack/reload/history/late inspection PASS',flush=True)

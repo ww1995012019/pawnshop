@@ -15,18 +15,18 @@ Same physicalitem must have only one holder; receipt/ack/reload must not reroll 
 
 ### Task1 Complete crime rules and native verification
 Files create godot/scripts/model/night_crime.gd, godot/tests/night_crime_test.gd; modify model.gd,commerce.gd,wanted_cases.gd,crime_events.gd,game.gd and native runner as needed.
-- [ ] Write failing tests for night boundaries/3% distribution, exactpolicyprices/coverageupdates, noeligibleloss, safeguardedowners/openwork, settledonce/morningonce, insured/uninsuredloss, sourcehiddeneligibility/claimrejection, actualresaleUID/rejection/recovery, arrestedabsence, overflowinspection0AP, riskbands, leniencythresholds, punishmentcashcap, samecasecredit and JSON/oldsave migration.
-- [ ] Observe RED before writing implementation.
-- [ ] Implement class_name NightCrime with ensure(s), insurance_quote(s)->Dictionary, insurance_problem(s)->String, public_report(s)->Dictionary, inspection_pending(s)->bool, can_arrive(s)->bool, reduce(previous,action)->Variant null whenunhandled. Define remaining UI actions/publicprojections and document in work/night-crime/backend-report.md. All new state under s.nightCrime, publicprojection must hide culprit/stolenflags until revealed.
-- [ ] Integrate actual SETTLE/NEXT/ARRIVE/trade/police report paths, not test-only helpers. Successful morning removes inventory and pays once, settlementlocksdrawandstock; insurance quote/record cap perapprovedspec. Existing old crime theft removed; preserve suspiciousgoods event without duplicate stolenitems. Add realgrayroute action, provenance and informedrisk gating, neverlaunder viaREGISTER.
-- [ ] Run targeted tests including oldcrimeupdated, wanted, commerce; commit ownedfiles, report API and evidence. No UI edits or deployment.
+- [x] Write failing tests for night boundaries/3% distribution, exactpolicyprices/coverageupdates, noeligibleloss, safeguardedowners/openwork, settledonce/morningonce, insured/uninsuredloss, sourcehiddeneligibility/claimrejection, actualresaleUID/rejection/recovery, arrestedabsence, overflowinspection0AP, riskbands, leniencythresholds, punishmentcashcap, samecasecredit and JSON/oldsave migration.
+- [x] Observe RED before writing implementation.
+- [x] Implement class_name NightCrime with ensure(s), insurance_quote(s)->Dictionary, insurance_problem(s)->String, public_report(s)->Dictionary, inspection_pending(s)->bool, can_arrive(s)->bool, reduce(previous,action)->Variant null whenunhandled. Define remaining UI actions/publicprojections and document in work/night-crime/backend-report.md. All new state under s.nightCrime, publicprojection must hide culprit/stolenflags until revealed.
+- [x] Integrate actual SETTLE/NEXT/ARRIVE/trade/police report paths, not test-only helpers. Successful morning removes inventory and pays once, settlementlocksdrawandstock; insurance quote/record cap perapprovedspec. Existing old crime theft removed; preserve suspiciousgoods event without duplicate stolenitems. Add realgrayroute action, provenance and informedrisk gating, neverlaunder viaREGISTER.
+- [x] Run targeted tests including oldcrimeupdated, wanted, commerce; commit ownedfiles, report API and evidence. No UI edits or deployment.
 
 ### Task2 UI and native layout
 Files report_page, counter_page, warehouse_page, shell, web_touch, campaign_ledger plus native crime_ui_test/fixture.
-- [ ] Add failing tests for policybuy/update affordances, same-model losslist/reopen/ack, visible coverage/exclusions, riskygraytradeconfirmation, thiefreport/recovery, inspectionarrival/resolve0AP, cooperation/leniencyoutcome, disabledactions and mobilebounds.
-- [ ] Implement insurance/report/persistentcases readable in existingpaperretroUI; immediatepurchase costs explicit, nightlypolicy noauto-renew. Morningloss modal confirmed and laterreopenable; nocases nointrusivedialog. Nextday notices nevercoverbuttons. Controls use backend eligibility. Currentexactinsurancevaluation is approved; no automatic evidence additions. Police receipt shows confiscations/finewaived/cooperation.
-- [ ] Support latebonusinspection on counter/phone even0AP/6visitors; all new dialogs actualtouchscrollwork. Root may add webcompanionpublicstate only if meaningful UIprintedinfo, not hidden/testtelemetry.
-- [ ] Run native UI/layout tests, commitownedfiles and report.
+- [x] Add failing tests for policybuy/update affordances, same-model losslist/reopen/ack, visible coverage/exclusions, riskygraytradeconfirmation, thiefreport/recovery, inspectionarrival/resolve0AP, cooperation/leniencyoutcome, disabledactions and mobilebounds.
+- [x] Implement insurance/report/persistentcases readable in existingpaperretroUI; immediatepurchase costs explicit, nightlypolicy noauto-renew. Morningloss modal confirmed and laterreopenable; nocases nointrusivedialog. Nextday notices nevercoverbuttons. Controls use backend eligibility. Currentexactinsurancevaluation is approved; no automatic evidence additions. Police receipt shows confiscations/finewaived/cooperation.
+- [x] Support latebonusinspection on counter/phone even0AP/6visitors; all new dialogs actualtouchscrollwork. Root may add webcompanionpublicstate only if meaningful UIprintedinfo, not hidden/testtelemetry.
+- [x] Run native UI/layout tests, commitownedfiles and report.
 
 ### Task3 Review verify and publication
 - [ ] Per-task review clean, integrated wholebranch review, full npm test, webbuild, desktop+mobile actualinput tests with deterministic realrules fixtures, reload/ack idempotence.
