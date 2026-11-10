@@ -43,10 +43,12 @@ Files: new scripts/world/counter_table.gd, counter_page.gd, web_touch.gd, new co
 - [x] Remove next-item dialogue requirement; clicking stock adds to desk; desk focus binds original price/inspection controls.
 - [x] GREEN desktop/phone native, full npm suite, export checks, real browser multi-item tabletop scenario.
 - [x] Fresh whole-branch review and repair material issues.
-- [ ] Publish verified package using existing authorization and confirm exact-SHA Pages success.
+- [x] Publish verified package using existing authorization and confirm exact-SHA Pages success.
 
 Ruling: This corrects the authorized multi-item implementation following the user's explicit physical-display requirement; it does not introduce bundle pricing or a new selection modal. Existing approved per-original negotiation remains.
 
 Verification: RED rules reproduced one-at-a-time NPC presentation, replacement of earlier player proposals and wrong focus; UI RED showed the missing multi-original surface. Final full npm suite passes 59/59 native groups plus packaging 7, font 1 and loading layout 2. Exported 33 watches/33 residents/3 instruments pass. Final real desktop and phone browsers show two NPC plus three player originals simultaneously, direct physical selection, inspection return, partial four-original settlement leaving the fifth original on the desk, continued reception and saved continuation.
 
 Independent review issues were reproduced RED and fixed GREEN: excluded seventh original cannot steal focus after failed addition; right-click flips the pointed original; removed/reintroduced and partially settled goods reuse only vacant positions; nearest-empty-slot drops cannot overlap; successive normal-motion settling clears its cached destination and checks optional metadata safely. Max nine-original native UI, independent hit regions, mixed-direction partial handover, later addition and send-off all pass. Reviewer concluded no outstanding findings.
+
+Deployment confirmed: source `5dd2d433e29d0928a033f5f35e8390810f40d0fc`, release `17e8acf53fbd9bf7`, Pages commit `30e728083f3ca9984a9cebe8642a928650ff6642`; exact-SHA Pages workflow [42848476696](https://github.com/ww1995012019/pawnshop/actions/runs/42848476696) completed successfully.
