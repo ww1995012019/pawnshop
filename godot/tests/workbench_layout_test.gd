@@ -32,7 +32,7 @@ func check_workbench(page, label: String) -> void:
 	if mat is Rect2:
 		check(r.encloses(mat) and not mat.intersects(bench.get_rect()) and is_equal_approx(mat.position.y, r.position.y), label + " item surface is aligned and clear of controls")
 	var item = page.item
-	if is_instance_valid(item):
+	if is_instance_valid(item) and item.visible:
 		var transform: Transform2D = active.get_viewport().get_canvas_transform() * item.body.global_transform
 		var art: Rect2 = transform * Rect2(-item.tex_size() * 0.5, item.tex_size())
 		check(not art.intersects(bench.get_global_rect()) and art.position.x > left.get_global_rect().end.x and art.end.x < right.global_position.x, label + " whole item is visible between the panels")
@@ -79,15 +79,15 @@ func run() -> void:
 	shell.active_shell().go("repair")
 	await settle()
 	page = shell.active_shell().page
-	for stage in 4:
-		game.state.repairProgress[page.it_uid] = stage
+	var service_order := ["dust","open","wash","replace","assemble","test"]
+	game.item(page.it_uid).service.tasks = service_order
+	for i in service_order.size():
+		game.item(page.it_uid).service.done = service_order.slice(0,i)
 		page._stage_ui()
 		await settle()
-		check_workbench(page, "repair stage %d" % stage)
-		if stage == 1:
-			var home: Vector2 = shell.active_shell().world_to_ui(page.part.position)
-			var mat = page.get("mat_rect")
-			check(mat is Rect2 and mat.grow(-30).has_point(home), "replacement part starts inside the repair surface")
+		check_workbench(page, "repair " + service_order[i])
+		if service_order[i] != "dust":
+			check(page.mat_rect.encloses(page.art.get_rect()), "animated native parts remain inside the repair surface")
 	for name in ["warehouse", "orders", "report"]:
 		shell.active_shell().go(name)
 		await settle()
@@ -149,14 +149,14 @@ func run() -> void:
 		check_workbench(inspection, "landscape inspection " + tool)
 	shell.go("repair")
 	await settle()
-	for stage in 4:
-		var repair = shell.active_shell().page
-		game.state.repairProgress[repair.it_uid] = stage
+	var repair = shell.active_shell().page
+	game.item(repair.it_uid).service.tasks = service_order
+	for i in service_order.size():
+		game.item(repair.it_uid).service.done = service_order.slice(0,i)
 		repair._stage_ui()
 		await settle()
-		await create_timer(0.7).timeout
-		await settle()
-		check_workbench(repair, "landscape repair stage %d" % stage)
+		check_workbench(repair, "landscape repair " + service_order[i])
+
 	shell.go("warehouse")
 	await settle()
 	var phone_warehouse = shell.active_shell().page

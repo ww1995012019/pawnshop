@@ -90,6 +90,7 @@ static func new_item(s: Dictionary, id: String, options := {}) -> Dictionary:
 	for k in options:
 		it[k] = options[k]
 	WatchRules.initialize(it, s.seed)
+	WatchService.ensure(it, s.seed)
 	return it
 
 static func dimensions(it: Dictionary, rotated = null) -> Array:
@@ -333,6 +334,8 @@ static func disclose_evidence(t: Dictionary, it: Dictionary, tool: String) -> vo
 	known.condition = facts.condition
 
 static func sale_eligibility(it: Dictionary, npc_id: String):
+	if it.get("service", {}).get("opened", false):
+		return "后盖或内部装配尚未收妥，请先完成工作台复核并封盖。"
 	if it.owner != "shop" or it.has("orderId"):
 		return "受托、抵押或订单预留的物品不能出售。"
 	if it.sealed or it.location == "isolation" or not it.sourceVerified:
@@ -569,7 +572,7 @@ static func create(seed := "ORBITAL-P0") -> Dictionary:
 	var orders := []
 	for d in GameData.orders:
 		orders.append({"id": d.id, "status": "available"})
-	var s := {"schema": 4, "seed": seed, "day": 1, "ap": 12, "cash": 1200, "phase": "open", "risk": 12, "relations": {"station": 30, "salvage": 35, "merchant": 20},
+	var s := {"schema": 4, "serviceVersion": 1, "seed": seed, "day": 1, "ap": 12, "cash": 1200, "phase": "open", "risk": 12, "relations": {"station": 30, "salvage": 35, "merchant": 20},
 		"inventory": [], "trade": null, "cursor": 0, "ledger": [], "completedTrades": [], "orders": orders, "materials": mats, "events": [], "repairProgress": {},
 		"scanned": [], "inspection": "announced", "upgrades": {"lamp": false, "shelf": false}, "report": null,
 		"notice": "回环九号旧港重新点灯。先接待来客，对照说明书检验手表，再安排维护和订单。", "nextId": 1, "tutorial": 0}
@@ -591,6 +594,8 @@ static func order_item_valid(s: Dictionary, id: String, it: Dictionary, required
 		return "交付物品型号不符，原物保留在库存。"
 	if trade_reserved(s, it):
 		return "当前报价已占用该物件，先取消交易再交单。"
+	if it.get("service", {}).get("opened", false):
+		return "后盖或内部装配尚未收妥，请先完成工作台复核并封盖。"
 	if it.location == "isolation" or it.sealed:
 		return "隔离或封存的物件不能交付，先核对并解除保管状态。"
 	if def.get("customerOwned", false) and (it.owner != "customer" or it.get("orderId", "") != id or order.get("uid", "") != it.uid):
@@ -723,7 +728,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			var it = find_inventory(s, a.uid)
 			if it == null:
 				return previous
-			if trade_reserved(s, it) or not owns(it) or it.has("orderId") or not it.sourceVerified or it.sealed or it.location == "isolation":
+			if trade_reserved(s, it) or not owns(it) or it.has("orderId") or not it.sourceVerified or it.sealed or it.location == "isolation" or it.get("service", {}).get("opened", false):
 				return notice(s, "应急清仓仍不能出售顾客、抵押、预留或来源未核货物。")
 			var amount := maxf(1, floor(D(it.defId).value * sale_appearance(it).condition * 0.45))
 			if not ledger(s, "relief-sale-%s" % it.uid, "clearance", "应急清仓 %s" % D(it.defId).name, amount, it.cost):
@@ -956,7 +961,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				it.x = pos.x
 				it.y = pos.y
 				return notice(s, "已从陈列架移回后仓。")
-			if not owns(it) or it.has("orderId") or it.location == "isolation" or it.sealed:
+			if not owns(it) or it.has("orderId") or it.location == "isolation" or it.sealed or it.get("service", {}).get("opened", false):
 				return notice(s, "受托、预留、隔离或封存物品不能上架。")
 			if not it.sourceVerified or evidence_count(it) < 2:
 				return notice(s, "请先取得两条独立物证并核验来源，再上架。")
@@ -1046,46 +1051,69 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			if inspection_ready(s):
 				s.inspection = "cleared"
 			return notice(s, "已打印返还凭证，原物移交。未伪造来源或额外收取报酬。")
-		"REPAIR_STEP":
-			var it = find_inventory(s, a.uid)
-			if it == null or trade_reserved(s, it) or it.owner == "pawn" or it.location == "isolation" or it.sealed or not it.sourceVerified or it.repaired:
-				return notice(s, "该物件不能开始新的维修工序。")
-			var progress: float = s.repairProgress.get(it.uid, 0)
-			if a.stage != progress or a.stage < 0 or a.stage > 2:
-				return notice(s, "按清洁排故、换件连接、配置复核的顺序操作。")
-			s.repairProgress[it.uid] = progress + 1
-			return notice(s, "三道工序准备完成，确认后才扣除材料与AP。" if progress == 2 else "工序位置已记录，材料与AP尚未提交。")
-		"REPAIR":
-			var it = find_inventory(s, a.uid)
-			var r := GameData.recipe(a.recipeId)
-			if it == null or r.is_empty() or r.kind != "repair":
-				return previous
-			if it.repaired:
-				return notice(s, "该物件已完成本次修复，不能重复刷价值。")
-			if trade_reserved(s, it) or it.owner == "pawn" or it.location == "isolation" or it.sealed or not it.sourceVerified:
-				return notice(s, "保管、来源未核或隔离货物不能加工。")
-			if r.itemId != it.defId and D(it.defId).get("recipeId", "") != r.id:
-				return notice(s, "配方与实际物件不兼容。")
-			if evidence_count(it) < 1:
-				return notice(s, "先取得故障诊断证据，再开始修复。")
-			if s.repairProgress.get(it.uid, 0) != 3:
-				return notice(s, "尚未完成三道可见维修工序。")
-			if not has_ap(s, r.ap):
-				return notice(s, "修复需%sAP，当前不足。" % jnum(r.ap))
-			for id in r.materials:
-				if s.materials.get(id, 0) < r.materials[id]:
-					return notice(s, "维修材料不足，请从物资采购补齐；尚未扣料。")
-			for id in r.materials:
-				s.materials[id] -= r.materials[id]
-			spend(s, r.ap)
-			it.cost += _materials_cost(r)
-			WatchRules.restore_parts(it)
-			it.repaired = true
-			it.working = true
-			it.condition = minf(0.9 if r.id == "REC-001" else 0.95, it.condition + 0.3)
+		"SERVICE_BEGIN":
+			var it = find_inventory(s, a.get("uid", ""))
+			if it == null: return previous
+			WatchService.ensure(it,s.seed)
+			var blocked := WatchService.available(s,it)
+			if blocked != "": return notice(s,blocked)
+			it.service.active = true
+			return notice(s,"维修工单已保存：只处理本件实际故障。")
+		"SERVICE_PROGRESS":
+			var it = find_inventory(s, a.get("uid", ""))
+			if it == null: return previous
+			WatchService.ensure(it,s.seed)
+			var blocked := WatchService.available(s,it)
+			if blocked != "": return notice(s,blocked)
+			var task := String(a.get("task", ""))
+			var progress = a.get("progress", null)
+			if not progress is Dictionary or not WatchService.valid_progress(progress): return previous
+			if task.begins_with("forge_"):
+				var method := task.trim_prefix("forge_")
+				if not WatchForgery.METHODS.has(method) or WatchForgery.treatments(it).has(method): return previous
+				if it.owner != "shop" or it.has("orderId"): return notice(s,"伪装加工只开放给店铺自有手表。")
+				if it.service.opened and it.service.get("forge_task", "") != task: return notice(s,"请先收妥内部维修并封盖。")
+				if progress.has("opened"):
+					it.service.opened = bool(progress.opened)
+					if progress.opened: it.service.forge_task = task
+			else:
+				if not WatchService.TASKS.has(task) or task != WatchService.current(it) or it.service.done.has(task) or it.service.get("forge_task", "") != "": return previous
+				if task == "open" and progress.get("opened", false): it.service.opened = true
+			it.service.operations[task] = progress.duplicate(true)
+			return s
+		"SERVICE_COMPLETE":
+			var it = find_inventory(s, a.get("uid", ""))
+			if it == null: return previous
+			WatchService.ensure(it,s.seed)
+			var task := String(a.get("task", ""))
+			if task == "" or not WatchService.TASKS.has(task): return previous
+			var blocked := WatchService.problem(s,it,task)
+			if blocked != "": return notice(s,blocked)
+			if not it.service.operations.get(task, {}).get("complete", false): return notice(s,"请先完成这道工序的实际操作。")
+			var cost := WatchService.step_cost(task,it)
+			for id in cost.materials:
+				s.materials[id] -= cost.materials[id]
+				it.cost += GameData.material(id).price * cost.materials[id]
+			spend(s,cost.ap)
+			it.service.paid[task] = cost.duplicate(true)
+			WatchService.commit(it,task)
 			it.listPrice = jround(D(it.defId).value * it.condition * 0.88)
-			s.tutorial = maxf(s.tutorial, 2)
-			return notice(s, "表带与缺件维护已完成，质量已更新；不证明走时精度、防水或真伪。")
+			return notice(s,"已完成：%s。实物变化已记录，请按需复测旧物证。" % WatchService.label(task,it))
+		"SERVICE_FINISH":
+			var it = find_inventory(s, a.get("uid", ""))
+			if it == null: return previous
+			WatchService.ensure(it,s.seed)
+			var blocked := WatchService.available(s,it)
+			if blocked != "": return notice(s,blocked)
+			if not WatchService.finished(it): return notice(s,"工单尚未完成，不能跳过故障处理、回装或封盖。")
+			if it.service.finished: return previous
+			it.service.active = false
+			it.service.finished = true
+			if not it.service.tasks.is_empty(): it.repaired = true
+			s.tutorial = maxf(s.tutorial,2)
+			return notice(s,"本次工单已交工；仅记录实际完成的维护，不证明真伪或防水。")
+		"REPAIR_STEP", "REPAIR":
+			return notice(s,"旧版三道维修工序已停用，请到修表工作台按实际工单操作。")
 		"DISMANTLE", "CRAFT":
 			return notice(s, "本店目前只提供手表基础维护。")
 		"TAKE_ORDER":

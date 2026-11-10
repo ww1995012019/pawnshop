@@ -720,7 +720,8 @@ func _on_changed(prev: Dictionary, next: Dictionary, action: Dictionary) -> void
 		_sync_wanted_notice()
 		return
 	_sync_wanted_notice()
-	if not workspace_open() and next.notice != "" and (next.notice != prev.notice or action.type != "OFFER"):
+	var quiet_save: bool = action.type in ["SERVICE_PROGRESS", "SERVICE_BEGIN"] and next.notice == prev.notice
+	if not workspace_open() and not quiet_save and next.notice != "" and (next.notice != prev.notice or action.type != "OFFER"):
 		toast(next.notice)
 	var spent: float = prev.ap - next.ap
 	if spent > 0 and hud.visible:
@@ -767,7 +768,9 @@ func toast(text: String, tone := "info") -> void:
 		if not last.is_queued_for_deletion() and (last.get_child(0) as Label).text == text:
 			return
 	var p := UIKit.plate(UIKit.paper_style(14))
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var l := UIKit.label(text, 20, UIKit.INK if tone == "info" else UIKit.RUST, false, true)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(toast_box.size.x - 36, 0)
 	p.add_child(l)
@@ -1264,7 +1267,7 @@ func open_help() -> void:
 	var manual := UIKit.button("打开手表检验说明书", "primary", Vector2(0, 56))
 	manual.pressed.connect(func(): open_watch_manual())
 	body.add_child(manual)
-	var text := "• 柜台：按服务铃请下一位来客。报价只代表对方的认识与预算；检测不会自动改变对方的开价。\n• 检验：只用放大镜、紫外线、称重。对照说明书查看 logo、编号与重量，记录物证；每项缩小估价范围，三项当前检验完成后显示准确参考市价，成交价仍需议定。\n• 议价：可以主动出示物证。维修师、收藏者和普通人理解同一条证据的能力不同，相关专家85%概率独立准确估价，普通客人20%概率接近市价；你的私下检验不会自动更新对方认知。\n• 造假：在仓储选择重描标识、伪造编号或添加配重。分别留下放大镜、紫外线和称重可辨认的痕迹，不修复真实故障或缺件；顾客按对应专业能力识别。\n• 维修：清洁、换件、复核装配，最后确认才扣材料和行动点。材料等流动商人到店购买。\n• 仓储与订单：保管每一只原表，核验来源，按订单要求交还同一实物。\n• 日结：按账本支付维护费与租金，继续经营 21 天。"
+	var text := "• 柜台：按服务铃请下一位来客。报价只代表对方的认识与预算；检测不会自动改变对方的开价。\n• 检验：只用放大镜、紫外线、称重。对照说明书查看 logo、编号与重量，记录物证；每项缩小估价范围，三项当前检验完成后显示准确参考市价，成交价仍需议定。\n• 议价：可以主动出示物证。维修师、收藏者和普通人理解同一条证据的能力不同，相关专家85%概率独立准确估价，普通客人20%概率接近市价；你的私下检验不会自动更新对方认知。\n• 造假：在修表台的伪装加工中操作重描标识、伪造编号或添加配重。分别留下标识漆层、编号晕边及内部配重痕迹，不修复真实故障或缺件；顾客按对应专业能力识别。\n• 维修：依本件故障安排除尘、开盖、洗件、换件、润滑回装与走时复核；机械表与石英表操作不同。完成对应工序时扣费，进度可保存。材料等流动商人到店购买。\n• 仓储与订单：保管每一只原表，核验来源，按订单要求交还同一实物。\n• 日结：按账本支付维护费与租金，继续经营 21 天。"
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.custom_minimum_size.y = clampf(get_viewport().get_visible_rect().size.y - 300, 180, 450)

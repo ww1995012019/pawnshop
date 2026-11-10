@@ -67,6 +67,8 @@ static func forgery_problem(s: Dictionary, item, method := "") -> String:
 	if s.phase != "open": return "打烊后不能加工。"
 	if item.owner != "shop" or item.has("orderId") or item.sealed or item.location == "isolation" or not item.sourceVerified or Model.trade_reserved(s, item):
 		return "只能加工来源已核验、未被占用的店铺自有手表。"
+	if item.get("service", {}).get("opened", false) and item.service.get("forge_task", "") != "forge_" + method:
+		return "请先收妥内部维修并封盖，再切换伪装加工。"
 	if method == "":
 		for candidate in WatchForgery.METHODS:
 			if forgery_problem(s, item, candidate) == "": return ""
@@ -150,6 +152,9 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 		var method: String = action.get("method", "logo")
 		var problem := forgery_problem(previous, item, method)
 		if problem != "": return _message(previous, problem)
+		var operation: Dictionary = item.get("service", {}).get("operations", {}).get("forge_" + method, {})
+		if not operation.get("complete", false) or operation.get("opened", false):
+			return _message(previous, "请先在修表工作台完成这项加工的实际操作与封盖。")
 		var s: Dictionary = previous.duplicate(true)
 		item = Model.find_inventory(s, item.uid)
 		for id in WatchForgery.COSTS[method]:
@@ -157,6 +162,8 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 			item.cost += GameData.material(id).price * WatchForgery.COSTS[method][id]
 		Model.spend(s, 1)
 		WatchForgery.apply(item, method)
+		item.service.opened = false
+		item.service.erase("forge_task")
 		return Model.notice(s, "%s完成：对应实物读数已改变，留下加工痕迹；故障、缺件与真实价值未改变，请复测更新记录。" % WatchForgery.LABELS[method])
 	if kind == "SELECT_TRADE" and previous.phase == "open" and previous.trade != null and previous.trade.kind == "sell" and not previous.trade.locked:
 		var item = Model.find_inventory(previous, action.get("uid", ""))
@@ -250,7 +257,7 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 		var item = Model.find_inventory(previous, action.get("uid", ""))
 		if item == null:
 			return previous
-		if item.owner != "shop" or item.has("orderId") or item.sealed or item.location == "isolation" or not item.sourceVerified or Model.trade_reserved(previous, item):
+		if item.owner != "shop" or item.has("orderId") or item.sealed or item.location == "isolation" or not item.sourceVerified or Model.trade_reserved(previous, item) or item.get("service", {}).get("opened", false):
 			return _message(previous, "只能回收来源已核验、未被占用的店铺自有物品。")
 		if not Model.has_ap(previous, 1):
 			return _message(previous, "行动点不足，旧物未售出。")

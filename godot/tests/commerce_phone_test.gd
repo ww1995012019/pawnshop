@@ -32,8 +32,8 @@ func run() -> void:
 	shell.add_child(bridge)
 	bridge.setup(shell)
 	var status: Dictionary = bridge.snapshot()
-	check(status.get("merchant", false) and status.get("merchant_goods", []).size() == 6,
-		"the phone can distinguish a merchant and see the six basic supplies")
+	check(status.get("merchant", false) and status.get("merchant_goods", []).size() == GameData.materials.size(),
+		"the phone can distinguish a merchant and see all basic and task-specific supplies")
 	var before_cash: float = game.state.cash
 	var before_owned: float = game.state.materials["MAT-001"]
 	bridge.command({"type": "merchant_buy", "id": "MAT-001"})
@@ -74,8 +74,9 @@ func run() -> void:
 		"the selected eligible warehouse item exposes a phone forgery action")
 	var before_ap: float = game.state.ap
 	bridge.command({"type": "forge", "uid": uid})
-	check(Model.find_inventory(game.state, uid).has("forgery") and game.state.ap == before_ap - 1,
-		"a phone forgery command changes the selected owned item through the real reducer")
+	await frame()
+	check(not Model.find_inventory(game.state, uid).has("forgery") and game.state.ap == before_ap and shell.active_shell().page_name == "repair" and shell.active_shell().page.mode == "forge",
+		"a phone forgery command opens physical work without silently committing or charging")
 	print("COMMERCE PHONE failures=", failures)
 	shell.queue_free()
 	await frame()

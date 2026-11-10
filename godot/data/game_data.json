@@ -30,7 +30,17 @@
         "serial_format": "BC N01 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "quartz",
+        "caseback": "snap",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -69,7 +79,17 @@
         "serial_format": "BC N02 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "quartz",
+        "caseback": "screw",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "bracelet_link",
+          "spring_bar"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -108,7 +128,17 @@
         "serial_format": "BC N03 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "quartz",
+        "caseback": "bolts",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -147,7 +177,17 @@
         "serial_format": "HX H01 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "quartz",
+        "caseback": "screw",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "bracelet_link",
+          "spring_bar"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -186,7 +226,17 @@
         "serial_format": "HX H02 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "quartz",
+        "caseback": "screw",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -225,7 +275,17 @@
         "serial_format": "HX H03 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "quartz",
+        "caseback": "bolts",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -264,7 +324,17 @@
         "serial_format": "HG A01 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "quartz",
+        "caseback": "snap",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -303,7 +373,18 @@
         "serial_format": "HG A02 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "mechanical",
+        "caseback": "snap",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -342,7 +423,18 @@
         "serial_format": "HG A03 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "mechanical",
+        "caseback": "screw",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "bracelet_link",
+          "spring_bar"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -381,7 +473,17 @@
         "serial_format": "YM R01 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "quartz",
+        "caseback": "bolts",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -420,7 +522,17 @@
         "serial_format": "YM R02 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "quartz",
+        "caseback": "screw",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "bracelet_link",
+          "spring_bar"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -459,7 +571,17 @@
         "serial_format": "YM R03 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "quartz",
+        "caseback": "snap",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -498,7 +620,18 @@
         "serial_format": "JH J01 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "mechanical",
+        "caseback": "snap",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -537,7 +670,18 @@
         "serial_format": "JH J02 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "mechanical",
+        "caseback": "screw",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -576,7 +720,18 @@
         "serial_format": "JH J03 0000 000000",
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "标准完整表带；金属带含全部原装表节。减少一节约3.1g。",
-        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。"
+        "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
+        "movement": "mechanical",
+        "caseback": "bolts",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "bracelet_link",
+          "spring_bar"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -616,7 +771,17 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装皮带与完整表扣；无可拆金属表节。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "半圆朝阳与水平底线，右侧有0道短刻线"
+        "logo_altered": "半圆朝阳与水平底线，右侧有0道短刻线",
+        "movement": "quartz",
+        "caseback": "snap",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -656,7 +821,17 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装皮带与完整表扣；无可拆金属表节。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "半圆朝阳与水平底线，右侧有1道短刻线"
+        "logo_altered": "半圆朝阳与水平底线，右侧有1道短刻线",
+        "movement": "quartz",
+        "caseback": "snap",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -696,7 +871,17 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装织物带与完整表扣；无可拆金属表节。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "半圆朝阳与水平底线，右侧有2道短刻线"
+        "logo_altered": "半圆朝阳与水平底线，右侧有2道短刻线",
+        "movement": "quartz",
+        "caseback": "bolts",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -736,7 +921,17 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装织物带与完整表扣；无可拆金属表节。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "半圆朝阳与水平底线，右侧有3道短刻线"
+        "logo_altered": "半圆朝阳与水平底线，右侧有3道短刻线",
+        "movement": "quartz",
+        "caseback": "snap",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -776,7 +971,17 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "半圆朝阳与水平底线，右侧有4道短刻线"
+        "logo_altered": "半圆朝阳与水平底线，右侧有4道短刻线",
+        "movement": "quartz",
+        "caseback": "screw",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "bracelet_link",
+          "spring_bar"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -816,7 +1021,17 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "半圆朝阳与水平底线，右侧有5道短刻线"
+        "logo_altered": "半圆朝阳与水平底线，右侧有5道短刻线",
+        "movement": "quartz",
+        "caseback": "screw",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "bracelet_link",
+          "spring_bar"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -856,7 +1071,18 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装皮带与完整表扣；无可拆金属表节。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "两道折线河纹，右侧有0道短刻线"
+        "logo_altered": "两道折线河纹，右侧有0道短刻线",
+        "movement": "mechanical",
+        "caseback": "snap",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -896,7 +1122,18 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "两道折线河纹，右侧有1道短刻线"
+        "logo_altered": "两道折线河纹，右侧有1道短刻线",
+        "movement": "mechanical",
+        "caseback": "screw",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "bracelet_link",
+          "spring_bar"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -936,7 +1173,17 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装皮带与完整表扣；无可拆金属表节。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "两道折线河纹，右侧有2道短刻线"
+        "logo_altered": "两道折线河纹，右侧有2道短刻线",
+        "movement": "quartz",
+        "caseback": "snap",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -976,7 +1223,18 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "两道折线河纹，右侧有3道短刻线"
+        "logo_altered": "两道折线河纹，右侧有3道短刻线",
+        "movement": "mechanical",
+        "caseback": "screw",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "bracelet_link",
+          "spring_bar"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -1016,7 +1274,17 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装橡胶带与完整表扣；无可拆金属表节。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "两道折线河纹，右侧有4道短刻线"
+        "logo_altered": "两道折线河纹，右侧有4道短刻线",
+        "movement": "quartz",
+        "caseback": "screw",
+        "parts": [
+          "battery",
+          "contact",
+          "quartz_module",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -1056,7 +1324,18 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "两道折线河纹，右侧有5道短刻线"
+        "logo_altered": "两道折线河纹，右侧有5道短刻线",
+        "movement": "mechanical",
+        "caseback": "bolts",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "bracelet_link",
+          "spring_bar"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -1096,7 +1375,18 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装皮带与完整表扣；无可拆金属表节。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "三峰冠冕与水平底线，右侧有0道短刻线"
+        "logo_altered": "三峰冠冕与水平底线，右侧有0道短刻线",
+        "movement": "mechanical",
+        "caseback": "snap",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -1136,7 +1426,18 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "三峰冠冕与水平底线，右侧有1道短刻线"
+        "logo_altered": "三峰冠冕与水平底线，右侧有1道短刻线",
+        "movement": "mechanical",
+        "caseback": "screw",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "bracelet_link",
+          "spring_bar"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -1176,7 +1477,18 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装皮带与完整表扣；无可拆金属表节。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "三峰冠冕与水平底线，右侧有2道短刻线"
+        "logo_altered": "三峰冠冕与水平底线，右侧有2道短刻线",
+        "movement": "mechanical",
+        "caseback": "snap",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -1216,7 +1528,18 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装皮带与完整表扣；无可拆金属表节。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "三峰冠冕与水平底线，右侧有3道短刻线"
+        "logo_altered": "三峰冠冕与水平底线，右侧有3道短刻线",
+        "movement": "mechanical",
+        "caseback": "screw",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "spring_bar",
+          "strap"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -1256,7 +1579,18 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "三峰冠冕与水平底线，右侧有4道短刻线"
+        "logo_altered": "三峰冠冕与水平底线，右侧有4道短刻线",
+        "movement": "mechanical",
+        "caseback": "bolts",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "bracelet_link",
+          "spring_bar"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -1296,7 +1630,18 @@
         "serial_location": "后盖中央，紫外光下显现",
         "configuration": "原装金属带；完整配置含全部原装表节，每节约3.4g。",
         "logo_exception": "磨损或合法更换表盘可能影响刻印；单项不证明真伪。",
-        "logo_altered": "三峰冠冕与水平底线，右侧有5道短刻线"
+        "logo_altered": "三峰冠冕与水平底线，右侧有5道短刻线",
+        "movement": "mechanical",
+        "caseback": "screw",
+        "parts": [
+          "train_wheel",
+          "bridge",
+          "escapement",
+          "bearing",
+          "retainer",
+          "bracelet_link",
+          "spring_bar"
+        ]
       },
       "clues": {
         "TOL-001": "记录实物细节后对照说明书。",
@@ -1368,6 +1713,30 @@
       "name": "光学透片",
       "price": 12,
       "description": "修正投影与灯具光路"
+    },
+    {
+      "id": "MAT-007",
+      "name": "零件清洗液",
+      "price": 6,
+      "description": "仅清洗已拆出的适用零件，须沥干吹干后回装"
+    },
+    {
+      "id": "MAT-008",
+      "name": "匹配维修件",
+      "price": 12,
+      "description": "按表款匹配传动、固定部件或表节，不用于伪装配重"
+    },
+    {
+      "id": "MAT-009",
+      "name": "微量表油",
+      "price": 7,
+      "description": "用于已清洗机械机芯的适用轴承润滑"
+    },
+    {
+      "id": "MAT-010",
+      "name": "匹配纽扣电池",
+      "price": 8,
+      "description": "按石英表规格匹配的供电电池，不用于机械表"
     }
   ],
   "npcs": [

@@ -15,8 +15,14 @@ func run() -> void:
 	Model.disclose_evidence(t,a,"TOL-005")
 	var known_old: Dictionary = t.npcKnowledge.duplicate(true)
 	var old_reading := Model.displayed_clue(a,"TOL-005")
-	WatchRules.restore_parts(a)
-	a.condition = 0.9
+	s = Model.reduce(s,{"type":"SERVICE_BEGIN","uid":a.uid})
+	for step in 6:
+		var task := WatchService.current(Model.find_inventory(s,a.uid))
+		if task == "": break
+		s = Model.reduce(s,{"type":"SERVICE_PROGRESS","uid":a.uid,"task":task,"progress":{"complete":true}})
+		s = Model.reduce(s,{"type":"SERVICE_COMPLETE","uid":a.uid,"task":task})
+	s = Model.reduce(s,{"type":"SERVICE_FINISH","uid":a.uid})
+	a = Model.find_inventory(s,a.uid)
 	check(Model.displayed_clue(a,"TOL-005") == old_reading,"repair preserves player pre-retest recorded reading")
 	Model.disclose_evidence(t,a,"TOL-005")
 	check(t.npcKnowledge == known_old,"redisclosing old record cannot leak repaired mass or wear")
@@ -28,7 +34,7 @@ func run() -> void:
 	s.trade = t
 	var floor_price := int(Model.trade_terms(s,t,a).opening)
 	s = Model.reduce(s,{"type":"OFFER","price":floor_price,"evidence":"TOL-005"})
-	check(s.trade != null and s.trade.npcKnowledge[a.uid].risk < 0 and is_equal_approx(s.trade.npcKnowledge[a.uid].condition,0.9),"reused OFFER tool replaces outdated risk and visible wear")
+	check(s.trade != null and s.trade.npcKnowledge[a.uid].risk < 0 and is_equal_approx(s.trade.npcKnowledge[a.uid].condition,a.condition),"reused OFFER tool replaces outdated risk and visible wear")
 	var updated: Dictionary = s.trade.npcKnowledge.duplicate(true)
 	Model.disclose_evidence(s.trade,Model.find_inventory(s,a.uid),"TOL-005")
 	check(s.trade.npcKnowledge == updated,"unchanged repeated disclosure never stacks adjustment")

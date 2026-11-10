@@ -1,505 +1,472 @@
 extends Page
-## Repair bench: scrub the grime off, seat the replacement part, run the load
-## test, then commit (materials and AP are only spent on the final step).
-
-var item_home := Vector2(860, 500)
-var part_home := Vector2(1230, 610)
-var mat_rect := Rect2()
-
-var item: ItemSprite
+## Persistent watch work orders; each tool touches the same physical watch.
+const Service = preload("res://scripts/model/watch_service.gd")
+const Cleaning = preload("res://scripts/model/watch_cleaning.gd")
+const BenchArt = preload("res://scripts/ui/watch_bench_art.gd")
+const Commerce = preload("res://scripts/model/commerce.gd")
 var it_uid := ""
-var list_box: VBoxContainer
-var info: VBoxContainer
-var bench_body: VBoxContainer
+var mode := "service"
+var task := ""
+var stage := 0
+var item: ItemSprite
+var item_home := Vector2.ZERO
+var mat_rect := Rect2()
 var list_panel: PanelContainer
 var detail_panel: PanelContainer
 var bench: PanelContainer
-var mask: Image
+var list_box: VBoxContainer
+var info: VBoxContainer
+var bench_body: VBoxContainer
+var art: Control
+var cleaning: RefCounted
 var mask_tex: ImageTexture
-var dirty := 1.0
+var dirty := 0.0
 var scrubbing := false
-var part: Node2D
-var slot: Node2D
-var dragging_part := false
-var test_hold := false
-var test_value := 0.0
-var test_bar: ProgressBar
+var last_uv := Vector2.ZERO
+var cloth_uv := Vector2(-1, -1)
+var cloth_direction := Vector2.RIGHT
+var show_residual := false
+var cleaning_unsaved := false
+var save_clock := 0.0
 var grime_label: Label
-var stage := 0
+var action_button: Button
+var instruction: Label
+var refresh_pending := false
+var pending_operation := {}
+var pending_task := ""
+var saved_boundary := ""
+var operation_clock := 0.0
 
-func scene_name() -> String:
-	return "workbench"
+func scene_name() -> String: return "workbench"
 
 func hint_text() -> String:
-	if stage < 0:
-		return "这件暂时不能开工：原因写在工作台上，或在左侧换一件。" if it_uid != "" else "没有可修的物件。收购故障货或接委修订单后再来。"
-	match stage:
-		0: return "按住实物来回擦，清掉污垢与氧化层。"
-		1: return "把工作台右侧的新零件拖进实物上发光的槽位。"
-		2: return "按住「复核装配」，指针进入绿区时松开。"
-		3: return "三道工序完成：确认修复后才扣材料与行动点。"
-	return ""
+	if mode == "forge": return "伪装只改变对应表象，会留下加工痕迹；不会修好真实故障。"
+	if task == "dust": return "按住手表来回擦拭。查看残留可指出未擦到的污渍，离开后进度保留。"
+	if is_instance_valid(art) and art.visible: return art.hint_text()
+	return "按本件故障工单处理；无故障的部件不需要重复维修。"
 
 func enter() -> void:
-	list_panel = left_panel(380)
-	var left := list_panel
-	var lv := UIKit.vbox(10)
-	left.add_child(lv)
-	lv.add_child(UIKit.module_header("待修物件", "选货后按工序完成维修", "REPAIR / 01"))
-	var sc := ScrollContainer.new()
-	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	list_panel = left_panel(260)
+	var left := UIKit.vbox(10)
+	list_panel.add_child(left)
+	left.add_child(UIKit.module_header("修表台", "逐件记录 · 随时续修", "SERVICE"))
+	var modes := UIKit.vbox(6)
+	for spec in [["维修保养", open_service], ["伪装加工", open_forgery]]:
+		var b := UIKit.button(spec[0], "secondary", Vector2(0, 48), 18)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.pressed.connect(spec[1])
+		modes.add_child(b)
+	left.add_child(modes)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	list_box = UIKit.vbox(8)
 	list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sc.add_child(list_box)
-	lv.add_child(sc)
-	detail_panel = side_panel(470)
-	var right := detail_panel
-	var rsc := ScrollContainer.new()
-	rsc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	info = UIKit.vbox(12)
+	scroll.add_child(list_box)
+	left.add_child(scroll)
+	detail_panel = side_panel(350)
+	var details := ScrollContainer.new()
+	details.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	info = UIKit.vbox(10)
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rsc.add_child(info)
-	right.add_child(rsc)
+	details.add_child(info)
+	detail_panel.add_child(details)
 	bench = UIKit.plate()
 	add_child(bench)
-	bench_body = UIKit.vbox(10)
+	bench_body = UIKit.vbox(6)
 	bench.add_child(bench_body)
 	bench_body.minimum_size_changed.connect(queue_relayout)
-	# Only lots in the shop's own storage can go on the bench; the visitor's
-	# item at the counter (Game.item finds it too) is not ours to work on.
-	var it = null
-	for c in _candidates():
-		if c.uid == Game.focus_uid:
-			it = c
-	if it == null:
-		var c := _candidates()
-		it = c[0] if not c.is_empty() else null
-	_select(it.uid if it != null else "")
-	queue_relayout()
-
-func relayout() -> void:
-	if not is_instance_valid(bench):
-		return
-	mat_rect = layout_workbench(list_panel, detail_panel, bench, 380)
-	part_home = shell.ui_to_world(Vector2(mat_rect.end.x - 90, mat_rect.get_center().y + 80))
-	if is_instance_valid(item):
-		item_home = fit_workbench_item(item, mat_rect)
-		item.position = item_home
-	if is_instance_valid(slot):
-		slot.position = item.uv_global(Vector2(0.58, 0.48))
-	if is_instance_valid(part) and not dragging_part:
-		part.position = part_home
-
-func _recipe(it: Dictionary) -> Dictionary:
-	var def := GameData.def(it.defId)
-	for r in GameData.recipes:
-		if r.kind == "repair" and (r.itemId == it.defId or def.get("recipeId", "") == r.id):
-			return r
-	return {}
-
-func _craft_recipe() -> Dictionary:
-	for r in GameData.recipes:
-		if r.kind == "craft":
-			return r
-	return {}
+	art = BenchArt.new()
+	art.progressed.connect(_operation_progressed)
+	art.completed.connect(_art_completed)
+	add_child(art)
+	move_child(bench, -1)
+	var candidates := _candidates()
+	var selected := ""
+	for candidate in candidates:
+		if candidate.uid == Game.focus_uid: selected = candidate.uid
+	if selected == "" and not candidates.is_empty(): selected = candidates[0].uid
+	_select(selected)
 
 func _candidates() -> Array:
 	var out := []
 	for it in Game.state.inventory:
-		if it.owner == "pawn":
-			continue
-		if not _recipe(it).is_empty() and not it.repaired:
-			out.append(it)
-		elif it.defId == _craft_recipe().get("itemId", "") and it.owner == "shop":
-			out.append(it)
+		if it.owner != "pawn" and it.get("watch", null) is Dictionary: out.append(it)
 	return out
 
-func _blocked(it: Dictionary) -> String:
-	if Model.trade_reserved(Game.state, it):
-		return "正在柜台交易中"
-	if it.location == "isolation" or it.sealed:
-		return "隔离/封存中，先在仓储解除"
-	if not it.sourceVerified:
-		return "来源未核验，先扫描登记"
-	if it.repaired:
-		return "已经修复"
-	return ""
+func _select(uid: String) -> void:
+	_save_cleaning()
+	_save_operation()
+	it_uid = uid
+	Game.focus_uid = uid
+	scrubbing = false
+	cloth_uv = Vector2(-1,-1)
+	show_residual = false
+	if is_instance_valid(item): item.queue_free()
+	item = null
+	cleaning = null
+	var it = Game.item(uid)
+	if it != null:
+		Game.dispatch({"type":"SERVICE_BEGIN", "uid":uid})
+		it = Game.item(uid)
+		item = ItemSprite.new()
+		item.setup(it.defId, uid, 360.0)
+		item.draggable = false
+		add_world(item)
+		var alpha: Image = item.body.texture.get_image().get_region(Rect2i(item.body.region_rect))
+		cleaning = Cleaning.new()
+		cleaning.configure(alpha, uid, it.get("service", {}).get("operations", {}).get("dust", {}))
+		mask_tex = ImageTexture.create_from_image(cleaning.image())
+		item.mat.set_shader_parameter("grime_mask",mask_tex)
+	_fill_list()
+	_stage_ui()
+	_refresh_info()
 
 func _fill_list() -> void:
 	UIKit.clear(list_box)
 	for it in _candidates():
-		var row := UIKit.button("", "primary" if it.uid == it_uid else "secondary", Vector2(0, 84), 18)
+		var selected: bool = it.uid == it_uid
+		var row := UIKit.button("", "primary" if selected else "secondary", Vector2(0, 76), 17)
+		var service: Dictionary = it.get("service", {})
+		var completed: int = service.get("done", []).size()
+		var count: int = service.get("tasks", []).size()
+		var status := "工单 %d/%d" % [completed,count] if count > 0 else ("已保养" if it.repaired else "待检查")
+		row.text = Game.def_name(it.defId) + "\n" + status
 		row.icon = UIKit.item_icon(it.defId)
-		row.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		row.expand_icon = true
-		row.add_theme_constant_override("icon_max_width", 64)
+		row.add_theme_constant_override("icon_max_width",48)
 		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		var p: int = int(Game.state.repairProgress.get(it.uid, 0))
-		var why := _blocked(it)
-		row.text = "%s%s\n%s" % [GameData.def(it.defId).name, " · 顾客委修" if it.owner == "customer" else "", why if why != "" else "工序 %d/3 · %s" % [p, "有物证" if Model.evidence_count(it) > 0 else "待鉴定"]]
 		var uid: String = it.uid
-		# Selecting a lot rebuilds this list, so keep the pressed row alive
-		# until Godot has finished dispatching the pointer event.
-		row.pressed.connect(func(): call_deferred("_select", uid))
+		row.pressed.connect(func(): call_deferred("_select",uid))
 		list_box.add_child(row)
-	if list_box.get_child_count() == 0:
-		list_box.add_child(UIKit.label("没有需要修理的物件。收购故障货或接委修订单后再来。", 18, UIKit.MUTED, false, true))
-
-func _select(uid: String) -> void:
-	it_uid = uid
-	Game.focus_uid = uid
-	if item != null and is_instance_valid(item):
-		item.queue_free()
-	for n in [part, slot]:
-		if n != null and is_instance_valid(n):
-			n.queue_free()
-	part = null
-	slot = null
-	_fill_list()
-	var it = Game.item(uid)
-	if it == null:
-		_refresh_info()
-		_stage_ui()
-		return
-	item = ItemSprite.new()
-	item.setup(it.defId, it.uid, 360.0)
-	item.position = item_home
-	item.draggable = false
-	add_world(item, "fg")
-	mask = Image.create(64, 64, false, Image.FORMAT_L8)
-	mask.fill(Color.WHITE)
-	mask_tex = ImageTexture.create_from_image(mask)
-	item.mat.set_shader_parameter("grime_mask", mask_tex)
-	if not Game.prefs.reduced_motion:
-		item.land(70.0)
-	_refresh_info()
-	_stage_ui()
+	if list_box.get_child_count() == 0: list_box.add_child(UIKit.label("暂无可维护的手表。",18,UIKit.MUTED,false,true))
 
 func repair_status(it: Dictionary) -> String:
-	if it.evidence.is_empty():
-		return "尚无检验记录；可先用三种工具对照手册。"
-	var tool: String = it.evidence[-1]
-	return Model.evidence_caption(it, tool) + "：" + Model.displayed_clue(it, tool)
+	var profile: Dictionary = Service.profile(it)
+	var movement := "机械机芯" if profile.movement == "mechanical" else "石英机芯"
+	var cover: String = {"screw":"旋入式后盖","snap":"压入式后盖","bolts":"螺钉式后盖"}.get(profile.caseback,"后盖")
+	var text := movement + " · " + cover
+	if it.evidence.is_empty(): text += "\n尚无检验记录；内部故障需开盖后逐步检查。"
+	else: text += "\n" + Model.evidence_caption(it,it.evidence[-1]) + "：" + Model.displayed_clue(it,it.evidence[-1])
+	return text
 
 func _refresh_info() -> void:
 	UIKit.clear(info)
 	var it = Game.item(it_uid)
 	if it == null:
-		info.add_child(UIKit.label("选择左侧物件。", 20, UIKit.MUTED))
-		_materials()
+		info.add_child(UIKit.label("选择左侧手表。",20,UIKit.MUTED))
 		return
-	var r := _recipe(it)
-	info.add_child(UIKit.record_card(GameData.def(it.defId).name, repair_status(it), "工单 / " + String(it.uid)))
-	if not r.is_empty():
-		var card := UIKit.plate(UIKit.inset_style(12))
-		var cv := UIKit.vbox(6)
-		card.add_child(cv)
-		cv.add_child(UIKit.module_header(r.name, "完成三道工序后确认交工", "STAGE / 03"))
-		var p: int = int(Game.state.repairProgress.get(it.uid, 0))
-		for i in 3:
-			cv.add_child(UIKit.label(("✓ " if i < p else ("▶ " if i == p else "· ")) + String(r.steps[i]), 17, UIKit.GOOD if i < p else (UIKit.TEXT if i == p else UIKit.MUTED), false, true))
-		var mats := []
-		for id in r.materials:
-			mats.append("%s ×%s（有 %s）" % [GameData.material(id).name, Model.jnum(r.materials[id]), Model.jnum(Game.state.materials.get(id, 0))])
-		cv.add_child(UIKit.label("材料：" + "、".join(mats), 16, UIKit.CYAN, false, true))
-		cv.add_child(UIKit.label("确认时消耗 %s AP" % Model.jnum(r.ap), 16, UIKit.MUTED))
-		var why := _repair_block(it, r)
-		var actions := UIKit.hbox(8)
-		var go := UIKit.button("确认修复", "primary", Vector2(0, 56), 21)
-		go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		go.disabled = p != 3 or it.repaired or why != ""
-		go.tooltip_text = why
-		go.pressed.connect(confirm_repair)
-		actions.add_child(go)
-		actions.add_child(_inspect_button(it.uid))
-		cv.add_child(actions)
-		if why != "" and not it.repaired:
-			cv.add_child(UIKit.label(why, 16, UIKit.DANGER, false, true))
-		info.add_child(card)
-	if r.is_empty():
-		info.add_child(_inspect_button(it.uid))
-	_materials()
-
-func _inspect_button(uid: String) -> Button:
-	var button := UIKit.button("去鉴定", "secondary", Vector2(0, 56), 20, "inspect")
-	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button.pressed.connect(func(): shell.go("inspect", uid))
-	return button
-
-func confirm_repair() -> void:
-	var it = Game.item(it_uid)
-	if it == null:
-		return
-	var recipe := _recipe(it)
-	if recipe.is_empty() or it.repaired or int(Game.state.repairProgress.get(it.uid, 0)) != 3 or _repair_block(it, recipe) != "":
-		return
-	if Game.dispatch({"type": "REPAIR", "uid": it_uid, "recipeId": recipe.id}) and Game.item(it_uid) != null and Game.item(it_uid).repaired:
-		_celebrate()
-
-## Mirrors the REPAIR rule so the button explains itself instead of failing.
-func _repair_block(it: Dictionary, r: Dictionary) -> String:
-	if Game.state.phase != "open":
-		return "当前未营业，明天可继续维修"
-	var why := _blocked(it)
-	if why != "" and why != "已经修复":
-		return why
-	if Model.evidence_count(it) < 1:
-		return "先去鉴定台取得至少一条故障诊断物证"
-	for id in r.materials:
-		if Game.state.materials.get(id, 0) < r.materials[id]:
-			return "%s不足，请等商人上门采购" % GameData.material(id).name
-	if Game.state.ap < r.ap:
-		return "行动点不足（需 %s AP）" % Model.jnum(r.ap)
-	return ""
-
-
-func _materials() -> void:
+	info.add_child(UIKit.record_card(Game.def_name(it.defId),repair_status(it),"工单 / " + it_uid))
+	if mode == "forge":
+		info.add_child(UIKit.note_card("伪装加工", "只改变标识、编号或读数；真实故障、缺件与真伪仍保留。被识破会影响交易与关系。"))
+		for method in WatchForgery.METHODS:
+			var selected: bool = task == "forge_" + method
+			var button := UIKit.button(WatchForgery.LABELS[method],"primary" if selected else "secondary",Vector2(0,48),19)
+			var candidate: String = method
+			button.pressed.connect(func(): call_deferred("open_forgery",candidate))
+			info.add_child(button)
+			info.add_child(UIKit.label(WatchForgery.cost_text(method),16,UIKit.MUTED,false,true))
+		if it.has("forgery"): info.add_child(UIKit.label(WatchForgery.summary(it),17,UIKit.AMBER,false,true))
+	else:
+		info.add_child(UIKit.module_header("本次维修工单", "只处理实际存在的问题", "WORK ORDER"))
+		var service: Dictionary = it.get("service",{})
+		var visible_faults := []
+		for fault in service.get("faults",[]):
+			if not fault.get("internal",false) or fault.get("discovered",false):
+				visible_faults.append(("✓ " if fault.get("resolved",false) else "· ") + String(fault.get("label",fault.get("id",""))))
+		if not visible_faults.is_empty(): info.add_child(UIKit.label("\n".join(visible_faults),17,UIKit.TEXT,false,true))
+		var work: Array = Service.tasks(it)
+		for step in work:
+			var done: bool = service.get("done",[]).has(step)
+			info.add_child(UIKit.label(("✓ " if done else ("▶ " if step == task else "· ")) + Service.label(step,it),18,UIKit.GOOD if done else (UIKit.AMBER if step == task else UIKit.MUTED),false,true))
+		if work.is_empty(): info.add_child(UIKit.label("本件暂无必须维修的故障。",18,UIKit.GOOD,false,true))
+		if service.get("opened",false): info.add_child(UIKit.label("后盖已打开 · 需回装封盖后才能出售",17,UIKit.AMBER,false,true))
+		if task != "": info.add_child(UIKit.label("本工序：" + _cost_text(Service.step_cost(task,it)),17,UIKit.CYAN,false,true))
+	var why := _current_problem()
+	if why != "": info.add_child(UIKit.label(why,17,UIKit.DANGER,false,true))
+	var inspect := UIKit.button("去鉴定","secondary",Vector2(0,48),19)
+	inspect.pressed.connect(func(): shell.go("inspect",it_uid))
+	info.add_child(inspect)
 	info.add_child(UIKit.rule())
-	info.add_child(UIKit.module_header("维修材料库存", "按最终交工数量扣料", "PARTS"))
-	var visiting: bool = Game.state.trade != null and Game.state.trade.kind == "merchant"
-	info.add_child(UIKit.label("商人正在柜台，可回柜台购买。" if visiting else "商人上门时才能购买维修材料。", 16, UIKit.AMBER, false, true))
-	var g := UIKit.grid(2, 8)
-	for m in GameData.materials:
-		g.add_child(UIKit.label("%s ×%s" % [m.name, Model.jnum(Game.state.materials.get(m.id, 0))], 16, UIKit.TEXT))
-	info.add_child(g)
+	info.add_child(UIKit.module_header("材料库存","完成对应操作时扣除","SUPPLIES"))
+	for material in GameData.materials:
+		info.add_child(UIKit.label("%s  ×%s" % [material.name,Model.jnum(Game.state.materials.get(material.id,0))],16,UIKit.MUTED))
 
-# ---------------------------------------------------------------- stages
+func _cost_text(cost: Dictionary) -> String:
+	var parts := []
+	for id in cost.get("materials",{}): parts.append("%s ×%s" % [GameData.material(id).name, Model.jnum(cost.materials[id])])
+	parts.append("%s AP" % Model.jnum(cost.get("ap",0)))
+	return " · ".join(parts)
+
+func _current_problem() -> String:
+	var it = Game.item(it_uid)
+	if it == null: return "请选择手表"
+	if mode == "forge": return Commerce.forgery_problem(Game.state,it,task.trim_prefix("forge_"))
+	return Service.problem(Game.state,it,task)
 
 func _stage_ui() -> void:
-	_stage_ui_body()
-	# Selecting another lot changes the stage; keep the dock hint in step.
-	shell.hint(hint_text())
-	queue_relayout()
-
-func _stage_ui_body() -> void:
 	UIKit.clear(bench_body)
 	grime_label = null
-	for n in [part, slot]:
-		if n != null and is_instance_valid(n):
-			n.queue_free()
-	part = null
-	slot = null
 	var it = Game.item(it_uid)
 	if it == null:
-		stage = -1
+		art.hide()
 		return
-	var why := _blocked(it)
-	stage = int(Game.state.repairProgress.get(it.uid, 0))
-	if why != "" and stage < 3:
-		bench_body.add_child(UIKit.label("不能开工：" + why, 20, UIKit.DANGER, false, true))
-		item.mat.set_shader_parameter("grime", 0.0)
-		stage = -1
-		return
-	item.mat.set_shader_parameter("grime", 1.0 if stage == 0 else 0.0)
-	bench_body.add_child(UIKit.module_header("维修工序台", "", "BENCH / 03"))
-	var titles := ["清洁排故", "换件连接", "复核装配"]
-	var steps := UIKit.hbox(8)
-	for i in 3:
-		var tag := UIKit.plate(UIKit.inset_style(6))
-		tag.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var text := UIKit.label("%02d  %s%s" % [i + 1, titles[i], "  ✓" if i < stage else ""], 16, UIKit.GOOD if i < stage else (UIKit.AMBER if i == stage else UIKit.MUTED))
-		tag.add_child(text)
-		steps.add_child(tag)
-	bench_body.add_child(steps)
-	bench_body.add_child(UIKit.label("工序完成 · " + hint_text() if stage >= 3 else hint_text(), 19, UIKit.TEXT, false, true))
-	match stage:
-		0:
-			mask.fill(Color.WHITE)
-			mask_tex.update(mask)
-			dirty = 1.0
-			grime_label = UIKit.label("污垢剩余 100%", 18, UIKit.MUTED)
-			bench_body.add_child(grime_label)
-		1:
-			slot = Slot.new()
-			slot.position = item.uv_global(Vector2(0.58, 0.48))
-			add_world(slot, "top")
-			part = Part.new()
-			part.position = part_home
-			add_world(part, "top")
-		2:
-			test_bar = ProgressBar.new()
-			test_bar.custom_minimum_size = Vector2(0, 26)
-			test_bar.show_percentage = false
-			test_bar.max_value = 1.0
-			var row := UIKit.hbox(14)
-			test_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			test_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			row.add_child(test_bar)
-			var b := UIKit.button("按住 · 复核装配", "primary", Vector2(260, 60), 20)
-			b.button_down.connect(func():
-				test_hold = true
-				test_value = 0.0)
-			b.button_up.connect(func():
-				test_hold = false
-				if test_value >= 0.72 and test_value <= 0.9:
-					_step(2)
-				else:
-					shell.toast("指针%s，再试一次：在绿区（72–90%%）松开。" % ("没到绿区" if test_value < 0.72 else "冲过了绿区"))
-					test_value = 0.0)
-			row.add_child(b)
-			bench_body.add_child(row)
-			bench_body.add_child(UIKit.label("绿区：72%–90%", 16, UIKit.GOOD))
-
-func _step(n: int) -> void:
-	if Game.dispatch({"type": "REPAIR_STEP", "uid": it_uid, "stage": n}):
-		shell.sound("check", -4)
-		_sparks(item.global_position)
-
-func _celebrate() -> void:
-	shell.sound("check", 0, 1.2)
-	_sparks(item.global_position)
-	if not Game.prefs.reduced_motion:
-		shell.shake = 0.4
-		item.land(60.0)
-
-func _return_part() -> void:
-	if Game.prefs.reduced_motion:
-		part.position = part_home
+	if mode == "service": task = Service.current(it)
+	stage = it.get("service",{}).get("done",[]).size()
+	var dust := mode == "service" and task == "dust"
+	if is_instance_valid(item):
+		item.visible = dust or task == ""
+		if item.visible and item.logo_variant != WatchRules.logo_variant(it): item._apply_face()
+		item.mat.set_shader_parameter("grime",1.0 if dust else 0.0)
+	art.visible = not dust and task != ""
+	art.set_process(art.visible)
+	var title: String = WatchForgery.LABELS.get(task.trim_prefix("forge_"),"伪装加工") if mode == "forge" else Service.label(task,it)
+	if task == "": title = "本次工单已完成" if not Service.tasks(it).is_empty() and Service.finished(it) else "本件无需维修"
+	bench_body.add_child(UIKit.module_header(title,"","SERVICE / BENCH"))
+	instruction = UIKit.label("",18,UIKit.TEXT,false,true)
+	bench_body.add_child(instruction)
+	var row := UIKit.hbox(10)
+	action_button = UIKit.button("","primary",Vector2(0,50),20)
+	action_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	action_button.pressed.connect(_primary_action)
+	row.add_child(action_button)
+	if dust:
+		dirty = cleaning.remaining()
+		grime_label = UIKit.label("污垢剩余 %d%%" % ceili(dirty*100),18,UIKit.AMBER)
+		row.add_child(grime_label)
+		instruction.text = "按住表面来回擦，污渍沿轨迹消失；不会把划痕擦掉。"
+		action_button.text = "查看残留" if not show_residual else "隐藏残留"
+		if cleaning.complete():
+			instruction.text = "擦拭已完成，提交后记录本工序并扣除对应行动点。"
+			action_button.text = "提交清洁结果"
+			action_button.disabled = _current_problem() != ""
 	else:
-		create_tween().tween_property(part, "position", part_home, 0.25).set_trans(Tween.TRANS_BACK)
+		if task != "":
+			art.configure(it,task,it.get("service",{}).get("operations",{}).get(task,{}))
+			instruction.text = art.hint_text()
+			action_button.text = art.action_text()
+		else:
+			instruction.text = "已完成的工序保留记录；鉴定读数若受维修影响，请复查。"
+			action_button.text = "完成工单 · 记录交工"
+		action_button.disabled = _current_problem() != ""
+	bench_body.add_child(row)
+	shell.hint(hint_text())
+	queue_relayout()
+	queue_redraw()
 
-func _sparks(at: Vector2) -> void:
-	if Game.prefs.reduced_motion:
-		return
-	var p := CPUParticles2D.new()
-	p.position = shell.layer("top").to_local(at)
-	p.amount = 40
-	p.lifetime = 0.8
-	p.one_shot = true
-	p.explosiveness = 0.9
-	p.texture = Util.radial(64, 0.3)
-	p.color = Color(1.0, 0.8, 0.45)
-	p.direction = Vector2(0, -1)
-	p.spread = 120
-	p.initial_velocity_min = 120
-	p.initial_velocity_max = 320
-	p.gravity = Vector2(0, 500)
-	p.scale_amount_min = 0.05
-	p.scale_amount_max = 0.12
-	p.material = Util.add_material()
-	add_world(p, "top")
-	p.emitting = true
+func open_service() -> void:
+	_save_cleaning()
+	_save_operation()
+	mode = "service"
+	_stage_ui()
+	_refresh_info()
 
-func on_changed(_p: Dictionary, _n: Dictionary, a: Dictionary) -> void:
-	# Changes can originate from controls in the panels being rebuilt. Let
-	# input propagation finish before removing those controls from the tree.
-	if a.type == "BUY_MATERIAL":
-		# Only the materials/price detail changed; retain any cleaning progress.
-		call_deferred("_refresh_info")
+func open_forgery(method := "") -> void:
+	_save_cleaning()
+	_save_operation()
+	var it = Game.item(it_uid)
+	if it == null: return
+	var ongoing: String = it.get("service",{}).get("forge_task", "")
+	if ongoing != "": method = ongoing.trim_prefix("forge_")
+	if it.get("service",{}).get("opened",false) and ongoing == "":
+		shell.toast("先完成当前机芯回装与封盖，再切换加工。")
 		return
-	call_deferred("_refresh_after_change", String(a.type))
-
-func _refresh_after_change(action_type: String) -> void:
-	if action_type in ["DISMANTLE", "CRAFT"] and Game.item(it_uid) == null:
-		var c := _candidates()
-		_select(c[0].uid if not c.is_empty() else "")
-		return
-	_fill_list()
+	mode = "forge"
+	if method == "":
+		method = "logo"
+		for candidate in WatchForgery.METHODS:
+			if Commerce.forgery_problem(Game.state,it,candidate) == "":
+				method = candidate
+				break
+	task = "forge_" + method
 	_refresh_info()
 	_stage_ui()
-	shell.hint(hint_text())
 
-# ---------------------------------------------------------------- input & frame
-
-func world_cursor_shape(p: Vector2) -> int:
-	if not is_instance_valid(item):
-		return Input.CURSOR_ARROW
-	if dragging_part:
-		return Input.CURSOR_DRAG
-	if shell.modal_open():
-		return Input.CURSOR_ARROW
-	if stage == 0 and item.contains(p):
-		return Input.CURSOR_CROSS
-	if stage == 1 and is_instance_valid(part) and p.distance_to(part.global_position) < 70:
-		return Input.CURSOR_CAN_DROP
-	return Input.CURSOR_ARROW
-
-func _unhandled_input(e: InputEvent) -> void:
-	if shell.modal_open() or item == null or not is_instance_valid(item):
+func _primary_action() -> void:
+	if task == "dust":
+		if cleaning != null and cleaning.complete():
+			_operation_completed()
+			return
+		show_residual = not show_residual
+		action_button.text = "隐藏残留" if show_residual else "查看残留"
+		queue_redraw()
 		return
-	var p: Vector2 = shell.world_mouse()
-	if e is InputEventMouseButton and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-		if e.pressed:
-			if stage == 0 and item.contains(p):
-				scrubbing = true
-			elif stage == 1 and part != null and p.distance_to(part.global_position) < 70:
-				dragging_part = true
-		else:
+	var why := _current_problem()
+	if why != "":
+		shell.toast(why)
+		return
+	if task == "":
+		confirm_repair()
+		return
+	var operation: Dictionary = Game.item(it_uid).get("service",{}).get("operations",{}).get(task,{})
+	if operation.get("complete",false): _operation_completed()
+	else: art.advance()
+
+func _operation_progressed(progress: Dictionary) -> void:
+	if not is_inside_tree() or task == "" or not art.visible or progress.get("task", "") != task: return
+	pending_operation = progress
+	pending_task = task
+	var boundary: String = task + ":" + str(progress.get("step", 0)) + ":" + String(progress.get("phase", "idle"))
+	if saved_boundary != boundary or operation_clock >= 0.35 or progress.get("complete",false):
+		saved_boundary = boundary
+		_save_operation()
+	if is_instance_valid(action_button): action_button.text = art.action_text()
+	if is_instance_valid(instruction): instruction.text = art.hint_text()
+
+func _save_operation() -> void:
+	if pending_operation.is_empty() or pending_task == "" or it_uid == "": return
+	var progress := pending_operation
+	pending_operation = {}
+	operation_clock = 0.0
+	Game.dispatch({"type":"SERVICE_PROGRESS","uid":it_uid,"task":pending_task,"progress":progress})
+
+func _art_completed() -> void:
+	if not art.visible or art.progress_snapshot().get("task", "") != task: return
+	_operation_completed()
+
+func _operation_completed() -> void:
+	_save_operation()
+	var it = Game.item(it_uid)
+	if it == null or task == "": return
+	var progress: Dictionary = it.get("service",{}).get("operations",{}).get(task,{}).duplicate(true)
+	progress.complete = true
+	Game.dispatch({"type":"SERVICE_PROGRESS","uid":it_uid,"task":task,"progress":progress})
+	if mode == "forge":
+		Game.dispatch({"type":"FORGE","uid":it_uid,"method":task.trim_prefix("forge_")})
+	else:
+		Game.dispatch({"type":"SERVICE_COMPLETE","uid":it_uid,"task":task})
+		it = Game.item(it_uid)
+		if Service.current(it) == "" and not Service.tasks(it).is_empty(): Game.dispatch({"type":"SERVICE_FINISH","uid":it_uid})
+	_request_refresh()
+
+func confirm_repair() -> void:
+	Game.dispatch({"type":"SERVICE_FINISH","uid":it_uid})
+	_request_refresh()
+
+func _wipe_uv(from_uv: Vector2,to_uv: Vector2) -> void:
+	if cleaning == null or task != "dust" or _current_problem() != "": return
+	if cleaning.stroke(from_uv,to_uv):
+		mask_tex.update(cleaning.image())
+		dirty = cleaning.remaining()
+		cleaning_unsaved = true
+		if is_instance_valid(grime_label): grime_label.text = "污垢剩余 %d%%" % ceili(dirty*100)
+		if cleaning.complete():
 			scrubbing = false
-			if dragging_part:
-				dragging_part = false
-				if part.global_position.distance_to(slot.global_position) < 60:
-					part.global_position = slot.global_position
-					_step(1)
-				else:
-					_return_part()
+			_save_cleaning()
+			_operation_completed()
+	cloth_direction = (to_uv-from_uv).normalized()
+	cloth_uv = to_uv
+	queue_redraw()
+
+func _save_cleaning() -> void:
+	if not cleaning_unsaved or cleaning == null or it_uid == "": return
+	cleaning_unsaved = false
+	Game.dispatch({"type":"SERVICE_PROGRESS","uid":it_uid,"task":"dust","progress":cleaning.serialize()})
+
+func relayout() -> void:
+	if not is_instance_valid(bench) or not is_instance_valid(art): return
+	mat_rect = layout_workbench(list_panel,detail_panel,bench,260,350)
+	art.position = mat_rect.position
+	art.size = mat_rect.size
+	if is_instance_valid(item):
+		item_home = fit_workbench_item(item,mat_rect)
+		item.position = item_home
+	queue_redraw()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if task != "dust" or mode != "service" or not is_instance_valid(item) or shell.modal_open(): return
+	var world: Vector2 = shell.world_mouse()
+	var uv: Vector2 = item.body.to_local(world) / item.tex_size() + Vector2(0.5,0.5)
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed and item.contains(world):
+			scrubbing = true
+			last_uv = uv
+			cloth_uv = uv
+			queue_redraw()
+		elif not event.pressed:
+			scrubbing = false
+			_save_cleaning()
+	elif event is InputEventMouseMotion and scrubbing:
+		_wipe_uv(last_uv,uv)
+		last_uv = uv
 
 func _process(delta: float) -> void:
-	if item == null or not is_instance_valid(item):
+	save_clock += delta
+	operation_clock += delta
+	if save_clock >= 0.4:
+		save_clock = 0.0
+		_save_cleaning()
+
+func _draw() -> void:
+	if task != "dust" or mode != "service" or not is_instance_valid(item) or cleaning == null: return
+	if show_residual:
+		for uv in cleaning.residual_points():
+			var p: Vector2 = shell.world_to_ui(item.uv_global(uv))
+			draw_arc(p,5,0,TAU,14,Color(1,0.78,0.35,0.65),1.3,true)
+	if cloth_uv.x >= 0.0:
+		var at: Vector2 = shell.world_to_ui(item.uv_global(cloth_uv))
+		var angle := cloth_direction.angle() * 0.15
+		draw_set_transform(at+Vector2(14,-10),angle)
+		draw_style_box(UIKit.inset_style(7),Rect2(-26,-18,52,36))
+		draw_colored_polygon(PackedVector2Array([Vector2(-24,-16),Vector2(21,-18),Vector2(28,9),Vector2(7,19),Vector2(-26,13)]),Color("c0bfa6"))
+		for x in [-14,-4,6,16]: draw_line(Vector2(x,-12),Vector2(x+3,11),Color("949782"),1,true)
+		draw_line(Vector2(-19,-9),Vector2(18,-12),Color("ece6c6"),2,true)
+		draw_set_transform(Vector2.ZERO)
+
+func world_cursor_shape(point: Vector2) -> int:
+	return Input.CURSOR_CROSS if task == "dust" and is_instance_valid(item) and item.contains(point) else Input.CURSOR_ARROW
+
+func toast_rect() -> Rect2:
+	# Notices belong on the paperwork, never over the watch/tool contact area.
+	if not is_instance_valid(detail_panel): return Rect2()
+	return Rect2(Vector2(detail_panel.position.x + 8,shell.content_rect().end.y - 130),Vector2(detail_panel.size.x - 16,120))
+
+func on_changed(_prev: Dictionary,_next: Dictionary,action: Dictionary) -> void:
+	if action.type == "SERVICE_PROGRESS" or action.type == "SERVICE_BEGIN": return
+	if action.type == "BUY_MATERIAL":
+		call_deferred("_refresh_info")
 		return
-	var p: Vector2 = shell.world_mouse()
-	if stage == 0 and scrubbing and item.contains(p):
-		var local := item.body.to_local(p) / item.tex_size() + Vector2(0.5, 0.5)
-		var c := Vector2i(int(local.x * 64), int(local.y * 64))
-		var cleared := 0
-		for y in range(-5, 6):
-			for x in range(-5, 6):
-				if x * x + y * y <= 25:
-					var q := c + Vector2i(x, y)
-					if q.x >= 0 and q.y >= 0 and q.x < 64 and q.y < 64:
-						var old := mask.get_pixel(q.x, q.y).r
-						mask.set_pixel(q.x, q.y, Color(maxf(0.0, old - 0.35), 0, 0))
-		mask_tex.update(mask)
-		if Engine.get_process_frames() % 6 == 0:
-			# Measure only the body of the object (an ellipse inside the reachable
-			# box). Counting the transparent margin made the step impossible to
-			# finish: the item looked clean while 50%+ "grime" remained.
-			var sum := 0.0
-			var n := 0
-			for y in range(0, 64, 2):
-				for x in range(0, 64, 2):
-					var d := Vector2((x + 0.5) / 64.0 - 0.5, (y + 0.5) / 64.0 - 0.5) / 0.4
-					if d.length_squared() <= 1.0:
-						sum += mask.get_pixel(x, y).r
-						n += 1
-			dirty = sum / maxf(1.0, float(n))
-			shell.sound("click", -26, randf_range(0.5, 0.7))
-			if is_instance_valid(grime_label):
-				grime_label.text = "污垢剩余 %d%%" % roundi(dirty * 100)
-			if dirty < 0.18:
-				scrubbing = false
-				item.mat.set_shader_parameter("grime", 0.0)
-				_step(0)
-		cleared += 1
-	if dragging_part and part != null:
-		part.global_position = part.global_position.lerp(p, 0.4)
-	if stage == 2 and test_bar != null and is_instance_valid(test_bar):
-		if test_hold:
-			test_value = minf(1.05, test_value + delta * 0.55)
-		test_bar.value = test_value
-		var fill := StyleBoxFlat.new()
-		fill.bg_color = Color("98ffb0") if test_value >= 0.72 and test_value <= 0.9 else Color("ffb35c")
-		test_bar.add_theme_stylebox_override("fill", fill)
+	_request_refresh()
 
+func _request_refresh() -> void:
+	if refresh_pending: return
+	refresh_pending = true
+	call_deferred("_refresh_after_change")
 
-class Slot extends Node2D:
-	func _process(_d: float) -> void:
-		queue_redraw()
-	func _draw() -> void:
-		var t := Time.get_ticks_msec() / 1000.0
-		var pulse := 0.0 if Game.prefs.reduced_motion else 0.1 * sin(t * 5.0)
-		draw_rect(Rect2(-34, -22, 68, 44), Color(1.0, 0.7, 0.3, 0.18 + pulse))
-		draw_rect(Rect2(-34, -22, 68, 44), Color(1.0, 0.75, 0.35), false, 3.0)
+func _refresh_after_change() -> void:
+	refresh_pending = false
+	if not is_inside_tree(): return
+	_fill_list()
+	_stage_ui()
+	_refresh_info()
 
+func snapshot() -> Dictionary:
+	var it = Game.item(it_uid)
+	if it == null: return {}
+	var service: Dictionary = it.get("service",{})
+	var targets := []
+	var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1",true)) if OS.has_feature("web") else 1.0
+	var transform: Transform2D = get_viewport().get_screen_transform()
+	if art.visible:
+		for target in art.interaction_targets():
+			var position: Vector2 = transform * art.get_global_transform_with_canvas() * target.position / ratio
+			var drop: Vector2 = transform * art.get_global_transform_with_canvas() * target.drop_position / ratio
+			targets.append({"id":target.id,"label":target.label,"x":position.x,"y":position.y,"drop_x":drop.x,"drop_y":drop.y,"busy":target.busy})
+	var object_rect := {}
+	if is_instance_valid(item) and item.visible:
+		var body_transform: Transform2D = transform * item.body.get_global_transform_with_canvas()
+		var a: Vector2 = body_transform * (-item.tex_size()*0.5) / ratio
+		var b: Vector2 = body_transform * (item.tex_size()*0.5) / ratio
+		object_rect = {"x":a.x,"y":a.y,"width":b.x-a.x,"height":b.y-a.y}
+	return {"repair_uid":it_uid,"repair_mode":mode,"repair_task":task,"repair_tasks":Service.tasks(it),
+		"forge_uid":it_uid,"forge_name":Game.def_name(it.defId),"forge_done":not WatchForgery.treatments(it).is_empty(),
+		"repair_done":service.get("done",[]),"repair_opened":service.get("opened",false),
+		"repair_grime":dirty if task == "dust" else 0.0,"repair_reason":_current_problem(),
+		"repair_action":action_button.text if is_instance_valid(action_button) else "",
+		"repair_can_finish":task == "" and not Service.tasks(it).is_empty(),"repair_targets":targets,
+		"repair_object":object_rect,"repair_animation":art.progress_snapshot() if art.visible else {}}
 
-class Part extends Node2D:
-	func _ready() -> void:
-		material = Util.unshaded()
-	func _draw() -> void:
-		draw_rect(Rect2(-30, -18, 60, 36), Color("6b4a2b"))
-		for i in 7:
-			draw_line(Vector2(-26 + i * 8, -18), Vector2(-26 + i * 8, 18), Color("d18a45"), 4.0)
-		draw_rect(Rect2(-36, -8, 6, 16), Color("c0c4c6"))
-		draw_rect(Rect2(30, -8, 6, 16), Color("c0c4c6"))
-		draw_string(UIKit.font, Vector2(-40, 44), "新线圈", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 0.9, 0.7))
+func leave() -> void:
+	_save_cleaning()
+	_save_operation()
+	super.leave()

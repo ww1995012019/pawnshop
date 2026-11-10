@@ -46,14 +46,9 @@ func run() -> void:
 		var restored: Dictionary = JSON.parse_string(JSON.stringify(it))
 		check(restored.uid == it.uid and restored.defId == it.defId and WatchRules.serial(restored) == WatchRules.serial(it) and is_equal_approx(WatchRules.mass(restored), WatchRules.mass(it)) and WatchRules.logo_variant(restored) == WatchRules.logo_variant(it), d.id + " physical identity survives save")
 		var repair_state := Model.create("REPAIR-" + d.id)
-		it.evidence = ["TOL-005"]
-		it.sourceVerified = true
-		it.watch.mass = float(d.watch.nominal_mass) - 2.0
-		it.watch.missing_part = "固定部件"
-		it.watch.part_mass = 2.0
+		it = Model.new_item(repair_state,d.id,{"condition":0.55,"working":false,"evidence":["TOL-005"],"watch":{"mass":float(d.watch.nominal_mass)-2.0,"serial":"REPAIR TEST","logo_variant":0,"missing_part":"固定部件","part_mass":2.0}})
 		Model.put_in(repair_state, it)
-		repair_state.repairProgress[it.uid] = 3
-		repair_state = Model.reduce(repair_state, {"type": "REPAIR", "uid": it.uid, "recipeId": d.recipeId})
+		repair_state = service_all(repair_state,it.uid)
 		var repaired: Dictionary = Model.find_inventory(repair_state, it.uid)
 		check(repaired.repaired and repaired.working and is_equal_approx(WatchRules.mass(repaired), float(d.watch.nominal_mass)), d.id + " real repair restores parts")
 		check(Model.estimate(it).high > 0, d.id + " can be valued")
@@ -67,3 +62,12 @@ func run() -> void:
 		player.stream = null
 	await process_frame
 	quit(1 if failures else 0)
+
+func service_all(s: Dictionary, uid: String) -> Dictionary:
+	s = Model.reduce(s,{"type":"SERVICE_BEGIN","uid":uid})
+	for step in 6:
+		var task := WatchService.current(Model.find_inventory(s,uid))
+		if task == "": break
+		s = Model.reduce(s,{"type":"SERVICE_PROGRESS","uid":uid,"task":task,"progress":{"complete":true}})
+		s = Model.reduce(s,{"type":"SERVICE_COMPLETE","uid":uid,"task":task})
+	return Model.reduce(s,{"type":"SERVICE_FINISH","uid":uid})

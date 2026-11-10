@@ -11,6 +11,7 @@ const CrimeEvents = preload("res://scripts/model/crime_events.gd")
 const SAVE_PATH := "user://orbital-watch-save-v4.json"
 const LEGACY_PATH := "user://orbital-save-v3.json"
 const LEGACY_BACKUP_PATH := "user://orbital-save-v3.backup.json"
+const SERVICE_BACKUP_PATH := "user://orbital-watch-save-v4.pre-service.backup.json"
 const PREFS_PATH := "user://orbital-prefs.json"
 
 var state: Dictionary = {}
@@ -32,7 +33,38 @@ func _ready() -> void:
 			has_save = true
 	if state.is_empty():
 		state = Model.create()
+	else:
+		state = migrate_service_save(state)
 	Wanted.ensure(state)
+	if has_save: save()
+
+## Preserve the exact pre-service save before interpreting its old repair counters.
+func migrate_service_save(previous: Dictionary) -> Dictionary:
+	if previous.get("serviceVersion", 0) >= 1: return previous
+	if FileAccess.file_exists(SAVE_PATH) and not FileAccess.file_exists(SERVICE_BACKUP_PATH):
+		var backup_path := ProjectSettings.globalize_path(SERVICE_BACKUP_PATH)
+		var error := ERR_ALREADY_EXISTS if DirAccess.dir_exists_absolute(backup_path) else DirAccess.copy_absolute(ProjectSettings.globalize_path(SAVE_PATH), backup_path)
+		if error != OK:
+			push_warning("维修升级前备份未完成，已保留原始存档；本次暂不升级。")
+			return previous
+	var migrated: Dictionary = previous.duplicate(true)
+	var items: Array = migrated.inventory.duplicate()
+	if migrated.get("trade") is Dictionary and migrated.trade.get("item") is Dictionary: items.append(migrated.trade.item)
+	var lost_cleaning := false
+	for it in items:
+		WatchService.ensure(it, migrated.seed)
+		var old_stage := int(migrated.get("repairProgress", {}).get(it.uid, 0))
+		if old_stage > 0 and it.service.tasks.has("dust") and not it.service.done.has("dust"):
+			# Old stage 1 is the recorded completed cleaning, never a new free repair.
+			it.service.done.append("dust")
+			it.service.operations.dust = {"complete":true,"legacy_completed":true}
+			for fault in it.service.faults:
+				if fault.id == "dust": fault.resolved = true
+		if old_stage == 0 and it.service.tasks.has("dust"): lost_cleaning = true
+	migrated.serviceVersion = 1
+	if lost_cleaning:
+		migrated.notice = "维修工单已升级并保留原档备份。旧版未完成的擦灰轨迹未保存，需重新擦拭一次；已完成维修和实物状态均已保留。"
+	return migrated
 
 ## Preserve the previous catalogue independently of the new watch campaign.
 func backup_legacy_save() -> void:
@@ -64,6 +96,9 @@ func dispatch(a: Dictionary) -> bool:
 	return true
 
 func save() -> void:
+	if state.get("serviceVersion", 0) < 1:
+		state = migrate_service_save(state)
+		if state.get("serviceVersion", 0) < 1: return
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(state))

@@ -77,6 +77,7 @@ func run():
 	await process_frame
 	await process_frame
 	page = active.page
+	for i in 8: await process_frame
 	var candidates: Array = page._candidates()
 	check(candidates.size() >= 2, "repair list has two selectable items")
 	if candidates.size() >= 2:
@@ -90,10 +91,8 @@ func run():
 			await process_frame
 			check(page.it_uid == candidates[index].uid, "touch selects repair item %d" % index)
 		Input.emulate_mouse_from_touch = previous_emulation
-	# Buying supplies should not rebuild the active cleaning stage and erase
-	# grime already removed from the item.
-	page.mask.set_pixel(32, 32, Color.BLACK)
-	page.dirty = 0.5
+	# Buying supplies refreshes the paper without rebuilding physical work.
+	var cleaned = page.cleaning.serialize()
 	var old_trade = game.state.trade
 	var old_cursor: int = game.state.cursor
 	game.state.trade = null
@@ -104,41 +103,34 @@ func run():
 	game.dispatch({"type": "BUY_MATERIAL", "id": "MAT-001", "qty": 1})
 	await process_frame
 	await process_frame
-	check(page.mask.get_pixel(32, 32).r < 0.1 and is_equal_approx(page.dirty, 0.5), "buying supplies preserves cleaning progress")
+	check(page.cleaning.serialize() == cleaned, "buying supplies preserves the physical cleaning mask")
 	var updated_quantity := false
 	for control in page.info.find_children("*", "Label", true, false):
-		if control.text.begins_with("导电纤维 ×%d" % (materials_before + 1)):
+		if control.text.contains("导电纤维") and control.text.contains("×%d" % (materials_before + 1)):
 			updated_quantity = true
 	check(updated_quantity, "supply count refreshes after purchase")
 	game.state.trade = old_trade
 	game.state.cursor = old_cursor
-	game.state.repairProgress[page.it_uid] = 1
+	game.item(page.it_uid).service.tasks = ["open","assemble","test"]
+	game.item(page.it_uid).service.done = []
 	page._stage_ui()
 	await create_timer(0.2).timeout
-	var from: Vector2 = page.part.position
-	var target: Vector2 = page.slot.position
-	await move(active, from)
-	await button(active, from, true)
-	await move(active, target, true)
-	await create_timer(0.25).timeout
-	await button(active, target, false)
-	check(int(game.state.repairProgress[page.it_uid]) == 2, "real pointer seats the replacement part inside the repair surface")
-	var load_key: Button
-	for control in page.bench.find_children("*", "Button", true, false):
-		if control.text.contains("复核装配"): load_key = control
-	check(load_key != null, "repair assembly test has a real hold control")
-	if load_key == null:
-		quit(1)
-		return
-	var load_point: Vector2 = active.ui_to_world(load_key.get_global_rect().get_center())
+	var action_target: Dictionary = page.art.interaction_targets()[0]
+	var point: Vector2 = active.ui_to_world(page.art.global_position + action_target.position)
+	await move(active,point)
+	await button(active,point,true)
+	await button(active,point,false)
+	for i in 100: page.art._process(0.03)
+	await process_frame
+	check(page.art.progress_snapshot().step >= 1, "real pointer operates the actual cover tool at its target")
+	var old_step: int = page.art.progress_snapshot().step
+	var load_point: Vector2 = active.ui_to_world(page.action_button.get_global_rect().get_center())
 	var emulation := Input.emulate_mouse_from_touch
 	Input.emulate_mouse_from_touch = true
-	await touch(active, load_point, true)
-	check(page.test_hold, "touch holds the load-test button")
-	page.test_value = 0.8
-	await touch(active, load_point, false)
-	await process_frame
-	check(int(game.state.repairProgress[page.it_uid]) == 3 and page.stage == 3, "touch release completes the load-test stage")
+	await touch(active,load_point,true)
+	await touch(active,load_point,false)
+	for i in 100: page.art._process(0.03)
+	check(page.art.progress_snapshot().step > old_step, "touch equivalent animates the next physical operation")
 	Input.emulate_mouse_from_touch = emulation
 	# A sharper drawer must still route the same real pointer input after the
 	# display resolution changes, without resetting the item or the tool.

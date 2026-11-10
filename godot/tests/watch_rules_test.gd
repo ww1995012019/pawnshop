@@ -35,8 +35,7 @@ func run() -> void:
 	check(original_missing and copy_normal, "genuine watches can miss links; copies can match mass")
 	var repair_item := Model.new_item(s, "WCH-002", {"watch":{"mass":108.9,"serial":"HX TEST", "logo_variant":0,"missing_part":"一节可拆表节","part_mass":3.1},"evidence":["TOL-005"]})
 	Model.put_in(s, repair_item)
-	s.repairProgress[repair_item.uid] = 3
-	s = Model.reduce(s, {"type":"REPAIR", "uid":repair_item.uid,"recipeId":"REC-002"})
+	s = service_all(s,repair_item.uid)
 	check(is_equal_approx(WatchRules.mass(Model.find_inventory(s, repair_item.uid)),112.0), "repair restores same watch's missing physical mass")
 	var anomaly := Model.new_item(s,"WCH-008",{"watch":{"mass":65.8,"serial":"HG X00 2401 123456","logo_variant":1}})
 	var expert := {"id":"expert","kind":"buy","npcId":"CHR-002","evidenceUsed":[]}
@@ -75,3 +74,12 @@ func run() -> void:
 	trade_state = Model.reduce(trade_state,{"type":"DELIVER","tradeId":trade_id})
 	check(Model.find_inventory(trade_state,bought_uid) != null and trade_state.trade == null,"ordinary buy transaction still transfers same watch")
 	quit(1 if failures else 0)
+
+func service_all(s: Dictionary, uid: String) -> Dictionary:
+	s = Model.reduce(s,{"type":"SERVICE_BEGIN","uid":uid})
+	for step in 6:
+		var task := WatchService.current(Model.find_inventory(s,uid))
+		if task == "": break
+		s = Model.reduce(s,{"type":"SERVICE_PROGRESS","uid":uid,"task":task,"progress":{"complete":true}})
+		s = Model.reduce(s,{"type":"SERVICE_COMPLETE","uid":uid,"task":task})
+	return Model.reduce(s,{"type":"SERVICE_FINISH","uid":uid})

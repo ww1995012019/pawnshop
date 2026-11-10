@@ -314,7 +314,7 @@ func _detail() -> void:
 	if it.owner == "shop":
 		var forge_why := Commerce.forgery_problem(s, it)
 		var forge_uid: String = it.uid
-		_act(g, "伪装造假", "danger", func(): _open_forgery(forge_uid), forge_why == "", forge_why)
+		_act(g, "送到修表台 · 加工", "danger", func(): _open_forgery(forge_uid), forge_why == "", forge_why)
 
 	if it.owner == "pawn":
 		_act(g, "客人赎回", "good", {"type": "REDEEM", "uid": it.uid})
@@ -544,35 +544,7 @@ class StorageGrid extends Control:
 			draw_rect(Rect2(tl * cs + Vector2(2, 2), Vector2(d[0], d[1]) * cs - Vector2(4, 4)), Color(0.4, 0.9, 0.6, 0.25) if ok else Color(0.95, 0.4, 0.3, 0.25))
 
 func _open_forgery(uid: String) -> void:
-	var it = Game.item(uid)
-	if it == null: return
-	var m: Array = shell.modal("造假工作台 · " + GameData.def(it.defId).name, 800)
-	var body: VBoxContainer = m[0]
-	body.add_child(UIKit.label("把异常物证伪装成参考读数，可能抬高外行买家的心理价；专家更容易识破。不会修好故障、补齐缺件或提高真实市价，每项只能做一次。", 19, UIKit.TEXT, false, true))
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.custom_minimum_size.y = clampf(get_viewport().get_visible_rect().size.y - 320, 220, 370)
-	body.add_child(scroll)
-	var list := UIKit.vbox(12)
-	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(list)
-	for method in WatchForgery.METHODS:
-		var explanation := "当前：%s\n处理后：符合参考标识；放大镜下仍可见重描漆层。" % WatchRules.logo_note(it)
-		if method == "serial": explanation = "当前：%s\n处理后：%s；紫外线下可见覆印晕边。" % [WatchRules.serial(it), WatchForgery.target_serial(it)]
-		if method == "weight": explanation = "当前 %.1f g → 参考 %.1f g；只填加配重，缺失部件仍然缺失，称重可发现重心偏移。" % [WatchRules.mass(it), float(GameData.def(it.defId).watch.nominal_mass)]
-		if method == "logo" and WatchRules.logo_variant(it) == 0: explanation += "\n当前标识已符合参考，重描不会改善读数。"
-		if method == "serial" and WatchRules.serial(it) == WatchForgery.target_serial(it): explanation += "\n当前编号已符合规则，覆印不会改善读数。"
-		var card := UIKit.record_card(WatchForgery.LABELS[method], explanation + "\n消耗：" + WatchForgery.cost_text(method), "加工 / " + method.to_upper())
-		list.add_child(card)
-		# Let finger drags on the receipt reach its enclosing scroller.
-		card.mouse_filter = Control.MOUSE_FILTER_PASS
-		var button := UIKit.button(WatchForgery.LABELS[method], "danger", Vector2(0, 48), 19)
-		var reason := Commerce.forgery_problem(Game.state, it, method)
-		button.disabled = reason != ""
-		button.tooltip_text = reason
-		card.get_child(0).add_child(button)
-		if reason != "": card.get_child(0).add_child(UIKit.label(reason, 16, UIKit.RUST, false, true))
-		button.pressed.connect(func():
-			m[1].call()
-			shell.confirm("确认" + WatchForgery.LABELS[method], explanation + "\n消耗：" + WatchForgery.cost_text(method) + "。真实价值不变；被识破将关注+10、对应阵营关系-8。", "确认" + WatchForgery.LABELS[method], func():
-				Game.dispatch({"type":"FORGE", "uid":uid, "method":method})))
+	if Game.item(uid) == null: return
+	shell.go("repair",uid)
+	var active = shell.active_shell()
+	if active.page_name == "repair": active.page.call_deferred("open_forgery")

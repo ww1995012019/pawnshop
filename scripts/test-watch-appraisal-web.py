@@ -85,36 +85,24 @@ def main():
                 uid=page.evaluate('OrbitalTouch.state.inspection_uid')
                 cmd({'type':'page','page':'warehouse'});phone.wait(page,"s.workspace==='warehouse'")
                 for _ in range(8):
-                    target=phone.locate(page,'伪装造假')
+                    target=phone.locate(page,'送到修表台 · 加工')
                     if 60<target['y']<height-55:break
                     page.mouse.move(width*.74,height*.62)
                     page.mouse.wheel(0,500 if target['y']>=height-55 else -500)
                     page.wait_for_timeout(200)
-                click('伪装造假');page.wait_for_timeout(400);snapshot('forgery-options')
-                if mobile:
-                    for _ in range(5):
-                        third=phone.locate(page,'配重掩盖缺件')
-                        if height*.48<third['y']<height*.84: break
-                        phone.touch_drag(context,page,[(width*.28,height*.80),(width*.28,height*.65),(width*.28,height*.52)])
-                else:
-                    page.mouse.move(width*.6,height*.6);page.mouse.wheel(0,2000);page.wait_for_timeout(350)
-                third=phone.locate(page,'配重掩盖缺件')
-                snapshot('forgery-after-scroll')
-                assert 60<third['y']<height-55, 'third treatment must be reachable by scrolling: '+str(third)
-                snapshot('forgery-third-method')
-                if mobile:
-                    for _ in range(5):
-                        first=phone.locate(page,'重描标识')
-                        if height*.48<first['y']<height*.84: break
-                        phone.touch_drag(context,page,[(width*.28,height*.52),(width*.28,height*.65),(width*.28,height*.80)])
-                else:
-                    page.mouse.move(width*.6,height*.6);page.mouse.wheel(0,-2000);page.wait_for_timeout(350)
-
+                click('送到修表台 · 加工')
+                phone.wait(page,"s.workspace==='repair' && s.repair_mode==='forge'")
+                snapshot('forgery-options')
                 before_ap=page.evaluate('OrbitalTouch.state.ap')
-                click('重描标识');page.wait_for_timeout(350);snapshot('forgery-confirm')
-                click('确认重描标识')
+                for _ in range(30):
+                    current=page.evaluate('OrbitalTouch.state')
+                    if current.get('forge_done'):break
+                    click(current['repair_action'])
+                    step=current['repair_animation']['step']
+                    page.wait_for_function("step=>{const a=OrbitalTouch.state.repair_animation;return a.complete || a.phase==='idle'&&a.step>step}",arg=step)
                 page.wait_for_function('(ap)=>OrbitalTouch.state.ap===ap-1',arg=before_ap)
                 assert page.evaluate('OrbitalTouch.state.forge_done') is True
+                snapshot('forgery-physical-complete')
                 cmd({'type':'page','page':'inspect'});phone.wait(page,"s.workspace==='inspect'")
                 assert page.evaluate('OrbitalTouch.state.inspection_uid')==uid
                 assert appraisal(0)['exact'] is False

@@ -92,6 +92,8 @@ func run() -> void:
 	check(game.state.cash == initial_cash - visitor_price and game.state.trade == null, "touch delivery uses the reducer's atomic transfer")
 	game.new_game("ORBITAL-P0")
 	var repair_uid: String = game.state.inventory[0].uid
+	game.item(repair_uid).condition = 0.6
+	game.item(repair_uid).erase("service")
 	shell.go("repair", repair_uid)
 	await frame()
 	var repair_state: Dictionary = bridge.snapshot()
@@ -99,7 +101,7 @@ func run() -> void:
 	check(repair_state.get("detail_title", "") == GameData.def(game.item(repair_uid).defId).name and not repair_state.get("detail_lines", []).is_empty(), "phone can show the selected repair details at readable size")
 	var undiscovered := "\n".join(repair_state.get("detail_lines", []))
 	check(undiscovered.contains("尚无检验记录") and not undiscovered.contains(Model.fault_label(game.item(repair_uid))), "repair details do not reveal a fault before any evidence is recorded")
-	check(String(repair_state.detail_lines[1]).contains("先去鉴定"), "phone shows the reason repair is blocked before the recipe steps")
+	check(repair_state.get("repair_task", "") != "" and not repair_state.get("repair_can_finish",true), "phone exposes fault-driven work and cannot skip unfinished operations")
 	var cash_before: float = game.state.cash
 	var ap_before: float = game.state.ap
 	var quantity_before: float = game.state.materials.get("MAT-001", 0)
@@ -119,26 +121,28 @@ func run() -> void:
 	repair_modal[1].call()
 	await frame()
 	game.item(repair_uid).evidence.append("TOL-001")
-	game.state.repairProgress[repair_uid] = 3
-	var recipe: Dictionary = shell.active_shell().page._recipe(game.item(repair_uid))
-	for id in recipe.materials:
-		game.state.materials[id] = maxi(game.state.materials.get(id, 0), int(recipe.materials[id]))
 	var visual_only := "\n".join(bridge.snapshot().get("detail_lines", []))
-	check(visual_only.contains(Model.displayed_clue(game.item(repair_uid), "TOL-001")) and not visual_only.contains(Model.fault_label(game.item(repair_uid))), "repair shows only the recorded visual evidence, without revealing an untested fault")
+	check(visual_only.contains(Model.displayed_clue(game.item(repair_uid), "TOL-001")) and not visual_only.contains(Model.fault_label(game.item(repair_uid))), "repair shows recorded visual evidence without inventing an internal diagnosis")
 	game.state.phase = "report"
-	var closed_state: Dictionary = bridge.snapshot()
-	check(not closed_state.get("repair_can_finish", true), "phone disables repair outside business hours")
 	bridge.command({"type":"finish_repair", "uid":repair_uid})
 	check(not game.item(repair_uid).repaired, "phone cannot repair after business closes")
 	game.state.phase = "open"
-	check(bridge.snapshot().get("repair_can_finish", false), "phone enables repair only when its actual prerequisites are satisfied")
 	bridge.command({"type":"finish_repair", "uid":"stale-item"})
-	check(not game.item(repair_uid).repaired, "stale phone repair cannot affect a different item")
 	bridge.command({"type":"finish_repair", "uid":repair_uid})
-	check(game.item(repair_uid).repaired and game.state.ap == ap_before - 1, "phone confirmation uses the normal repair reducer")
-	var completed_detail := "\n".join(bridge.snapshot().get("detail_lines", []))
-	check(completed_detail.contains("修复完成") and not completed_detail.contains("不足") and not completed_detail.contains("确认时消耗"), "a completed repair shows success instead of asking for more supplies")
-	check(String(bridge.snapshot().detail_lines[1]).contains("修复完成"), "phone shows successful repair before the recipe steps")
+	check(not game.item(repair_uid).repaired, "stale and early phone confirmation cannot bypass physical work")
+	var service_page = shell.active_shell().page
+	for row in range(0,65,3):
+		service_page._wipe_uv(Vector2(-0.05,row/64.0),Vector2(1.05,row/64.0))
+	await frame()
+	for attempt in 80:
+		service_page = shell.active_shell().page
+		if service_page.task == "": break
+		service_page._primary_action()
+		for i in 120: service_page.art._process(0.03)
+		await frame()
+	bridge.command({"type":"finish_repair", "uid":repair_uid})
+	check(game.item(repair_uid).repaired and game.state.ap < ap_before, "native work commits matching per-task repairs through the reducer")
+	check(bridge.snapshot().get("repair_task","pending") == "", "phone exposes completed persistent work order")
 	ap_before = game.state.ap
 	game.item(repair_uid).x = 5
 	game.item(repair_uid).y = 3

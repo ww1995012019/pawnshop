@@ -14,7 +14,7 @@ func run():
  var value = Model.item_value(it)
  for method in ['logo','serial','weight']:
   var ap = s.ap
-  s = Commerce.reduce(s,{'type':'FORGE','uid':it.uid,'method':method})
+  s = forge_at_bench(s,it.uid,method)
   it = Model.find_inventory(s,it.uid)
   check(s.ap == ap-1, method+' consumes one AP')
   check(it.watch == base and not it.authentic and not it.working and it.condition == 0.55 and Model.item_value(it) == value,method+' does not repair or increase real worth')
@@ -61,12 +61,12 @@ func run():
  npc.expertise.watch.logo = 100
  npc.expertise.watch.serial = 100
  probe.trade = {'id':'same-encounter','npcId':'CHR-003','kind':'sell','item':null,'price':0,'rounds':0,'locked':false,'evidenceUsed':[],'line':''}
- probe = Commerce.reduce(probe,{'type':'FORGE','uid':lot.uid,'method':'logo'})
+ probe = forge_at_bench(probe,lot.uid,'logo')
  probe = Commerce.reduce(probe,{'type':'SELECT_TRADE','uid':lot.uid})
  var risk = probe.risk
  var relation = probe.relations.station
  probe = JSON.parse_string(JSON.stringify(probe))
- probe = Commerce.reduce(probe,{'type':'FORGE','uid':lot.uid,'method':'serial'})
+ probe = forge_at_bench(probe,lot.uid,'serial')
  probe = Commerce.reduce(probe,{'type':'SELECT_TRADE','uid':lot.uid})
  check(probe.risk == risk and probe.relations.station == relation and probe.inventory[0].forgery.methods.serial.exposed,'newly caught method after reload exposes without repeating encounter penalty')
  npc.expertise.watch.logo = old_logo
@@ -76,7 +76,7 @@ func run():
  var merchant_npc = GameData.npc('CHR-010')
  var merchant_skill = merchant_npc.expertise.watch.logo
  merchant_npc.expertise.watch.logo = 100
- merchant = Commerce.reduce(merchant,{'type':'FORGE','uid':merchant_item.uid,'method':'logo'})
+ merchant = forge_at_bench(merchant,merchant_item.uid,'logo')
  merchant.trade = {'id':'merchant-encounter','npcId':'CHR-010','kind':'merchant','item':null,'price':0,'rounds':0,'locked':false,'evidenceUsed':[],'line':''}
  var cash_before = merchant.cash
  merchant = Commerce.reduce(merchant,{'type':'SELL_MERCHANT_ITEM','uid':merchant_item.uid})
@@ -89,3 +89,7 @@ func run():
   check(Model.find_inventory(merchant,merchant_item.uid)!=null,'a new encounter independently checks previously exposed treatments')
  merchant_npc.expertise.watch.logo = merchant_skill
  quit(1 if failures else 0)
+
+func forge_at_bench(state: Dictionary, uid: String, method: String) -> Dictionary:
+ state = Model.reduce(state,{'type':'SERVICE_PROGRESS','uid':uid,'task':'forge_'+method,'progress':{'complete':true,'opened':false}})
+ return Commerce.reduce(state,{'type':'FORGE','uid':uid,'method':method})

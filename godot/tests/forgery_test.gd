@@ -23,6 +23,7 @@ func run() -> void:
 	var original: Dictionary = item.duplicate(true)
 	var materials: Dictionary = game.state.materials.duplicate(true)
 	var ap: float = game.state.ap
+	game.dispatch({"type":"SERVICE_PROGRESS","uid":uid,"task":"forge_logo","progress":{"complete":true,"opened":false}})
 	game.dispatch({"type": "FORGE", "uid": uid})
 	item = Model.find_inventory(game.state, uid)
 	check(item.get("forgery", null) is Dictionary and game.state.ap == ap - 1 and
@@ -71,7 +72,7 @@ func run() -> void:
 	var commerce = load("res://scripts/model/commerce.gd")
 	var locked_state := Model.create("FORGED-LOCKED")
 	var forged_uid: String = locked_state.inventory[0].uid
-	locked_state = commerce.reduce(locked_state, {"type": "FORGE", "uid": forged_uid})
+	locked_state = forge_at_bench(locked_state,forged_uid)
 	var old_uid: String = locked_state.inventory[1].uid
 	locked_state.trade = {"id": "locked-sale", "npcId": "CHR-003", "kind": "sell", "item": null,
 		"price": 30, "rounds": 0, "locked": true, "evidenceUsed": [], "line": "", "selectedUid": old_uid}
@@ -88,7 +89,7 @@ func run() -> void:
 		item.working = false
 		item.condition = 0.75
 		uid = item.uid
-		state = commerce.reduce(state, {"type": "FORGE", "uid": uid})
+		state = forge_at_bench(state,uid)
 		state.trade = {"id": "buyer-%d" % index, "npcId": "CHR-003", "kind": "sell", "item": null,
 			"price": 0, "rounds": 0, "locked": false, "evidenceUsed": [], "line": "",
 			"selectedUid": state.inventory[1].uid}
@@ -124,3 +125,7 @@ func run() -> void:
 	check(caught > 0 and passed > 0, "buyers can either detect or miss a disguise")
 	print("FORGERY failures=", failures)
 	quit(1 if failures else 0)
+
+func forge_at_bench(state: Dictionary, uid: String, method := "logo") -> Dictionary:
+	state = Model.reduce(state,{"type":"SERVICE_PROGRESS","uid":uid,"task":"forge_"+method,"progress":{"complete":true,"opened":false}})
+	return load("res://scripts/model/commerce.gd").reduce(state,{"type":"FORGE","uid":uid,"method":method})

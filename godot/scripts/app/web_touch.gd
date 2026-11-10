@@ -96,38 +96,15 @@ func snapshot() -> Dictionary:
 				"scale_stable": active.page.scale_stable,
 				"scale_occupied": active.page.scale_occupied})
 	elif active.page_name == "repair":
+		result.merge(active.page.snapshot())
+		var current = Game.item(active.page.it_uid)
+		if current != null:
+			result.merge({"detail_title":GameData.def(current.defId).name,
+				"detail_lines":[active.page.repair_status(current),"修复完成，可重新鉴定。" if current.repaired else String(active.page.snapshot().get("repair_reason",""))]})
 		var materials := []
 		for material in GameData.materials:
-			materials.append({"id": material.id, "name": material.name,
-				"quantity": state.materials.get(material.id, 0)})
-		var current = Game.item(active.page.it_uid)
-		var title := "维修工作台"
-		var details := ["请选择一件待修物品。"]
-		var can_finish := false
-		if current != null:
-			title = GameData.def(current.defId).name
-			details = [active.page.repair_status(current)]
-			var recipe: Dictionary = active.page._recipe(current)
-			if not recipe.is_empty():
-				var progress := int(state.repairProgress.get(current.uid, 0))
-				if current.repaired:
-					details.append("修复完成，可重新鉴定。")
-				else:
-					var reason: String = active.page._repair_block(current, recipe)
-					if reason != "":
-						details.append(reason)
-					can_finish = progress == 3 and reason == ""
-				details.append(recipe.name)
-				for i in 3:
-					details.append(("✓ " if i < progress else "· ") + String(recipe.steps[i]))
-				if not current.repaired:
-					var needed := []
-					for id in recipe.materials:
-						needed.append("%s ×%s（有 %s）" % [GameData.material(id).name, Model.jnum(recipe.materials[id]), Model.jnum(state.materials.get(id, 0))])
-					details.append("材料：" + "、".join(needed))
-					details.append("确认时消耗 %s AP" % Model.jnum(recipe.ap))
-		result.merge({"detail_title": title, "detail_lines": details, "repair_can_finish": can_finish,
-			"repair_uid": active.page.it_uid, "repair_materials": materials})
+			materials.append({"id":material.id,"name":material.name,"quantity":state.materials.get(material.id,0)})
+		result.repair_materials = materials
 	elif active.page_name == "warehouse":
 		result.merge({"warehouse_uid": active.page.selected,
 			"warehouse_rotated": active.page.selected_rotation(),
@@ -239,7 +216,9 @@ func command(data: Dictionary) -> void:
 		var active = shell.active_shell()
 		var uid = data.get("uid", null)
 		if active.page_name == "warehouse" and uid is String and uid == active.page.selected:
-			Game.dispatch({"type": "FORGE", "uid": uid, "method":data.get("method", "logo")})
+			active.page._open_forgery(uid)
+		elif active.page_name == "repair" and uid == active.page.it_uid:
+			active.page.open_forgery(String(data.get("method","logo")))
 		return
 	# Native workspace and modal input boundaries apply to every trade command.
 	if shell.workspace_open() or shell.page._scene_blocked():
