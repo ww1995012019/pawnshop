@@ -1,0 +1,17 @@
+# Optical idle timing correction review
+
+Reviewed frozen delta `3d8a072..6223337`, limited to `scripts/test-optical-documents-web.py` (37 additions/6 deletions), plus retained startup diagnostics and guard fault-injection evidence. Read-only except this report; no tests, browser sessions, builds, or production changes were performed.
+
+**Spec verdict: PASS. Quality verdict: APPROVE. Findings:0 P0,0 P1,0 P2,0 P3.**
+
+The retained `optical/idle-followup/per-frame-startup.json` supports a timing correction: manual opening caused three DPR reads in the first sampled frame, then zero additional reads through frame14, with no recorded browser errors. The former350ms opening delay plus900ms idle interval could include deferred initial layout and observe too few actual frames on the software-rendered environment. This evidence does not establish a recurring production cache defect.
+
+`scripts/test-optical-documents-web.py:38` introduces one bounded sample operation. Each observation awaits `requestAnimationFrame` and then a task, so the counter is sampled after that frame's engine callbacks rather than depending on callback registration order. Warmup requires at least six sampled frames and three consecutive zero-read intervals. It permits at most30 warmup frames; a continuing read resets the quiet streak and cannot satisfy settling. A45-second timer covers warmup and measurement together. Timeout returns an incomplete result and deactivates the loop; subsequent awaited callbacks check `active` before mutating counters. The timer is cleared after resolution. No retry-until-success or discarded failed measurement is introduced.
+
+After settling, the helper resets the counter once and records eight further frame intervals without resetting between them. The assertion at `:156` requires all three conditions: settled, exactly eight measured frames, and zero total reads. This strengthens the previous `<=2` read allowance after900ms, and applies the check to wanted, closed, and manual modes, including the previously unchecked closed baseline. Timeout or unsettled results have incomplete frame/read fields and fail the same assertion. Warmup and sample arrays plus any error are retained in the JSON report.
+
+The fault verification uses the same imported `IDLE_SAMPLE` as the production browser regression. `guard-fault-verification.json` and its retained log show healthy0/8, an injected real `devicePixelRatio` getter read in every animation frame producing30 nonzero warmup intervals and `settled=false`, then recovery0/8 after removing the injection. Inspection of `diagnose.py` confirms it injects recurring reads rather than fabricating the sample result. Thus the new settling gate does not hide the continuous per-frame regression it is meant to detect. The45-second no-progress branch is supported by source inspection; no separate timeout-injection execution is claimed.
+
+The four color comparisons, input-motion instrumentation, UV/AP/evidence checks, explicit pin checks, and browser/script/shader error collection are unchanged. The existing explicit `--record-red` diagnostic mode is unchanged; ordinary execution still raises on any accumulated failure. Only the browser test script changes, with no production source, asset, export, or PCK delta.
+
+No actionable issue was identified. The implementer's full current-pack desktop run was active at review time and is not claimed complete here; the coordinator retains that verification gate. This review does not assert production FPS or hardware smoothness.
