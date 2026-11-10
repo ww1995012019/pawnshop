@@ -181,7 +181,7 @@ const engine = new Engine(GODOT_CONFIG);
 		downloaded = current >= total;
 		stage.textContent = downloaded ? '正在通电、点亮柜台…' : '正在读取压缩货架与库存…';
 	};
-	window.OrbitalTouch.whenLandscape().then(() => Promise.all([
+	Promise.all([
 		// Observe the public load Promise too: vendor init does not forward WASM failures.
 		Engine.load(GODOT_CONFIG.executable, GODOT_CONFIG.fileSizes[GODOT_CONFIG.executable + '.wasm']),
 		engine.startGame({
@@ -189,7 +189,7 @@ const engine = new Engine(GODOT_CONFIG);
 			if (finished) return;
 			if (downloaded) stage.textContent = '正在通电、点亮柜台…';
 		},
-	})])).then(open, fail);
+	})]).then(open, fail);
 }());
 	</script>
 </body>

@@ -1,16 +1,7 @@
 [hidden] { display: none !important; }
-#phone-guide {
-  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
-  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
-  background: linear-gradient(#211c26db, #211c26f2), url(loading-shop.png) center / cover;
+/* A phone held upright shows the landscape game turned a quarter turn. */
+#canvas { position: fixed; left: 0; top: 0; transform-origin: 0 0; }
+html.turned #loader {
+  inset: auto; left: 0; top: 0; width: 100vh; height: 100vw;
+  transform-origin: 0 0; transform: translateX(100vw) rotate(90deg);
 }
-#phone-guide section { max-width: 380px; padding: 26px; border: 3px solid #aa9277; background: #34313c; box-shadow: 6px 6px #15111a; }
-#phone-guide h2 { font-size: 25px; line-height: 1.5; margin: 0 0 14px; color: #f0dfbd; }
-#phone-guide p { font-size: 16px; line-height: 1.8; color: #d0c6ad; }
-.touch-button {
-  min-width: 44px; min-height: 44px; border: 2px solid #9c8870; border-radius: 0;
-  padding: 7px 12px; font: 16px/1.25 var(--sans); color: #f5e7c9; background: #44454b;
-  cursor: pointer; touch-action: manipulation;
-}
-.touch-button.primary { background: #956e3b; border-color: #e9bd79; }
-.touch-button:focus-visible { outline: 3px solid #f5e7c9; outline-offset: 2px; }

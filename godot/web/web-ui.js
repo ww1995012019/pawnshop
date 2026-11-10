@@ -1,58 +1,77 @@
-/* Phone shell around the Godot canvas: portrait guide, fullscreen landscape and
-   a canvas that fills the screen. All shop controls live in the game itself. */
+/* Phone shell around the Godot canvas: the game always plays in landscape.
+   A phone held upright shows the same landscape picture turned a quarter turn,
+   with touch positions turned back for the engine. All shop controls live in
+   the game itself. */
 (() => {
   'use strict';
   const coarse = matchMedia('(any-pointer: coarse)');
   const phone = () => coarse.matches && Math.min(innerWidth, innerHeight) <= 600;
-  const portrait = () => phone() && innerHeight > innerWidth;
-  const guide = document.createElement('div');
-  guide.id = 'phone-guide'; guide.hidden = true;
-  guide.setAttribute('role', 'dialog'); guide.setAttribute('aria-modal', 'true');
-  guide.setAttribute('aria-labelledby', 'phone-heading');
-  guide.innerHTML = `<section><h2 id="phone-heading">横过来，柜台更好操作</h2><p>点一下屏幕，游戏会全屏并自动横过来；也可以直接把手机横放。店里的服务铃、报价机、鉴定仪和工作台都可以直接点。</p><button type="button" class="touch-button primary" id="phone-fullscreen">横屏开始</button><p id="phone-orientation-note">如有需要，请先关闭手机的方向锁定。</p></section>`;
-  document.body.append(guide);
+  const canvas = document.getElementById('canvas');
+  let turned = false;
   let state = {ready: false};
+
+  // The engine reads clientX/clientY against the canvas box. While the canvas
+  // is turned, hand it positions in the canvas's own landscape space.
+  const POINTER = /^(mouse|touch|pointer|wheel|contextmenu|click|dblclick)/;
+  const LISTS = new Set(['touches', 'changedTouches', 'targetTouches']);
+  function turnedPoint(point) {
+    return new Proxy(point, {get(target, key) {
+      if (key === 'clientX') return target.clientY;
+      if (key === 'clientY') return innerWidth - target.clientX;
+      if (LISTS.has(key)) return Array.from(target[key], turnedPoint);
+      const value = target[key];
+      return typeof value === 'function' ? value.bind(target) : value;
+    }});
+  }
+  for (const target of [canvas, window]) {
+    const add = target.addEventListener.bind(target), remove = target.removeEventListener.bind(target);
+    const wrapped = new Map();
+    target.addEventListener = (type, listener, options) => {
+      if (typeof listener !== 'function' || !POINTER.test(type)) return add(type, listener, options);
+      const key = type + (options === true || options?.capture ? ':capture' : '');
+      if (!wrapped.has(listener)) wrapped.set(listener, new Map());
+      const byType = wrapped.get(listener);
+      if (!byType.has(key)) byType.set(key, event => listener.call(target, turned ? turnedPoint(event) : event));
+      return add(type, byType.get(key), options);
+    };
+    target.removeEventListener = (type, listener, options) => {
+      const key = type + (options === true || options?.capture ? ':capture' : '');
+      return remove(type, wrapped.get(listener)?.get(key) || listener, options);
+    };
+  }
+  const nativeRect = canvas.getBoundingClientRect.bind(canvas);
+  canvas.getBoundingClientRect = () => turned ? new DOMRect(0, 0, innerHeight, innerWidth) : nativeRect();
+
   async function fullscreen() {
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
       if (screen.orientation?.lock) await screen.orientation.lock('landscape');
-    } catch {
-      document.getElementById('phone-orientation-note').textContent = '请关闭方向锁定后，将手机横放；当前浏览器可直接横屏游玩。';
-    }
+    } catch { /* Not every browser allows it; the turned canvas still plays. */ }
   }
-  document.getElementById('phone-fullscreen').addEventListener('click', fullscreen);
-  // Phones always play fullscreen and landscape. Browsers only allow this from
-  // a user gesture, so every tap re-enters it (e.g. after a back gesture).
+  // Phones always play fullscreen and landscape where the browser allows it.
+  // Browsers only allow this from a user gesture, so every tap re-enters it
+  // (e.g. after a back gesture).
   addEventListener('pointerup', event => {
     if (event.pointerType !== 'mouse' && phone() && !document.fullscreenElement) fullscreen();
   }, true);
   // Size the render buffer as well as the CSS box so the canvas stays sharp.
-  function fitCanvas() {
-    const canvas = document.getElementById('canvas');
+  function render() {
+    turned = phone() && innerHeight > innerWidth;
     const ratio = devicePixelRatio || 1;
-    const width = Math.round(innerWidth * ratio), height = Math.round(innerHeight * ratio);
+    const long = turned ? innerHeight : innerWidth, short = turned ? innerWidth : innerHeight;
+    const width = Math.round(long * ratio), height = Math.round(short * ratio);
     if (canvas.width !== width) canvas.width = width;
     if (canvas.height !== height) canvas.height = height;
-    canvas.style.width = `${innerWidth}px`;
-    canvas.style.height = `${innerHeight}px`;
-  }
-  function render() {
-    const vertical = portrait();
-    guide.hidden = !vertical;
-    document.getElementById('canvas').inert = vertical;
-    fitCanvas();
+    canvas.style.width = `${long}px`;
+    canvas.style.height = `${short}px`;
+    canvas.style.transform = turned ? `translateX(${innerWidth}px) rotate(90deg)` : '';
+    document.documentElement.classList.toggle('turned', turned);
   }
   window.OrbitalTouch = {
     state,
     update(next) { state = next; this.state = next; },
-    whenLandscape() {
-      render();
-      if (!portrait()) return Promise.resolve();
-      return new Promise(resolve => {
-        const check = () => { render(); if (!portrait()) { removeEventListener('resize', check); resolve(); } };
-        addEventListener('resize', check);
-      });
-    },
+    phone,
+    turned: () => turned,
   };
   addEventListener('resize', render);
   coarse.addEventListener('change', render);

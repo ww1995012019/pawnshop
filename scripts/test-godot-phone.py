@@ -104,15 +104,28 @@ def main():
                     'browser metadata to extension' not in message.text else None)
             page.on("request", lambda request: downloads.append(request.url) if ".wasm" in request.url or ".pck" in request.url else None)
             page.goto(args.url)
-            expect(page.get_by_role("heading", name="横过来，柜台更好操作")).to_be_visible(timeout=4000)
-            page.screenshot(path=str(args.screenshots / '01-portrait-guide.png'))
-            assert not downloads, "Portrait entry must defer the large engine and pack download"
-            if args.portrait_only:
-                print("PHONE portrait guide passes; engine download is deferred")
-                return
-            page.set_viewport_size({"width":844,"height":390})
+            # A phone held upright starts straight away: no rotate prompt, the same
+            # landscape shop turned a quarter turn, and taps land on its buttons.
             page.wait_for_function("window.OrbitalTouch?.state?.ready", timeout=90000)
-            expect(page.get_by_role("heading", name="横过来，柜台更好操作")).not_to_be_visible()
+            assert downloads, "Portrait entry must start loading the game at once"
+            assert page.locator('#phone-guide').count() == 0, 'Phones must not show a rotate prompt'
+            assert page.evaluate("window.OrbitalTouch.turned()"), 'An upright phone must show the turned landscape game'
+            pixels = page.evaluate('({width:canvas.width,height:canvas.height,ratio:devicePixelRatio})')
+            assert pixels['width'] == 844 * pixels['ratio'] and pixels['height'] == 390 * pixels['ratio'], 'Upright phones render the landscape picture'
+            box = page.locator('#canvas').bounding_box()
+            assert abs(box['width'] - 390) <= 1 and abs(box['height'] - 844) <= 1, 'The turned game must fill the upright screen'
+            page.wait_for_timeout(800)
+            page.screenshot(path=str(args.screenshots / '01-portrait-turned.png'))
+            target = locate(page, '营业')
+            page.touchscreen.tap(390 - target['y'], target['x'])
+            wait(page, "!s.title && !s.busy")
+            if args.portrait_only:
+                print("PHONE upright start plays the turned landscape game without a prompt")
+                return
+            page.reload()
+            page.wait_for_function("window.OrbitalTouch?.state?.ready", timeout=90000)
+            page.set_viewport_size({"width":844,"height":390})
+            page.wait_for_function("!window.OrbitalTouch.turned()")
             assert_full_screen(page, 844, 390)
             page.wait_for_timeout(800)
             tap(page, '营业')
@@ -144,9 +157,9 @@ def main():
             page.wait_for_timeout(350)
             uid = state(page, 'inspection_uid')
             page.set_viewport_size({'width': 390, 'height': 844})
-            expect(page.get_by_role('heading', name='横过来，柜台更好操作')).to_be_visible()
+            page.wait_for_function("window.OrbitalTouch.turned()")
             page.set_viewport_size({'width': 844, 'height': 390})
-            expect(page.get_by_role('heading', name='横过来，柜台更好操作')).not_to_be_visible()
+            page.wait_for_function("!window.OrbitalTouch.turned()")
             wait(page, f"s.workspace === 'inspect' && s.inspection_uid === {uid!r}")
             page.wait_for_timeout(350)
             tap(page, '收起')

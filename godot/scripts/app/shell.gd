@@ -627,7 +627,7 @@ func _layout_workspace() -> void:
 func _landscape_phone() -> bool:
 	if not OS.has_feature("web"):
 		return false
-	return bool(JavaScriptBridge.eval("matchMedia('(any-pointer: coarse)').matches && Math.min(innerWidth, innerHeight) <= 600 && innerWidth > innerHeight", true))
+	return bool(JavaScriptBridge.eval("!!(window.OrbitalTouch && window.OrbitalTouch.phone())", true))
 
 func _set_workspace_render_scale(output_scale: float) -> void:
 	if not is_instance_valid(workspace_container):
