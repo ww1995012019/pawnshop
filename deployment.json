@@ -1,8 +1,8 @@
 {
-  "source_commit": "5dd2d433e29d0928a033f5f35e8390810f40d0fc",
-  "release_id": "17e8acf53fbd9bf7",
-  "pack": "workbench-775233972ddbc4a0.pck",
-  "html_sha256": "b03626a9b53fcd0828d8ba5a6480cc970873981850fc83ab185ad9c52f0e1ef0",
+  "source_commit": "4c0cd12f34f9c98905ac3396a638316ca10bee9c",
+  "release_id": "2b733eda675fcf60",
+  "pack": "workbench-060015600e32ce94.pck",
+  "html_sha256": "c46fe58d91df9624693237c43cdb7754da40578004f298489f0cb6df804dae2e",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -18,5 +18,6 @@
   "night_crime_version": 1,
   "premium_counterfeit_version": 1,
   "natural_dialogue_version": 1,
-  "counter_table_version": 1
+  "counter_table_version": 1,
+  "theft_only_popup_version": 1
 }
