@@ -180,6 +180,7 @@ static func appraisal_revision(it: Dictionary) -> String:
 	var refurbished: Array = it.get("refurbishment",{}).get("done",[])
 	if not refurbished.is_empty(): signature.append(refurbished)
 	if WatchForgery.target_id(it)!="": signature.append(WatchForgery.signature(it))
+	if D(it.defId).get("watch",{}).get("brand","")=="星冕": signature.append(float(D(it.defId).value))
 	return JSON.stringify(signature)
 
 static func estimate(it: Dictionary) -> Dictionary:

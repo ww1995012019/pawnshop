@@ -1348,7 +1348,7 @@
       "id": "WCH-028",
       "name": "星冕 X01 银穹",
       "category": "watch",
-      "value": 420,
+      "value": 5200,
       "sprite": 27,
       "size": [
         1,
@@ -1399,7 +1399,7 @@
       "id": "WCH-029",
       "name": "星冕 X02 星轨",
       "category": "watch",
-      "value": 480,
+      "value": 6000,
       "sprite": 28,
       "size": [
         1,
@@ -1450,7 +1450,7 @@
       "id": "WCH-030",
       "name": "星冕 X03 月庭",
       "category": "watch",
-      "value": 540,
+      "value": 7000,
       "sprite": 29,
       "size": [
         1,
@@ -1501,7 +1501,7 @@
       "id": "WCH-031",
       "name": "星冕 X04 王冠",
       "category": "watch",
-      "value": 610,
+      "value": 8500,
       "sprite": 30,
       "size": [
         1,
@@ -1552,7 +1552,7 @@
       "id": "WCH-032",
       "name": "星冕 X05 天极",
       "category": "watch",
-      "value": 690,
+      "value": 10000,
       "sprite": 31,
       "size": [
         1,
@@ -1603,7 +1603,7 @@
       "id": "WCH-033",
       "name": "星冕 X06 典藏",
       "category": "watch",
-      "value": 780,
+      "value": 12000,
       "sprite": 32,
       "size": [
         1,
