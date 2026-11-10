@@ -14,7 +14,7 @@ func run():
  check(CounterDialogue.active(s),"ordinary arrival automatically enables natural multi-item conversation")
  var id: String=s.trade.id
  var first: String=Model.trade_item(s).uid
- check(s.trade.kind=="buy" and s.trade.line.contains(GameData.def(Model.trade_item(s).defId).name),"NPC's first lot and asking price are already in normal conversation")
+ check(s.trade.kind=="buy" and CounterDialogue.table_items(s).any(func(shown):return shown.uid==first and shown.price==s.trade.price),"NPC originals and asking prices are already on the desk at arrival")
  TradeSession.session(s).cash=5000;TradeSession.session(s).want_count=6
  for it in s.inventory: it.working=true;it.authentic=true;it.sourceVerified=true;it.condition=0.9
  s=verb(s,"ACCEPT")
@@ -68,10 +68,11 @@ func run():
  var many=Model.create("MANY-REFUSALS");many=Commerce.reduce(many,{"type":"ARRIVE"});many.inventory=[];TradeSession.session(many).want_count=0
  var final_uid=""
  for i in 7:
+  if i>0: many=verb(many,"COUNTER_CANCEL")
   var offered=Model.new_item(many,"WCH-001",{"sourceVerified":true,"working":true,"condition":0.9})
   Model.put_in(many,offered);final_uid=offered.uid
   many=Commerce.reduce(many,{"type":"SELECT_TRADE","uid":offered.uid})
- check(TradeSession.session(many).focus==final_uid,"putting rejected proposals aside allows discussing a seventh original")
+ check(TradeSession.session(many).focus==final_uid,"taking rejected originals back frees the desk for a seventh original")
  # Legacy pawn contract consumes the focused original while retaining other NPC goods.
  var pawn=Model.create("DIALOGUE-PAWN");pawn.ap=12;pawn.cash=5000;pawn=Commerce.reduce(pawn,{"type":"ARRIVE"})
  var pledged=Model.trade_item(pawn);var pledge_uid: String=pledged.uid

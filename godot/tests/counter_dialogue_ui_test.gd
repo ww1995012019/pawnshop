@@ -18,7 +18,7 @@ func run():
  var page=shell.page
  check(not shell.modal_open() and page.find_child("multi_trade_open",true,false)==null,"arrival has no list gateway or trade modal")
  check(page.offer_panel.visible and page.offer_button!=null,"original quotation console is immediately interactive")
- check(page.find_child("dialogue_next_goods",true,false)!=null,"NPC's next offered item is an ordinary dialogue response")
+ check(page.find_child("dialogue_next_goods",true,false)==null and page.get("counter_table")!=null,"all NPC offers are physical goods, with no next-item response")
  TradeSession.session(game.state).cash=5000;TradeSession.session(game.state).want_count=6
  var uid: String=game.state.inventory[0].uid
  page._stock_clicked(uid,true,null);await frames()
@@ -43,7 +43,7 @@ func run():
   var handed=page.get("handover_history")
   check(handed is Array and handed.size()==1 and handed[0].uid==uid and handed[0].direction=="sell","handover moves the agreed original rather than the currently unconfirmed watch")
   check(game.state.trade!=null and is_instance_valid(page.customer) and not page.customer.walking,"checkout keeps same NPC physically at counter")
- game.dispatch({"type":"COUNTER_NEXT"});await frames()
+ game.dispatch({"type":"COUNTER_FOCUS","tradeId":game.state.trade.id,"uid":TradeSession.session(game.state).goods[0].uid});await frames()
  var offered=Model.trade_item(game.state)
  if offered!=null:
   shell.go("inspect",offered.uid);await frames();shell.close_workspace();await frames()
@@ -52,7 +52,7 @@ func run():
  se.cash=5000;se.want_count=6
  var stock=game.state.inventory.filter(func(lot):return lot.owner=="shop")[0]
  page._stock_clicked(stock.uid,true,null);await frames();action(game,"ACCEPT");await frames()
- action(game,"COUNTER_NEXT");await frames()
+ game.dispatch({"type":"COUNTER_FOCUS","tradeId":game.state.trade.id,"uid":TradeSession.session(game.state).goods[0].uid});await frames()
  var funded=CounterDialogue.current(game.state)
  if not funded.is_empty() and funded.direction=="buy":
   game.state.cash=0

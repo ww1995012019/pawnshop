@@ -1,0 +1,103 @@
+extends Node2D
+## A view of the visit's canonical originals. Focusing never replaces a sprite.
+var sprites: Dictionary={}
+var cards: Dictionary={}
+var origins: Dictionary={}
+
+class DeskCard extends Node2D:
+ var caption:=""
+ var note:=""
+ var focused:=false
+ var agreed:=false
+ var refused:=false
+ var visitor:=false
+ var width:=102.0
+ func area() -> Rect2: return Rect2(Vector2(-width/2,-35),Vector2(width,98))
+ func _draw() -> void:
+  var edge:=Color("f2c27b") if focused else Color("83b7a0") if agreed else Color("b77e65") if refused else Color("65765d")
+  draw_style_box(_paper(edge),Rect2(-width/2,33,width,30))
+  draw_rect(Rect2(-width/2,-35,width,67),Color(edge,0.09 if focused else 0.025))
+  if focused or agreed: draw_rect(Rect2(-width/2,-35,width,67),edge,false,2)
+  draw_string(UIKit.font,Vector2(-width/2+5,46),caption,HORIZONTAL_ALIGNMENT_LEFT,width-10,16,Color("302c27"))
+  draw_string(UIKit.font,Vector2(-width/2+5,60),note,HORIZONTAL_ALIGNMENT_LEFT,width-10,13,Color("8c482d") if refused else Color("315547"))
+ func _paper(edge: Color) -> StyleBoxFlat:
+  var style:=StyleBoxFlat.new();style.bg_color=Color("dfcfaa");style.border_color=edge;style.set_border_width_all(1);return style
+
+func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
+ var shown:=CounterDialogue.table_items(state)
+ var keep: Array=[]
+ var vi:=0;var pi:=0
+ for info in shown:
+  var uid: String=info.uid
+  var original=TradeSession.item(state,uid)
+  if original==null: continue
+  keep.append(uid)
+  var visitor: bool=info.direction=="buy"
+  var index:=vi if visitor else pi
+  if visitor: vi+=1
+  else: pi+=1
+  var gap:=205.0 if visitor else 108.0
+  var default_position:=Vector2((785.0 if visitor else 720.0)+index*gap,508 if visitor else 610)
+  var saved=TradeSession.session(state).get("table_positions",{}).get(uid,[])
+  var pos:=Vector2(float(saved[0]),float(saved[1])) if saved is Array and saved.size()==2 else default_position
+  var fresh:=not sprites.has(uid)
+  if fresh:
+   var card:=DeskCard.new();card.name="desk_card_"+uid;cards[uid]=card;add_child(card)
+   var sprite:=ItemSprite.new();sprite.name="desk_original_"+uid;sprite.setup(original.defId,uid,64.0)
+   sprite.bounds=Rect2(670,500,610,110)
+   sprites[uid]=sprite;add_child(sprite)
+   sprite.position=pos
+  var card: DeskCard=cards[uid]
+  var sprite: ItemSprite=sprites[uid]
+  origins[uid]=info.direction
+  if not sprite.dragging and not sprite.get_meta("arriving",false) and sprite.position.distance_to(pos)>0.5:
+   if fresh or Game.prefs.reduced_motion: sprite.position=pos
+   elif sprite.get_meta("layout_destination",Vector2.INF)!=pos:
+    var old=sprite.get_meta("layout_tween") if sprite.has_meta("layout_tween") else null
+    if old is Tween and old.is_valid(): old.kill()
+    sprite.set_meta("layout_destination",pos)
+    var settle:=sprite.create_tween();sprite.set_meta("layout_tween",settle)
+    settle.tween_property(sprite,"position",pos,.18).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+    settle.tween_callback(func(): if is_instance_valid(sprite): sprite.remove_meta("layout_destination"))
+  card.width=178.0 if visitor else 102.0
+  card.visitor=visitor;card.focused=info.focused;card.agreed=info.selected;card.refused=info.status in ["rejected","blocked"]
+  sprite.set_meta("hit_size",Vector2(card.width,98))
+  card.caption=("来客 · " if visitor else "店·")+WatchForgery.sale_name(original).left(8 if visitor else 5)
+  card.note=("已谈妥 " if info.selected else "不收 " if card.refused else "开价 " if visitor else "报价 ")+Model.jnum(info.price)
+  card.position=sprite.position;card.queue_redraw()
+  if fresh and animate and not Game.prefs.reduced_motion:
+   var start:=to_local(from);sprite.position=start;sprite.set_meta("arriving",true)
+   var tw:=sprite.create_tween()
+   tw.tween_property(sprite,"position",pos,.38).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+   tw.parallel().tween_property(sprite,"lift",0.0,.38).from(25.0)
+   tw.tween_callback(func():sprite.set_meta("arriving",false))
+ for uid in sprites.keys():
+  if uid not in keep: discard(uid)
+
+func discard(uid: String) -> void:
+ var sprite=take(uid)
+ if is_instance_valid(sprite): sprite.queue_free()
+
+func take(uid: String):
+ var sprite=sprites.get(uid,null)
+ sprites.erase(uid);origins.erase(uid)
+ if cards.has(uid): cards[uid].queue_free();cards.erase(uid)
+ return sprite
+
+func clear() -> void:
+ for uid in sprites.keys(): discard(uid)
+
+func hit_test(global_point: Vector2) -> String:
+ var order: Array=sprites.keys();order.reverse()
+ for uid in order:
+  var sprite: ItemSprite=sprites[uid]
+  if sprite.contains(global_point) or cards[uid].area().has_point(to_local(global_point)-sprite.position): return uid
+ return ""
+
+func _process(_delta: float) -> void:
+ for uid in sprites:
+  if sprites[uid].dragging:
+   var old=sprites[uid].get_meta("layout_tween") if sprites[uid].has_meta("layout_tween") else null
+   if old is Tween and old.is_valid(): old.kill()
+   sprites[uid].remove_meta("layout_destination")
+  if cards.has(uid): cards[uid].position=sprites[uid].position

@@ -39,13 +39,19 @@ def main():
     cmd({'type':'start'});phone.wait(page,'!s.title && !s.busy && s.dialogue')
     assert not state()['blocked'],'natural counter has no trade modal'
     before=state();snap('normal-arrival')
+    npc_goods=[x['uid'] for x in state()['table_items'] if x['direction']=='buy']
+    assert len(npc_goods)==2
+    for uid in npc_goods: assert phone.locate(page,'@desk_original_'+uid)['found']
     for lot in fixture['inventory']:
      tap('@stock_recommend_'+lot['uid']);phone.wait(page,"s.dialogue_uid==='"+lot['uid']+"'")
      assert not state()['blocked'] and lot['defId'].split('-')[0]=='WCH'
      assert Game_name(lot['defId']) in state()['dialogue_line']
      tap('接受 ');phone.wait(page,"s.locked && s.trade_session.lines.some(l=>l.uid===s.dialogue_uid && l.selected)")
     assert state()['trade_session']['sell_count']==3
-    tap('@dialogue_next_goods');phone.wait(page,'s.buy && s.has_item && !s.locked')
+    assert len(state()['table_items'])==5
+    for lot in fixture['inventory']: assert phone.locate(page,'@desk_original_'+lot['uid'])['found']
+    snap('five-originals-on-table')
+    tap('@desk_original_'+npc_goods[0]);phone.wait(page,'s.buy && s.has_item && !s.locked')
     offered=state()['dialogue_uid'];tap('拿去鉴定');phone.wait(page,"s.workspace==='inspect'")
     assert state()['inspection_uid']==offered
     cmd({'type':'tool','tool':'TOL-001'});phone.wait(page,"s.inspection_current==='TOL-001' && !s.inspection_busy")
@@ -58,6 +64,8 @@ def main():
     tap('谈妥的 4 件一起交割');phone.wait(page,'!s.busy && s.dialogue',timeout=15000)
     assert state()['ap']==before_ap-1 and state()['cash']==before_cash+summary['net']
     assert not state()['blocked'] and state()['visitor']==before['visitor']
+    assert len(state()['table_items'])==1 and state()['table_items'][0]['uid']==npc_goods[1]
+    assert phone.locate(page,'@desk_original_'+npc_goods[1])['found']
     snap('same-person-continues')
     deadline=time.time()+12
     while time.time()<deadline:
@@ -68,10 +76,11 @@ def main():
     page.reload();page.wait_for_function('window.OrbitalTouch?.state?.ready && OrbitalTouch.state.has_save',timeout=90000)
     cmd({'type':'start'});phone.wait(page,'!s.title && !s.busy && s.dialogue')
     assert not state()['blocked'] and state()['ap']==before_ap-1
+    assert len(state()['table_items'])==1 and state()['table_items'][0]['uid']==npc_goods[1]
     snap('saved-conversation')
     tap('送客');phone.wait(page,'!s.busy && s.can_arrive',timeout=15000)
     assert 'dialogue' not in state() and not errors,errors
-    print(label,'NATURAL conversation, immediate recommendations, both directions, inspection, checkout/stay/reload pass',flush=True)
+    print(label,'TABLETOP simultaneous five originals, physical selection, partial settlement, inspection/stay/reload pass',flush=True)
    except Exception:snap('failure');raise
    finally:context.close()
   browser.close()

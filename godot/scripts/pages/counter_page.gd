@@ -22,6 +22,7 @@ var STAND := Vector2(880, 490)
 var fixture_buttons: Dictionary = {}
 var customer: Customer
 var mat_item: ItemSprite
+var counter_table: Node2D
 var bell: ServiceBell
 var bubble: Panel
 var bubble_name: Label
@@ -175,6 +176,9 @@ func enter() -> void:
 	stage_root = Node2D.new()
 	stage_root.material = Util.unshaded()
 	add_world(stage_root, "top")
+	counter_table=preload("res://scripts/world/counter_table.gd").new()
+	counter_table.name="counter_table"
+	stage_root.add_child(counter_table)
 	_align_stage()
 	# The importer lifts the original painted bell out of the background.
 	# This is its sole visible copy, at the exact source coordinates.
@@ -220,7 +224,7 @@ func workspace_state_changed(opened: bool) -> void:
 		for key in nudge_keys:
 			(key as Button).disabled = true
 		if is_instance_valid(mat_item) and mat_item.dragging:
-			mat_item.end_drag()
+			_finish_table_drag()
 	else:
 		_refresh()
 
@@ -234,8 +238,8 @@ func _sync_world() -> void:
 		return
 	_spawn_customer(t.npcId, false)
 	var it = Model.trade_item(Game.state)
-	if it != null:
-		_spawn_mat_item(it, false)
+	if CounterDialogue.active(Game.state): _sync_table()
+	elif it != null: _spawn_mat_item(it, false)
 	_say(t.line, false)
 
 func _spawn_customer(npc_id: String, walk: bool) -> void:
@@ -249,7 +253,29 @@ func _spawn_customer(npc_id: String, walk: bool) -> void:
 	if walk:
 		customer.walk_in(920.0)
 
+func _sync_table(animate:=false,from:=Vector2.ZERO) -> void:
+	if not is_instance_valid(counter_table): return
+	if CounterDialogue.active(Game.state):
+		counter_table.sync(Game.state,animate,from)
+		mat_item=counter_table.sprites.get(TradeSession.session(Game.state).focus,null)
+	else:
+		counter_table.clear()
+		if is_instance_valid(mat_item) and mat_item.get_parent()==counter_table: mat_item=null
+
+func _focus_table(uid: String) -> void:
+	if uid!="" and CounterDialogue.active(Game.state): Game.dispatch({"type":"COUNTER_FOCUS","tradeId":Game.state.trade.id,"uid":uid})
+
+func _finish_table_drag() -> void:
+	if not is_instance_valid(mat_item): return
+	var was_dragging:=mat_item.dragging
+	mat_item.end_drag()
+	if was_dragging and CounterDialogue.active(Game.state) and counter_table.sprites.has(mat_item.uid):
+		Game.dispatch({"type":"COUNTER_MOVE","tradeId":Game.state.trade.id,"uid":mat_item.uid,"position":[mat_item.position.x,mat_item.position.y]})
+
 func _spawn_mat_item(it: Dictionary, animate: bool, from := Vector2.ZERO) -> void:
+	if CounterDialogue.active(Game.state):
+		_sync_table(animate,from)
+		return
 	if mat_item != null and is_instance_valid(mat_item):
 		mat_item.queue_free()
 	mat_item = ItemSprite.new()
@@ -527,7 +553,7 @@ func relayout() -> void:
 	if is_instance_valid(customer) and not customer.walking:
 		customer.position = STAND - resident_window.position
 	if is_instance_valid(mat_item):
-		mat_item.bounds = drag_rect
+		if not CounterDialogue.active(Game.state): mat_item.bounds = drag_rect
 
 func _refresh_board() -> void:
 	var s := Game.state
@@ -585,6 +611,7 @@ func _refresh_desk() -> void:
 	if crate == null:
 		return
 	_refresh_board()
+	if not busy: _sync_table()
 	UIKit.clear(stock_grid)
 	UIKit.clear(display_goods)
 	var s := Game.state
@@ -629,7 +656,7 @@ func _refresh_desk() -> void:
 	if busy and t == null:
 		return
 	var it = Model.trade_item(s) if t != null else null
-	tag.visible = it != null
+	tag.visible = it != null and not CounterDialogue.active(s)
 	if it != null:
 		tag_name.text = WatchForgery.sale_name(it)
 		tag_info.text = "%s · %s · 物证 %d" % [UIKit.pct(it.condition), "本店维护" if it.repaired else "状态待对照", Model.evidence_count(it)]
@@ -804,7 +831,7 @@ func _refresh() -> void:
 	var shown_original=Model.trade_item(s) if t!=null else null
 	var shown_uid: String=shown_original.uid if shown_original!=null else ""
 	if chosen_evidence_uid!=shown_uid: chosen_evidence="";chosen_evidence_uid=shown_uid
-	dialogue_next_goods.disabled=busy or _scene_blocked()
+	dialogue_put_aside.text="取消本件约定" if t!=null and t.locked else "这件先不买" if t!=null and t.kind=="buy" else "收回本件"
 	offer_button = null
 	UIKit.clear(actions)
 	UIKit.clear(chips)
@@ -1162,12 +1189,6 @@ func _build_bubble() -> void:
 	dialogue_put_aside.pressed.connect(func():
 		if not busy and not _scene_blocked(): Game.dispatch(dialogue_put_aside.get_meta("action")))
 	dialogue_choices.add_child(dialogue_put_aside)
-	dialogue_next_goods=UIKit.button("再看看你的货","secondary",Vector2(0,38),16)
-	dialogue_next_goods.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-	dialogue_next_goods.name="dialogue_next_goods"
-	dialogue_next_goods.pressed.connect(func():
-		if not _scene_blocked() and not busy: Game.dispatch({"type":"COUNTER_NEXT"}))
-	dialogue_choices.add_child(dialogue_next_goods)
 
 func _layout_bubble_content() -> void:
 	if not is_instance_valid(bubble) or not is_instance_valid(bubble_label) or not is_instance_valid(footer):
@@ -1251,15 +1272,20 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 				await customer.arrived
 				customer.lean_in()
 				var presented=Model.trade_item(next)
-				if nt.kind == "buy" and presented != null:
+				if CounterDialogue.active(next):
+					_sync_table(true,customer.hands())
+				elif nt.kind == "buy" and presented != null:
 					await get_tree().create_timer(0.2).timeout
 					_spawn_mat_item(presented, true, customer.hands())
 					await get_tree().create_timer(0.6).timeout
 				busy = false
 				_say(nt.line)
-		"SELECT_TRADE", "COUNTER_NEXT":
+		"SELECT_TRADE", "COUNTER_NEXT", "COUNTER_FOCUS", "COUNTER_CANCEL":
 			var it = Model.trade_item(next)
-			if it != null:
+			if CounterDialogue.active(next):
+				_sync_table(a.type=="SELECT_TRADE",_crate_point())
+				_say(nt.line,true,"focused")
+			elif it != null:
 				_spawn_mat_item(it, true, customer.hands() if nt.kind=="buy" else _crate_point())
 				_say(nt.line, true, "focused")
 			elif nt != null and customer != null and String(nt.line).contains("识破"):
@@ -1333,7 +1359,12 @@ func _leave_with_goods(t: Dictionary, mood: String) -> void:
 	if mood == "reject":
 		customer.shake_head()
 	await get_tree().create_timer(1.3).timeout
-	if mat_item != null and is_instance_valid(mat_item):
+	if t.get("session",{}).get("dialogue",false):
+		for shown in CounterDialogue.table_items({"trade":t,"inventory":Game.state.inventory}):
+			if counter_table.sprites.has(shown.uid):
+				var item=TradeSession.item({"trade":t,"inventory":Game.state.inventory},shown.uid)
+				if item!=null: await _handover(item,"sell" if shown.direction=="buy" else "buy")
+	elif mat_item != null and is_instance_valid(mat_item):
 		var keep: bool = t.kind == "sell"
 		var start := mat_item.global_position
 		var dest: Vector2 = _crate_point() if keep else customer.hands()
@@ -1390,7 +1421,8 @@ func _deal(t: Dictionary, pawn: bool, item_name: String, stay := false) -> void:
 		busy=false
 		_refresh()
 		var following=Model.trade_item(Game.state)
-		if following!=null: _spawn_mat_item(following,false,customer.hands() if Game.state.trade.kind=="buy" else _crate_point())
+		if CounterDialogue.active(Game.state): _sync_table()
+		elif following!=null: _spawn_mat_item(following,false,customer.hands() if Game.state.trade.kind=="buy" else _crate_point())
 		_say(Game.state.trade.line,true,"focused")
 		return
 	_hide_bubble()
@@ -1403,6 +1435,11 @@ func _deal(t: Dictionary, pawn: bool, item_name: String, stay := false) -> void:
 
 func _handover(original, direction: String) -> void:
 	if original!=null:
+		if is_instance_valid(counter_table) and counter_table.sprites.has(original.uid):
+			mat_item=counter_table.take(original.uid)
+			mat_item.reparent(stage_root,true)
+		elif CounterDialogue.active(Game.state):
+			mat_item=ItemSprite.new();mat_item.setup(original.defId,original.uid,64);mat_item.position=MAT_POS;stage_root.add_child(mat_item)
 		if not is_instance_valid(mat_item) or mat_item.uid!=original.uid: _spawn_mat_item(original,false)
 		handover_history.append({"uid":original.uid,"direction":direction})
 		if Game.item(original.uid)==null and WatchForgery.target_id(original)!="":
@@ -1551,6 +1588,8 @@ func world_cursor_shape(p: Vector2) -> int:
 		return Input.CURSOR_ARROW
 	if is_instance_valid(mat_item) and mat_item.dragging:
 		return Input.CURSOR_DRAG
+	if CounterDialogue.active(Game.state) and counter_table.hit_test(p)!="":
+		return Input.CURSOR_POINTING_HAND
 	if is_instance_valid(mat_item) and mat_item.draggable and not mat_item.busy and mat_item.contains(p):
 		return Input.CURSOR_CAN_DROP
 	if is_instance_valid(bell) and bell.hit_test(p):
@@ -1569,16 +1608,28 @@ func _unhandled_input(e: InputEvent) -> void:
 			if bell.hit_test(p):
 				_bell_clicked()
 				return
+			if CounterDialogue.active(Game.state):
+				var hit: String=counter_table.hit_test(p)
+				if hit!="":
+					_focus_table(hit)
+					if is_instance_valid(mat_item): mat_item.begin_drag(p)
+					shell.sound("click",-10,0.8)
+					return
 			if mat_item != null and is_instance_valid(mat_item) and mat_item.contains(p):
 				mat_item.begin_drag(p)
 				shell.sound("click", -10, 0.8)
 				return
 			if customer != null and is_instance_valid(customer) and Game.state.trade != null and _over_customer(p):
 				shell.open_people(Game.state.trade.npcId)
-		elif mb.button_index == MOUSE_BUTTON_RIGHT and mat_item != null and is_instance_valid(mat_item):
-			mat_item.flip()
+		elif mb.button_index == MOUSE_BUTTON_RIGHT:
+			if CounterDialogue.active(Game.state):
+				var hit: String=counter_table.hit_test(p)
+				if hit!="":
+					_focus_table(hit)
+					if is_instance_valid(mat_item): mat_item.flip()
+			elif is_instance_valid(mat_item): mat_item.flip()
 	elif e is InputEventMouseButton and not e.pressed and mat_item != null and is_instance_valid(mat_item):
-		mat_item.end_drag()
+		_finish_table_drag()
 	elif e is InputEventKey and e.pressed and (e as InputEventKey).keycode == KEY_F and mat_item != null and is_instance_valid(mat_item):
 		mat_item.flip()
 
@@ -1590,7 +1641,7 @@ func _process(delta: float) -> void:
 	_align_stage()
 	if _scene_blocked():
 		if is_instance_valid(mat_item) and mat_item.dragging:
-			mat_item.end_drag()
+			_finish_table_drag()
 		return
 	_advance_conversation(delta)
 	var p: Vector2 = shell.world_mouse()

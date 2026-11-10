@@ -144,6 +144,7 @@ func snapshot() -> Dictionary:
 			result.merchant_items = sellable
 	if not TradeSession.session(state).is_empty(): result.trade_session=TradeSession.summary(state)
 	if CounterDialogue.active(state):
+		result.table_items=CounterDialogue.table_items(state)
 		result.dialogue=true
 		result.dialogue_line=state.trade.line
 		result.dialogue_uid=TradeSession.session(state).focus
@@ -268,25 +269,28 @@ func command(data: Dictionary) -> void:
 ## Report where an on-screen button is, in CSS pixels, so browser checks can tap
 ## the real in-scene control instead of a separate Web overlay.
 func _locate(text: String) -> void:
-	var found: Button = null
+	var found: CanvasItem = null
 	var stack: Array[Node] = [shell]
 	while not stack.is_empty():
 		var node: Node = stack.pop_front()
 		for child in node.get_children():
 			stack.append(child)
+		if node is ItemSprite and text=="@"+String(node.name) and text.begins_with("@desk_original_"):
+			found=node;break
 		if node is Button and text != "" and (node as Button).is_visible_in_tree():
 			var b := node as Button
 			if text.begins_with("@"):
 				if String(b.name)==text.substr(1): found=b;break
 				continue
-			if b.text == text or (found == null or found.text != text) and (b.text.contains(text) or b.tooltip_text.contains(text)):
+			if b.text == text or (found == null or not found is Button or found.text != text) and (b.text.contains(text) or b.tooltip_text.contains(text)):
 				found = b
 	var result := {"found": found != null, "text": text}
 	if found != null:
 		var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1", true))
 		var xf := found.get_viewport().get_screen_transform() * found.get_global_transform_with_canvas()
-		var center: Vector2 = xf * (found.size * 0.5)
-		var corner: Vector2 = xf * found.size - xf * Vector2.ZERO
+		var extent: Vector2=found.size if found is Button else found.get_meta("hit_size",Vector2(102,98))
+		var center: Vector2 = xf * (found.size * 0.5 if found is Button else Vector2.ZERO)
+		var corner: Vector2 = xf * extent - xf * Vector2.ZERO
 		result.merge({"x": center.x / ratio, "y": center.y / ratio, "width": absf(corner.x) / ratio,
-			"height": absf(corner.y) / ratio, "disabled": found.disabled, "label": found.text})
+			"height": absf(corner.y) / ratio, "disabled": found.disabled if found is Button else shell.page.busy or shell.modal_open() or shell.workspace_open(), "label": found.text if found is Button else String(found.name)})
 	JavaScriptBridge.eval("window.__orbitalLocated = %s;" % JSON.stringify(result))
