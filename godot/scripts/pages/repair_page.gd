@@ -184,9 +184,6 @@ func _refresh_info() -> void:
 		if task != "": info.add_child(UIKit.label("本工序：" + _cost_text(Service.step_cost(task,it)),17,UIKit.CYAN,false,true))
 	var why := _current_problem()
 	if why != "": info.add_child(UIKit.label(why,17,UIKit.DANGER,false,true))
-	var inspect := UIKit.button("去鉴定","secondary",Vector2(0,48),19)
-	inspect.pressed.connect(func(): shell.go("inspect",it_uid))
-	info.add_child(inspect)
 	info.add_child(UIKit.rule())
 	info.add_child(UIKit.module_header("材料库存","完成对应操作时扣除","SUPPLIES"))
 	for material in GameData.materials:
@@ -249,10 +246,16 @@ func _stage_ui() -> void:
 			instruction.text = "已完成的工序保留记录；鉴定读数若受维修影响，请复查。"
 			action_button.text = "完成工单 · 记录交工"
 		action_button.disabled = _current_problem() != ""
+	var inspect := UIKit.button("去鉴定","secondary",Vector2(126,50),19)
+	inspect.pressed.connect(func(): call_deferred("_open_inspection"))
+	row.add_child(inspect)
 	bench_body.add_child(row)
 	shell.hint(hint_text())
 	queue_relayout()
 	queue_redraw()
+
+func _open_inspection() -> void:
+	if it_uid != "": shell.go("inspect",it_uid)
 
 func open_service() -> void:
 	_save_cleaning()

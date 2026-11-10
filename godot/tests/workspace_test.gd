@@ -57,7 +57,7 @@ func audit() -> void:
 		repair_labels += label.text + "\n"
 	check(repair_labels.contains("尚无检验记录") and not repair_labels.contains(Model.fault_label(game.item(repair_uid))), "Repair does not show a hidden functional result before inspection")
 	var to_inspect: Button = null
-	for control in repair_page.info.find_children("*", "Button", true, false):
+	for control in repair_page.bench.find_children("*", "Button", true, false):
 		if control.text == "去鉴定":
 			to_inspect = control
 			break
@@ -73,7 +73,7 @@ func audit() -> void:
 	await frame()
 	var assembly_page = shell.active_shell().page
 	var assembly_inspect: Button = null
-	for control in assembly_page.info.find_children("*", "Button", true, false):
+	for control in assembly_page.bench.find_children("*", "Button", true, false):
 		if control.text == "去鉴定":
 			assembly_inspect = control
 			break

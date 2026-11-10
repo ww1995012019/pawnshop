@@ -85,6 +85,10 @@ func run() -> void:
 		page.art._process(10.0)
 		check(not page.art.is_processing() and game.item(uid).service.operations.get("dust",{}) == dust_progress,
 			"hidden forging animation cannot overwrite or complete the cleaning task")
+	var persistent_inspect: Button
+	for button in page.bench.find_children("*","Button",true,false):
+		if button.text == "去鉴定": persistent_inspect = button
+	check(persistent_inspect != null,"inspection navigation stays on the fixed workbench toolbar, outside scrolling paperwork")
 	var labels := ""
 	for label in page.find_children("*", "Label", true, false): labels += label.text + "\n"
 	check(not labels.contains("绿区") and not labels.contains("新线圈") and not labels.contains("三道工序"), "obsolete universal minigames have been removed")
