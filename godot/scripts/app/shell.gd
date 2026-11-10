@@ -850,6 +850,13 @@ func world_mouse() -> Vector2:
 		return pointer_override
 	return get_viewport().get_canvas_transform().affine_inverse() * last_screen
 
+## Root papers can stop input before it reaches an embedded workbench viewport.
+## Its last mouse coordinate is then stale; GUI ownership comes from both views.
+func world_pointer_available() -> bool:
+	if modal_open(): return false
+	if workspace_mode and not workspace_parent._workspace_pointer_inside(): return false
+	return get_viewport().gui_get_hovered_control() == null
+
 # A viewport owns its own GUI focus. Keep one focus owner across the drawer
 # boundary and traverse only the currently visible interaction layer.
 func _focusable_controls(node: Node) -> Array[Control]:

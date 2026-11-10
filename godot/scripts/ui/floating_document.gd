@@ -27,6 +27,28 @@ var pinch_distance := 0.0
 var pinch_zoom := 1.0
 const RESIZE_HIT_PIXELS := 48.0
 var last_css_scale := 0.0
+var last_grip_scale := Vector2.ZERO
+var last_grip_size := Vector2.ZERO
+var last_grip_origin := Vector2.ZERO
+var browser_window: JavaScriptObject
+var browser_resize_callback: JavaScriptObject
+
+func _enter_tree() -> void:
+	if OS.has_feature("web") and browser_resize_callback == null:
+		browser_window = JavaScriptBridge.get_interface("window")
+		browser_resize_callback = JavaScriptBridge.create_callback(_browser_resized)
+		browser_window.addEventListener("resize",browser_resize_callback)
+
+func _exit_tree() -> void:
+	if browser_window != null and browser_resize_callback != null:
+		browser_window.removeEventListener("resize",browser_resize_callback)
+	browser_resize_callback = null
+	browser_window = null
+
+func _browser_resized(_args: Array) -> void:
+	# Browser zoom can change DPR/CSS size while backing pixels stay constant.
+	# Invalidate even hidden papers; the next visible process refreshes once.
+	last_grip_scale = Vector2.ZERO
 
 func configure(title: String, key: String, dimensions := Vector2(720,760)) -> void:
 	geometry_key = key
@@ -124,11 +146,15 @@ func _css_scale() -> float:
 	return maxf(0.01,absf((get_viewport().get_screen_transform()*get_global_transform_with_canvas()).get_scale().x)/ratio)
 
 func _layout_grips() -> void:
+	last_grip_scale = (get_viewport().get_screen_transform()*get_global_transform_with_canvas()).get_scale()
+	last_grip_size = size
+	if not corner_handles.is_empty(): last_grip_origin = (corner_handles[0].get_parent() as Control).position
 	last_css_scale = _css_scale()
 	var extent := minf(RESIZE_HIT_PIXELS/last_css_scale,minf(size.x,size.y)*0.3)
 	for handle in corner_handles:
 		handle.size = Vector2.ONE*extent
 		handle.position = size*(handle.get_meta("corner") as Vector2)-handle.size*0.5-(handle.get_parent() as Control).position
+		handle.queue_redraw()
 
 func resize_cursor_shape() -> int:
 	return Control.CURSOR_FDIAGSIZE if resize_anchor_corner.x == resize_anchor_corner.y else Control.CURSOR_BDIAGSIZE
@@ -152,7 +178,7 @@ class ResizeGrip extends Control:
 		return true
 	func _draw() -> void:
 		if not is_instance_valid(document): return
-		var unit := 1.0/document._css_scale()
+		var unit := 1.0/maxf(document.last_css_scale,0.01)
 		var inward := Vector2.ONE-corner*2.0
 		var c := size*0.5
 		var a := c+inward*1.5*unit
@@ -248,5 +274,12 @@ func _input(event: InputEvent) -> void:
 
 func _process(_delta: float) -> void:
 	if is_visible_in_tree():
-		if get_viewport_rect().size != last_viewport: relayout()
-		_layout_grips()
+		if get_viewport_rect().size != last_viewport:
+			relayout()
+		else:
+			# Native transforms also change when browser DPI/zoom changes. Only
+			# cross the JS bridge and resize controls when their CSS extent changes.
+			var projected := (get_viewport().get_screen_transform()*get_global_transform_with_canvas()).get_scale()
+			var origin: Vector2 = (corner_handles[0].get_parent() as Control).position if not corner_handles.is_empty() else Vector2.ZERO
+			if not projected.is_equal_approx(last_grip_scale) or size != last_grip_size or origin != last_grip_origin:
+				_layout_grips()

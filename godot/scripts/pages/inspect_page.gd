@@ -403,6 +403,7 @@ func world_cursor_shape(p: Vector2) -> int:
 
 func _unhandled_input(e: InputEvent) -> void:
 	if shell.modal_open() or not is_instance_valid(item): return
+	if e is InputEventMouse and not shell.world_pointer_available(): return
 	var p: Vector2 = shell.world_mouse()
 	if e is InputEventMouseButton:
 		if e.button_index == MOUSE_BUTTON_LEFT:
@@ -429,7 +430,21 @@ func _unhandled_input(e: InputEvent) -> void:
 		elif e.keycode == KEY_ESCAPE: _set_tool("")
 
 func _process(delta: float) -> void:
-	if not is_instance_valid(item) or shell.modal_open(): return
+	if not is_instance_valid(item): return
+	var modal_blocked: bool = shell.modal_open() or (shell.workspace_mode and shell.workspace_parent.modal_open())
+	if tool == "TOL-001" or tool == "TOL-002":
+		var optical: Node2D = lens if tool == "TOL-001" else wand
+		var available: bool = not modal_blocked and (optical_pinned or shell.world_pointer_available())
+		optical.visible = available
+		if is_instance_valid(uv_light): uv_light.visible = available
+		if not available:
+			# Pause partial observation; recorded evidence and the explicit pin
+			# remain intact. Hidden tools must not expose the physical texture.
+			item.mat.set_shader_parameter("lens_r",0.0)
+			item.mat.set_shader_parameter("uv_r",0.0)
+			item.reveal.material.set_shader_parameter("uv_r",0.0)
+			return
+	if modal_blocked: return
 	if _tool_problem(tool) != "":
 		_set_tool("")
 		return

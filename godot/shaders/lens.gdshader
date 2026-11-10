@@ -3,7 +3,10 @@
 // is recovered from screen-space derivatives, so camera zoom and window stretch
 // need no extra uniforms.
 shader_type canvas_item;
-uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
+// Screen pixels already include the bench's modulation and point lights.
+// Applying those lights again clips pale dials and shifts dark face colours.
+render_mode unshaded;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform float zoom = 2.2;
 
 void fragment() {
@@ -18,7 +21,6 @@ void fragment() {
 	suv += (SCREEN_UV - center) * rim * 0.35 / zoom;
 	vec2 fringe = normalize(c + 1e-5) * rim * 0.004;
 	vec3 col = vec3(texture(screen_tex, suv + fringe).r, texture(screen_tex, suv).g, texture(screen_tex, suv - fringe).b);
-	col *= 1.1;
 	float sheen = (1.0 - smoothstep(0.0, 0.32, length(c - vec2(-0.17, -0.2)))) * 0.16;
 	col += vec3(sheen);
 	col = mix(col, col * 0.3, rim * 0.8);

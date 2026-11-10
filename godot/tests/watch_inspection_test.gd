@@ -76,7 +76,7 @@ func run():
 		check(page.item.reveal.text == load("res://scripts/model/watch_rules.gd").serial(game.item(page.it_uid)), "UV shows actual instance serial")
 		page._set_tool("TOL-001")
 		check(is_zero_approx(float(page.item.reveal.material.get_shader_parameter("uv_r"))), "serial hidden after UV closes")
-		page.optical_fixed = true
+		page.optical_pin_button.pressed.emit()
 		page.optical_position = page.item.logo_world_position()
 		await create_timer(1.0).timeout
 		check(game.item(page.it_uid).evidence.has("TOL-001"), "loupe records observation at actual instance logo")

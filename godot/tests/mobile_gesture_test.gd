@@ -106,7 +106,7 @@ func run():
 	var calls := {"check":0}
 	game.changed.connect(func(_old,_next,action):
 		if action.type=="CHECK": calls.check += 1)
-	page.optical_fixed = true
+	page.optical_pin_button.pressed.emit()
 	page.optical_position = page.item.logo_world_position()
 	for i in 12: page._process(1.0)
 	check(calls.check==1,"a denied observation triggers one notice/save rather than repeating every frame")

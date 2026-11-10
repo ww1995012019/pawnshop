@@ -22,7 +22,7 @@ func run():
 	await process_frame
 	check(page.item.back, "UV automatically presents the back")
 	page.flip_item()
-	page.optical_fixed = true
+	page.optical_pin_button.pressed.emit()
 	page.optical_position = page.item.reveal_center()
 	await create_timer(1.0).timeout
 	check(not game.item(page.it_uid).evidence.has("TOL-002"), "front face cannot auto-record hidden serial")
@@ -51,7 +51,7 @@ func run():
 	check(page.item.mat.get_shader_parameter("logo_hidden") == 1.0, "selecting magnifier alone does not unlock logo")
 	check(not page.item.back, "magnifier automatically presents the dial")
 	page.flip_item()
-	page.optical_fixed = true
+	page.optical_pin_button.pressed.emit()
 	page.optical_position = page.item.logo_world_position()
 	await create_timer(1.0).timeout
 	check(not game.item(page.it_uid).evidence.has("TOL-001"), "back face cannot auto-record hidden dial logo")

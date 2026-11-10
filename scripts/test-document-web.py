@@ -8,12 +8,20 @@ from pathlib import Path
 import shutil
 from playwright.sync_api import sync_playwright
 
+RESIZE_LISTENER_PROBE = """(()=>{
+              window.__resizeListeners=new Set();
+              const add=window.addEventListener.bind(window),remove=window.removeEventListener.bind(window);
+              window.addEventListener=(type,listener,options)=>{if(type==='resize')__resizeListeners.add(listener);return add(type,listener,options)};
+              window.removeEventListener=(type,listener,options)=>{if(type==='resize')__resizeListeners.delete(listener);return remove(type,listener,options)};
+            })()"""
+
 def run(url='http://127.0.0.1:4174/'):
     output=Path('work/documents-web'); output.mkdir(parents=True,exist_ok=True)
     with sync_playwright() as p:
         browser=p.chromium.launch(executable_path=os.environ.get('CHROMIUM_EXECUTABLE') or shutil.which('chromium'),args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
         try:
             context=browser.new_context(viewport={'width':1280,'height':720},has_touch=True)
+            context.add_init_script(RESIZE_LISTENER_PROBE)
             page=context.new_page(); errors=[]
             page.on('pageerror',lambda e:errors.append(str(e)))
             page.on('console',lambda m:errors.append(m.text) if 'SCRIPT ERROR' in m.text else None)
@@ -46,8 +54,10 @@ def run(url='http://127.0.0.1:4174/'):
                 r=locate(text);page.mouse.click(r['x'],r['y']);page.wait_for_timeout(400)
             page.goto(url);page.wait_for_function('window.OrbitalTouch?.state?.ready',timeout=90000)
             command({'type':'start'});page.wait_for_function('!OrbitalTouch.state.title && !OrbitalTouch.state.busy',timeout=15000)
+            page.evaluate('window.__beforePaperListeners=new Set(__resizeListeners)')
             command({'type':'manual'});page.wait_for_timeout(600)
             original=locate('X');assert not page.evaluate('OrbitalTouch.state.blocked')
+            assert page.evaluate('window.__paperListeners=[...__resizeListeners].filter(cb=>!__beforePaperListeners.has(cb));__paperListeners.length')==1,'paper owns exactly one resize listener'
             assert_diagonal_cursors(original)
             # Top-right corner: shrink diagonally toward its opposite anchor.
             x=original['x']+original['width']/2+20;y=original['y']-original['height']/2-20
@@ -80,6 +90,33 @@ def run(url='http://127.0.0.1:4174/'):
                 cdp.send('Input.dispatchTouchEvent',{'type':kind,'touchPoints':[{'x':cx-gap,'y':cy,'id':0},{'x':cx+gap,'y':cy,'id':1}]});page.wait_for_timeout(100)
             cdp.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]});page.wait_for_timeout(300)
             assert locate('X')['width']>before+3,'two-finger pinch scales paper'
+            # A new viewport transform must refresh the cached CSS-sized
+            # corner targets, including their portion outside the paper.
+            page.set_viewport_size({'width':1100,'height':700})
+            page.wait_for_timeout(600)
+            dpi=locate('X')
+            page.mouse.move(dpi['x']-dpi['width']*4,dpi['y'])
+            for _ in range(8):page.mouse.wheel(0,100);page.wait_for_timeout(50)
+            dpi=locate('X')
+            hx=dpi['x']-dpi['width']*4
+            page.mouse.move(hx,dpi['y']);page.mouse.down();page.mouse.move(hx-100,dpi['y']+20,steps=8);page.mouse.up()
+            dpi=locate('X');unit=dpi['height']/48
+            tx=dpi['x']+dpi['width']/2+16*unit+21
+            ty=dpi['y']-dpi['height']/2-16*unit-21
+            page.mouse.move(tx,ty);page.mouse.down();page.mouse.move(tx-35,ty+35,steps=10);page.mouse.up()
+            assert locate('X')['width']<dpi['width']-1,'outside corner remains draggable after viewport change'
+            page.screenshot(path=str(output/'guide-dpr1-resized.png'))
+            # No backing-pixel change is necessary for a CSS/DPR resize event
+            # to invalidate the paper once. Hidden/reopened paper stays single.
+            page.evaluate('window.__dpiReads=0;const ratio=devicePixelRatio;Object.defineProperty(window,"devicePixelRatio",{configurable:true,get(){__dpiReads++;return ratio}})')
+            def resize_reads():
+                page.evaluate('__dpiReads=0;dispatchEvent(new Event("resize"))');page.wait_for_timeout(1000)
+                return page.evaluate('__dpiReads')
+            tap('X');hidden_reads=resize_reads()
+            command({'type':'manual'});page.wait_for_timeout(600)
+            visible_reads=resize_reads()
+            assert visible_reads>hidden_reads,('visible paper refreshes CSS scale on resize with unchanged backing pixels',hidden_reads,visible_reads)
+            assert page.evaluate('__paperListeners.every(cb=>__resizeListeners.has(cb)) && [...__resizeListeners].filter(cb=>!__beforePaperListeners.has(cb)).length===1'),'reopening does not duplicate listener'
             tap('X')
             command({'type':'page','page':'inspect'});page.wait_for_function("OrbitalTouch.state.workspace==='inspect'")
             command({'type':'manual'});page.wait_for_timeout(400)
@@ -91,7 +128,41 @@ def run(url='http://127.0.0.1:4174/'):
             tap('北辰 N01');page.screenshot(path=str(output/'catalogue-detail.png'))
             tap('返回全部手表');assert locate('北辰 N01')['found']
             command({'type':'close'});assert not errors,errors
-            print('DOCUMENT WEB outer-corner resize, custom diagonals, workbench overlay, touch/pinch/reopen and catalogue pass')
+            engine_listeners=page.evaluate('__paperListeners.length')
+            page.evaluate('engine.requestQuit()')
+            page.wait_for_function('window.orbitalTouchSend===null',timeout=15000)
+            assert engine_listeners==1 and page.evaluate('__paperListeners.every(cb=>!__resizeListeners.has(cb))'),'freed paper removes its JS callback before disposal'
+            print('DOCUMENT WEB DPR1 gestures, resize invalidation, single listener and removal pass',flush=True)
+            context.close()
+            # Use a fresh DPR2 engine: changing CDP DPR after boot can leave
+            # pinned Godot screen-coordinate metadata inconsistent.
+            context=browser.new_context(viewport={'width':1280,'height':720},has_touch=True,device_scale_factor=2)
+            context.add_init_script(RESIZE_LISTENER_PROBE)
+            page=context.new_page();errors=[]
+            page.on('pageerror',lambda e:errors.append(str(e)))
+            page.on('console',lambda m:errors.append(m.text) if 'SCRIPT ERROR' in m.text else None)
+            page.goto(url);page.wait_for_function('window.OrbitalTouch?.state?.ready',timeout=90000)
+            command({'type':'start'});page.wait_for_function('!OrbitalTouch.state.title && !OrbitalTouch.state.busy',timeout=15000)
+            page.evaluate('window.__beforePaperListeners=new Set(__resizeListeners)')
+            command({'type':'manual'});page.wait_for_timeout(600)
+            assert page.evaluate('window.__paperListeners=[...__resizeListeners].filter(cb=>!__beforePaperListeners.has(cb));__paperListeners.length')==1
+            page.set_viewport_size({'width':1100,'height':700});page.wait_for_timeout(600)
+            dpi=locate('X');hx=dpi['x']-dpi['width']*4
+            page.mouse.move(hx,dpi['y']);page.mouse.down();page.mouse.move(hx-100,dpi['y']+40,steps=8);page.mouse.up()
+            dpi=locate('X');unit=dpi['height']/48
+            tx=dpi['x']+dpi['width']/2+16*unit+21
+            ty=dpi['y']-dpi['height']/2-16*unit-21
+            assert 0<tx<1100 and 0<ty<700,('outside-corner point must be on canvas',tx,ty)
+            page.mouse.move(tx,ty);page.mouse.down();page.mouse.move(tx-35,ty+35,steps=10);page.mouse.up()
+            assert locate('X')['width']<dpi['width']-1,'fresh DPR2 outside-corner target stays finger-sized after ordinary resize'
+            page.screenshot(path=str(output/'guide-fresh-dpr2-resized.png'))
+            tap('X');command({'type':'manual'});page.wait_for_timeout(400)
+            assert page.evaluate('[...__resizeListeners].filter(cb=>!__beforePaperListeners.has(cb)).length===1'),'DPR2 reopen owns one callback'
+            assert not errors,errors
+            page.evaluate('engine.requestQuit()');page.wait_for_function('window.orbitalTouchSend===null',timeout=15000)
+            assert page.evaluate('__paperListeners.every(cb=>!__resizeListeners.has(cb))'),'DPR2 document free removes callback'
+            context.close()
+            print('DOCUMENT WEB fresh DPR2 resize/corner/reopen and listener removal pass',flush=True)
         finally:browser.close()
 if __name__=='__main__':
     import sys
