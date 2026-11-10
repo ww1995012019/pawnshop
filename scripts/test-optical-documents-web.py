@@ -35,6 +35,38 @@ PROBE = """()=>{
 }"""
 
 
+IDLE_SAMPLE = """async () => {
+ const result={settled:false,warmup:[],samples:[],reads:null,frames:0};
+ let active=true,timer;
+ // Sampling in a task after rAF includes the engine's callbacks for that
+ // rendered frame, regardless of whether our probe registered first.
+ const frame=()=>new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
+ const deadline=new Promise(resolve=>{timer=setTimeout(()=>{
+  active=false;result.error='idle sampling exceeded 45 seconds';resolve(result);
+ },45000)});
+ const run=async()=>{
+  opticalProbe.reads=0;
+  let previous=0,quiet=0;
+  for(let i=0;i<30 && active;i++){
+   await frame();if(!active)return result;
+   const total=opticalProbe.reads,delta=total-previous;previous=total;
+   result.warmup.push(delta);quiet=delta===0?quiet+1:0;
+   if(i+1>=6 && quiet>=3){result.settled=true;break}
+  }
+  if(!result.settled){result.error='paper did not become read-free within 30 rendered frames';return result}
+  opticalProbe.reads=0;previous=0;
+  for(let i=0;i<8 && active;i++){
+   await frame();if(!active)return result;
+   const total=opticalProbe.reads;result.samples.push(total-previous);previous=total;
+  }
+  result.reads=opticalProbe.reads;result.frames=result.samples.length;
+  return result;
+ };
+ const measured=await Promise.race([run(),deadline]);
+ active=false;clearTimeout(timer);return measured;
+}"""
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--record-red',action='store_true')
@@ -108,10 +140,9 @@ def main():
                     # Measure each paper while it stays open; do not depend on FPS.
                     for mode in ['wanted','closed','manual']:
                         if mode=='closed':click('@wanted_close')
-                        if mode=='manual':cmd({'type':'manual'});page.wait_for_timeout(350)
+                        if mode=='manual':cmd({'type':'manual'})
                         page.evaluate('opticalProbe.reads=0;opticalProbe.mips=0;opticalProbe.frames=[]')
-                        page.wait_for_timeout(900)
-                        idle=page.evaluate('({reads:opticalProbe.reads,frames:opticalProbe.frames.length})')
+                        idle=page.evaluate(IDLE_SAMPLE)
                         page.evaluate('opticalProbe.reads=0;opticalProbe.mips=0;opticalProbe.frames=[]')
                         for i in range(12):move(button['x']-35+i*6,button['y']-240);page.wait_for_timeout(20)
                         if mobile:
@@ -120,9 +151,9 @@ def main():
                             for i,(x,y) in enumerate(path):
                                 cdp.send('Input.dispatchTouchEvent',{'type':'touchStart' if i==0 else 'touchMove','touchPoints':[{'x':x,'y':y,'id':0}]});page.wait_for_timeout(25)
                             cdp.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]})
-                        data=page.evaluate('({reads:opticalProbe.reads,mips:opticalProbe.mips,frames:opticalProbe.frames})');data['idle_reads']=idle['reads'];data['idle_frames']=idle['frames'];report[view+'-'+mode]=data
-                        print(view,mode,'idle DPR',data['idle_reads'],'/',data['idle_frames'],'input DPR reads',data['reads'],'mip calls',data['mips'],'frames',len(data['frames']),flush=True)
-                        if mode!='closed':check(data['idle_reads']<=2,f'{view} idle {mode} avoids per-frame DPR bridge reads')
+                        data=page.evaluate('({reads:opticalProbe.reads,mips:opticalProbe.mips,frames:opticalProbe.frames})');data['idle_reads']=idle['reads'];data['idle_frames']=idle['frames'];data['idle_settled']=idle['settled'];data['idle_warmup']=idle['warmup'];data['idle_samples']=idle['samples'];data['idle_error']=idle.get('error','');report[view+'-'+mode]=data
+                        print(view,mode,'warmup',data['idle_warmup'],'idle DPR',data['idle_reads'],'/',data['idle_frames'],'input DPR reads',data['reads'],'mip calls',data['mips'],'frames',len(data['frames']),flush=True)
+                        check(data['idle_settled'] and data['idle_frames']==8 and data['idle_reads']==0,f'{view} idle {mode} avoids per-frame DPR bridge reads')
                         snap(mode+'-moving')
                     # Guide remains non-modal; pointer over its content cannot earn
                     # a new UV record or usage charge at a stale nested coordinate.
