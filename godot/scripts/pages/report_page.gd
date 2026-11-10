@@ -30,10 +30,10 @@ func show_status(text: String, tone := "info") -> void:
 	if is_instance_valid(status_label):
 		status_label.text = text
 		status_label.visible = text != ""
-		status_label.add_theme_color_override("font_color", UIKit.INK if tone == "info" else UIKit.RUST)
+		status_label.add_theme_color_override("font_color", UIKit.TEXT if tone == "info" else UIKit.DANGER)
 
 func _add_status() -> void:
-	status_label = UIKit.label(status_text, 18, UIKit.INK if status_tone == "info" else UIKit.RUST, false, true)
+	status_label = UIKit.label(status_text, 18, UIKit.TEXT if status_tone == "info" else UIKit.DANGER, false, true)
 	status_label.name = "report_status"
 	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	status_label.visible = status_text != ""

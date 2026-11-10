@@ -13,6 +13,7 @@ func all_text(node: Node) -> String:
 	return result
 func run() -> void:
 	var game = root.get_node("Game")
+	var kit = load("res://scripts/app/ui_kit.gd")
 	game.prefs.reduced_motion = true
 	game.prefs.sound = false
 	game.new_game("LEDGER-LAYOUT")
@@ -56,6 +57,14 @@ func run() -> void:
 	await settle()
 	check(active.toast_box.get_child_count() == 0, "settlement does not create a global overlay")
 	check(all_text(page).contains("日结完成") and all_text(page).contains("店铺电费") and all_text(page).contains("店铺清洁费"), "settled receipt and inline result show new fees")
+	check(page.status_label.get_theme_color("font_color") == kit.TEXT, "rebuilt info status uses light text on the dark report sheet")
+	page.show_status("余额不足，请补齐费用。", "error")
+	check(page.status_label.get_theme_color("font_color") == kit.DANGER, "live error status uses the dark-surface danger color")
+	page._refresh()
+	await settle()
+	check(page.status_label.get_theme_color("font_color") == kit.DANGER, "rebuilt error status preserves readable danger color")
+	page.show_status("日结完成", "info")
+	check(page.status_label.get_theme_color("font_color") == kit.TEXT, "live info status uses light text on the dark report sheet")
 	shell.workspace_container.stretch = false
 	for logical_size in [Vector2(1600, 900), Vector2(1600, 600), Vector2(1160, 600), Vector2(600, 900)]:
 		var viewport: SubViewport = active.get_viewport()
