@@ -29,47 +29,29 @@ body { color: var(--paper); font-family: var(--sans); -webkit-user-select: none;
 	transition: opacity .35s ease;
 }
 #loader.opening { opacity: 0; pointer-events: none; }
-.panel {
-	position: relative; width: min(500px, 88vw); padding: 17px;
-	background: #3b3a40; border: 5px solid #88766b;
-	box-shadow: 0 0 0 4px #251e29, 0 8px 0 #1c1a23, inset 0 2px #b3a08c;
-}
-.panel::before, .panel::after {
-	content: ""; position: absolute; top: 7px; width: 7px; height: 7px;
-	background: #d1ad7c; box-shadow: 1px 1px #312630;
-}
-.panel::before { left: 7px; } .panel::after { right: 7px; }
-.plate { display: flex; align-items: center; gap: 12px; padding: 3px 5px 12px; }
-.plate i { display: none; }
-.station { color: var(--muted); font-size: 12px; letter-spacing: .08em; }
-h1 { margin: 0; color: var(--paper); font-size: clamp(24px, 4.5vw, 31px); letter-spacing: .06em; }
-.motto { margin-left: auto; color: var(--amber); font-size: 13px; white-space: nowrap; }
-.gauge {
-	background: var(--screen); border: 4px solid #1a2025; outline: 2px solid #718578;
-	padding: 16px 18px 14px;
-}
-.screen-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.screen-heading span { color: #a9c6b3; font-size: 13px; }
-.screen-heading strong { color: var(--amber); font: 22px var(--mono); }
-.track { height: 15px; padding: 3px; background: #101c20; border: 1px solid #5f796d; }
-.fill { width: 0; height: 100%; background: repeating-linear-gradient(90deg,#e5bd7e 0 11px,#826b4f 11px 13px); transition: width .2s ease-out; }
-.track.indeterminate .fill { width: 28% !important; animation: sweep 1.4s steps(16,end) infinite; }
-@keyframes sweep { from { transform: translateX(0); } to { transform: translateX(255%); } }
-.readout { display: flex; justify-content: space-between; margin-top: 7px; color: var(--muted); font: 12px var(--mono); }
-.readout b { color: var(--amber); font-weight: 600; }
-#stage { margin-top: 12px; color: var(--paper); font-size: 15px; min-height: 1.5em; }
-#tip { margin: 15px 4px 0; color: #b8b7a6; font-size: 13px; line-height: 1.6; min-height: 3.2em; transition: opacity .25s; }
-#tip::before { content: "店内须知 · "; color: var(--amber); }
-#fail { display: none; margin: 15px 4px 0; }
-#loader.failed #fail { display: block; }
-#loader.failed .gauge, #loader.failed #tip { display: none; }
-#fail p { color: #f1caa0; font-size: 15px; line-height: 1.6; margin: 0 0 14px; white-space: pre-line; }
-#retry { font: inherit; min-width: 156px; min-height: 42px; cursor: pointer; color: #f7e9cc; background: #856b4e; border: 2px solid #c8a879; box-shadow: 0 3px #27202a; }
-#retry:hover, #retry:focus-visible { background: #a1825a; outline: 2px solid var(--paper); }
-#retry:active { transform: translateY(2px); box-shadow: 0 1px #27202a; }
-@media (max-width: 440px) { .panel { padding: 14px; } .motto { display: none; } }
-@media (max-height: 520px) { .panel { padding: 12px 16px; } .plate { padding-bottom: 7px; } .gauge { padding: 9px 14px; } #tip { display: none; } }
-@media (prefers-reduced-motion: reduce) { #loader, .fill, #tip { transition: none; } .track.indeterminate .fill { animation: none; width: 100% !important; opacity: .6; } }
+
+.loading-title { position:absolute; top:max(20px,env(safe-area-inset-top)); left:clamp(20px,4vw,64px); margin:0; font-size:clamp(18px,2.4vw,26px); letter-spacing:.12em; color:#d7c7ac; font-weight:500; }
+#loading-cast { display:flex; flex-direction:column; align-items:center; justify-content:center; width:min(680px,84%); gap:12px; padding-bottom:48px; text-align:center; transition:opacity .3s; }
+#loading-portrait { width:clamp(130px,24vh,230px); aspect-ratio:1; background-image:url("loading-cast.webp"); background-size:600% 600%; image-rendering:pixelated; animation:breathe 3.2s ease-in-out infinite; }
+@keyframes breathe { 0%,100% { transform:translateY(0) rotate(-.5deg); } 50% { transform:translateY(-5px) rotate(.5deg); } }
+#loading-name { margin:0; color:var(--amber); font-size:clamp(14px,2vw,18px); letter-spacing:.15em; }
+#loading-line { margin:0; max-width:100%; min-height:3em; font-size:clamp(16px,2.2vw,23px); line-height:1.7; text-wrap:balance; color:#f0e5cf; text-shadow:0 2px 4px #17131c; }
+#loading-bottom { position:absolute; left:clamp(16px,3vw,48px); right:clamp(16px,3vw,48px); bottom:max(14px,env(safe-area-inset-bottom)); }
+#pct { display:block; margin-bottom:8px; color:var(--paper); text-align:right; font:14px var(--mono); }
+.track { height:7px; background:#181e20; overflow:hidden; }
+.fill { width:0; height:100%; background:#dfbc80; transition:width .2s ease-out; }
+#fail { display:none; position:absolute; inset:20%; place-content:center; text-align:center; }
+#loader.failed #fail { display:grid; }
+#loader.failed #loading-cast, #loader.failed #loading-bottom { display:none; }
+#fail p { color:#f1caa0; font-size:16px; line-height:1.7; white-space:pre-line; }
+#retry { justify-self:center; font:inherit; min-width:156px; min-height:44px; cursor:pointer; color:#f7e9cc; background:#856b4e; border:2px solid #c8a879; }
+#retry:hover, #retry:focus-visible { background:#a1825a; outline:2px solid var(--paper); }
+@media (max-height:520px) { #loading-cast { gap:6px; padding-bottom:26px; } #loading-portrait { width:clamp(80px,30vh,145px); } .loading-title { top:14px; } #loading-line { min-height:2.8em; font-size:16px; } }
+html.turned #loading-cast { gap:6px; padding-bottom:26px; }
+html.turned #loading-portrait { width:clamp(80px,30vw,145px); }
+html.turned #loading-line { min-height:2.8em; font-size:16px; }
+html.turned .loading-title { top:14px; }
+@media (prefers-reduced-motion:reduce) { #loader, .fill, #loading-cast { transition:none; } #loading-portrait { animation:none; } }
 
 	</style>
 	<link rel="stylesheet" href="web-ui.css">
@@ -80,22 +62,17 @@ h1 { margin: 0; color: var(--paper); font-size: clamp(24px, 4.5vw, 31px); letter
 	<noscript><div style="position:fixed;inset:0;display:grid;place-items:center;color:#ece7d9">需要开启 JavaScript 才能开门营业。</div></noscript>
 
 	<div id="loader" role="status" aria-live="polite">
-		<div class="panel">
-			<div class="plate">
-				<i></i><i></i><i></i><i></i>
-				<div><div class="station">回环九号 · 下层旧港</div>
-				<h1>轨道旧货局</h1></div>
-				<div class="motto">每件旧物，都有下一程。</div>
-			</div>
-			<div class="gauge">
-				<div class="screen-heading"><span>店铺系统 · 正在连接</span><strong aria-hidden="true">◦ ◦ ◦</strong></div>
-				<div class="track" id="track" role="progressbar" aria-label="加载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div>
-				<div class="readout"><span id="bytes">0.0 / — MB</span><b id="pct">0%</b></div>
-				<div id="stage">正在整理柜台…</div>
-			</div>
-			<div id="tip"></div>
-			<div id="fail"><p id="fail-text"></p><button id="retry" type="button">重新开门</button></div>
+		<h1 class="loading-title">轨道旧货局</h1>
+		<div id="loading-cast" aria-live="off">
+			<div id="loading-portrait" role="img" aria-label="旧港来客"></div>
+			<p id="loading-name"></p>
+			<p id="loading-line"></p>
 		</div>
+		<div id="loading-bottom">
+			<span id="pct">0%</span>
+			<div class="track" id="track" role="progressbar" aria-label="加载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div>
+		</div>
+		<div id="fail"><p id="fail-text"></p><button id="retry" type="button">重新开门</button></div>
 	</div>
 
 	<script src="asset-loader.js"></script>
@@ -112,52 +89,51 @@ const engine = new Engine(GODOT_CONFIG);
 	const track = document.getElementById('track');
 	const fill = document.getElementById('fill');
 	const pct = document.getElementById('pct');
-	const bytes = document.getElementById('bytes');
-	const stage = document.getElementById('stage');
-	const tip = document.getElementById('tip');
+	const cast = $LOADING_CAST;
+	const speaker = document.getElementById('loading-cast');
+	const portrait = document.getElementById('loading-portrait');
+	const name = document.getElementById('loading-name');
+	const line = document.getElementById('loading-line');
 	const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-	const TIPS = [
-		'放大镜看标识，紫外线读编号，称重核对配置；对照说明书再出价。',
-		'接受报价只是锁价，确认交割才真正付钱拿货，花 1 点行动。',
-		'来源不明的货要先扫描、登记，或者放进隔离柜。',
-		'维修的三道工序做完后才扣材料与行动点，中途离开不吃亏。',
-		'第 7、14、21 天要交租金，留够现金再打烊。',
-		'委修单必须交还顾客的原物，别拿店里的同款顶替。',
-	];
-	let tipIndex = Math.floor(Math.random() * TIPS.length);
-	function nextTip() {
-		tip.style.opacity = 0;
-		setTimeout(() => {
-			tip.textContent = TIPS[tipIndex % TIPS.length];
-			tipIndex += 1;
-			tip.style.opacity = 1;
-		}, reduced ? 0 : 350);
+	let queue = [], lastId = null, swapTimer;
+	function nextSpeaker() {
+		if (!queue.length) {
+			queue = [...cast];
+			for (let i=queue.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [queue[i],queue[j]]=[queue[j],queue[i]]; }
+			if (queue.length>1 && queue[queue.length-1].id===lastId) [queue[0],queue[queue.length-1]]=[queue[queue.length-1],queue[0]];
+		}
+		const person = queue.pop(); lastId = person.id;
+		speaker.style.opacity = '0';
+		swapTimer = setTimeout(() => {
+			portrait.style.backgroundPosition = `${person.slot%6*20}% ${Math.floor(person.slot/6)*20}%`;
+			portrait.setAttribute('aria-label', person.name);
+			name.textContent = person.name;
+			line.textContent = '“' + person.line + '”';
+			speaker.style.opacity = '1';
+		}, reduced ? 0 : 300);
 	}
-	nextTip();
-	const tipTimer = setInterval(nextTip, 5200);
-
-	const mb = (n) => (n / 1048576).toFixed(1);
+	nextSpeaker();
+	const castTimer = setInterval(nextSpeaker, 5200);
 	let finished = false;
 
 	function fail(err) {
 		console.error(err);
 		finished = true;
-		clearInterval(tipTimer);
+		clearInterval(castTimer);
+		clearTimeout(swapTimer);
 		const msg = err instanceof Error ? err.message : (typeof err === 'string' ? err : '');
 		document.getElementById('fail-text').textContent = '店铺暂时没有接通。\n请检查网络后重试。' + (msg ? '\n（' + msg + '）' : '');
 		loader.classList.add('failed');
-		stage.textContent = '';
 	}
 	document.getElementById('retry').addEventListener('click', () => location.reload());
 
 	function open() {
 		finished = true;
-		clearInterval(tipTimer);
+		clearInterval(castTimer);
+		clearTimeout(swapTimer);
 		fill.style.width = '100%';
 		pct.textContent = '100%';
 		track.setAttribute('aria-valuenow', '100');
-		stage.textContent = '开门营业';
 		// Gently reveal the same shop behind the loading panel.
 		setTimeout(() => {
 			if (reduced) { loader.remove(); return; }
@@ -174,12 +150,11 @@ const engine = new Engine(GODOT_CONFIG);
 
 	let downloaded = false;
 	window.OrbitalAssets.onProgress = (current, total) => {
-		const p = Math.min(100, Math.floor(current / total * 100));
+		if (finished || !Number.isFinite(total) || total <= 0) return;
+		const p = Math.min(95, Math.floor(current / total * 95));
 		fill.style.width = p + '%'; pct.textContent = p + '%';
 		track.setAttribute('aria-valuenow', String(p));
-		bytes.textContent = mb(current) + ' / ' + mb(total) + ' MB';
 		downloaded = current >= total;
-		stage.textContent = downloaded ? '正在通电、点亮柜台…' : '正在读取压缩货架与库存…';
 	};
 	Promise.all([
 		// Observe the public load Promise too: vendor init does not forward WASM failures.
@@ -187,7 +162,7 @@ const engine = new Engine(GODOT_CONFIG);
 		engine.startGame({
 		'onProgress': function (current, total) {
 			if (finished) return;
-			if (downloaded) stage.textContent = '正在通电、点亮柜台…';
+			if (downloaded) { fill.style.width = '98%'; pct.textContent = '98%'; track.setAttribute('aria-valuenow', '98'); }
 		},
 	})]).then(open, fail);
 }());

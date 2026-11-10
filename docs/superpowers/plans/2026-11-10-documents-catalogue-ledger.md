@@ -33,3 +33,8 @@ Small viewport reachable close/resize handles; touch gesture does not activate u
 - Ruling: save continuous gesture geometry on release, not on every input frame, to avoid repeated synchronous save writes.
 - Validation: npm test passed 35/35 native groups, 7 packaging tests, 1 font test; exported resources 33 watches / 33 residents / 3 instruments, failures=0. Desktop/audio and phone browser regressions passed. Floating paper browser regression passed actual mouse drag, plus/minus, touch pinch and reopen; all-watch grid/detail/back navigation passed. Logo rendered regression: 165 checks across all 33 models.
 - Existing Godot resource-at-exit diagnostics remain as on baseline; no script/parse errors in passing runs.
+
+## Follow-up: minimal loading screen
+- User requested bottom-only progress bar and percentage, no byte counts or center panel; central randomized resident portraits/quotes.
+- Implemented build-time lightweight 33-resident WebP sheet from existing art, shuffled full cast with matching source dialogue, subtle animation, reduced-motion handling, persistent real progress/error/retry behavior.
+- Tests: layout/roster unit tests RED→GREEN; 7 packaging tests; font check; actual loading regression (cold/cache/corruption/error/legacy); browser screenshots/geometry for desktop, landscape phone and rotated portrait. Corrected portrait geometry overlap caught by browser test.

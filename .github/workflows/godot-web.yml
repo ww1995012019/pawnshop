@@ -35,6 +35,7 @@ jobs:
           godot --headless --editor --path godot --import
           python scripts/test-godot-native.py
           python scripts/test-godot-packaging.py
+          python scripts/test-loading-layout.py
           python godot/tools/test_portrait_import.py
           python godot/tools/test_bell_art.py
       - name: Build and check exported resources
@@ -46,6 +47,7 @@ jobs:
           python scripts/serve-godot-web.py --port 4174 > work/web-server.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
+          python scripts/test-loading-screen.py
           python scripts/test-godot-loading.py
           python scripts/test-godot-web.py http://127.0.0.1:4174/
           python scripts/test-godot-phone.py http://127.0.0.1:4174/

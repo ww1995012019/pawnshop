@@ -60,6 +60,9 @@ def package_web(pack, runtime, output):
         assets["touch-" + digest(data)[:16] + Path(name).suffix] = data
     js_name = next(name for name in assets if name.startswith("touch-") and name.endswith(".js"))
     css_name = next(name for name in assets if name.startswith("touch-") and name.endswith(".css"))
+    cast, cast_image = loading_cast()
+    cast_name = "loading-cast-" + digest(cast_image)[:16] + ".webp"
+    assets[cast_name] = cast_image
     loading = (ROOT / "godot/web/loading-shop.png").read_bytes()
     loading_name = "loading-shop-" + digest(loading)[:16] + ".png"
     assets[loading_name] = loading
@@ -84,6 +87,7 @@ def package_web(pack, runtime, output):
         html = html.replace(placeholder, value)
     html = html.replace('"web-ui.js"', f'"{js_name}"').replace('"web-ui.css"', f'"{css_name}"')
     html = html.replace("loading-shop.png", loading_name)
+    html = html.replace("loading-cast.webp", cast_name).replace("$LOADING_CAST", json.dumps(cast, ensure_ascii=False).replace("<", "\\u003c"))
     html = html.replace("asset-loader.js", loader_name)
     assets["index.html"] = html.encode()
     assets[".nojekyll"] = b""
@@ -104,7 +108,7 @@ def package_web(pack, runtime, output):
     previous = [name for name in previous if Path(name).name == name and name not in assets and (output / name).is_file()]
     retained = set(assets) | set(previous)
     for name in old.get("files", {}):
-        if Path(name).name == name and name not in retained and re.match(r"^(workbench|engine|touch|loading-shop|assets|music)-[0-9a-f]+\.", name):
+        if Path(name).name == name and name not in retained and re.match(r"^(workbench|engine|touch|loading-shop|loading-cast|assets|music)-[0-9a-f]+\.", name):
             (output / name).unlink(missing_ok=True)
     files = {name: {"bytes": (output / name).stat().st_size,
                     "sha256": digest((output / name).read_bytes())} for name in sorted(retained)}
@@ -114,6 +118,35 @@ def package_web(pack, runtime, output):
               "initial_gzip_bytes": len(assets[pack_name + ".gz"]) + len(assets[engine + ".wasm.gz"])}
     (output / "release.json").write_text(json.dumps(result, indent=2) + "\n")
     return result
+
+
+def loading_cast():
+    """Small transparent sprite sheet, independent of the large game pack."""
+    import io
+    from PIL import Image
+    game = json.loads((ROOT / "godot/data/game_data.json").read_text())
+    people = game["npcs"] + json.loads((ROOT / "godot/data/extra_residents.json").read_text()) + json.loads((ROOT / "godot/data/new_residents.json").read_text())
+    sheet = Image.new("RGBA", (6 * 128, 6 * 128))
+    atlases = {}
+    cast = []
+    for npc in people:
+        number = int(npc["id"].split("-")[1]) - 1
+        if number >= 13:
+            key, index, columns = "shop-residents-new", number - 13, 5
+        elif number >= 9:
+            key, index, columns = "shop-residents-extra", number - 9, 2
+        else:
+            key, index, columns = "shop-residents", number, 3
+        if key not in atlases:
+            atlases[key] = Image.open(ROOT / "godot/assets/atlas" / (key + ".png")).convert("RGBA")
+        x, y = index % columns * 256, index // columns * 256
+        portrait = atlases[key].crop((x,y,x+256,y+256)).resize((128,128),Image.Resampling.NEAREST)
+        slot = len(cast)
+        sheet.paste(portrait,(slot % 6 * 128,slot // 6 * 128))
+        cast.append({"id":npc["id"],"name":npc["name"],"line":npc["line"],"slot":slot})
+    data = io.BytesIO()
+    sheet.save(data, format="WEBP", lossless=True, method=6)
+    return cast, data.getvalue()
 
 
 def main():
