@@ -205,7 +205,7 @@ func _refresh_info() -> void:
 			button.tooltip_text = blocked
 			button.pressed.connect(func(): call_deferred("open_forgery",candidate))
 			info.add_child(button)
-			info.add_child(UIKit.label(WatchForgery.cost_text(method),16,UIKit.MUTED,false,true))
+			info.add_child(UIKit.label(WatchForgery.cost_text(method) + ("\n" + _power_copy("forge_" + method, it) if method in ["serial", "weight"] else ""),16,UIKit.MUTED,false,true))
 		if it.has("forgery"): info.add_child(UIKit.label(WatchForgery.summary(it),17,UIKit.AMBER,false,true))
 	else:
 		info.add_child(UIKit.module_header("本次维修工单", "只处理实际存在的问题", "WORK ORDER"))
@@ -234,6 +234,22 @@ func _cost_text(cost: Dictionary) -> String:
 	for id in cost.get("materials",{}): parts.append("%s ×%s" % [GameData.material(id).name, Model.jnum(cost.materials[id])])
 	parts.append("%s AP" % Model.jnum(cost.get("ap",0)))
 	return " · ".join(parts)
+
+func _power_copy(for_task: String, it: Dictionary) -> String:
+	var device := ""
+	var cr := 0.0
+	if for_task == "test":
+		device = "repair_tester"
+		cr = 1.5 if Service.profile(it).movement == "mechanical" else 1.0
+	elif for_task in ["forge_serial", "forge_weight"]:
+		device = "uv" if for_task == "forge_serial" else "scale"
+		cr = 0.5
+	if device == "": return ""
+	var problem := StoreCosts.device_problem(Game.state, device)
+	if problem != "": return problem
+	var charge := StoreCosts.usage_quote(Game.state, device, cr)
+	if charge <= 0: return "本日沿用旧版能源维护，不另计作业电费。"
+	return "本次预计电费 +%s Cr，成功提交本工序后日结统一收取；中间动作不另收费。" % Model.jnum(charge)
 
 func _current_problem() -> String:
 	var it = Game.item(it_uid)
@@ -331,6 +347,9 @@ func _update_guidance() -> void:
 	# work and all other action buttons share the displayed permission check.
 	if task != "dust" and is_instance_valid(action_button): action_button.disabled = why != ""
 	instruction.text = "暂不能操作 · " + why if why != "" else (art.hint_text() if art.visible else instruction.text)
+	if why == "" and current != null:
+		var power_copy := _power_copy(task, current)
+		if power_copy != "": instruction.text += "\n" + power_copy
 	instruction.add_theme_color_override("font_color", UIKit.DANGER if why != "" else UIKit.TEXT)
 	instruction.mouse_filter = Control.MOUSE_FILTER_IGNORE
 

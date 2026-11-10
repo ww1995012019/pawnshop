@@ -77,6 +77,8 @@ func _select_status(key: String) -> void:
 		"active": "逐项核对品相与维修要求，交付消耗 1 行动点。",
 		"closed": "查看已交付和已过期的委托记录。"
 	}[key]
+	var terminal_problem := StoreCosts.device_problem(Game.state, "order_terminal")
+	if terminal_problem != "": status_note.text = terminal_problem
 	if status_changed:
 		tabs[key].call_deferred("grab_focus")
 
@@ -179,9 +181,12 @@ func _refresh() -> void:
 	for k in cols:
 		UIKit.clear(cols[k])
 	var s := Game.state
+	var terminal_problem := StoreCosts.device_problem(s, "order_terminal")
 	for def in Model.available_orders(s):
 		var v := _card(def)
 		var b := UIKit.button("接取订单", "primary", Vector2(0, 56), 22)
+		b.disabled = terminal_problem != ""
+		b.tooltip_text = terminal_problem
 		var id: String = def.id
 		b.pressed.connect(func():
 			if Game.dispatch({"type": "TAKE_ORDER", "id": id}):
@@ -212,6 +217,11 @@ func _refresh() -> void:
 			var why := UIKit.label("", 18, UIKit.RUST, false, true)
 			var b := UIKit.button("交付（1 AP）", "good", Vector2(0, 56), 22)
 			var check := func():
+				if terminal_problem != "":
+					why.text = terminal_problem
+					b.disabled = true
+					opt.disabled = true
+					return
 				if opt.item_count == 0:
 					why.text = "库存里还没有这件货。"
 					b.disabled = true

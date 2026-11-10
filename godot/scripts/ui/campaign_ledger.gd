@@ -5,7 +5,7 @@ const KIND_LABELS := {
 	"purchase": "收购支出", "sale": "售货收入", "pawn-principal": "抵押本金支出",
 	"pawn-return": "抵押本金收回", "pawn-fee": "抵押服务费", "registration": "来源登记费",
 	"order": "订单收入", "service": "服务收入", "materials": "材料采购",
-	"material-sale": "材料出售", "maintenance": "能源维护", "rent": "租金",
+	"material-sale": "材料出售", "maintenance": "旧版能源维护", "electricity": "店铺电费", "cleaning": "店铺清洁费", "rent": "租金",
 	"upgrade": "设备升级", "clearance": "应急清仓", "relief-window": "救济记录",
 	"station-event": "站务事件", "bounty": "协查赏金", "fine": "处罚支出"
 }

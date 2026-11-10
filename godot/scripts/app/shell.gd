@@ -524,6 +524,9 @@ func content_rect() -> Rect2:
 func go(name: String, focus_uid := "") -> void:
 	if not PAGES.has(name):
 		return
+	if name == "report":
+		_clear_toasts()
+		if workspace_mode and is_instance_valid(workspace_parent): workspace_parent._clear_toasts()
 	if workspace_mode and name == "counter":
 		workspace_parent.close_workspace()
 		return
@@ -766,7 +769,17 @@ func hint(text: String) -> void:
 
 # ---------------------------------------------------------------- feedback
 
+func _clear_toasts() -> void:
+	for notice in toast_box.get_children():
+		toast_box.remove_child(notice)
+		notice.queue_free()
+
 func toast(text: String, tone := "info") -> void:
+	var active := active_shell()
+	if active.page_name == "report" and active.page != null:
+		_clear_toasts()
+		active.page.show_status(text, tone)
+		return
 	# The same notice twice in a row (e.g. arriving and then opening the
 	# workbench) only refreshes the one already shown.
 	if toast_box.get_child_count() > 0:
@@ -1285,7 +1298,7 @@ func open_help() -> void:
 	var manual := UIKit.button("打开手表检验说明书", "primary", Vector2(0, 56))
 	manual.pressed.connect(func(): open_watch_manual())
 	body.add_child(manual)
-	var text := "• 柜台：按服务铃请下一位来客。报价只代表对方的认识与预算；检测不会自动改变对方的开价。\n• 检验：只用放大镜、紫外线、称重。对照说明书查看 logo、编号与重量，记录物证；每项缩小估价范围，三项当前检验完成后仍保留估价区间，成交价需自行议定。\n• 议价：可以主动出示物证。维修师、收藏者和普通人理解同一条证据的能力不同，相关专家85%概率独立准确估价，普通客人20%概率接近市价；你的私下检验不会自动更新对方认知。\n• 造假：在修表台的伪装加工中操作重描标识、伪造编号或添加配重。分别留下标识漆层、编号晕边及内部配重痕迹，不修复真实故障或缺件；顾客按对应专业能力识别。\n• 维修：依本件故障安排除尘、开盖、洗件、换件、润滑回装与走时复核；机械表与石英表操作不同。完成对应工序时扣费，进度可保存。材料等流动商人到店购买。独立翻新可自由选择吹灰、擦拭、抛光、换壳或换表带，分别结算；提升品相但不修复机芯，更换件保留可鉴定痕迹。\n• 仓储与订单：保管每一只原表，核验来源，按订单要求交还同一实物。\n• 日结：按账本支付维护费与租金，继续经营 21 天。"
+	var text := "• 柜台：按服务铃请下一位来客。报价只代表对方的认识与预算；检测不会自动改变对方的开价。\n• 检验：只用放大镜、紫外线、称重。对照说明书查看 logo、编号与重量，记录物证；每项缩小估价范围，三项当前检验完成后仍保留估价区间，成交价需自行议定。\n• 议价：可以主动出示物证。维修师、收藏者和普通人理解同一条证据的能力不同，相关专家85%概率独立准确估价，普通客人20%概率接近市价；你的私下检验不会自动更新对方认知。\n• 造假：在修表台的伪装加工中操作重描标识、伪造编号或添加配重。分别留下标识漆层、编号晕边及内部配重痕迹，不修复真实故障或缺件；顾客按对应专业能力识别。\n• 维修：依本件故障安排除尘、开盖、洗件、换件、润滑回装与走时复核；机械表与石英表操作不同。完成对应工序时扣费，进度可保存。材料等流动商人到店购买。独立翻新可自由选择吹灰、擦拭、抛光、换壳或换表带，分别结算；提升品相但不修复机芯，更换件保留可鉴定痕迹。\n• 仓储与订单：保管每一只原表，核验来源，按订单要求交还同一实物。\n• 日结：按账本支付设备每日费用与有效作业电费、固定清洁费 8 Cr 及租金，继续经营 21 天。电费只在成功记录新读数或提交用电工序时计次；手工清洁、移动镜片和查看旧结果不收费。账本可展开设备状态、台数与作业明细；工作灯一次性 120 Cr，安装后从次日起用电 +1 Cr/日。"
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.custom_minimum_size.y = clampf(get_viewport().get_visible_rect().size.y - 300, 180, 450)

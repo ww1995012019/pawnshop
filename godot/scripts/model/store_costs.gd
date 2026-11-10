@@ -54,17 +54,29 @@ static func device_problem(s: Dictionary, device: String) -> String:
 		if (entry.type == device or entry.id == device) and _available(s,entry): return ""
 	return "%s未安装、未启用或正在停机维修，暂不能操作。" % DEVICES.get(device,{"name":device}).name
 
-static func record(s: Dictionary, device: String, key: String, cr: float) -> void:
+static func _usage_device(s: Dictionary, device: String) -> Dictionary:
 	ensure(s)
-	if int(s.day) < int(s.storeCosts.fromDay) or s.get("phase","open") != "open" or cr <= 0: return
+	for entry in s.storeCosts.devices:
+		if (entry.type == device or entry.id == device) and _available(s,entry): return entry
+	return {}
+
+static func _usage_cents(entry: Dictionary, cr: float) -> int:
+	return int(round(cr * 100.0)) * _factor(String(entry.get("status","normal"))) / 100
+
+## Preview the next successful use without recording or rounding the day total.
+static func usage_quote(s: Dictionary, device: String, cr: float) -> float:
+	var entry := _usage_device(s,device)
+	if entry.is_empty() or int(s.day) < int(s.storeCosts.fromDay) or s.get("phase","open") != "open" or cr <= 0: return 0.0
+	return float(_usage_cents(entry,cr)) / 100.0
+
+static func record(s: Dictionary, device: String, key: String, cr: float) -> void:
+	var entry := _usage_device(s,device)
+	if entry.is_empty() or int(s.day) < int(s.storeCosts.fromDay) or s.get("phase","open") != "open" or cr <= 0: return
 	var usage: Dictionary = s.storeCosts.days[str(int(s.day))].usage
 	var identity := device + "|" + key
 	if usage.has(identity): return
-	for entry in s.storeCosts.devices:
-		if (entry.type != device and entry.id != device) or not _available(s,entry): continue
-		var kind := String(entry.type)
-		usage[identity] = {"device":String(entry.id),"type":kind,"name":DEVICES[kind].name,"status":String(entry.get("status","normal")),"key":key,"count":1,"cr":cr,"cents":int(round(cr * 100.0)) * _factor(String(entry.get("status","normal"))) / 100}
-		return
+	var kind := String(entry.type)
+	usage[identity] = {"device":String(entry.id),"type":kind,"name":DEVICES[kind].name,"status":String(entry.get("status","normal")),"key":key,"count":1,"cr":cr,"cents":_usage_cents(entry,cr)}
 
 static func quote(s: Dictionary) -> Dictionary:
 	ensure(s)

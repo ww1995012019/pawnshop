@@ -290,12 +290,20 @@ func _detail() -> void:
 	var reserved := Model.trade_reserved(s, it)
 	var shelf_why := _shelf_block(it, reserved)
 	_act(g, "下架" if it.location == "display" else "上架陈列", "good", {"type": "DISPLAY", "uid": it.uid}, shelf_why == "", shelf_why)
-	var price_ok: bool = it.owner == "shop" and not it.has("orderId") and not reserved
-	_act(g, "挂牌 −10", "chip", {"type": "PRICE", "uid": it.uid, "price": maxf(1, it.listPrice - 10)}, price_ok and it.listPrice > 1)
-	_act(g, "挂牌 +10", "chip", {"type": "PRICE", "uid": it.uid, "price": it.listPrice + 10}, price_ok)
+	var quote_problem := StoreCosts.device_problem(s, "quote_terminal")
+	var price_ok: bool = it.owner == "shop" and not it.has("orderId") and not reserved and quote_problem == ""
+	if quote_problem != "": detail.add_child(UIKit.label(quote_problem, 16, UIKit.DANGER, false, true))
+	_act(g, "挂牌 −10", "chip", {"type": "PRICE", "uid": it.uid, "price": maxf(1, it.listPrice - 10)}, price_ok and it.listPrice > 1, quote_problem)
+	_act(g, "挂牌 +10", "chip", {"type": "PRICE", "uid": it.uid, "price": it.listPrice + 10}, price_ok, quote_problem)
 	# Touch screens have no right-click while dragging, so rotation also needs a button.
 	_act(g, "旋转方向", "chip", func(): rotate_selected(), can_rotate_selected(), "" if can_rotate_selected() else "需要后仓里有能容纳旋转后形状的空位")
-	_act(g, "已扫描 · 复查" if s.scanned.has(it.uid) else "安检扫描", "secondary", {"type": "SCAN", "uid": it.uid})
+	var scanner_problem := StoreCosts.device_problem(s, "scanner")
+	_act(g, "已扫描 · 复查" if s.scanned.has(it.uid) else "安检扫描", "secondary", {"type": "SCAN", "uid": it.uid}, scanner_problem == "", scanner_problem)
+	if scanner_problem != "":
+		detail.add_child(UIKit.label(scanner_problem, 16, UIKit.DANGER, false, true))
+	else:
+		var charge := StoreCosts.usage_quote(s, "scanner", 0.5)
+		detail.add_child(UIKit.label("新的有效来源扫描预计电费 +%s Cr，日结统一收取；查看旧结果不收费。" % Model.jnum(charge) if charge > 0 else "本日沿用旧版能源维护，不另计来源扫描电费。", 16, UIKit.CYAN, false, true))
 	var reg_why := ""
 	if it.get("stolen", false):
 		reg_why = "疑似赃物不能办理普通来源登记"

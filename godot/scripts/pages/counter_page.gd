@@ -789,6 +789,7 @@ func _refresh() -> void:
 	UIKit.clear(actions)
 	UIKit.clear(chips)
 	var dial_on := false
+	var quote_problem := StoreCosts.device_problem(s, "quote_terminal")
 	if t == null:
 		var closed: bool = s.cursor >= Model.daily_visit_limit()
 		scr.head.text = "今日营业中" if s.phase == "open" else "已打烊"
@@ -882,8 +883,8 @@ func _refresh() -> void:
 				chips.add_child(chip)
 			if chips.get_child_count() == 0:
 				chips.add_child(UIKit.label("物证插槽 · 先在鉴定仪取证", 13, Color("36463e")))
-			offer_button = _act("出价 " + UIKit.money(dial.value), "primary", func(): _offer())
-			_act("接受 " + UIKit.money(t.price), "good", func(): Game.dispatch({"type": "ACCEPT"}), s.ap >= 1 and (not buy or s.cash >= t.price))
+			offer_button = _act("出价 " + UIKit.money(dial.value), "primary", func(): _offer(), quote_problem == "", false, quote_problem)
+			_act("接受 " + UIKit.money(t.price), "good", func(): Game.dispatch({"type": "ACCEPT"}), s.ap >= 1 and (not buy or s.cash >= t.price) and quote_problem == "", false, quote_problem)
 			_act("拿去鉴定", "secondary", func(): shell.go("inspect", it.uid))
 			if buy:
 				var pawn_ok := Model.evidence_count(it) >= 2
@@ -895,7 +896,11 @@ func _refresh() -> void:
 	var alarm_reason := WantedCases.report_reason(s)
 	alarm_button.disabled = busy or alarm_reason != ""
 	alarm_button.tooltip_text = alarm_reason if alarm_reason != "" else "核对当前来客后呼叫巡警；错误报警会记录次数"
-	dial.enabled = dial_on and not busy and not _scene_blocked()
+	if dial_on and quote_problem != "":
+		scr.line3.text = quote_problem
+		scr.line3.tooltip_text = quote_problem
+		footer.text = quote_problem
+	dial.enabled = dial_on and quote_problem == "" and not busy and not _scene_blocked()
 	for k in nudge_keys:
 		(k as Button).disabled = not dial.enabled
 	# The tray occupies the empty payment space. During active negotiation the

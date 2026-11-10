@@ -151,13 +151,17 @@ func _refresh_info() -> void:
 		info.add_child(distinction)
 	var appraisal := Model.estimate(it)
 	var price_text := "估价 %s–%s Cr" % [Model.jnum(appraisal.low), Model.jnum(appraisal.high)]
-	info.add_child(UIKit.note_card("检验估价 · %d/3" % appraisal.count, price_text + "\n鉴定只提供参考范围；加工或维修后可免费复测。"))
+	info.add_child(UIKit.note_card("检验估价 · %d/3" % appraisal.count, price_text + "\n鉴定只提供参考范围；加工或维修后复测不耗 AP，用电另计。"))
 	info.add_child(UIKit.label("观察记录 · %d / %d" % [it.evidence.size(), TOOL_IDS.size()], 17, UIKit.AMBER))
 	var pending: Array[String] = []
 	for index in TOOL_IDS.size():
 		var id: String = TOOL_IDS[index]
 		var done: bool = it.evidence.has(id)
 		var fresh: bool = done and it.get("inspectionFacts", {}).get(id, {}).get("appraisalRevision", "") == Model.appraisal_revision(it)
+		var problem := _tool_problem(id)
+		tool_buttons[id].disabled = problem != ""
+		tool_buttons[id].tooltip_text = problem
+		if problem != "": info.add_child(UIKit.label(problem, 16, UIKit.DANGER, false, true))
 		tool_buttons[id].text = GameData.tool(id).name + ("  ✓" if fresh else " · 复测" if done else "")
 		tool_buttons[id].add_theme_stylebox_override("normal",UIKit.key_style("primary" if tool == id else "secondary","normal"))
 		if done:
@@ -166,7 +170,7 @@ func _refresh_info() -> void:
 			pending.append("%02d %s" % [index + 1, GameData.tool(id).name])
 	if not pending.is_empty():
 		info.add_child(UIKit.label("待检：" + " / ".join(pending), 16, UIKit.MUTED, false, true))
-	info.add_child(UIKit.note_card("检验须知", "单项物证不能证明原装、走时或防水。三项当前记录齐全后缩小估价范围，仍需自行议价。重描、覆印和配重会留下对应加工痕迹。\n首次记录本件消耗 1 AP；后续取证免费。"))
+	info.add_child(UIKit.note_card("检验须知", "单项物证不能证明原装、走时或防水。三项当前记录齐全后缩小估价范围，仍需自行议价。重描、覆印和配重会留下对应加工痕迹。\n首次记录本件消耗 1 AP；后续取证不耗 AP。紫外与称重各按新的有效读数计电费，重复查看旧结果不收费。"))
 
 func _load_item() -> void:
 	_set_tool("")
@@ -219,9 +223,24 @@ func _orient_for_tool() -> void:
 	pending_tool = ""
 	if item.back != needs_back: item.flip()
 
+func _tool_problem(id: String) -> String:
+	if id == "TOL-002": return StoreCosts.device_problem(Game.state, "uv")
+	if id == "TOL-005": return StoreCosts.device_problem(Game.state, "scale")
+	return ""
+
+func _power_copy(id: String) -> String:
+	if id not in ["TOL-002", "TOL-005"]: return ""
+	var charge := StoreCosts.usage_quote(Game.state, "uv" if id == "TOL-002" else "scale", 0.5)
+	if charge <= 0: return "本日沿用旧版能源维护，不另计作业电费。"
+	return "本次预计电费 +%s Cr，成功记录新的有效读数后，日结时统一收取。" % Model.jnum(charge)
+
 func _set_tool(id: String) -> void:
 	if id != "" and not TOOL_IDS.has(id): return
 	if id != "" and Game.item(it_uid) == null: return
+	var problem := _tool_problem(id)
+	if problem != "":
+		shell.toast(problem)
+		return
 	if scale_occupied: _scale_remove()
 	tool = id
 	pending_tool = id if id in ["TOL-001", "TOL-002"] else ""
@@ -291,6 +310,7 @@ func _optical(id: String) -> void:
 		optical_position = _optical_target()
 		fixed.text = "解除固定" if optical_pinned else "定位并固定观察点")
 	bench_body.add_child(fixed)
+	if id == "TOL-002": bench_body.add_child(UIKit.label(_power_copy(id), 16, UIKit.CYAN, false, true))
 
 func _optical_target() -> Vector2:
 	return item.logo_world_position() if tool == "TOL-001" else item.reveal_center()
@@ -302,6 +322,7 @@ func _scale() -> void:
 	add_world(scale_pan,"fg")
 	scale_label = UIKit.label("0.0 g · 请先空秤归零",22,UIKit.CYAN)
 	bench_body.add_child(scale_label)
+	bench_body.add_child(UIKit.label(_power_copy("TOL-005"), 16, UIKit.CYAN, false, true))
 	var grid := UIKit.grid(3,8)
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for entry in [["空秤归零",_scale_tare],["放到秤上",_scale_place],["取回手表",_scale_remove]]:
@@ -316,14 +337,14 @@ func _scale() -> void:
 	_scale_controls()
 
 func _scale_tare() -> bool:
-	if tool != "TOL-005" or scale_occupied: return false
+	if tool != "TOL-005" or _tool_problem(tool) != "" or scale_occupied: return false
 	tared = true
 	scale_reading = 0.0
 	_scale_controls()
 	return true
 
 func _scale_place() -> bool:
-	if tool != "TOL-005" or not tared or scale_occupied or item.busy: return false
+	if tool != "TOL-005" or _tool_problem(tool) != "" or not tared or scale_occupied or item.busy: return false
 	scale_origin = drag_origin if item.dragging else item.position
 	item.end_drag()
 	item.draggable = false
@@ -355,12 +376,13 @@ func _scale_record() -> bool:
 
 func _scale_controls() -> void:
 	if not is_instance_valid(scale_label): return
-	tare_button.disabled = scale_occupied
-	place_button.disabled = not tared or scale_occupied
+	tare_button.disabled = scale_occupied or _tool_problem(tool) != ""
+	place_button.disabled = not tared or scale_occupied or _tool_problem(tool) != ""
 	remove_button.disabled = not scale_occupied
 	scale_label.text = "%.1f g · %s" % [scale_reading,"稳定 ✓" if scale_stable else "正在稳定…" if scale_occupied else "空秤已归零" if tared else "请先空秤归零"]
 
 func _record() -> void:
+	if _tool_problem(tool) != "": return
 	if (tool == "TOL-001" or tool == "TOL-002") and not _optical_face_visible(): return
 	var it = Game.item(it_uid)
 	if it == null: return
@@ -369,6 +391,7 @@ func _record() -> void:
 	_refresh_info()
 
 func on_changed(_p: Dictionary,_n: Dictionary,_a: Dictionary) -> void:
+	if _tool_problem(tool) != "": _set_tool("")
 	_refresh_info()
 
 func world_cursor_shape(p: Vector2) -> int:
@@ -407,6 +430,9 @@ func _unhandled_input(e: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	if not is_instance_valid(item) or shell.modal_open(): return
+	if _tool_problem(tool) != "":
+		_set_tool("")
+		return
 	var it = Game.item(it_uid)
 	if it == null: return
 	var p: Vector2 = shell.world_mouse()
