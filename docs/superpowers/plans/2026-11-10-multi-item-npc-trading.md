@@ -23,18 +23,20 @@
 ### Task1: Sessions and atomic batches
 **Files:** model/trade_session.gd, commerce.gd, model.gd, tests/multi_item_trade_test.gd.
 **Interfaces:** TradeSession.ensure/reduce/item/summary, action types TRADE_OPEN, TRADE_ADD, TRADE_REVIEW, TRADE_OFFER, TRADE_CONFIRM, TRADE_REMOVE, TRADE_FOCUS, TRADE_CHECKOUT, TRADE_END.
-- [ ] Add RED native tests for partial/all/refused choices, immutable originals, budget/quantity reservations, per-line negotiation, cached recognition, net checkout, final packing, duplicate/stale/closed/unauthorized actions and reload.
-- [ ] Implement fixed session stock, per-line contexts, atomic candidate-state validation, gross ledger and NPC owned archive.
-- [ ] GREEN targeted plus existing commerce/forgery/order regressions; commit and ledger.
+- [x] Add RED native tests for partial/all/refused choices, immutable originals, budget/quantity reservations, per-line negotiation, cached recognition, net checkout, final packing, duplicate/stale/closed/unauthorized actions and reload.
+- [x] Implement fixed session stock, per-line contexts, atomic candidate-state validation, gross ledger and NPC owned archive.
+- [x] GREEN targeted plus existing commerce/forgery/order regressions; commit and ledger.
 
 ### Task2: Player UI and inspection continuity
 **Files:** ui/trade_list.gd, counter_page.gd, game.gd, web_touch.gd; tests/multi_item_trade_ui_test.gd and scripts/test-multi-item-trade-web.py.
 **Interfaces:** TradeList.open(shell), snapshot via TradeSession.summary, Model.find_item/trade_item resolve focused visitor goods.
-- [ ] RED UI tests for prominent access, multiple stock rows, separate visitor goods, line prices/reasons/confirm states, net totals and checkout/finish separation.
-- [ ] Add responsive scroll list and per-line detail, invoke true tool inspection preserving session, fixed footer and explicit blocked reasons; update help and save migration lazily on list open.
-- [ ] GREEN UI/native tests and real desktop/phone two-direction multi-item checkout/reload; commit.
+- [x] RED UI tests for prominent access, multiple stock rows, separate visitor goods, line prices/reasons/confirm states, net totals and checkout/finish separation.
+- [x] Add responsive scroll list and per-line detail, invoke true tool inspection preserving session, fixed footer and explicit blocked reasons; update help and save migration lazily on list open.
+- [x] GREEN UI/native tests and real desktop/phone two-direction multi-item checkout/reload; commit.
 
 ### Task3: Integration, review and release
-- [ ] Run complete native/packaging/font/layout suite, export and real browser regressions for counterfeit and multi-item transactions.
-- [ ] Obtain fresh whole-branch review per executing-plans; reproduce and fix material findings with tests.
-- [ ] Reconcile remote main, merge/push, stage tested pack and verify hashes, publish preserving prior assets; await exact Pages SHA success.
+- [x] Run complete native/packaging/font/layout suite, export and real browser regressions for counterfeit and multi-item transactions.
+- [x] Obtain fresh whole-branch review per executing-plans; reproduce and fix material findings with tests.
+- [x] Reconcile remote main, merge/push, stage tested pack and verify hashes, publish preserving prior assets; await exact Pages SHA success.
+
+Verification: full native52/52, packaging7/7, font and layout checks pass; exported33 items/33 residents/3 instruments failures0. Counterfeit four jobs and reload pass on desktop/phone; multi-item5-object bidirectional batch, actual NPC inspection, automatic list return and reload pass on desktop/phone. Fresh independent reviews completed; all material findings fixed with RED→GREEN regressions. Merge and publication executed by the authorized finish workflow; deployment record holds exact source and pack fingerprints.

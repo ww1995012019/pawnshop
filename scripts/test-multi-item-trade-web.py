@@ -36,9 +36,9 @@ def main():
     for attempt in range(12):
      target=phone.locate(page,text)
      in_list=text.startswith('@') or text.startswith('推荐 ') or text.startswith('购买 ')
-     low,high=(height*.36,height*.67) if in_list else (height*.10,height*.94)
+     low,high=((height*.31,height*.70) if mobile else (height*.36,height*.67)) if in_list else (height*.10,height*.94)
      if low < target['y'] < high:break
-     x=max(20,min(width-20,target["x"]))
+     x=width*.73 # Scroll outside the expanded numeric LineEdit, which selects text on drag.
      if mobile:
       a,b=(height*.62,height*.44) if target['y']>=high else (height*.44,height*.62)
       phone.touch_drag(context,page,[(x,a),(x,(a+b)/2),(x,b)])
