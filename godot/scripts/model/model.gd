@@ -6,6 +6,9 @@ const MASK := 0xFFFFFFFF
 const FACTIONS := ["station", "salvage", "merchant"]
 const FIXED_EVENT_DAYS := {1: "EVT-001", 7: "EVT-007", 14: "EVT-014", 20: "EVT-020", 21: "EVT-021"}
 
+# Only actual business commands produce a closed-hours notice; unknown input stays a no-op.
+const BUSINESS_ACTIONS := ["CHOOSE_EVENT", "EMERGENCY_SALE", "ARRIVE", "SELECT_TRADE", "CHECK", "OFFER", "ACCEPT", "DELIVER", "PAWN", "REDEEM", "REFUSE", "MOVE", "DISPLAY", "PRICE", "ISOLATE", "SCAN", "REGISTER", "RETURN_ITEM", "REFURB_PROGRESS", "REFURB_COMPLETE", "SERVICE_BEGIN", "SERVICE_PROGRESS", "SERVICE_COMPLETE", "SERVICE_FINISH", "REPAIR_STEP", "REPAIR", "DISMANTLE", "CRAFT", "TAKE_ORDER", "DELIVER_ORDER", "BUY_MATERIAL", "SETTLE"]
+
 # ------------------------------------------------------------ JS semantics
 
 static func fnv(s: String) -> int:
@@ -641,6 +644,11 @@ static func _remove_item(s: Dictionary, uid: String) -> void:
 			keep.append(i)
 	s.inventory = keep
 
+static func business_hours_problem(s: Dictionary) -> String:
+	if s.phase == "open": return ""
+	if s.phase == "ending": return "本轮经营已结束，不能继续办理业务；可以查看经营记录。"
+	return "店铺已打烊，当前不能办理业务。请先开始下一营业日。"
+
 static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 	GameData.ensure()
 	var s: Dictionary = previous.duplicate(true)
@@ -698,7 +706,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 		s.report.cash = s.cash
 		return notice(s, "工作灯已换装：新日鉴定首次费用减为0AP。" if a.id == "lamp" else "陈列架已换装：合法货物的陈列报价提高5%。")
 	if s.phase != "open":
-		return previous
+		return notice(s,business_hours_problem(s)) if BUSINESS_ACTIONS.has(type) else previous
 	var required_device := ""
 	if type in ["SELECT_TRADE","OFFER","ACCEPT","PRICE"]: required_device = "quote_terminal"
 	if type in ["TAKE_ORDER","DELIVER_ORDER"]: required_device = "order_terminal"
