@@ -22,6 +22,19 @@ func run() -> void:
 	check(guide != null, "inspection guide opens as floating paper")
 	check(not shell.modal_open(), "guide leaves workbench interactive")
 	if guide != null:
+		check(guide.find_child("document_resize",true,false)==null,"paper has no resize button")
+		check(guide.header.get_child_count()==2,"paper header contains only title and close")
+		check(guide.find_children("document_corner_*","Control",true,false).size()==4,"all four paper corners are draggable resize targets")
+		for corner in [Vector2.ZERO,Vector2(1,0),Vector2(0,1),Vector2.ONE]:
+			guide.set_document_zoom(0.6)
+			guide.move_document(Vector2(500,200))
+			var anchor: Vector2 = guide.position+guide.size*guide.scale*(Vector2.ONE-corner)
+			var pointer: Vector2 = guide.position+guide.size*guide.scale*corner
+			guide._begin_corner_resize(corner,pointer)
+			guide._resize_to(pointer-(corner*2.0-Vector2.ONE)*guide.logical_size*0.1)
+			check(is_equal_approx(guide.scale.x,0.5),"corner gesture continuously scales the document")
+			check((guide.position+guide.size*guide.scale*(Vector2.ONE-corner)).distance_to(anchor)<1,"corner gesture keeps opposite corner fixed")
+			guide.resizing = false
 		guide.set_document_zoom(1.0)
 		var old_scale: Vector2 = guide.scale
 		guide.set_document_zoom(0.65)
