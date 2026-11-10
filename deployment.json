@@ -1,6 +1,7 @@
 {
-  "source_commit": "f667243809391ac399875d763b8d8d778e3c6281",
-  "release_id": "6658e6b058c78596",
-  "pack": "workbench-c6dbf81bf6902165.pck",
-  "html_sha256": "20a52a6f9bbc542ebae3a364355f3aec6f581bbc72f994db73c3ff6b4c6cbeca"
+  "source_commit": "11f418fb9fc5a61abd84e9c6f8a4f50d22c6ef32",
+  "release_id": "1a275618d1af2a92",
+  "pack": "workbench-5b7dc6e41370d641.pck",
+  "html_sha256": "b8d0d00e26de077012fb01b1d3f6f275efcae63e4ed402395f715f8dba5fabf6",
+  "watch_service_version": 1
 }
