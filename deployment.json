@@ -1,10 +1,11 @@
 {
-  "source_commit": "c40e026586626d4bd92e7d35a0c9f3533b461df7",
-  "release_id": "8d4e0b1e59b87d40",
-  "pack": "workbench-422c617847e7fe2a.pck",
-  "html_sha256": "4d2729e720cde86bf92d3c5fbfb3cc38686fd745c546f03dc847bc23af5fb4ee",
+  "source_commit": "cf5867dd799e7f0f721f12d1e4287877d0e3a7a3",
+  "release_id": "9d069b11bd21a5b3",
+  "pack": "workbench-17a91ab4164bb47f.pck",
+  "html_sha256": "929bef69c1d8a9095ec417bccf35f40f7603b0ad23f0e7a44c9bc63f9be33948",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
-  "mobile_input_version": 1
+  "mobile_input_version": 1,
+  "workshop_permissions_version": 1
 }
