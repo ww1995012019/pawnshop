@@ -40,6 +40,8 @@ var _workspace_suspended := false
 var _last_offer_value := 100
 var alarm_button: Button
 var _conversation_wait := 6.0
+var _departure_key := ""
+var _departure_wait := 3.0
 var cash_tray: Control
 var terminal: PanelContainer
 var offer_panel: PanelContainer
@@ -210,12 +212,13 @@ func _align_stage() -> void:
 		back_root.global_transform = inv
 
 func _scene_blocked() -> bool:
-	return _workspace_suspended or shell.modal_open() or (shell.has_method("workspace_open") and shell.workspace_open())
+	return _workspace_suspended or is_instance_valid(shell.title) or shell.modal_open() or (shell.has_method("workspace_open") and shell.workspace_open())
 
 ## Shell calls this synchronously at the workspace boundary. A Control with
 ## an existing GUI drag can retain pointer capture even behind the new sheet.
 func workspace_state_changed(opened: bool) -> void:
 	_workspace_suspended = opened
+	_departure_key = ""
 	if opened:
 		if is_instance_valid(dial):
 			dial.cancel_drag()
@@ -982,7 +985,7 @@ func _refresh() -> void:
 	evidence_box.visible = dial_on
 	scr.line3.visible = t != null
 	footer.visible = t != null
-	footer.tooltip_text = footer.text
+	footer.tooltip_text = ""
 	call_deferred("_layout_bubble_content")
 	for k in ["line1", "line2"]:
 		var l: Label = scr[k]
@@ -1164,7 +1167,8 @@ func _build_bubble() -> void:
 	bubble.add_theme_stylebox_override("panel", _flat(Color("ded0ac"), Color("8e775c"), 0))
 	bubble.clip_contents = true
 	bubble.modulate.a = 0.0
-	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.hide()
+	bubble.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bubble)
 	bubble_name = UIKit.label("", 17, UIKit.RUST)
 	bubble_name.clip_text = true
@@ -1222,11 +1226,12 @@ func _say(text: String, type := true, mood := "") -> void:
 	if purchase >= 0:
 		spoken = spoken.left(purchase)
 	bubble_label.text = spoken
-	bubble_label.tooltip_text = spoken
+	bubble_label.tooltip_text = ""
 	bubble_label.scroll_to_line(0)
 	call_deferred("_layout_bubble_content")
 	var dur := text.length() * 0.035
 	customer.say(dur + 0.2)
+	bubble.show()
 	bubble.modulate.a = 1.0
 	if type and not Game.prefs.reduced_motion:
 		bubble_label.visible_ratio = 0.0
@@ -1243,8 +1248,11 @@ func _say(text: String, type := true, mood := "") -> void:
 func _hide_bubble() -> void:
 	if Game.prefs.reduced_motion:
 		bubble.modulate.a = 0.0
+		bubble.hide()
 	else:
-		create_tween().tween_property(bubble, "modulate:a", 0.0, 0.2)
+		var fade := create_tween()
+		fade.tween_property(bubble, "modulate:a", 0.0, 0.2)
+		fade.tween_callback(bubble.hide)
 
 # ---------------------------------------------------------------- flow
 
@@ -1259,6 +1267,8 @@ func _ring() -> void:
 	Game.dispatch({"type": "ARRIVE"})
 
 func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
+	if a.type in CounterDialogue.VERBS or a.type in TradeSession.ACTIONS or a.type == "ISSUE_WANTED":
+		_departure_key = ""
 	var pt = prev.trade
 	var nt = next.trade
 	match a.type:
@@ -1581,8 +1591,11 @@ func _stamp(paper: Control, pawn: bool, t: Dictionary, animate: bool) -> void:
 
 # ---------------------------------------------------------------- input & frame
 
+func _dialogue_owns_pointer() -> bool:
+	return is_instance_valid(bubble) and bubble.is_visible_in_tree() and bubble.modulate.a > 0.01 and bubble.get_global_rect().has_point(get_global_mouse_position())
+
 func world_cursor_shape(p: Vector2) -> int:
-	if busy or _scene_blocked():
+	if busy or _scene_blocked() or _dialogue_owns_pointer():
 		return Input.CURSOR_ARROW
 	if is_instance_valid(mat_item) and mat_item.dragging:
 		return Input.CURSOR_DRAG
@@ -1597,7 +1610,7 @@ func world_cursor_shape(p: Vector2) -> int:
 	return Input.CURSOR_ARROW
 
 func _unhandled_input(e: InputEvent) -> void:
-	if _scene_blocked() or busy:
+	if _scene_blocked() or busy or _dialogue_owns_pointer():
 		return
 	var p: Vector2 = shell.world_mouse()
 	if e is InputEventMouseButton and e.pressed:
@@ -1641,12 +1654,13 @@ func _process(delta: float) -> void:
 		if is_instance_valid(mat_item) and mat_item.dragging:
 			_finish_table_drag()
 		return
+	_advance_departure(delta)
 	_advance_conversation(delta)
 	var p: Vector2 = shell.world_mouse()
 	if is_instance_valid(mat_item):
 		if mat_item.dragging:
 			mat_item.drag_to(p)
-		mat_item.hover = lerpf(mat_item.hover, 1.0 if mat_item.contains(p) or mat_item.dragging else 0.0, 0.2)
+		mat_item.hover = lerpf(mat_item.hover, 1.0 if not _dialogue_owns_pointer() and (mat_item.contains(p) or mat_item.dragging) else 0.0, 0.2)
 	if is_instance_valid(customer):
 		customer.look = clampf((p.x - customer.global_position.x) / 700.0, -1.0, 1.0)
 
@@ -1685,11 +1699,28 @@ func _confirm_alarm() -> void:
 		Game.dispatch({"type":"REPORT_VISITOR","tradeId":trade_id}))
 	body.add_child(confirm)
 
+func _advance_departure(delta: float) -> void:
+	var reason := CounterDialogue.departure_reason(Game.state)
+	if reason == "":
+		_departure_key = ""
+		return
+	var se := TradeSession.session(Game.state)
+	var line := CounterDialogue.current(Game.state)
+	var key := JSON.stringify([Game.state.trade.id,se.get("version",0),se.get("focus",""),reason,line.get("status","")])
+	if key != _departure_key:
+		_departure_key = key
+		_departure_wait = 3.0
+	if busy or _scene_blocked() or bubble_label.visible_ratio < 1.0: return
+	_departure_wait -= delta
+	if _departure_wait <= 0.0:
+		_departure_key = ""
+		Game.dispatch({"type":"REFUSE"})
+
 func _advance_conversation(delta: float) -> void:
 	var trade = Game.state.trade
 	if busy or _scene_blocked() or trade == null or not is_instance_valid(customer):
 		return
-	if Game.state.phase != "open" or trade.get("locked", false):
+	if Game.state.phase != "open" or trade.get("locked", false) or CounterDialogue.departure_reason(Game.state) != "":
 		return
 	_conversation_wait -= delta
 	if _conversation_wait > 0.0:
@@ -1702,6 +1733,9 @@ func _advance_conversation(delta: float) -> void:
 
 func _police_response(previous_trade: Dictionary) -> void:
 	busy=true
+	# The standard top status already shows the outcome; keep both faces clear.
+	bubble.hide()
+	bubble.modulate.a=0.0
 	_refresh()
 	var result: Dictionary=WantedCases.case_state(Game.state).lastResult
 	var patrol:=Customer.new()
@@ -1712,23 +1746,31 @@ func _police_response(previous_trade: Dictionary) -> void:
 	patrol.walk_in(920)
 	await patrol.arrived
 	if is_instance_valid(customer):
-		_say(result.get("text","巡警已完成核对。"),false,"focused")
-		bubble_name.text="衡岚 · 旧港巡警"
+		customer.set_mood("focused")
 		customer.talking=0
 	patrol.say(1.2)
-	if is_instance_valid(mat_item):
-		var goods:=mat_item
+	var originals: Array=[]
+	if previous_trade.get("session",{}).get("dialogue",false):
+		for shown in CounterDialogue.table_items({"trade":previous_trade,"inventory":Game.state.inventory}):
+			var goods=counter_table.take(shown.uid)
+			if is_instance_valid(goods):
+				goods.reparent(stage_root,true)
+				originals.append({"sprite":goods,"return_shop":shown.direction=="sell"})
+	elif is_instance_valid(mat_item):
+		originals.append({"sprite":mat_item,"return_shop":previous_trade.kind=="sell"})
+	mat_item=null
+	for original in originals:
+		var goods: ItemSprite=original.sprite
 		goods.draggable=false
 		if not Game.prefs.reduced_motion:
 			var from:=goods.global_position
-			var to: Vector2=_crate_point() if previous_trade.kind=="sell" else patrol.hands() if result.get("arrested",false) else customer.hands() if is_instance_valid(customer) else _crate_point()
-			var transfer:=create_tween()
+			var to: Vector2=_crate_point() if original.return_shop else patrol.hands() if result.get("arrested",false) else customer.hands() if is_instance_valid(customer) else _crate_point()
+			var transfer:=goods.create_tween()
 			transfer.tween_method(func(p:float):
 				goods.global_position=from.lerp(to,p)+Vector2(0,-sin(p*PI)*50)
 				goods.modulate.a=1.0-smoothstep(.75,1,p),0.0,1.0,.4)
 			await transfer.finished
 		goods.queue_free()
-		mat_item=null
 	if not Game.prefs.reduced_motion: await get_tree().create_timer(1.3).timeout
 	if is_instance_valid(customer):
 		customer.walk_out(-500)

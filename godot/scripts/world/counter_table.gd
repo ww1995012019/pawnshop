@@ -52,6 +52,7 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
    glow.texture_filter=CanvasItem.TEXTURE_FILTER_LINEAR
    var glow_material:=ShaderMaterial.new()
    glow_material.shader=preload("res://shaders/watch_selection.gdshader")
+   glow_material.set_shader_parameter("strength",0.0)
    glow.material=glow_material
    sprite.body.add_child(glow)
   var card: DeskCard=cards[uid]

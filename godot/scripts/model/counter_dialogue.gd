@@ -6,6 +6,22 @@ static func active(s: Dictionary) -> bool:
  return s.get("trade")!=null and not s.trade.get("inspectionVisit",false) and bool(TradeSession.session(s).get("dialogue",false))
 static func current(s: Dictionary) -> Dictionary:
  return TradeSession.row(s,String(TradeSession.session(s).get("focus","")))
+## A refusal ends this visit only after every already-agreed original is delivered.
+static func departure_reason(s: Dictionary) -> String:
+ var trade=s.get("trade")
+ if trade==null or trade.get("inspectionVisit",false): return ""
+ if trade.kind=="police" and WantedCases.has_notice(s): return "completed"
+ if not active(s): return ""
+ var totals:=TradeSession.summary(s)
+ if totals.sell_count+totals.buy_count>0: return ""
+ var line:=current(s)
+ if line.get("status","")=="rejected": return "refused"
+ var se:=TradeSession.session(s)
+ if not se.get("had_deal",false) or not se.goods.is_empty(): return ""
+ if int(se.bought)>=int(se.want_count): return "completed"
+ for it in s.inventory:
+  if TradeSession._stock_problem(s,it,"sell")=="" and TradeSession.row(s,it.uid).get("status","") not in ["rejected","done"]: return ""
+ return "completed"
 static func begin(s: Dictionary) -> Dictionary:
  if s.get("trade")==null or s.trade.get("inspectionVisit",false) or s.trade.kind not in ["buy","sell"]: return s
  TradeSession.ensure(s)
@@ -102,7 +118,7 @@ static func _reply(s: Dictionary,line: Dictionary) -> void:
  var it=TradeSession.item(s,line.uid)
  var name := String(GameData.def(WatchForgery.target_id(it) if WatchForgery.is_targeted(it) else String(it.defId)).name) if it!=null else "这只"
  if line.status in ["blocked","rejected"]:
-  s.trade.line="%s我先不收。%s 你可以再拿别的给我看看。" % [name,line.reason]
+  s.trade.line="%s我先不收。%s %s" % [name,line.reason,"这次先到这儿吧。" if departure_reason(s)=="refused" else "先把已经说好的货物交割，其他的可以再谈。" if TradeSession.summary(s).sell_count+TradeSession.summary(s).buy_count>0 else "可以换其他货物，或者稍后再谈。"]
  elif line.status=="confirmed":
   s.trade.line="行，%s就按%s Cr。说好的几件我都记着，你还有别的可以接着拿。" % [name,Model.jnum(line.context.price)]
  elif line.direction=="buy":
@@ -214,7 +230,9 @@ static func reduce(previous: Dictionary,a: Dictionary):
   var receipt := {"income":summary.income,"expense":summary.expense,"net":summary.net,"count":summary.sell_count+summary.buy_count}
   TradeSession.session(result).last_receipt=receipt
   _idle(result,"说好的都交割好了。我还在，你可以继续拿货给我看，也可以看看我带的其他东西。")
-  return _focus_remaining(result)
+  result=_focus_remaining(result)
+  if departure_reason(result)=="completed": result.trade.line="说好的都交割好了，钱货两清。这次先到这儿，下回再来。"
+  return result
  if line.is_empty() or line.status=="done": return Model.notice(s,"你可以拿一只货给我看看，或者问问我带来的东西。")
  if type in ["OFFER","ACCEPT"] and (line.selected or line.status=="confirmed"): return previous
  if type=="OFFER":
