@@ -1,8 +1,8 @@
 {
-  "source_commit": "629df6948434704dbc639eb55c223a1179ba1edd",
-  "release_id": "0bc41bf6bd159822",
-  "pack": "workbench-b8f87fc31dfeba5d.pck",
-  "html_sha256": "153c9c29c68f3f4404f40d5065eebfb9c04bf33f3ca06cf6705d180bd8ffe617",
+  "source_commit": "2a13c8ecd30f1983fb629250e1fe67adf3f88051",
+  "release_id": "e728295a747ec98e",
+  "pack": "workbench-dec3ee3c14206714.pck",
+  "html_sha256": "bd7fe00cf265b84176eec290cf8fc242d1718a723fc5ca79ec1dbc7c1b914fdc",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -27,5 +27,10 @@
   "star_price_version": 1,
   "star_catalogue_version": 1,
   "distinct_watch_dials_version": 1,
-  "player_painted_logo_version": 1
+  "player_painted_logo_version": 1,
+  "watch_expansion_version": 1,
+  "watch_catalogue_count": 78,
+  "counter_lifecycle_version": 2,
+  "optical_windows_version": 2,
+  "bench_contour_version": 1
 }
