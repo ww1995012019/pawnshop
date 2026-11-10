@@ -26,12 +26,12 @@ READ_SAVE = """async () => {
  }finally{db.close()}
 }"""
 
-def prepare_fixture():
+def prepare_fixture(square_no_ap=False):
     """Generate a normal save using the real rules without touching personal saves."""
     (ROOT/'work/watch-repair').mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='watch-service-fixture-') as saves:
         subprocess.run([os.environ.get('GODOT_BIN','godot'),'--headless','--path',str(ROOT/'godot'),
-                        '--script','res://tests/watch_service_fixture.gd'],
+                        '--script','res://tests/watch_service_fixture.gd',*(['--','--square-no-ap'] if square_no_ap else [])],
                        env={**os.environ,'XDG_DATA_HOME':saves},check=True,
                        stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=30)
     return json.loads((ROOT/'work/watch-repair/browser-fixture.json').read_text())
@@ -44,10 +44,11 @@ def main():
     parser.add_argument('--phone-only',action='store_true')
     parser.add_argument('--desktop-only',action='store_true')
     parser.add_argument('--cleaning-only',action='store_true')
+    parser.add_argument('--square-no-ap',action='store_true')
     parser.add_argument('--forgery-only',action='store_true')
     parser.add_argument('--mechanical-only',action='store_true')
     args=parser.parse_args()
-    fixture=prepare_fixture()
+    fixture=prepare_fixture(args.square_no_ap)
     args.output.mkdir(parents=True,exist_ok=True)
     with sync_playwright() as p:
         browser=p.chromium.launch(executable_path=os.environ.get('CHROMIUM_EXECUTABLE') or shutil.which('chromium'),args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
@@ -182,6 +183,18 @@ def main():
                     cmd({'type':'start'});phone.wait(page,'!s.title && !s.busy')
                     cmd({'type':'page','page':'repair'});phone.wait(page,"s.workspace==='repair'")
                     assert abs(status()['repair_grime']-after)<.001,'reload reset cleaning'
+                    if args.square_no_ap:
+                        for attempt in range(20):
+                            if status()['repair_grime']==0:break
+                            sweep()
+                        assert status()['repair_grime']==0 and status()['repair_task']=='dust',status()
+                        assert '行动点不足' in status()['repair_reason'] and status()['repair_action']=='提交清洁结果',status()
+                        complete_save=saved(lambda s:next(it for it in s['inventory'] if it['uid']==uid)['service']['operations'].get('dust',{}).get('complete',False))['state']
+                        assert complete_save['ap']==0 and 'dust' not in next(it for it in complete_save['inventory'] if it['uid']==uid)['service']['done']
+                        snap('square-clean-zero-ap')
+                        assert not errors,errors
+                        print(label,'square watch ZERO AP: real cloth fade, release, partial/page/reload and complete saved mask PASS',flush=True)
+                        continue
                     run_task_job('cleaning');snap('cleaning-finished')
                     if args.cleaning_only:
                         assert not errors,errors

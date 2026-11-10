@@ -231,12 +231,7 @@ func _stage_ui() -> void:
 		dirty = cleaning.remaining()
 		grime_label = UIKit.label("污垢剩余 %d%%" % ceili(dirty*100),18,UIKit.AMBER)
 		row.add_child(grime_label)
-		instruction.text = "按住表面来回擦，污渍沿轨迹消失；不会把划痕擦掉。"
-		action_button.text = "查看残留" if not show_residual else "隐藏残留"
-		if cleaning.complete():
-			instruction.text = "擦拭已完成，提交后记录本工序并扣除对应行动点。"
-			action_button.text = "提交清洁结果"
-			action_button.disabled = _current_problem() != ""
+		_update_cleaning_controls()
 	else:
 		if task != "":
 			art.configure(it,task,it.get("service",{}).get("operations",{}).get(task,{}))
@@ -287,6 +282,15 @@ func open_forgery(method := "") -> void:
 
 func _primary_action() -> void:
 	if task == "dust":
+		var current = Game.item(it_uid)
+		var unfinished: String = current.get("service",{}).get("forge_task","") if current != null else ""
+		if unfinished != "":
+			open_forgery(unfinished.trim_prefix("forge_"))
+			return
+		var blocked := _cleaning_problem()
+		if blocked != "":
+			shell.toast(blocked)
+			return
 		if cleaning != null and cleaning.complete():
 			_operation_completed()
 			return
@@ -346,8 +350,30 @@ func confirm_repair() -> void:
 	Game.dispatch({"type":"SERVICE_FINISH","uid":it_uid})
 	_request_refresh()
 
+func _cleaning_problem() -> String:
+	var current = Game.item(it_uid)
+	return "请选择手表" if current == null else Service.progress_problem(Game.state,current,"dust")
+
+func _update_cleaning_controls() -> void:
+	var blocked := _cleaning_problem()
+	var current = Game.item(it_uid)
+	var unfinished: String = current.get("service",{}).get("forge_task","") if current != null else ""
+	action_button.disabled = false
+	if blocked != "":
+		instruction.text = blocked
+		action_button.text = "继续伪装加工并封盖" if unfinished != "" else "暂不能清洁"
+		action_button.disabled = unfinished == ""
+	elif cleaning.complete():
+		var cost_problem := _current_problem()
+		instruction.text = "擦拭已完成，进度已保存。" + (cost_problem if cost_problem != "" else "提交后记录本工序并扣除对应行动点。")
+		action_button.text = "提交清洁结果"
+		action_button.disabled = cost_problem != ""
+	else:
+		instruction.text = "按住表面来回擦，污渍沿轨迹消失；不会把划痕擦掉。"
+		action_button.text = "查看残留" if not show_residual else "隐藏残留"
+
 func _wipe_uv(from_uv: Vector2,to_uv: Vector2,elapsed := 0.0) -> void:
-	if cleaning == null or task != "dust" or _current_problem() != "": return
+	if cleaning == null or task != "dust" or _cleaning_problem() != "": return
 	if cleaning.stroke(from_uv,to_uv,0.075,elapsed):
 		mask_tex.update(cleaning.image())
 		dirty = cleaning.remaining()
@@ -356,7 +382,11 @@ func _wipe_uv(from_uv: Vector2,to_uv: Vector2,elapsed := 0.0) -> void:
 		if cleaning.complete():
 			scrubbing = false
 			_save_cleaning()
-			_operation_completed()
+			if _current_problem() == "":
+				_operation_completed()
+			else:
+				_update_cleaning_controls()
+				_refresh_info()
 	if from_uv.distance_squared_to(to_uv) > 0.000001:
 		cloth_direction = (to_uv-from_uv).normalized()
 	cloth_uv = to_uv
@@ -383,6 +413,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	var uv: Vector2 = item.body.to_local(world) / item.tex_size() + Vector2(0.5,0.5)
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed and item.contains(world):
+			var blocked := _cleaning_problem()
+			if blocked != "":
+				scrubbing = false
+				cloth_uv = Vector2(-1,-1)
+				_update_cleaning_controls()
+				shell.toast(blocked)
+				queue_redraw()
+				return
 			scrubbing = true
 			last_uv = uv
 			cloth_uv = uv
@@ -393,8 +431,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	if scrubbing and task == "dust" and mode == "service" and is_instance_valid(item):
-		if shell.modal_open():
+		if shell.modal_open() or _cleaning_problem() != "":
 			scrubbing = false
+			cloth_uv = Vector2(-1,-1)
+			_update_cleaning_controls()
+			queue_redraw()
 		else:
 			var world: Vector2 = shell.world_mouse()
 			var uv: Vector2 = item.body.to_local(world) / item.tex_size() + Vector2(0.5,0.5)
@@ -423,7 +464,7 @@ func _draw() -> void:
 		draw_set_transform(Vector2.ZERO)
 
 func world_cursor_shape(point: Vector2) -> int:
-	return Input.CURSOR_CROSS if task == "dust" and is_instance_valid(item) and item.contains(point) else Input.CURSOR_ARROW
+	return Input.CURSOR_CROSS if task == "dust" and is_instance_valid(item) and item.contains(point) and _cleaning_problem() == "" else Input.CURSOR_ARROW
 
 func toast_rect() -> Rect2:
 	# Notices belong on the paperwork, never over the watch/tool contact area.

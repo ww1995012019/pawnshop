@@ -98,7 +98,8 @@ static func available(state: Dictionary, it: Dictionary) -> String:
 	if not ["shop","customer"].has(it.owner): return "这件手表不在店铺或委修保管中。"
 	return ""
 
-static func problem(state: Dictionary, it: Dictionary, task := "") -> String:
+static func progress_problem(state: Dictionary, it: Dictionary, task := "") -> String:
+	# Physical progress can be saved before the separate, atomic cost commit.
 	ensure(it)
 	var unavailable := available(state,it)
 	if unavailable != "": return unavailable
@@ -107,6 +108,13 @@ static func problem(state: Dictionary, it: Dictionary, task := "") -> String:
 	if task == "": return "" if not it.service.opened else "后盖尚未封回。"
 	if it.service.done.has(task): return "这道工序已完成，不能重复扣料或修复。"
 	if task != current(it): return "请先完成：" + label(current(it),it)
+	return ""
+
+static func problem(state: Dictionary, it: Dictionary, task := "") -> String:
+	var blocked := progress_problem(state,it,task)
+	if blocked != "": return blocked
+	if task == "": task = current(it)
+	if task == "": return ""
 	var cost := step_cost(task,it)
 	if not Model.has_ap(state,cost.ap): return "行动点不足：本工序需要%s AP。" % Model.jnum(cost.ap)
 	for id in cost.materials:
