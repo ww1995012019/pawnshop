@@ -6,12 +6,6 @@ static func event_for_day(s: Dictionary):
 	if int(s.day) < 3 or int(s.day) > 19 or Model.FIXED_EVENT_DAYS.has(int(s.day)):
 		return ordinary
 	var roll := Model.fnv("%s/crime/%d" % [s.seed, int(s.day)]) % 5
-	if roll == 0:
-		return {"id": "CRIME-THEFT", "title": "后仓有人摸进来了", "speakerId": "CHR-006",
-			"description": "监控拍到有人试探后仓门锁。店里的自有货可能被偷走，你要先处理这件事。",
-			"choices": [
-				{"id": "CRIME-THEFT-secure", "label": "守住后仓", "costText": "1 AP", "rewardText": "货物安全；风险−2"},
-				{"id": "CRIME-THEFT-ignore", "label": "继续照看柜台", "costText": "可能失去一件自有货", "rewardText": "不消耗 AP"}]}
 	if roll == 1:
 		return {"id": "CRIME-GOODS", "title": "没有回执的箱子", "speakerId": "CHR-006",
 			"description": "有人想把疑似失窃的旧设备寄存在店里，没有出示来源回执。收下后必须隔离，不能登记成合法货物。",
@@ -64,23 +58,9 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 	var s: Dictionary = previous.duplicate(true)
 	var message := ""
 	match choice.id:
-		"CRIME-THEFT-secure":
-			Model.spend(s, 1)
-			s.risk = Model.clampn(s.risk - 2)
-			message = "后仓门锁加固，货物安全。"
-		"CRIME-THEFT-ignore":
-			var candidates := []
-			for item in s.inventory:
-				if item.owner == "shop" and not item.has("orderId") and not item.sealed and item.location != "isolation" and not Model.trade_reserved(s, item):
-					candidates.append(item)
-			if candidates.is_empty():
-				message = "对方没找到能拿走的货物。"
-			else:
-				var chosen: Dictionary = candidates[Model.fnv("%s/%d/theft" % [s.seed, int(s.day)]) % candidates.size()]
-				message = "店里丢失了「%s」。" % GameData.def(chosen.defId).name
-				Model._remove_item(s, chosen.uid)
-				s.risk = Model.clampn(s.risk + 4)
 		"CRIME-GOODS-report":
+			NightCrime.ensure(s)
+			NightCrime.credit(s,"EVENT-GOODS-%d" % int(s.day))
 			s.risk = Model.clampn(s.risk - 3)
 			s.relations.station = Model.clampn(s.relations.station + 4)
 			message = "站务接走疑似赃物并登记线索。"
@@ -88,6 +68,10 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 			var item := Model.new_item(s, "WCH-002", {"condition": 0.6, "working": false,
 				"sourceVerified": false, "source": "疑似失窃物品 / 待移交站务", "sealed": true,
 				"location": "isolation", "stolen": true, "cost": 0})
+			NightCrime.ensure(s)
+			var case_id := "EVENT-GOODS-%d" % int(s.day)
+			item.crimeCaseId = case_id
+			s.nightCrime.cases.append({"id":case_id,"origin":"external","lossDay":int(s.day),"culprit":"","revealed":true,"arrested":false,"items":[{"uid":item.uid,"item":item.duplicate(true),"holder":"inventory","paid":false,"payout":0,"originalLawful":false,"handled":false,"resolved":false,"recovery":""}]})
 			s.inventory.append(item)
 			s.risk = Model.clampn(s.risk + 8)
 			message = "疑似赃物已封入隔离柜；请从仓储移交站务。"

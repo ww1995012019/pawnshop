@@ -21,6 +21,8 @@ static func merchant_due(s: Dictionary) -> bool:
 	return s.phase == "open" and s.trade == null and int(s.cursor) == merchant_slot(s)
 
 static func next_visitor(s: Dictionary) -> String:
+	var night_visitor := NightCrime.visitor_override(s)
+	if night_visitor != "": return night_visitor
 	if merchant_due(s):
 		return MERCHANT_ID
 	var override := Wanted.visitor_override(s,merchant_slot(s))
@@ -131,6 +133,17 @@ static func _reject_forgery(s: Dictionary, item: Dictionary, caught: Array[Strin
 	return Model.notice(s, "伪装被识破：%s；本次未售出。%s" % ["、".join(caught), "关注+10，阵营关系-8。" if first_penalty else "同一轮已记录处罚，不重复扣关系或增加关注。"])
 
 static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
+	var night_result = NightCrime.reduce(previous,action)
+	if night_result != null: return night_result
+	var prepared := previous.duplicate(true)
+	NightCrime.ensure(prepared)
+	NightCrime.ensure_day(prepared)
+	var next := _reduce(prepared,action)
+	if is_same(next,prepared): return previous
+	NightCrime.after_action(prepared,next,action)
+	return next
+
+static func _reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 	GameData.ensure()
 	var kind: String = action.get("type", "")
 	var wanted_result = Wanted.reduce(previous, action)

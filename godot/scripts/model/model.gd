@@ -1,4 +1,5 @@
 class_name Model
+extends Node
 ## Base gameplay rules. State is a JSON-shaped Dictionary.
 ## Live commerce and crime events are layered in commerce.gd and crime_events.gd.
 
@@ -219,7 +220,7 @@ static func finish_trade(s: Dictionary, text: String) -> Dictionary:
 
 static func inspection_ready(s: Dictionary) -> bool:
 	for it in s.inventory:
-		if it.owner == "shop" and not it.sourceVerified and it.location != "isolation":
+		if it.owner == "shop" and not it.sourceVerified and not it.get("graySale",false) and it.location != "isolation":
 			return false
 	return true
 
@@ -352,7 +353,7 @@ static func sale_eligibility(it: Dictionary, npc_id: String):
 		return "后盖或内部装配尚未收妥，请先完成工作台复核并封盖。"
 	if it.owner != "shop" or it.has("orderId"):
 		return "受托、抵押或订单预留的物品不能出售。"
-	if it.sealed or it.location == "isolation" or not it.sourceVerified:
+	if it.sealed or it.location == "isolation" or (not it.sourceVerified and not it.get("graySale",false)):
 		return "先解除封存并核验来源，顾客才会收货。"
 	var apparent := sale_appearance(it)
 	var demand = GameData.npc(npc_id).get("purchase", null)
@@ -594,6 +595,7 @@ static func create(seed := "ORBITAL-P0") -> Dictionary:
 		var it := new_item(s, id, {"condition": 0.55 if id == "WCH-001" else 0.85, "working": id != "WCH-001", "source": "前任店主移交清单 / 所有权已核对", "cost": jround(D(id).value * 0.28)})
 		put_in(s, it)
 	StoreCosts.ensure(s)
+	NightCrime.ensure(s)
 	return s
 
 static func validated_trade_item(s: Dictionary, t: Dictionary):
@@ -653,6 +655,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 	GameData.ensure()
 	var s: Dictionary = previous.duplicate(true)
 	StoreCosts.ensure(s)
+	NightCrime.ensure(s)
 	var type: String = a.type
 	if type == "NEXT":
 		if s.phase != "report":
@@ -683,6 +686,8 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				it.erase("pawnPrincipal")
 				it.erase("pawnDay")
 		StoreCosts.ensure(s)
+		NightCrime.morning(s,int(previous.day))
+		NightCrime.ensure_day(s)
 		var text := "第%s天开门。核对订单与到期抵押，店铺电费、清洁费和租金在日结显示。" % jnum(s.day)
 		if s.day == 2:
 			text = "第2天：阿篁与澄九带来委修预约。到订单页接单，再到维修台换件复测。"
@@ -1224,6 +1229,8 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			s.materials[m.id] = s.materials.get(m.id, 0) + a.qty
 			return notice(s, "耗材已入工具柜，采购不消耗AP。")
 		"SETTLE":
+			if NightCrime.inspection_pending(s):
+				return notice(s,"打烊前须接待待到场的查货；0 AP也可呼叫巡警完成核对。")
 			if s.trade != null:
 				return notice(s, "先交割或送客，再打烊。")
 			if s.day >= 3 and s.inspection == "pending" and not inspection_ready(s):
@@ -1267,6 +1274,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				ledger(s, "rent-day-%s" % jnum(s.day), "rent", "第%s天租金" % jnum(s.day), -due)
 			s.report = {"day": s.day, "income": income, "expenses": expenses, "maintenance": maintenance, "electricity": costs.electricity, "cleaning": costs.cleaning, "costs": costs.duplicate(true), "rent": due, "cash": s.cash, "upgraded": false}
 			s.phase = "report"
+			NightCrime.settle(s)
 			if s.day == 21:
 				s.outcome = "高风险转运站" if s.risk >= 60 else ("稀有收藏行" if s.relations.merchant > s.relations.salvage else "可信赖维修店")
 			return notice(s, "日结完成：旧版能源维护 %s Cr，租金 %s Cr；本次支付 %s Cr。" % [jnum(maintenance),jnum(due),jnum(payment)] if costs.legacy else "日结完成：电费 %s Cr，清洁费 %s Cr，租金 %s Cr；本次支付 %s Cr。" % [jnum(costs.electricity),jnum(costs.cleaning),jnum(due),jnum(payment)])
