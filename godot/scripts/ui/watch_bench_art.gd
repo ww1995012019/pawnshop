@@ -770,6 +770,19 @@ func _draw_cover(p: Vector2) -> void:
 		else:
 			_text(p + Vector2(-57, 5), "SERVICE BACK", 10, Color("667c61"), true)
 
+func _mark_observed() -> bool:
+	if not _item.get("evidence",[]).has("TOL-001"): return false
+	var facts: Dictionary = _item.get("inspectionFacts",{}).get("TOL-001",{})
+	var revision: String = facts.get("logoRevision","")
+	if revision.is_empty():
+		var prior = JSON.parse_string(facts.get("appraisalRevision",""))
+		if prior is Array and prior.size() >= 10: revision = JSON.stringify([prior[0],int(prior[4]),bool(prior[9])])
+	return revision == Model.logo_revision(_item)
+
+func mark_visibility() -> String:
+	if _task == "forge_logo" and float(_state.get("logo",0)) > 0 and not _state.get("complete",false): return "painting"
+	return "observed" if _mark_observed() else "hidden"
+
 func _draw_dial() -> void:
 	var face := Color(_art.get("face", "#ddd9bc"))
 	var dial_ink := Color(_art.get("ink", "#252a30"))
@@ -790,10 +803,17 @@ func _draw_dial() -> void:
 	var fraction := float(_state.logo) if _task == "forge_logo" else 1.0
 	var variant := int(_item.get("watch", {}).get("logo_variant", 1))
 	if WatchForgery.active(_item, "logo"): variant = 0
-	for pixel in WatchLogo.pixels(String(_item.get("defId", "WCH-001")), variant):
-		draw_rect(Rect2(Vector2(200 + pixel[0] * 4, 125 + pixel[1] * 4), Vector2(3.7, 3.7)), Color(dial_ink, 0.28))
+	var observed := _mark_observed()
+	if observed:
+		for pixel in WatchLogo.pixels(String(_item.get("defId", "WCH-001")), variant):
+			draw_rect(Rect2(Vector2(200 + pixel[0] * 4,125 + pixel[1] * 4),Vector2(3.7,3.7)),Color(dial_ink,0.28))
+	else:
+		# Same mosaic for both variants: service work never grants inspection evidence.
+		for y in 5:
+			for x in 8:
+				draw_rect(Rect2(200+x*12,125+y*13,12,13),face.darkened(0.10 + ((x*3+y*5)%4)*0.055))
 	var visible_glyph: Array = _glyph if _task == "forge_logo" else WatchLogo.pixels(String(_item.get("defId", "WCH-001")), variant)
-	var visible_count := int(ceil(fraction * visible_glyph.size()))
+	var visible_count := int(ceil(fraction * visible_glyph.size())) if mark_visibility() != "hidden" else 0
 	for i in range(visible_count):
 		var pixel: Array = visible_glyph[i]
 		var origin := Vector2(200 + pixel[0] * 4, 125 + pixel[1] * 4)

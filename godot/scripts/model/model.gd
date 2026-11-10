@@ -156,6 +156,12 @@ static func item_value(it: Dictionary) -> float:
 	var missing := not String(it.get("watch", {}).get("missing_part", "")).is_empty()
 	return maxf(1, jround(D(it.defId).value * clampn(it.condition, 0.35, 1) * (1.0 if it.working else 0.5) * (1.0 if it.authentic else 0.6) * (0.85 if missing else 1.0)))
 
+## A loupe observation belongs to the physical mark, independent of repairs,
+## serial overprinting or ballast. Kept in the existing saved evidence snapshot.
+static func logo_revision(it: Dictionary) -> String:
+	WatchRules.initialize(it)
+	return JSON.stringify([String(it.defId), int(it.watch.logo_variant), WatchForgery.active(it, "logo")])
+
 static func appraisal_revision(it: Dictionary) -> String:
 	WatchRules.initialize(it)
 	return JSON.stringify([String(it.defId), snappedf(float(it.condition), 0.000001), bool(it.working), bool(it.authentic), int(it.watch.logo_variant), String(it.watch.serial), snappedf(float(it.watch.mass), 0.1), String(it.watch.get("missing_part", "")), snappedf(float(it.watch.get("part_mass", 0)), 0.1), WatchForgery.active(it,"logo"), WatchForgery.active(it,"serial"), WatchForgery.active(it,"weight"), WatchRules.serial(it), snappedf(WatchRules.mass(it), 0.1)])
@@ -284,7 +290,9 @@ static func npc_knowledge(t: Dictionary, it: Dictionary) -> Dictionary:
 static func record_inspection(it: Dictionary, tool: String) -> Dictionary:
 	var facts := {"condition":sale_appearance(it).condition, "appraisalRevision":appraisal_revision(it), "appraisalValue":item_value(it), "tampered":WatchForgery.trace(it, tool) != ""}
 	match tool:
-		"TOL-001": facts.logo_variant = WatchRules.logo_variant(it)
+		"TOL-001":
+			facts.logo_variant = WatchRules.logo_variant(it)
+			facts.logoRevision = logo_revision(it)
 		"TOL-002": facts.serial = WatchRules.serial(it)
 		"TOL-005": facts.mass = WatchRules.mass(it)
 	var readings: Dictionary = it.get("evidenceReadings", {})

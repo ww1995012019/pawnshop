@@ -255,6 +255,21 @@ func run() -> void:
 		check(Rect2(Vector2.ZERO,pointer.size).has_point(t.position), "phone hit targets remain inside the mat")
 	pointer.queue_free()
 
+	var physical: Dictionary = Model.new_item(game.state,"WCH-001",{"authentic":false})
+	var privacy = bench(physical,"forge_logo")
+	if not privacy.has_method("mark_visibility"):
+		check(false,"workbench respects main's observation-bound mark masking")
+	else:
+		check(privacy.mark_visibility() == "hidden","unobserved repair mark stays concealed")
+		physical.evidence.append("TOL-001")
+		Model.record_inspection(physical,"TOL-001")
+		privacy.configure(physical,"forge_logo",{})
+		check(privacy.mark_visibility() == "observed","current observation reveals the physical mark")
+		WatchForgery.apply(physical,"logo")
+		privacy.configure(physical,"forge_logo",{})
+		check(privacy.mark_visibility() == "hidden","repainting requires a new observation after merge")
+	privacy.queue_free()
+
 	game.prefs.reduced_motion = true
 	var reduced = bench(item("mechanical", "snap"), "forge_weight")
 	var done_count := {"done":0}

@@ -154,7 +154,7 @@ func hint_text() -> String:
 	return "拖动实物、右键翻面；点击鉴定仪取证，再转动报价旋钮出价。"
 
 func toast_rect() -> Rect2:
-	return Rect2(666, 126, 630, 70)
+	return Rect2(666, 42, 630, 76)
 
 func enter() -> void:
 	back_root = Node2D.new()
@@ -588,7 +588,9 @@ func _refresh_desk() -> void:
 		if i < items.size():
 			stock_grid.add_child(_stock_slot(items[i], picking))
 		elif i == items.size() and WantedCases.has_notice(s):
-			var document := UIKit.button("名单","secondary",Vector2(58,58),16)
+			var document := UIKit.button("","secondary",Vector2(58,58),16)
+			document.icon = load("res://assets/ui/wanted-document.svg")
+			document.expand_icon = true
 			document.name="wanted_inventory"
 			document.tooltip_text="库存档案 · 取出或收起通缉名单"
 			document.pressed.connect(func(): shell.toggle_wanted_notice())
@@ -627,7 +629,7 @@ func _refresh_desk() -> void:
 	if t == null:
 		idle_label.text = "按左侧服务铃 · 接待下一位来客" if s.phase == "open" and s.cursor < Model.daily_visit_limit() else "预约已接待完 · 打开日结账本"
 	else:
-		idle_label.text = "巡警到店 · 领取协查名单或聊聊案情" if t.kind == "police" else "商人到店 · 在报价台查看商品" if t.kind == "merchant" else "请从陈列柜或下方抽屉选货"
+		idle_label.text = "巡警到店 · 领取协查名单，听巡警说明" if t.kind == "police" else "商人到店 · 在报价台查看商品" if t.kind == "merchant" else "请从陈列柜或下方抽屉选货"
 
 func _stock_clicked(uid: String, picking: bool, why) -> void:
 	if busy or _scene_blocked():
@@ -661,7 +663,13 @@ func _build_terminal() -> void:
 	cash_tray.name = "cash_tray"
 	cash_tray.position = Vector2(392, 142)
 	cash_tray.size = Vector2(116, 64)
-	cash_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cash_tray.mouse_filter = Control.MOUSE_FILTER_STOP
+	cash_tray.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	cash_tray.tooltip_text = "查看本局总流水"
+	cash_tray.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and not busy and not _scene_blocked():
+			shell.open_campaign_ledger()
+			cash_tray.accept_event())
 	content.add_child(cash_tray)
 	# Live readouts sit in the painted LCD, not on an extra rectangular plate.
 	scr.head = _terminal_label(content, Vector2(107, 48), Vector2(223, 23), 18, Color("a7cbbb"))

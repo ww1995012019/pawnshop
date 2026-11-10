@@ -89,13 +89,15 @@ def main():
             page.mouse.move(690, 250)
             page.mouse.wheel(0, 900)
             page.wait_for_timeout(400)
-            forge_target = locate(page, '伪装造假')
+            forge_target = locate(page, '送到修表台 · 加工')
             assert 60 < forge_target['y'] < 330, 'Forgery control must be reachable by scrolling'
-            tap(page, '伪装造假')
-            page.wait_for_timeout(400)
-            tap(page, '重描标识')
-            page.wait_for_timeout(400)
-            tap(page, '确认重描标识')
+            tap(page, '送到修表台 · 加工')
+            wait(page, "s.workspace === 'repair' && s.repair_mode === 'forge'", 10000)
+            for _ in range(30):
+                current = page.evaluate('OrbitalTouch.state')
+                if current.get('forge_done'): break
+                tap(page, current['repair_action'])
+                page.wait_for_function("step=>{const a=OrbitalTouch.state.repair_animation;return a.complete || a.phase==='idle'&&a.step>step}", arg=current['repair_animation']['step'])
             wait(page, "s.forge_done === true", 10000)
             assert state(page, 'ap') == before_ap - 1
             page.screenshot(path=str(args.screenshots / 'forgery.png'))
