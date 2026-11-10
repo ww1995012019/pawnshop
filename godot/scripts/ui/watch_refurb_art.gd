@@ -141,8 +141,15 @@ func _draw_labels() -> void:
  _text(Vector2(29,34),WatchRefurbishment.LABELS.get(job,"独立翻新"),19,INK)
  _text(Vector2(30,49),"独立项目 / 原机芯与真实身份保留",10,MUTED)
  _text(Vector2(469,36),"%02d / %02d" % [mini(int(_state.step)+1,_plan.size()),_plan.size()],18,GOLD,true)
- _text(Vector2(520,52),"已交工" if _state.complete else ("待操作" if _state.phase == "idle" else "操作中"),11,CYAN)
+ _text(Vector2(520,52),"已交工" if _state.complete else ("已暂停" if not interaction_allowed else ("待操作" if _state.phase == "idle" else "操作中")),11,CYAN)
 
 func _result_text() -> String:
  if _task.begins_with("refurb_"): return "本项翻新已完成 · 原机芯状态与真伪保留"
  return super._result_text()
+
+func _draw_rack() -> void:
+ if _task.begins_with("refurb_") and not _state.is_empty() and _state.complete:
+  _panel(Rect2(31,398,578,47),Color("132320"),Color("52665c"),5)
+  _text(Vector2(49,426),"本项翻新已完成 · 工具已收妥",14,CYAN)
+ else:
+  super._draw_rack()

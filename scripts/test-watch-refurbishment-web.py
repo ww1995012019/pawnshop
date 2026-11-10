@@ -66,7 +66,13 @@ def main():
       state=status()
       if job in state['refurb_done']:break
       assert not state['repair_reason'],state
-      prior=state['repair_animation'];click(state['repair_action'])
+      prior=state['repair_animation']
+      if attempt%2:
+       target=state['repair_targets'][0]
+       if mobile:page.touchscreen.tap(target['x'],target['y'])
+       else:page.mouse.click(target['x'],target['y'])
+       print(label,'contact',target['label'],flush=True)
+      else:click(state['repair_action'])
       if job=='case' and attempt==0:
        page.wait_for_timeout(200);snap('case-start')
        click('收起');phone.wait(page,"s.workspace===''")

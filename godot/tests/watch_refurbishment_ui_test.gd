@@ -58,6 +58,17 @@ func run() -> void:
  page.open_refurb("blow")
  await settle()
  check(page.task == "refurb_blow" and page.art.interaction_targets().size() == 1,"blow-dusting is independently selectable after case replacement")
+ game.item(uid).sourceVerified = false
+ page._stage_ui()
+ await settle()
+ var before_blocked: Dictionary = page.art.progress_snapshot().duplicate(true)
+ page.art.advance()
+ page.art._process(2.0)
+ check(page.art.progress_snapshot() == before_blocked and page.art.interaction_targets().is_empty() and page.action_button.disabled,"restricted refurbishment blocks pointer targets, animations and primary action together")
+ game.item(uid).sourceVerified = true
+ page._stage_ui()
+ await settle()
+ check(page.art.interaction_allowed and not page.action_button.disabled,"restoring permission resumes the selected independent job")
  shell.queue_free()
  await settle()
  print("REFURB UI failures=",failures)

@@ -103,8 +103,15 @@ func enter() -> void:
 func _candidates() -> Array:
 	var out := []
 	for it in Game.state.inventory:
-		if it.owner != "pawn" and it.get("watch", null) is Dictionary: out.append(it)
+		if it.owner != "pawn" and it.get("watch", null) is Dictionary:
+			if mode != "forge" or _is_forgery_stock(it): out.append(it)
 	return out
+
+func _is_forgery_stock(it) -> bool:
+	if it == null or it.owner != "shop" or it.has("orderId"): return false
+	if not it.sourceVerified or it.sealed or it.location == "isolation" or Model.trade_reserved(Game.state,it): return false
+	var service: Dictionary = it.get("service",{})
+	return not service.get("opened",false) or service.get("forge_task","") != ""
 
 func _select(uid: String) -> void:
 	_save_cleaning()
@@ -138,6 +145,7 @@ func _select(uid: String) -> void:
 	_refresh_info()
 
 func _fill_list() -> void:
+	_sync_modes()
 	UIKit.clear(list_box)
 	for it in _candidates():
 		var selected: bool = it.uid == it_uid
@@ -146,6 +154,9 @@ func _fill_list() -> void:
 		var completed: int = service.get("done", []).size()
 		var count: int = service.get("tasks", []).size()
 		var status := "工单 %d/%d" % [completed,count] if count > 0 else ("已保养" if it.repaired else "待检查")
+		if mode == "forge":
+			var forged: int = WatchForgery.treatments(it).size()
+			status = "已加工 %d/%d" % [forged,WatchForgery.METHODS.size()] if forged > 0 else "自有库存 · 可加工"
 		row.text = Game.def_name(it.defId) + "\n" + status
 		row.icon = UIKit.item_icon(it.defId)
 		row.expand_icon = true
@@ -171,7 +182,7 @@ func _refresh_info() -> void:
 	if it == null:
 		info.add_child(UIKit.label("选择左侧手表。",20,UIKit.MUTED))
 		return
-	info.add_child(UIKit.record_card(Game.def_name(it.defId),repair_status(it) + ("\n当前品相：" + UIKit.pct(it.condition) if mode == "refurb" else ""),"工单 / " + it_uid))
+	info.add_child(UIKit.record_card(Game.def_name(it.defId),repair_status(it) + ("\n当前品相：" + UIKit.pct(it.condition) if mode == "refurb" else ""),({"service":"维修工单 / ","refurb":"独立翻新 / ","forge":"伪装加工 / "}[mode]) + it_uid))
 	if mode == "refurb":
 		info.add_child(UIKit.module_header("独立翻新项目","自由选择 · 完成时单独结算","REFURBISH"))
 		for job in WatchRefurbishment.JOBS:
@@ -189,6 +200,9 @@ func _refresh_info() -> void:
 			var selected: bool = task == "forge_" + method
 			var button := UIKit.button(WatchForgery.LABELS[method],"primary" if selected else "secondary",Vector2(0,48),19)
 			var candidate: String = method
+			var blocked := Commerce.forgery_problem(Game.state,it,method)
+			button.disabled = blocked != ""
+			button.tooltip_text = blocked
 			button.pressed.connect(func(): call_deferred("open_forgery",candidate))
 			info.add_child(button)
 			info.add_child(UIKit.label(WatchForgery.cost_text(method),16,UIKit.MUTED,false,true))
@@ -285,8 +299,13 @@ func _stage_ui() -> void:
 	queue_redraw()
 
 func _sync_modes() -> void:
+	var forgery_stock := _is_forgery_stock(Game.item(it_uid))
+	if mode == "forge" and not forgery_stock:
+		mode = "service"
+		task = ""
 	for id in mode_buttons:
 		var button: Button = mode_buttons[id]
+		if id == "forge": button.visible = forgery_stock
 		var selected: bool = id == mode
 		button.set_pressed_no_signal(selected)
 		button.text = ("✓ " if selected else "") + {"service":"维修保养","refurb":"独立翻新","forge":"伪装加工"}[id]
@@ -299,8 +318,18 @@ func _update_guidance() -> void:
 	if mode == "refurb" and current != null and current.get("refurbishment",{}).get("done",[]).has(task.trim_prefix("refurb_")):
 		instruction.text = "本项翻新已完成 · 当前品相 %s；可选择其他独立项目。" % UIKit.pct(current.condition)
 		instruction.add_theme_color_override("font_color",UIKit.GOOD)
+		if is_instance_valid(art): art.set_interaction_allowed(false)
+		if is_instance_valid(action_button): action_button.disabled = true
 		return
 	var why := _cleaning_problem() if task == "dust" and cleaning != null and not cleaning.complete() else _current_problem()
+	if is_instance_valid(art): art.set_interaction_allowed(why == "")
+	if task == "dust" and why != "":
+		scrubbing = false
+		cloth_uv = Vector2(-1,-1)
+		queue_redraw()
+	# The dust branch may expose a navigation-only resume button. All physical
+	# work and all other action buttons share the displayed permission check.
+	if task != "dust" and is_instance_valid(action_button): action_button.disabled = why != ""
 	instruction.text = "暂不能操作 · " + why if why != "" else (art.hint_text() if art.visible else instruction.text)
 	instruction.add_theme_color_override("font_color", UIKit.DANGER if why != "" else UIKit.TEXT)
 	instruction.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -326,6 +355,7 @@ func open_refurb(job := "") -> void:
 	if job == "": job = "blow"
 	mode = "refurb"
 	task = "refurb_"+job
+	_fill_list()
 	_stage_ui()
 	_refresh_info()
 
@@ -334,6 +364,7 @@ func open_service() -> void:
 	_save_cleaning()
 	_save_operation()
 	mode = "service"
+	_fill_list()
 	_stage_ui()
 	_refresh_info()
 
@@ -344,6 +375,12 @@ func open_forgery(method := "") -> void:
 	_save_operation()
 	var it = Game.item(it_uid)
 	if it == null: return
+	if not _is_forgery_stock(it):
+		mode = "service"
+		_fill_list()
+		_stage_ui()
+		_refresh_info()
+		return
 	var ongoing: String = it.get("service",{}).get("forge_task", "")
 	if ongoing != "": method = ongoing.trim_prefix("forge_")
 	if it.get("service",{}).get("opened",false) and ongoing == "":
@@ -358,6 +395,7 @@ func open_forgery(method := "") -> void:
 				method = candidate
 				break
 	task = "forge_" + method
+	_fill_list()
 	_refresh_info()
 	_stage_ui()
 
@@ -414,6 +452,9 @@ func _save_operation() -> void:
 
 func _art_completed() -> void:
 	if not art.visible or art.progress_snapshot().get("task", "") != task: return
+	if _current_problem() != "":
+		_update_guidance()
+		return
 	_operation_completed()
 
 func _operation_completed() -> void:
@@ -526,6 +567,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_save_cleaning()
 
 func _process(delta: float) -> void:
+	if is_instance_valid(art) and art.visible and art.interaction_allowed != (_current_problem() == ""):
+		_update_guidance()
 	if is_instance_valid(instruction):
 		# Preserve layout while a transient notice occupies the instruction row.
 		instruction.self_modulate.a = 0.0 if shell.toast_box.get_child_count() > 0 else 1.0
@@ -571,6 +614,7 @@ func toast_rect() -> Rect2:
 
 func on_changed(_prev: Dictionary,_next: Dictionary,action: Dictionary) -> void:
 	if action.type in ["SERVICE_PROGRESS","SERVICE_BEGIN","REFURB_PROGRESS"]: return
+	_update_guidance()
 	if action.type == "BUY_MATERIAL":
 		call_deferred("_refresh_info")
 		return

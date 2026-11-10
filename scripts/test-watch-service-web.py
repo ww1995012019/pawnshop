@@ -26,12 +26,13 @@ READ_SAVE = """async () => {
  }finally{db.close()}
 }"""
 
-def prepare_fixture(square_no_ap=False):
+def prepare_fixture(square_no_ap=False, permissions=False):
     """Generate a normal save using the real rules without touching personal saves."""
     (ROOT/'work/watch-repair').mkdir(parents=True,exist_ok=True)
+    flags=(['--square-no-ap'] if square_no_ap else [])+(['--permissions'] if permissions else [])
     with tempfile.TemporaryDirectory(prefix='watch-service-fixture-') as saves:
         subprocess.run([os.environ.get('GODOT_BIN','godot'),'--headless','--path',str(ROOT/'godot'),
-                        '--script','res://tests/watch_service_fixture.gd',*(['--','--square-no-ap'] if square_no_ap else [])],
+                        '--script','res://tests/watch_service_fixture.gd',*(['--',*flags] if flags else [])],
                        env={**os.environ,'XDG_DATA_HOME':saves},check=True,
                        stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=30)
     return json.loads((ROOT/'work/watch-repair/browser-fixture.json').read_text())
@@ -45,10 +46,11 @@ def main():
     parser.add_argument('--desktop-only',action='store_true')
     parser.add_argument('--cleaning-only',action='store_true')
     parser.add_argument('--square-no-ap',action='store_true')
+    parser.add_argument('--permissions-only',action='store_true')
     parser.add_argument('--forgery-only',action='store_true')
     parser.add_argument('--mechanical-only',action='store_true')
     args=parser.parse_args()
-    fixture=prepare_fixture(args.square_no_ap)
+    fixture=prepare_fixture(args.square_no_ap,args.permissions_only)
     args.output.mkdir(parents=True,exist_ok=True)
     with sync_playwright() as p:
         browser=p.chromium.launch(executable_path=os.environ.get('CHROMIUM_EXECUTABLE') or shutil.which('chromium'),args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
@@ -135,6 +137,39 @@ def main():
                 page.reload();page.wait_for_function('window.OrbitalTouch?.state?.ready && OrbitalTouch.state.has_save',timeout=90000)
                 cmd({'type':'start'});phone.wait(page,'!s.title && !s.busy')
                 cmd({'type':'page','page':'repair'});phone.wait(page,"s.workspace==='repair'")
+                if args.permissions_only:
+                    click('伪装加工');phone.wait(page,"s.repair_mode==='forge'")
+                    blocked=status()
+                    assert blocked['repair_reason'] and not blocked['repair_targets'],blocked
+                    assert phone.locate(page,blocked['repair_action'])['disabled'],'unavailable action button is enabled'
+                    before=blocked['repair_animation']
+                    for x,y in [(width*.40,height*.40),(width*.50,height*.50),(width*.60,height*.60)]:
+                        if mobile:page.touchscreen.tap(x,y)
+                        else:page.mouse.click(x,y)
+                    page.wait_for_timeout(500)
+                    assert status()['repair_animation']==before,'blocked physical input advanced an animation'
+                    snap('blocked-forgery')
+                    click('维修保养');phone.wait(page,"s.repair_mode==='service'")
+                    order=fixture['inventory'][-1]
+                    definitions=json.loads((ROOT/'godot/data/game_data.json').read_text())['itemDefs']
+                    name=next(d['name'] for d in definitions if d['id']==order['defId'])
+                    found=phone.locate(page,name)
+                    for _ in range(5):
+                        if height*.25<found['y']<height*.80:break
+                        points=[(found['x'],height*.78-i*height*.035) for i in range(9)]
+                        if mobile:phone.touch_drag(context,page,points)
+                        else:page.mouse.move(found['x'],height*.60);page.mouse.wheel(0,350)
+                        page.wait_for_timeout(200);found=phone.locate(page,name)
+                    click(name);phone.wait(page,f"s.repair_uid==='{order['uid']}'&&s.repair_mode==='service'")
+                    page.evaluate("window.__orbitalLocated=null;orbitalTouchSend(JSON.stringify({type:'locate',text:'伪装加工'}))")
+                    page.wait_for_function('window.__orbitalLocated!==null')
+                    assert not page.evaluate('window.__orbitalLocated.found'),'repair order exposes a forge entry'
+                    cmd({'type':'forge','uid':order['uid'],'method':'logo'});page.wait_for_timeout(300)
+                    assert status()['repair_mode']=='service' and not status()['repair_task'].startswith('forge_'),status()
+                    snap('customer-repair-only')
+                    assert not errors,errors
+                    print(label,'blocked action/physical surface and customer repair-only routing PASS',flush=True)
+                    continue
                 if args.mechanical_only:
                     definitions=json.loads((ROOT/'godot/data/game_data.json').read_text())['itemDefs']
                     selected=fixture['inventory'][2]
