@@ -66,14 +66,14 @@ func _ready() -> void:
 func configure(it: Dictionary, task: String, progress: Dictionary = {}) -> void:
 	_item = it.duplicate(true)
 	_task = task
-	_profile = it.get("service", {}).get("profile", {"movement":"quartz", "caseback":"screw"}).duplicate(true)
-	var id := String(it.get("defId", "WCH-001"))
+	_profile = WatchService.profile(it)
+	var id := WatchForgery.appearance_id(it)
 	_art = WatchLogo.art(id)
-	_glyph = WatchLogo.pixels(id, 0)
+	_glyph = WatchLogo.pixels(WatchForgery.target_id(it) if task=="forge_logo" and WatchForgery.target_id(it)!="" else WatchForgery.logo_id(it),0)
 	var definition: Dictionary = GameData.def(id)
-	_reference = definition.get("watch", {})
+	_reference = GameData.def(WatchForgery.target_id(it)).watch if task.begins_with("forge_") and WatchForgery.target_id(it)!="" else definition.get("watch", {})
 	var index := clampi(id.get_slice("-", 1).to_int() - 1, 0, 32)
-	var template: int = index if index < 15 else EXTRA_TEMPLATES[index - 15]
+	var template: int = WatchForgery.template(id)
 	_appearance = {"template":template, "case_shape":"square" if template == 6 else "round",
 		"strap":STRAP_TYPES[template], "strap_color":STRAP_COLORS[index] if index < 15 else EXTRA_STRAP_COLORS[index - 15],
 		"case_color":"bda064" if template == 13 or definition.get("tier", "") == "luxury" else "b6c0c0"}
@@ -839,14 +839,14 @@ func _draw_dial() -> void:
 	if WatchForgery.active(_item, "logo"): variant = 0
 	var observed := _mark_observed()
 	if observed:
-		for pixel in WatchLogo.pixels(String(_item.get("defId", "WCH-001")), variant):
+		for pixel in WatchLogo.pixels(WatchForgery.logo_id(_item), variant):
 			draw_rect(Rect2(Vector2(200 + pixel[0] * 4,125 + pixel[1] * 4),Vector2(3.7,3.7)),Color(dial_ink,0.28))
 	else:
 		# Same mosaic for both variants: service work never grants inspection evidence.
 		for y in 5:
 			for x in 8:
 				draw_rect(Rect2(200+x*12,125+y*13,12,13),face.darkened(0.10 + ((x*3+y*5)%4)*0.055))
-	var visible_glyph: Array = _glyph if _task == "forge_logo" else WatchLogo.pixels(String(_item.get("defId", "WCH-001")), variant)
+	var visible_glyph: Array = _glyph if _task == "forge_logo" else WatchLogo.pixels(WatchForgery.logo_id(_item), variant)
 	var visible_count := int(ceil(fraction * visible_glyph.size())) if mark_visibility() != "hidden" else 0
 	for i in range(visible_count):
 		var pixel: Array = visible_glyph[i]
@@ -854,7 +854,7 @@ func _draw_dial() -> void:
 		draw_rect(Rect2(origin + Vector2(0.8, 1.0), Vector2(4.3, 4.2)), face.darkened(0.3))
 		draw_rect(Rect2(origin, Vector2(3.8, 3.8)), dial_ink)
 		if i % 4 == 0: draw_line(origin + Vector2(0, 0.5), origin + Vector2(2.5, 0.5), dial_ink.lightened(0.22), 0.7)
-	_text(Vector2(217, 282), String(_reference.get("model", "N01")), 10, dial_ink, true)
+	_text(Vector2(217, 282), String(GameData.def(WatchForgery.logo_id(_item)).watch.model), 10, dial_ink, true)
 	# Narrow, directional glass reflection; it never obscures the contact point.
 	draw_arc(CENTER, 99, -2.8, -2.25, 25, Color(1, 1, 0.9, 0.28), 5, true)
 	if fraction >= 1.0 and _task == "forge_logo":
@@ -1054,7 +1054,7 @@ func _draw_implement(tool: String, tip: Vector2, angle: float, ratio: float, wor
 	draw_set_transform(rect.position, 0.0, Vector2.ONE * unit)
 
 func _draw_labels() -> void:
-	var names := {"open":"开盖拆检", "wash":"金属件清洗 / 干燥", "replace":"故障件更换", "assemble":"定点润滑 / 回装", "test":"走时校验 / 封盖", "forge_logo":"重描标识", "forge_serial":"紫外编号覆印", "forge_weight":"后盖配重加工"}
+	var names := {"open":"开盖拆检", "wash":"金属件清洗 / 干燥", "replace":"故障件更换", "assemble":"定点润滑 / 回装", "test":"走时校验 / 封盖", "forge_logo":"重描标识", "forge_serial":"紫外编号覆印", "forge_weight":"后盖配重加工", "forge_case":"改装目标外壳"}
 	_text(Vector2(29, 34), String(names.get(_task, "维修工位")), 19, INK)
 	var movement := "机械机芯" if _profile.get("movement", "quartz") == "mechanical" else "石英机芯"
 	var back: String = {"screw":"旋入后盖", "snap":"压入后盖", "bolts":"螺钉后盖"}.get(_profile.get("caseback", "screw"), "旋入后盖")

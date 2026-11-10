@@ -6,7 +6,7 @@ const LABELS := {"dust":"清洁除尘", "open":"开盖拆检", "wash":"零件清
 
 static func profile(it: Dictionary) -> Dictionary:
 	var result: Dictionary=it.get("service", {}).get("profile", WatchRules.model_reference(it.defId)).duplicate(true)
-	result.caseback=WatchRules.model_reference(WatchForgery.appearance_id(it)).caseback
+	if WatchForgery.appearance_id(it)!=String(it.defId): result.caseback=WatchRules.model_reference(WatchForgery.appearance_id(it)).caseback
 	return result
 
 static func _fault(id: String, text: String, internal: bool, functional := false) -> Dictionary:

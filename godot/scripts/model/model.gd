@@ -1129,7 +1129,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				if it.owner != "shop" or it.has("orderId"): return notice(s,"伪装加工只开放给店铺自有手表。")
 				if WatchForgery.target_id(it)!="":
 					if method in ["serial","weight"] and WatchForgery.appearance_id(it)!=WatchForgery.target_id(it): return notice(s,"请先完成目标换壳。")
-					it.forgery.target_locked=true
+					if progress.get("complete",false) or progress.get("opened",false) or int(progress.get("step",0))>0 or progress.get("phase","started")!="idle": it.forgery.target_locked=true
 				if it.service.opened and it.service.get("forge_task", "") != task: return notice(s,"请先收妥内部维修并封盖。")
 				if progress.has("opened"):
 					it.service.opened = bool(progress.opened)

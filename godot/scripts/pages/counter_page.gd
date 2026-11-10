@@ -546,7 +546,7 @@ func _stock_slot(it: Dictionary, picking: bool, display := false) -> Button:
 	if picking and it.owner != "shop":
 		why = "不是店铺自有货"
 	var slot := UIKit.button("", "chip", Vector2(76, 78) if display else Vector2(58, 58), 14)
-	slot.icon = UIKit.item_icon(it.defId)
+	slot.icon = UIKit.physical_icon(it)
 	slot.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	slot.expand_icon = true
 	slot.add_theme_constant_override("icon_max_width", 74 if display else 52)
@@ -622,7 +622,7 @@ func _refresh_desk() -> void:
 	var it = Model.trade_item(s) if t != null else null
 	tag.visible = it != null
 	if it != null:
-		tag_name.text = GameData.def(it.defId).name
+		tag_name.text = WatchForgery.sale_name(it)
 		tag_info.text = "%s · %s · 物证 %d" % [UIKit.pct(it.condition), "本店维护" if it.repaired else "状态待对照", Model.evidence_count(it)]
 	idle_label.visible = it == null
 	idle_jobs.visible = t == null
@@ -846,7 +846,7 @@ func _refresh() -> void:
 		scr.price.text = Model.jnum(t.price) + " Cr" if it != null else "待选货"
 		if it != null:
 			var e := Model.estimate(it)
-			scr.line1.text = "%s · %s %s" % [GameData.def(it.defId).name.left(8), "估价", "%s–%s" % [Model.jnum(e.low), Model.jnum(e.high)]]
+			scr.line1.text = "%s · %s %s" % [WatchForgery.sale_name(it).left(8), "估价", "%s–%s" % [Model.jnum(e.low), Model.jnum(e.high)]]
 			scr.line2.text = "物证 %d · 议价 %d/3%s" % [Model.evidence_count(it), int(t.rounds), " · 已锁价" if t.locked else ""]
 		else:
 			scr.line1.text = "需求：" + Model.customer_need(t.npcId).left(20)
@@ -1002,7 +1002,7 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 		eligible += 1
 		var uid: String = item.uid
 		var price := Commerce.recovery_price(Game.state, item)
-		var sell_item := UIKit.button("出售旧物 %s · 收 %s" % [GameData.def(item.defId).name, UIKit.money(price)], "secondary", Vector2(0, 50), 17)
+		var sell_item := UIKit.button("出售旧物 %s · 收 %s" % [WatchForgery.sale_name(item), UIKit.money(price)], "secondary", Vector2(0, 50), 17)
 		sell_item.set_meta("merchant_focus", "item:" + uid)
 		focus_targets["item:" + uid] = sell_item
 		sell_item.disabled = s.ap < 1 or Commerce.forgery_rejected(s, item)
@@ -1054,13 +1054,13 @@ func _pick_goods() -> void:
 		var cv := UIKit.vbox(6)
 		card.add_child(cv)
 		var pic := TextureRect.new()
-		pic.texture = UIKit.item_icon(it.defId)
+		pic.texture = UIKit.physical_icon(it)
 		pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		pic.custom_minimum_size = Vector2(0, 120)
 		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		cv.add_child(pic)
-		cv.add_child(UIKit.label(GameData.def(it.defId).name, 19, UIKit.TEXT))
+		cv.add_child(UIKit.label(WatchForgery.sale_name(it), 19, UIKit.TEXT))
 		cv.add_child(UIKit.label("品相 %s · %s · 物证 %d" % [UIKit.pct(it.condition), "本店维护" if it.repaired else "状态待对照", Model.evidence_count(it)], 15, UIKit.MUTED))
 		var est := Model.estimate(it)
 		cv.add_child(UIKit.label("挂牌 %s · 成本 %s" % [UIKit.money(it.listPrice), UIKit.money(it.cost)], 15, UIKit.AMBER))
@@ -1230,7 +1230,7 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 		"DELIVER", "PAWN":
 			if pt != null and nt == null:
 				var sold = Model.trade_item(prev)
-				await _deal(pt, a.type == "PAWN", GameData.def(sold.defId).name if sold != null else "货物")
+				await _deal(pt, a.type == "PAWN", WatchForgery.sale_name(sold) if sold != null else "货物")
 		"ISSUE_WANTED", "ASK_VISITOR":
 			if nt != null: _say(nt.line,true,"focused")
 		"REPORT_VISITOR":

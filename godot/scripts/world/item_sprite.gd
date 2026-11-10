@@ -30,6 +30,7 @@ var draggable := true
 var land_tween: Tween
 var logo_variant := 0
 var finish_signature := ""
+var physical_signature := ""
 
 ## height: on-screen height in px for the front face.
 func setup(id: String, item_uid := "", height := 300.0, start_back := false) -> void:
@@ -78,6 +79,11 @@ func _apply_face() -> void:
 		body.texture = UIKit.watch_variant_texture(def_id)
 		body.region_rect = Rect2(8.96, 8.96, 238.08, 238.08)
 		asz = Vector2(256, 256)
+	if it!=null and WatchForgery.target_id(it)!="":
+		body.texture=UIKit.physical_texture(it,back)
+		body.region_rect=Rect2(8.96,8.96,238.08,238.08)
+		asz=Vector2(256,256)
+	physical_signature=WatchForgery.signature(it) if it!=null else ""
 	var r: Rect2 = body.region_rect
 	mat.set_shader_parameter("region", Vector4(r.position.x / asz.x, r.position.y / asz.y, r.size.x / asz.x, r.size.y / asz.y))
 	mat.set_shader_parameter("back_face", 1.0 if back else 0.0)
@@ -193,7 +199,7 @@ func flip() -> void:
 
 func _process(delta: float) -> void:
 	var it = Game.item(uid) if not uid.is_empty() else null
-	if it != null and logo_variant != WatchRules.logo_variant(it):
+	if it != null and (logo_variant != WatchRules.logo_variant(it) or physical_signature!=WatchForgery.signature(it)):
 		_apply_face()
 	else:
 		_sync_logo_observation()
