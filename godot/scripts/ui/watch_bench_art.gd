@@ -78,6 +78,7 @@ func configure(it: Dictionary, task: String, progress: Dictionary = {}) -> void:
 	_appearance = {"template":template, "case_shape":_art.get("shape","square" if template == 6 else "round"),
 		"strap":WatchLogo.art(WatchForgery.strap_id(it)).get("strap",STRAP_TYPES[WatchForgery.template(WatchForgery.strap_id(it))]), "strap_color":_strap_color(WatchForgery.strap_id(it)),
 		"case_color":_art.get("case_color", "bda064" if template == 13 or definition.get("tier", "") in ["luxury","ultra"] else "b6c0c0")}
+	_contour_rays.clear()
 	_started_opened = bool(it.get("service", {}).get("opened", false))
 	if progress.get("version", 0) == 1 and progress.get("task", "") == task:
 		# The reducer updates service.opened during this operation. Its original
@@ -433,7 +434,7 @@ func _build_plan() -> void:
 				_action("mechanical_trace", "观察稳定走时轨迹", "等待摆幅与走时读数稳定，不触碰轮系", "probe", Vector2(356, 220), "settle", 1.5)
 			else:
 				_action("check_voltage", "测量电池供电", "表笔接触电池与端子；石英机芯无需调快慢针", "probe", Vector2(275, 252), "press", 1.1)
-				_action("set_crown", "校正指针并推回表冠", "沿表冠轴向校时，恢复每秒一步", "fingers", Vector2(389, 227), "turn", 1.0)
+				_action("set_crown", "校正指针并推回表冠", "沿表冠轴向校时，恢复每秒一步", "fingers", _crown_contact(), "turn", 1.0)
 				_action("quartz_tick", "复核石英步进", "观察供电与连续步进，不跳过稳定读数", "probe", Vector2(356, 220), "settle", 1.5)
 			_close_actions()
 			_action("final_check", "封盖后最终复核", "确认后盖齐平、表冠归位与走时稳定", "probe", Vector2(360, 227), "settle", 1.1)
@@ -473,14 +474,14 @@ func _external_only() -> bool:
 
 func _safe_action() -> void:
 	var mech: bool = _profile.get("movement", "quartz") == "mechanical"
-	_action("safe_mechanical" if mech else "safe_quartz", "停机并释放储能" if mech else "停机并隔离供电", "固定软垫表座，操作表冠；拆出部件前安全停机", "fingers", Vector2(389, 227), "turn", 0.9)
+	_action("safe_mechanical" if mech else "safe_quartz", "停机并释放储能" if mech else "停机并隔离供电", "固定软垫表座，操作表冠；拆出部件前安全停机", "fingers", _crown_contact(), "turn", 0.9)
 
 func _open_actions() -> void:
 	match String(_profile.get("caseback", "screw")):
 		"bolts":
 			for i in range(4):
 				_action("unscrew_%d" % i, "卸下后盖螺钉 %d / 4" % (i + 1), "刀口对准螺钉槽，旋松后收到零件盘", "driver", _screw_pos(i), "turn", 0.85)
-		"snap": _action("lever_snap", "从缺口撬起压入式后盖", "刀口仅插入壳侧缺口，轻抬至盖缘分离", "caseknife", Vector2(339, 289), "lever", 1.0)
+		"snap": _action("lever_snap", "从缺口撬起压入式后盖", "刀口仅插入壳侧缺口，轻抬至盖缘分离", "caseknife", _snap_contact(), "lever", 1.0)
 		_: _action("unscrew_cover", "双爪旋开旋入式后盖", "开盖器两爪卡入对侧槽口，逆时针旋松", "opener", CENTER, "turn", 1.4)
 	_transfer("lift_cover", "取下后盖放入零件盘", "夹住盖缘，抬起后移入有软垫的后盖格", "cover", CENTER, COVER_TRAY)
 
@@ -640,7 +641,8 @@ func _draw_strap() -> void:
 		draw_line(Vector2(204, y - 1), Vector2(291, y - 1), Color("a5b1a4"), 3)
 
 func _draw_case() -> void:
-	draw_circle(CENTER + Vector2(4, 7), 123, Color(0.02, 0.05, 0.05, 0.5))
+	if _shaped_case(): _case_shape(CENTER+Vector2(4,7),123,Color(0.02,0.05,0.05,0.5))
+	else: draw_circle(CENTER + Vector2(4, 7), 123, Color(0.02, 0.05, 0.05, 0.5))
 	var rim := Color(String(_appearance.get("case_color", "b6c0c0")))
 	_case_shape(CENTER, 121, Color("182221"))
 	_case_shape(CENTER, 117, rim.darkened(0.20))
@@ -651,16 +653,17 @@ func _draw_case() -> void:
 		draw_line(CENTER + Vector2(-114, 114), CENTER + Vector2(-114, -114), rim.lightened(0.20), 2)
 		draw_line(CENTER + Vector2(-114, -114), CENTER + Vector2(114, -114), rim.lightened(0.20), 2)
 	else:
-		draw_arc(CENTER, 115, -2.85, -0.7, 60, rim.lightened(0.20), 2.5, true)
-		draw_arc(CENTER, 117, 0.35, 1.98, 45, rim.darkened(0.45), 2, true)
-		draw_arc(CENTER, 108, -0.3, 2.9, 70, Color("899575"), 1, true)
+		_draw_contour_arc(CENTER,115,-2.85,-0.7,60,rim.lightened(0.20),2.5)
+		_draw_contour_arc(CENTER,117,0.35,1.98,45,rim.darkened(0.45),2)
+		_draw_contour_arc(CENTER,108,-0.3,2.9,70,Color("899575"),1)
 	for angle in [0.0, PI]:
-		var p := CENTER + Vector2.from_angle(angle) * 124
+		var p := CENTER + _case_offset(121,angle) + Vector2.from_angle(angle)*3
 		draw_line(p - Vector2(0, 11), p + Vector2(0, 11), Color("bbc7b9"), 3)
-	_panel(Rect2(365, 216, 26, 22), Color("768e80"), Color("bfccba"), 4)
-	for x in range(373, 391, 4): draw_line(Vector2(x, 219), Vector2(x, 235), Color("3c5146"), 1)
+	var crown := _crown_rect()
+	_panel(crown, Color("768e80"), Color("bfccba"), 4)
+	for offset in [8,12,16,20,24]: draw_line(crown.position+Vector2(offset,3),crown.position+Vector2(offset,19),Color("3c5146"),1)
 	if bool(_state.power_safe):
-		draw_line(Vector2(392, 219), Vector2(392, 235), GOLD, 2)
+		draw_line(crown.position+Vector2(27,3),crown.position+Vector2(27,19),GOLD,2)
 
 func _draw_movement() -> void:
 	draw_circle(CENTER, 103, Color("53695a"))
@@ -786,25 +789,31 @@ func _draw_external_parts() -> void:
 func _draw_cover(p: Vector2) -> void:
 	var distance := clampf(p.distance_to(CENTER) / CENTER.distance_to(COVER_TRAY), 0.0, 1.0)
 	var radius := lerpf(104.0, 51.0, distance)
-	draw_circle(p + Vector2(2, 4), radius + 1, Color(0.02, 0.04, 0.03, 0.5))
+	if _shaped_case(): _case_shape(p+Vector2(2,4),radius+1,Color(0.02,0.04,0.03,0.5))
+	else: draw_circle(p + Vector2(2, 4), radius + 1, Color(0.02, 0.04, 0.03, 0.5))
 	_case_shape(p, radius, Color("bac4b3"))
 	_case_shape(p, radius - 3, Color("596e5f"))
 	_case_shape(p, radius - 6, Color("8d9e89"))
 	for y in range(int(-radius + 9), int(radius - 8), 4):
-		var half := radius - 9 if _appearance.case_shape == "square" else sqrt(maxf(0.0, pow(radius - 9, 2) - pow(float(y), 2)))
-		draw_line(p + Vector2(-half, y), p + Vector2(half, y), Color(0.86, 0.91, 0.80, 0.11), 1)
+		if _shaped_case():
+			for span in _case_hatch_spans(radius-9,float(y)):
+				draw_line(p+Vector2(span.x,y),p+Vector2(span.y,y),Color(0.86,0.91,0.80,0.11),1)
+		else:
+			var half := radius - 9 if _appearance.case_shape == "square" else sqrt(maxf(0.0, pow(radius - 9, 2) - pow(float(y), 2)))
+			draw_line(p + Vector2(-half, y), p + Vector2(half, y), Color(0.86, 0.91, 0.80, 0.11), 1)
 	if _appearance.case_shape == "square":
 		draw_rect(Rect2(p - Vector2.ONE * (radius - 10), Vector2.ONE * (radius - 10) * 2), Color("516849"), false, 1)
 	else:
-		draw_arc(p, radius - 4, -2.8, -0.6, 52, Color("e4e5cb"), 1.6, true)
-		draw_arc(p, radius - 10, 0, TAU, 90, Color("516849"), 1, true)
+		_draw_contour_arc(p,radius-4,-2.8,-0.6,52,Color("e4e5cb"),1.6)
+		_draw_contour_arc(p,radius-10,0,TAU,90,Color("516849"),1)
 	var ratio := radius / 104.0
 	if String(_profile.get("caseback", "screw")) == "screw":
 		for i in range(6):
-			var vector := Vector2.from_angle(float(i) * TAU / 6.0)
-			draw_line(p + vector * (radius - 9), p + vector * (radius - 3), Color("40594b"), 3 * ratio)
+			var slot := _cover_slot(radius,float(i)*TAU/6.0)
+			draw_line(p+slot[0],p+slot[1],Color("40594b"),3*ratio)
 	elif String(_profile.get("caseback", "screw")) == "snap":
-		draw_line(p + Vector2(radius * 0.73, radius * 0.63), p + Vector2(radius * 0.89, radius * 0.43), Color("2d4337"), 3)
+		var notch := _snap_notch(radius)
+		draw_line(p+notch[0],p+notch[1],Color("2d4337"),3)
 	else:
 		for i in range(4):
 			if not bool(_state.screws[i]):
@@ -836,12 +845,11 @@ func _draw_dial() -> void:
 	_case_shape(CENTER, 100, face)
 	for i in range(60):
 		var angle := float(i) * TAU / 60 - PI * 0.5
-		var v := Vector2.from_angle(angle)
-		draw_line(CENTER + v * (87 if i % 5 == 0 else 93), CENTER + v * 98, dial_ink, 3 if i % 5 == 0 else 1, true)
+		draw_line(CENTER+_case_offset(87 if i%5==0 else 93,angle),CENTER+_case_offset(98,angle),dial_ink,3 if i%5==0 else 1,true)
 	for i in range(12):
 		if i in [0, 3, 6, 9]:
-			var v := Vector2.from_angle(float(i) * TAU / 12 - PI * 0.5)
-			_text(CENTER + v * 77 - Vector2(6, -4), str(12 if i == 0 else i), 13, dial_ink, true)
+			var offset := _case_offset(77,float(i)*TAU/12-PI*0.5)
+			_text(CENTER + offset - Vector2(6, -4), str(12 if i == 0 else i), 13, dial_ink, true)
 	draw_line(CENTER, CENTER + Vector2(-43, -29), dial_ink.darkened(0.2), 7, true)
 	draw_line(CENTER, CENTER + Vector2(38, -61), dial_ink, 4, true)
 	draw_line(CENTER, CENTER + Vector2(18, 65), Color("ac6a4a"), 1.5, true)
@@ -1017,12 +1025,20 @@ func _draw_implement(tool: String, tip: Vector2, angle: float, ratio: float, wor
 				draw_polyline(PackedVector2Array([tip + side * sign_value * 1.7, tip + axis * 31 + side * sign_value * 5, tip + axis * 75 + side * sign_value * 2]), STEEL, 3, true)
 				draw_line(tip + axis * 32 + side * sign_value * 4, tip + axis * 65 + side * sign_value * 2, Color("dfdfbd"), 0.8, true)
 		"opener":
-			draw_line(tip - Vector2(85, 0).rotated(angle), tip + Vector2(85, 0).rotated(angle), Color("49676a"), 13, true)
-			draw_line(tip - Vector2(85, 3).rotated(angle), tip + Vector2(85, -3).rotated(angle), STEEL, 2, true)
-			for sign_value in [-1.0, 1.0]:
-				var end := tip + Vector2(sign_value * 91, 0).rotated(angle)
-				draw_line(end + Vector2(0, -13), end, Color("c9d3c4"), 6, true)
-				draw_circle(tip + Vector2(sign_value * 62, 0).rotated(angle), 6, Color("233b37"))
+			if _shaped_case():
+				var contacts := _opener_contacts()
+				draw_line(contacts[0],contacts[1],Color("49676a"),13,true)
+				draw_line(contacts[0]+Vector2(6,-3),contacts[1]-Vector2(6,3),STEEL,2,true)
+				for contact in contacts:
+					draw_line(contact+Vector2(0,-13),contact,Color("c9d3c4"),6,true)
+					draw_circle(contact*0.68+Vector2(0,sin(angle)*8),6,Color("233b37"))
+			else:
+				draw_line(tip - Vector2(85, 0).rotated(angle), tip + Vector2(85, 0).rotated(angle), Color("49676a"), 13, true)
+				draw_line(tip - Vector2(85, 3).rotated(angle), tip + Vector2(85, -3).rotated(angle), STEEL, 2, true)
+				for sign_value in [-1.0, 1.0]:
+					var end := tip + Vector2(sign_value * 91, 0).rotated(angle)
+					draw_line(end + Vector2(0, -13), end, Color("c9d3c4"), 6, true)
+					draw_circle(tip + Vector2(sign_value * 62, 0).rotated(angle), 6, Color("233b37"))
 		"blower":
 			draw_line(tip, tip + axis * 27, Color("899f8e"), 5, true)
 			draw_circle(tip + axis * 52, 20, Color("634f3d"))
@@ -1121,27 +1137,109 @@ func _draw_ballast(p: Vector2) -> void:
 		_draw_screw(p + Vector2(13, 9), 3, 0.1, STEEL)
 
 func _case_shape(p: Vector2, radius: float, fill: Color) -> void:
-	var shape: String = _appearance.get("case_shape", "round")
-	if shape in ["square","cushion"]:
-		_panel(Rect2(p - Vector2.ONE * radius, Vector2.ONE * radius * 2), fill, fill, 5 if shape=="square" else int(radius*0.35))
-	elif shape in ["octagon","sun"]:
+	if _shaped_case():
 		var points := PackedVector2Array()
+		for point in _case_contour(): points.append(p+point*radius)
+		draw_colored_polygon(points,fill)
+	elif _appearance.get("case_shape","round")=="square":
+		_panel(Rect2(p-Vector2.ONE*radius,Vector2.ONE*radius*2),fill,fill,5)
+	else:
+		draw_circle(p,radius,fill)
+
+# Normalized authored contours are shared; fixed-angle ray hits are reused per bench.
+static var _shape_contours: Dictionary = {}
+var _contour_rays: Dictionary = {}
+
+func _shaped_case() -> bool:
+	return _appearance.get("case_shape","round") not in ["round","square"]
+
+func _case_contour() -> PackedVector2Array:
+	var shape: String = _appearance.get("case_shape","round")
+	if _shape_contours.has(shape): return _shape_contours[shape]
+	var points := PackedVector2Array()
+	if shape in ["octagon","sun"]:
 		var sides := 16 if shape=="sun" else 8
 		for k in sides:
-			points.append(p+Vector2.from_angle(float(k)*TAU/sides)*radius*(0.88 if shape=="sun" and k%2 else 1.0))
-		draw_colored_polygon(points,fill)
-	elif shape == "tonneau":
-		var points := PackedVector2Array()
-		for point in [Vector2(-0.78,-1),Vector2(0.78,-1),Vector2(1,-0.55),Vector2(1,0.55),Vector2(0.78,1),Vector2(-0.78,1),Vector2(-1,0.55),Vector2(-1,-0.55)]:
-			points.append(p+point*radius)
-		draw_colored_polygon(points,fill)
-	elif shape in ["oval","crescent"]:
-		var points := PackedVector2Array()
-		for k in 64:
-			points.append(p+Vector2.from_angle(float(k)*TAU/64)*Vector2(0.85 if shape=="oval" else 1.08,1.05 if shape=="oval" else 1.0)*radius)
-		draw_colored_polygon(points,fill)
+			points.append(Vector2.from_angle(float(k)*TAU/sides)*(0.88 if shape=="sun" and k%2 else 1.0))
+	elif shape=="tonneau":
+		points=PackedVector2Array([Vector2(-0.78,-1),Vector2(0.78,-1),Vector2(1,-0.55),Vector2(1,0.55),Vector2(0.78,1),Vector2(-0.78,1),Vector2(-1,0.55),Vector2(-1,-0.55)])
+	elif shape=="cushion":
+		for corner in 4:
+			var center := Vector2(0.65,0.65).rotated(corner*PI/2)
+			for k in range(9):
+				points.append(center+Vector2.from_angle(corner*PI/2+float(k)*PI/16)*0.35)
 	else:
-		draw_circle(p, radius, fill)
+		var axes := Vector2(0.85,1.05) if shape=="oval" else Vector2(1.08,1.0)
+		for k in 64: points.append(Vector2.from_angle(float(k)*TAU/64)*axes)
+	_shape_contours[shape]=points
+	return points
+
+func _case_offset(radius: float, angle: float) -> Vector2:
+	var direction := Vector2.from_angle(angle)
+	if not _shaped_case(): return direction*radius
+	if not _contour_rays.has(angle):
+		var points := _case_contour()
+		var distance := 4.0
+		for i in points.size():
+			var a := points[i]
+			var edge := points[(i+1)%points.size()]-a
+			var denominator := direction.cross(edge)
+			if absf(denominator)<0.000001: continue
+			var t := a.cross(edge)/denominator
+			var u := a.cross(direction)/denominator
+			if t>=0 and u>=-0.00001 and u<=1.00001: distance=minf(distance,t)
+		_contour_rays[angle]=direction*distance
+	return Vector2(_contour_rays[angle])*radius
+
+func _case_arc(p: Vector2, radius: float, start: float, end: float, samples: int) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	for i in range(samples+1): points.append(p+_case_offset(radius,lerpf(start,end,float(i)/samples)))
+	return points
+
+func _draw_contour_arc(p: Vector2, radius: float, start: float, end: float, samples: int, color: Color, width: float) -> void:
+	if _shaped_case(): draw_polyline(_case_arc(p,radius,start,end,samples),color,width,true)
+	else: draw_arc(p,radius,start,end,samples,color,width,true)
+
+func _case_hatch_spans(radius: float, y: float) -> Array[Vector2]:
+	var points := _case_contour()
+	var crossings: Array[float] = []
+	var row := y/radius
+	for i in points.size():
+		var a := points[i]
+		var b := points[(i+1)%points.size()]
+		if (a.y<=row and b.y>row) or (b.y<=row and a.y>row):
+			crossings.append((a.x+(row-a.y)*(b.x-a.x)/(b.y-a.y))*radius)
+	crossings.sort()
+	var spans: Array[Vector2] = []
+	for i in range(0,crossings.size()-1,2): spans.append(Vector2(crossings[i],crossings[i+1]))
+	return spans
+
+func _crown_rect() -> Rect2:
+	return Rect2(Vector2(CENTER.x+_case_offset(121,0).x-4,216),Vector2(26,22)) if _shaped_case() else Rect2(365,216,26,22)
+
+func _crown_contact() -> Vector2:
+	return Vector2(_crown_rect().end.x-2,CENTER.y)
+
+func _cover_slot(radius: float, angle: float) -> PackedVector2Array:
+	return PackedVector2Array([_case_offset(radius-9,angle),_case_offset(radius-3,angle)])
+
+func _opener_contacts() -> PackedVector2Array:
+	var contacts := PackedVector2Array()
+	for angle in [PI,0.0]:
+		var slot := _cover_slot(104,angle)
+		contacts.append((slot[0]+slot[1])*0.5)
+	return contacts
+
+func _snap_notch(radius: float) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	for point in [Vector2(0.73,0.63),Vector2(0.89,0.43)]:
+		points.append(_case_offset(radius,point.angle())*point.length() if _shaped_case() else point*radius)
+	return points
+
+func _snap_contact() -> Vector2:
+	if not _shaped_case(): return Vector2(339,289)
+	var notch := _snap_notch(104)
+	return CENTER+(notch[0]+notch[1])*0.5
 
 func _draw_screw(p: Vector2, radius: float, angle: float, color: Color) -> void:
 	draw_circle(p + Vector2(0.5, 1), radius + 0.7, Color("28392d"))

@@ -585,7 +585,9 @@ static func physical_texture(it: Dictionary, back := false) -> CanvasTexture:
 		var strap_cell := item_cell(strap_id,back)
 		var strap_atlas: Image=tex("res://assets/atlas/%s.png" % strap_cell.key).get_image()
 		var strap_start := Vector2i(strap_cell.region.position-Vector2.ONE*8.96)
-		for band in [Rect2i(0,0,256,65),Rect2i(0,206,256,50)]:
+		# Authored new cases/lugs begin at y54; preserve the shipped33 blend contract.
+		var strap_top := 54 if int(GameData.def(shell_id).sprite)>=33 else 65
+		for band in [Rect2i(0,0,256,strap_top),Rect2i(0,206,256,50)]:
 			image.blit_rect(strap_atlas,Rect2i(strap_start+band.position,band.size),band.position)
 	if not back:
 		var background := image.get_pixel(104,88)
