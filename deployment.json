@@ -1,8 +1,8 @@
 {
-  "source_commit": "bc3ef87afcc2ed3d248484b38681ad32e00709e9",
-  "release_id": "323e53e7602b7602",
-  "pack": "workbench-b98bbf2b87538eb8.pck",
-  "html_sha256": "a217bcffccce70c2be2c2e280feb48aa913e3468b3b1a323d08f4b7b08abaa1b",
+  "source_commit": "7fd9effe60a859867e29720740da3660a5d0e3c5",
+  "release_id": "63a488f589052966",
+  "pack": "workbench-a345b17e9900e1f3.pck",
+  "html_sha256": "0521caed08b6a0b41d8fb9693cf26da7c6d8ee47013f693667fadfa47af48902",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -14,5 +14,7 @@
   "store_costs_version": 1,
   "document_grips_version": 1,
   "counterfeit_targets_version": 1,
-  "multi_item_trade_version": 1
+  "multi_item_trade_version": 1,
+  "night_crime_version": 1,
+  "premium_counterfeit_version": 1
 }
