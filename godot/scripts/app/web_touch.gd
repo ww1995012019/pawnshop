@@ -71,7 +71,7 @@ func snapshot() -> Dictionary:
 		"busy": busy, "workspace": active.page_name if shell.workspace_open() else "",
 		"trade": trade != null, "notice": state.get("notice", ""), "locked": false,
 		"can_arrive": not title_open and not blocked and not busy and trade == null and
-			state.phase == "open" and state.cursor < Model.daily_visit_limit() and (state.ap >= 1 or Commerce.merchant_due(state) or Commerce.next_visitor(state) == WantedCases.OFFICER_ID),
+			NightCrime.can_arrive(state),
 		"offer": shell.page.dial.value, "min": shell.page.dial.min_value, "max": shell.page.dial.max_value}
 	# Only information printed on the owned paper is exposed to the companion.
 	result.notice_owned = WantedCases.has_notice(state)

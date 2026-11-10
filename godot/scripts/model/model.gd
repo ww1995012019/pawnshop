@@ -596,6 +596,7 @@ static func create(seed := "ORBITAL-P0") -> Dictionary:
 		put_in(s, it)
 	StoreCosts.ensure(s)
 	NightCrime.ensure(s)
+	NightCrime.ensure_day(s)
 	return s
 
 static func validated_trade_item(s: Dictionary, t: Dictionary):

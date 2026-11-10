@@ -412,7 +412,7 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 			return Model.notice(s,"来源未核货须先确认本次灰色收售风险；仍保留真实来源与案件记录。")
 	if type == "PAWN" and s.trade != null and s.trade.get("crimeCaseId","") != "":
 		return Model.notice(s,"案件来源尚未核对，不能转为抵押保管；可拒收、核对报警或确认灰色收购风险。")
-	if type in ["ACCEPT","DELIVER","PAWN"] and s.trade != null and s.trade.kind == "buy" and s.trade.item != null and int(s.day)>=3 and not s.trade.item.sourceVerified and s.trade.item.get("grayAuthorized","") != s.trade.id:
+	if type in ["OFFER","ACCEPT","DELIVER","PAWN"] and s.trade != null and s.trade.kind == "buy" and s.trade.item != null and int(s.day)>=3 and not s.trade.item.sourceVerified and s.trade.item.get("grayAuthorized","") != s.trade.id:
 		return Model.notice(s,"来源尚未核实，须先明确确认灰色收售风险，或拒收。")
 	if type == "REGISTER":
 		var item = Model.find_inventory(s,action.get("uid",""))

@@ -38,6 +38,7 @@ func _ready() -> void:
 	StoreCosts.ensure(state)
 	Wanted.ensure(state)
 	NightCrime.ensure(state)
+	NightCrime.ensure_day(state)
 	if has_save: save()
 
 ## Preserve the exact pre-service save before interpreting its old repair counters.

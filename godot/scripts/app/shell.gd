@@ -1128,7 +1128,8 @@ func close_top_modal() -> void:
 func confirm(title_text: String, message: String, ok_text: String, fn: Callable) -> void:
 	var m := modal(title_text, 640)
 	var body: VBoxContainer = m[0]
-	body.add_child(UIKit.label(message, 21, UIKit.TEXT, false, true))
+	var message_body := night_scroll(body, 240) if title_text.contains("灰色") or title_text.contains("本店失物") else body
+	message_body.add_child(UIKit.label(message, 21, UIKit.TEXT, false, true))
 	var row := UIKit.hbox(12)
 	var cancel := UIKit.button("取消", "secondary", Vector2(0, 56), 21)
 	cancel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1497,6 +1498,7 @@ func shutter(day: int) -> void:
 # ---------------------------------------------------------------- frame
 
 func _process(delta: float) -> void:
+	_poll_night_report()
 	_update_cursor()
 	var t := Time.get_ticks_msec() / 1000.0
 	ambient.color = ambient.color.lerp(ambient_target, 1.0 - exp(-delta * 6.0))
@@ -1574,3 +1576,80 @@ func toggle_wanted_notice() -> void:
 		toast("先向巡警领取通缉名单。")
 		return
 	Game.dispatch({"type":"TOGGLE_NOTICE"})
+
+# Suppress repeated automatic opening after X for this session; ACK is saved.
+var night_report_seen := ""
+func _poll_night_report() -> void:
+	if workspace_mode or not Game.state.get("nightCrime", {}).get("reportOpen", false): return
+	if is_instance_valid(title) and not title.is_queued_for_deletion(): return
+	if modal_open() or workspace_open(): return
+	for effect in fx.get_children():
+		if effect.get_meta("blocks_shop_input", false) and not effect.is_queued_for_deletion(): return
+	var key := String(Game.state.seed) + "/" + str(Game.state.day)
+	if night_report_seen == key: return
+	night_report_seen = key
+	open_night_report(false)
+
+## Scroll only the records; confirmation always remains on screen.
+func night_scroll(body: VBoxContainer, height := 430.0) -> VBoxContainer:
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.custom_minimum_size.y = minf(height, maxf(140, get_viewport().get_visible_rect().size.y - 310))
+	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.mouse_filter = Control.MOUSE_FILTER_PASS
+	body.add_child(sc)
+	var gutter := MarginContainer.new()
+	gutter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gutter.add_theme_constant_override("margin_right", 18)
+	sc.add_child(gutter)
+	var records := UIKit.vbox(12)
+	records.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gutter.add_child(records)
+	return records
+
+func open_night_report(manual := true) -> void:
+	if workspace_mode:
+		workspace_parent.open_night_report(manual)
+		return
+	if manual: Game.dispatch({"type":"OPEN_NIGHT_REPORT"})
+	night_report_seen = String(Game.state.seed) + "/" + str(Game.state.day)
+	var report := NightCrime.public_report(Game.state)
+	var m := modal("夜间失窃与查货记录", 940)
+	var body: VBoxContainer = m[0]
+	var records := night_scroll(body)
+	records.add_child(UIKit.label("有效协警 %d 次 · 本次查货宽容概率 %d%%" % [report.cooperation, report.leniencyChance], 21, UIKit.TEXT, true, true))
+	if report.mornings.is_empty(): records.add_child(UIKit.label("尚无夜间记录。", 19, UIKit.TEXT))
+	var mornings: Array = report.mornings.duplicate()
+	mornings.reverse()
+	for morning in mornings:
+		var card := UIKit.plate(UIKit.paper_style(14))
+		var rows := UIKit.vbox(10)
+		card.add_child(rows)
+		rows.add_child(UIKit.label("第 %d 天开门 · 昨夜%s" % [morning.day, "无失窃" if morning.losses.is_empty() else "失窃 %d 件" % morning.losses.size()], 22, UIKit.INK, true, true))
+		for loss in morning.losses:
+			var row := UIKit.hbox(12)
+			var image := TextureRect.new()
+			image.texture = UIKit.item_icon(loss.defId)
+			image.custom_minimum_size = Vector2(64,64)
+			image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			row.add_child(image)
+			var caption := UIKit.label("%s · %s\n品相 %s · %s · 核定市价 %s\n%s · 承保上限 %s · 赔款 %s\n案件 %s · %s" % [loss.name, loss.uid, UIKit.pct(loss.condition), {"display":"陈列架","warehouse":"后仓"}.get(loss.location,loss.location), UIKit.money(loss.value), "已承保" if loss.covered else "未承保", UIKit.money(loss.confirmedValue), UIKit.money(loss.payout), loss.caseId, loss.claimReason], 18, UIKit.INK, false, true)
+			caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(caption)
+			rows.add_child(row)
+		rows.add_child(UIKit.label("保险赔款 %s 已自动入账；重开记录不会重复理赔。已赔付原物追回后移交保险方。" % UIKit.money(morning.payout), 18, UIKit.INK, false, true))
+		records.add_child(card)
+	for case in report.cases:
+		var details := "案件 %s · 第 %d 天 · %s" % [case.id, case.lossDay, "已抓获" if case.arrested else "待核对线索"]
+		if case.has("suspect"): details += " · " + String(case.suspect)
+		for item in case.items: details += "\n%s · %s · %s%s" % [item.name, item.uid, item.recovery if item.recovery != "" else "尚未追回", " · 曾获赔，追回归保险方" if item.paid else ""]
+		records.add_child(UIKit.label(details, 18, UIKit.TEXT, false, true))
+	if not report.lastInspection.is_empty():
+		var receipt: Dictionary = report.lastInspection
+		records.add_child(UIKit.label("第 %d 天查货回执\n%s\n追回编号：%s\n应罚 %s · 实缴 %s · %s\n有效协警 %d 次" % [receipt.day, receipt.text, "、".join(receipt.confiscated) if not receipt.confiscated.is_empty() else "无", UIKit.money(receipt.fineDue), UIKit.money(receipt.finePaid), "本次宽容免罚" if receipt.waived else "按规定处置", receipt.cooperation], 19, UIKit.TEXT, false, true))
+	var ack := UIKit.button("确认夜间记录", "primary", Vector2(0,56), 22)
+	ack.pressed.connect(func():
+		Game.dispatch({"type":"ACK_NIGHT_REPORT"})
+		m[1].call())
+	body.add_child(ack)
