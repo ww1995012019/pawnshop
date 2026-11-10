@@ -16,8 +16,6 @@ class DeskCard extends Node2D:
  func _draw() -> void:
   var edge:=Color("f2c27b") if focused else Color("83b7a0") if agreed else Color("b77e65") if refused else Color("65765d")
   draw_style_box(_paper(edge),Rect2(-width/2,33,width,30))
-  draw_rect(Rect2(-width/2,-35,width,67),Color(edge,0.09 if focused else 0.025))
-  if focused or agreed: draw_rect(Rect2(-width/2,-35,width,67),edge,false,2)
   draw_string(UIKit.font,Vector2(-width/2+5,46),caption,HORIZONTAL_ALIGNMENT_LEFT,width-10,16,Color("302c27"))
   draw_string(UIKit.font,Vector2(-width/2+5,60),note,HORIZONTAL_ALIGNMENT_LEFT,width-10,13,Color("8c482d") if refused else Color("315547"))
  func _paper(edge: Color) -> StyleBoxFlat:
@@ -47,9 +45,19 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
    sprite.bounds=Rect2(670,500,610,110)
    sprites[uid]=sprite;add_child(sprite)
    sprite.position=pos
+   var glow:=Sprite2D.new()
+   glow.name="selection_glow"
+   glow.show_behind_parent=true
+   glow.region_enabled=true
+   glow.texture_filter=CanvasItem.TEXTURE_FILTER_LINEAR
+   var glow_material:=ShaderMaterial.new()
+   glow_material.shader=preload("res://shaders/watch_selection.gdshader")
+   glow.material=glow_material
+   sprite.body.add_child(glow)
   var card: DeskCard=cards[uid]
   var sprite: ItemSprite=sprites[uid]
   origins[uid]=info.direction
+  _select_glow(sprite,bool(info.focused))
   if not sprite.dragging and not sprite.get_meta("arriving",false) and sprite.position.distance_to(pos)>0.5:
    if fresh or Game.prefs.reduced_motion: sprite.position=pos
    elif sprite.get_meta("layout_destination",Vector2.INF)!=pos:
@@ -74,6 +82,33 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
  for uid in sprites.keys():
   if uid not in keep: discard(uid)
 
+func _select_glow(sprite: ItemSprite, focused: bool) -> void:
+ var glow: Sprite2D=sprite.body.get_node("selection_glow")
+ _sync_glow(sprite,glow)
+ var target:=1.0 if focused else 0.0
+ if glow.get_meta("target",-1.0)==target: return
+ glow.set_meta("target",target)
+ var material: ShaderMaterial=glow.material
+ var previous=glow.get_meta("fade") if glow.has_meta("fade") else null
+ if previous is Tween and previous.is_valid(): previous.kill()
+ if Game.prefs.reduced_motion:
+  material.set_shader_parameter("strength",target)
+  glow.visible=focused
+ else:
+  glow.visible=true
+  var fade:=glow.create_tween();glow.set_meta("fade",fade)
+  var current: float=float(material.get_shader_parameter("strength"))
+  fade.tween_method(func(value: float):material.set_shader_parameter("strength",value),current,target,.16).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+  if not focused: fade.tween_callback(func():glow.hide())
+
+func _sync_glow(sprite: ItemSprite, glow: Sprite2D) -> void:
+ var face: Texture2D=sprite.body.texture.diffuse_texture if sprite.body.texture is CanvasTexture else sprite.body.texture
+ if glow.texture!=face:
+  glow.texture=face
+  glow.material.set_shader_parameter("face_texture",glow.texture)
+ glow.region_rect=sprite.body.region_rect.grow(24.0)
+ glow.material.set_shader_parameter("region",sprite.mat.get_shader_parameter("region"))
+
 func discard(uid: String) -> void:
  var sprite=take(uid)
  if is_instance_valid(sprite): sprite.queue_free()
@@ -96,6 +131,7 @@ func hit_test(global_point: Vector2) -> String:
 
 func _process(_delta: float) -> void:
  for uid in sprites:
+  _sync_glow(sprites[uid],sprites[uid].body.get_node("selection_glow"))
   if sprites[uid].dragging:
    var old=sprites[uid].get_meta("layout_tween") if sprites[uid].has_meta("layout_tween") else null
    if old is Tween and old.is_valid(): old.kill()
