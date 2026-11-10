@@ -1,8 +1,8 @@
 {
-  "source_commit": "d4c5e3436f2af99dd43181c0f43fed8c75753ebb",
-  "release_id": "061c0d41ad115c79",
-  "pack": "workbench-7374c04e82d976dc.pck",
-  "html_sha256": "24d4073646a9109c2fd949d35f248644c628d0f596ee6d05d99f9cec0c4528f4",
+  "source_commit": "5dd2d433e29d0928a033f5f35e8390810f40d0fc",
+  "release_id": "17e8acf53fbd9bf7",
+  "pack": "workbench-775233972ddbc4a0.pck",
+  "html_sha256": "b03626a9b53fcd0828d8ba5a6480cc970873981850fc83ab185ad9c52f0e1ef0",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -17,5 +17,6 @@
   "multi_item_trade_version": 1,
   "night_crime_version": 1,
   "premium_counterfeit_version": 1,
-  "natural_dialogue_version": 1
+  "natural_dialogue_version": 1,
+  "counter_table_version": 1
 }
