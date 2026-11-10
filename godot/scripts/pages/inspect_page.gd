@@ -67,12 +67,14 @@ func _build_panels() -> void:
 		b.pressed.connect(func(): _set_tool("" if tool == id else id))
 		instrument_list.add_child(b)
 		tool_buttons[id] = b
-	var manual := UIKit.button("检验说明书", "primary", Vector2(0,60),20)
+	var manual := UIKit.button("检验说明书", "primary", Vector2(150,44),18)
 	manual.name = "watch_manual"
 	manual.pressed.connect(func():
 		var it = Game.item(it_uid)
 		if it != null: shell.open_watch_manual(it.defId))
-	lv.add_child(manual)
+	add_child(manual)
+	manual.position = Vector2(1260,108)
+	manual.z_index = 4
 	detail_panel = side_panel(470)
 	var rv := UIKit.vbox(10)
 	detail_panel.add_child(rv)
@@ -106,6 +108,8 @@ func _build_panels() -> void:
 func relayout() -> void:
 	if not is_instance_valid(instrument_panel): return
 	mat_rect = layout_workbench(instrument_panel,detail_panel,bench,300)
+	var guide_button := get_node_or_null("watch_manual") as Button
+	if guide_button != null: guide_button.position = Vector2(mat_rect.end.x-158,mat_rect.position.y+12)
 	if is_instance_valid(item):
 		var next_home := fit_workbench_item(item,mat_rect)
 		var offset := next_home-item_home
@@ -201,6 +205,7 @@ func _reset_optical_observation() -> void:
 		lens_ring.queue_redraw()
 	if is_instance_valid(item):
 		item.mat.set_shader_parameter("uv_r",0.0)
+		item.mat.set_shader_parameter("lens_r",0.0)
 		item.reveal.material.set_shader_parameter("uv_r",0.0)
 
 func _orient_for_tool() -> void:
@@ -410,6 +415,9 @@ func _process(delta: float) -> void:
 		if not _optical_face_visible():
 			_reset_optical_observation()
 			return
+		if tool == "TOL-001":
+			item.mat.set_shader_parameter("lens_pos",at)
+			item.mat.set_shader_parameter("lens_r",125.0)
 		if tool == "TOL-002":
 			uv_light.global_position = at
 			item.mat.set_shader_parameter("uv_pos",at)

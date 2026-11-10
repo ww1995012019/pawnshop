@@ -76,8 +76,8 @@ func run():
 		var active = shell.active_shell()
 		active.open_watch_manual(game.item(page.it_uid).defId)
 		await process_frame
-		check(active.modal_open() and page.tool == "TOL-001", "manual opens above current inspection")
-		active.close_top_modal()
+		check(not active.modal_open() and shell.root_ui.find_child("inspection_guide",true,false).visible and page.tool == "TOL-001", "guide opens above current inspection without blocking tools")
+		shell.root_ui.find_child("inspection_guide",true,false).close_document()
 		await process_frame
 		check(page.item.position.is_equal_approx(pose) and page.optical_fixed, "manual preserves item pose and fixed lens")
 	for price_tool in ["TOL-001", "TOL-002", "TOL-005"]:

@@ -25,32 +25,28 @@ func run() -> void:
 		shell.open_watch_manual(GameData.item_list[0].id)
 		await process_frame
 		await process_frame
-		check(shell.modal_open(), "reference manual opens as an independent sheet")
-		var text := text_in(shell.modal_layer)
-		check(text.contains("编号") and text.contains("重量") and text.contains("logo"), "manual provides all three reference standards")
+		var guide = shell.root_ui.find_child("inspection_guide",true,false)
+		check(guide != null and not shell.modal_open(), "reference guide opens as a non-modal paper")
+		var text := text_in(guide)
+		check(text.contains("编号") and text.contains("重量") and text.contains("logo"), "guide provides all three reference standards")
 		check(not text.contains("分类："), "internal item category is not shown")
-		check(text.contains("型号档次：低等"), "manual displays the model tier")
-		var picker: OptionButton = shell.modal_layer.find_child("manual_model", true, false)
-		var groups := []
-		var models := []
-		for index in picker.item_count:
-			if picker.is_item_separator(index):
-				groups.append(picker.get_item_text(index))
-			else:
-				models.append(picker.get_item_metadata(index))
-		check(groups == ["低等", "中等", "名贵"], "manual groups models in tier order")
-		check(models.size() == 33 and models.has("WCH-033"), "manual lists all models")
-		var last := picker.item_count - 1
-		picker.select(last)
-		picker.item_selected.emit(last)
+		check(text.contains("型号档次：低等"), "guide displays current model tier")
+		guide.close_document()
+		shell.open_watch_catalogue()
+		await process_frame
+		var cards: Array = shell.modal_layer.find_children("catalogue_model_*","Button",true,false)
+		check(cards.size()==33,"catalogue displays all 33 watch icons")
+		check(shell.modal_layer.find_child("manual_model",true,false)==null,"no dropdown model selector")
+		var last: Button = shell.modal_layer.find_child("catalogue_model_WCH-033",true,false)
+		last.pressed.emit()
 		await process_frame
 		text = text_in(shell.modal_layer)
-		check(text.contains("星冕 X06 典藏") and text.contains("型号档次：名贵"), "last model has correct name and tier after separators")
+		check(text.contains("星冕 X06 典藏") and text.contains("型号档次：名贵"), "last model has correct name and tier")
 		check(text.contains("XM X06") and text.contains("148.0"), "last model has its own serial and mass")
-		check(JSON.stringify(game.state) == before, "reading the manual is free and records no evidence")
+		check(JSON.stringify(game.state) == before, "reading references is free and records no evidence")
 		shell.close_top_modal()
 		await process_frame
-		check(not shell.modal_open(), "closing manual restores the counter")
+		check(not shell.modal_open(), "closing catalogue restores counter")
 	var added := Model.new_item(game.state, "WCH-033", {"x": 4, "y": 0})
 	Model.put_in(game.state, added)
 	game.focus_uid = added.uid
