@@ -845,7 +845,7 @@ func _refresh() -> void:
 		scr.price.text = Model.jnum(t.price) + " Cr" if it != null else "待选货"
 		if it != null:
 			var e := Model.estimate(it)
-			scr.line1.text = "%s · %s %s" % [GameData.def(it.defId).name.left(8), "市价" if e.exact else "估价", Model.jnum(e.low) if e.exact else "%s–%s" % [Model.jnum(e.low), Model.jnum(e.high)]]
+			scr.line1.text = "%s · %s %s" % [GameData.def(it.defId).name.left(8), "估价", "%s–%s" % [Model.jnum(e.low), Model.jnum(e.high)]]
 			scr.line2.text = "物证 %d · 议价 %d/3%s" % [Model.evidence_count(it), int(t.rounds), " · 已锁价" if t.locked else ""]
 		else:
 			scr.line1.text = "需求：" + Model.customer_need(t.npcId).left(20)
@@ -1059,7 +1059,7 @@ func _pick_goods() -> void:
 		cv.add_child(UIKit.label("品相 %s · %s · 物证 %d" % [UIKit.pct(it.condition), "本店维护" if it.repaired else "状态待对照", Model.evidence_count(it)], 15, UIKit.MUTED))
 		var est := Model.estimate(it)
 		cv.add_child(UIKit.label("挂牌 %s · 成本 %s" % [UIKit.money(it.listPrice), UIKit.money(it.cost)], 15, UIKit.AMBER))
-		cv.add_child(UIKit.label("估值 %s" % (UIKit.money(est.low) if est.exact else "%s–%s Cr" % [Model.jnum(est.low), Model.jnum(est.high)]), 15, UIKit.CYAN))
+		cv.add_child(UIKit.label("估值 %s" % ("%s–%s Cr" % [Model.jnum(est.low), Model.jnum(est.high)]), 15, UIKit.CYAN))
 		var b := UIKit.button("推荐这件" if why == null else "不符合", "primary" if why == null else "chip", Vector2(0, 44), 17)
 		b.disabled = why != null
 		if why != null:

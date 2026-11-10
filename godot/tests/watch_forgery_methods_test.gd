@@ -29,7 +29,7 @@ func run():
   if not it.evidence.has(appraisal_tool): it.evidence.append(appraisal_tool)
   Model.record_inspection(it,appraisal_tool)
  var restored = JSON.parse_string(JSON.stringify(it))
- check(Model.estimate(restored).exact and Model.estimate(restored)==Model.estimate(it),'all three forged-channel appraisal snapshots survive JSON reload')
+ check(not Model.estimate(restored).exact and Model.estimate(restored).count == 3 and Model.estimate(restored).low < Model.estimate(restored).high and Model.estimate(restored)==Model.estimate(it),'all three forged-channel appraisal snapshots survive JSON reload')
  check(WatchRules.mass(restored)==WatchRules.mass(it) and WatchRules.serial(restored)==WatchRules.serial(it),'physical forgery survives reload')
  var public_before = Model.sale_appearance(restored)
  restored.forgery.methods.logo.exposed = true

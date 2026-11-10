@@ -150,8 +150,8 @@ func _refresh_info() -> void:
 		distinction.add_child(UIKit.label("名贵型号 · 金饰徽章", 16, UIKit.AMBER))
 		info.add_child(distinction)
 	var appraisal := Model.estimate(it)
-	var price_text := "参考市价 %s" % UIKit.money(appraisal.low) if appraisal.exact else "估价 %s–%s Cr" % [Model.jnum(appraisal.low), Model.jnum(appraisal.high)]
-	info.add_child(UIKit.note_card("检验估价 · %d/3" % appraisal.count, price_text + ("\n成交价仍需议定。" if appraisal.exact else "\n三项检验齐全后确定市价；加工或维修后可免费复测。")))
+	var price_text := "估价 %s–%s Cr" % [Model.jnum(appraisal.low), Model.jnum(appraisal.high)]
+	info.add_child(UIKit.note_card("检验估价 · %d/3" % appraisal.count, price_text + "\n鉴定只提供参考范围；加工或维修后可免费复测。"))
 	info.add_child(UIKit.label("观察记录 · %d / %d" % [it.evidence.size(), TOOL_IDS.size()], 17, UIKit.AMBER))
 	var pending: Array[String] = []
 	for index in TOOL_IDS.size():
@@ -166,7 +166,7 @@ func _refresh_info() -> void:
 			pending.append("%02d %s" % [index + 1, GameData.tool(id).name])
 	if not pending.is_empty():
 		info.add_child(UIKit.label("待检：" + " / ".join(pending), 16, UIKit.MUTED, false, true))
-	info.add_child(UIKit.note_card("检验须知", "单项物证不能证明原装、走时或防水。三项当前记录齐全后显示准确参考市价。重描、覆印和配重会留下对应加工痕迹。\n首次记录本件消耗 1 AP；后续取证免费。"))
+	info.add_child(UIKit.note_card("检验须知", "单项物证不能证明原装、走时或防水。三项当前记录齐全后缩小估价范围，仍需自行议价。重描、覆印和配重会留下对应加工痕迹。\n首次记录本件消耗 1 AP；后续取证免费。"))
 
 func _load_item() -> void:
 	_set_tool("")

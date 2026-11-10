@@ -14,11 +14,14 @@ func run():
   var current = Model.estimate(it)
   check(current.low >= previous.low and current.high <= previous.high and current.high-current.low < previous.high-previous.low, 'each current inspection narrows nested price bounds')
   previous = current
- check(previous.exact and previous.low == Model.item_value(it) and previous.low == previous.high, 'three tools reveal exact reference value')
+ check(not previous.exact and previous.count == 3 and previous.low < previous.high and previous.low <= Model.item_value(it) and previous.high >= Model.item_value(it), 'three tools retain uncertainty while containing the actual value')
+ for repeat in 3:
+  for tool in ['TOL-001','TOL-002','TOL-005']: Model.record_inspection(it,tool)
+  check(Model.estimate(it) == previous, 'repeating completed inspections cannot squeeze the range into an exact price')
  var old = JSON.parse_string(JSON.stringify(it))
  check(Model.estimate(old) == previous, 'appraisal survives save/reload')
  it.condition = 0.93
- check(not Model.estimate(it).exact, 'a repaired watch requires refreshed appraisals')
+ check(Model.estimate(it).count == 0, 'a repaired watch requires refreshed appraisals')
  var expert_hits = 0
  var novice_hits = 0
  for i in 200:
