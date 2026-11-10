@@ -72,6 +72,10 @@ static func owns(it: Dictionary) -> bool:
 	return it.owner == "shop"
 
 static func trade_reserved(s: Dictionary, it: Dictionary) -> bool:
+	if s.trade!=null and s.trade.get("session") is Dictionary:
+		for line in s.trade.session.get("lines",[]):
+			if line.uid==it.uid and line.get("selected",false) and line.get("status","")=="confirmed": return true
+		return false
 	return s.trade != null and s.trade.get("selectedUid", null) == it.uid
 
 static func evidence_count(it: Dictionary) -> int:
@@ -152,6 +156,10 @@ static func find_item(s: Dictionary, uid):
 	var it = find_inventory(s, uid)
 	if it != null:
 		return it
+	if s.trade!=null and s.trade.get("session") is Dictionary:
+		for lot in s.trade.session.get("goods",[]):
+			if lot.uid==uid: return lot
+		return null
 	if s.trade != null and s.trade.item != null and s.trade.item.uid == uid:
 		return s.trade.item
 	return null
@@ -164,13 +172,14 @@ static func item_value(it: Dictionary) -> float:
 ## serial overprinting or ballast. Kept in the existing saved evidence snapshot.
 static func logo_revision(it: Dictionary) -> String:
 	WatchRules.initialize(it)
-	return JSON.stringify([String(it.defId), int(it.watch.logo_variant), WatchForgery.active(it, "logo")])
+	return JSON.stringify([String(it.defId), int(it.watch.logo_variant), WatchForgery.active(it, "logo"), WatchForgery.logo_id(it)]) if WatchForgery.target_id(it)!="" else JSON.stringify([String(it.defId), int(it.watch.logo_variant), WatchForgery.active(it, "logo")])
 
 static func appraisal_revision(it: Dictionary) -> String:
 	WatchRules.initialize(it)
 	var signature := [String(it.defId), snappedf(float(it.condition), 0.000001), bool(it.working), bool(it.authentic), int(it.watch.logo_variant), String(it.watch.serial), snappedf(float(it.watch.mass), 0.1), String(it.watch.get("missing_part", "")), snappedf(float(it.watch.get("part_mass", 0)), 0.1), WatchForgery.active(it,"logo"), WatchForgery.active(it,"serial"), WatchForgery.active(it,"weight"), WatchRules.serial(it), snappedf(WatchRules.mass(it), 0.1)]
 	var refurbished: Array = it.get("refurbishment",{}).get("done",[])
 	if not refurbished.is_empty(): signature.append(refurbished)
+	if WatchForgery.target_id(it)!="": signature.append(WatchForgery.signature(it))
 	return JSON.stringify(signature)
 
 static func estimate(it: Dictionary) -> Dictionary:
@@ -234,6 +243,7 @@ static func trade_item(s: Dictionary, t = null):
 		t = s.trade
 	if t == null:
 		return null
+	if t.get("session") is Dictionary: return find_item(s,t.session.get("focus",""))
 	if t.kind == "sell":
 		return find_inventory(s, t.get("selectedUid", ""))
 	return t.item
@@ -269,7 +279,8 @@ static func watch_expertise(npc_id: String) -> Dictionary:
 
 static func npc_knowledge(t: Dictionary, it: Dictionary) -> Dictionary:
 	var all_known: Dictionary = t.get("npcKnowledge", {})
-	if not all_known.has(it.uid):
+	if not all_known.has(it.uid) or all_known[it.uid].get("forgerySignature","") != (WatchForgery.signature(it) if WatchForgery.is_targeted(it) else ""):
+		var learned: Dictionary=all_known.get(it.uid,{}).duplicate(true)
 		var visible := sale_appearance(it)
 		var expertise := watch_expertise(t.npcId)
 		var specialist := maxf(float(expertise.market), maxf(float(expertise.logo), maxf(float(expertise.serial), float(expertise.structure)))) >= 80.0
@@ -280,7 +291,7 @@ static func npc_knowledge(t: Dictionary, it: Dictionary) -> Dictionary:
 		if not specialist and recognized and absf(error) < 0.03: error = 0.06
 		var market_error := (float(fnv(key + "/market-belief") % 61) - 30.0) / 100.0
 		market_error *= 1.0 - float(expertise.market) / 150.0
-		var ref := WatchRules.model_reference(it.defId)
+		var ref := WatchRules.model_reference(WatchForgery.target_id(it) if WatchForgery.is_targeted(it) else String(it.defId))
 		var visible_risks := {"TOL-001":0.18 * float(expertise.logo) / 100.0 if WatchRules.logo_variant(it) else 0.0,
 			"TOL-002":0.22 * float(expertise.serial) / 100.0 if not WatchRules.serial(it).begins_with("%s %s " % [ref.serial_prefix, ref.model]) else 0.0,
 			"TOL-005":0.16 * float(expertise.structure) / 100.0 if absf(WatchRules.mass(it) - float(ref.nominal_mass)) > float(ref.tolerance) else 0.0}
@@ -289,13 +300,19 @@ static func npc_knowledge(t: Dictionary, it: Dictionary) -> Dictionary:
 		var prior: Dictionary = it.get("npcKnowledge", {}).get(t.npcId, {})
 		all_known[it.uid] = {"condition":prior.get("condition", visible.condition), "working":prior.get("working", visible.working), "authentic":prior.get("authentic", visible.authentic),
 			"marketFactor":1.0 + market_error, "evidence":{}, "risk":clampf(visible_risk,0,0.45), "visibleRisks":visible_risks, "appraisalGrade":grade,
-			"appraisalError":0.0 if specialist else error}
-		if recognized: all_known[it.uid].appraisedValue = maxf(1, jround(item_value(it) * (1.0 if specialist else 1.0 + error)))
+			"appraisalError":0.0 if specialist else error, "forgerySignature":WatchForgery.signature(it) if WatchForgery.is_targeted(it) else ""}
+		if recognized and not WatchForgery.is_targeted(it): all_known[it.uid].appraisedValue = maxf(1, jround(item_value(it) * (1.0 if specialist else 1.0 + error)))
+		if learned.get("identityRevealed",false):
+			all_known[it.uid].identityRevealed=true
+			all_known[it.uid].evidence=learned.get("evidence",{}).duplicate(true)
+			all_known[it.uid].appraisalGrade=learned.get("appraisalGrade","impression")
+			all_known[it.uid].appraisalError=learned.get("appraisalError",0)
+			all_known[it.uid].appraisedValue=maxf(1,jround(item_value(it)*(1.0+float(learned.get("appraisalError",0)))))
 		t.npcKnowledge = all_known
 	return all_known[it.uid]
 
 static func record_inspection(it: Dictionary, tool: String) -> Dictionary:
-	var facts := {"condition":sale_appearance(it).condition, "appraisalRevision":appraisal_revision(it), "appraisalValue":item_value(it), "tampered":WatchForgery.trace(it, tool) != ""}
+	var facts := {"condition":sale_appearance(it).condition, "appraisalRevision":appraisal_revision(it), "appraisalValue":item_value(it), "tampered":WatchForgery.trace(it, tool) != "", "originalDefId":String(it.defId)}
 	match tool:
 		"TOL-001":
 			facts.logo_variant = WatchRules.logo_variant(it)
@@ -341,6 +358,9 @@ static func disclose_evidence(t: Dictionary, it: Dictionary, tool: String) -> vo
 		# an old/private player price snapshot is never their source of truth.
 		known.appraisedValue = maxf(1, jround(item_value(it) * (1.0 + float(known.get("appraisalError", 0)))))
 	known.evidence[tool] = {"reading": it.get("evidenceReadings", {}).get(tool, WatchRules.reading(it, tool)), "facts": facts.duplicate(true), "adjustment": strength}
+	if WatchForgery.is_targeted(it) and facts.get("appraisalRevision","")==appraisal_revision(it) and facts.get("originalDefId","")==it.defId:
+		known.identityRevealed=true
+		known.appraisedValue=maxf(1,jround(item_value(it)*(1.0+float(known.get("appraisalError",0)))))
 	var total := 0.0
 	for channel in ["TOL-001", "TOL-002", "TOL-005"]:
 		total += float(known.evidence[channel].adjustment) if known.evidence.has(channel) else float(known.get("visibleRisks", {}).get(channel, 0))
@@ -378,14 +398,14 @@ static func sale_eligibility(it: Dictionary, npc_id: String):
 static func trade_terms(s: Dictionary, t: Dictionary, it: Dictionary) -> Dictionary:
 	var def := D(it.defId)
 	var priced := npc_knowledge(t, it)
-	var value := maxf(1, jround(def.value * clampf(float(priced.condition), 0.35, 1.0) * (1.0 if priced.working else 0.65) * (1.0 if priced.authentic else 0.75) * float(priced.marketFactor) * (1.0 - float(priced.risk))))
+	var value := maxf(1, jround(WatchForgery.perceived_base(it) * clampf(float(priced.condition), 0.35, 1.0) * (1.0 if priced.working else 0.65) * (1.0 if priced.authentic else 0.75) * float(priced.marketFactor) * (1.0 - float(priced.risk))))
 	if priced.has("appraisedValue"):
 		value = float(priced.appraisedValue)
 	var proof: int = priced.evidence.size()
 	var faction: String = GameData.npc(t.npcId).faction
 	var relation := maxf(0, minf(100, s.relations[faction]))
 	var variation := ((fnv("%s|%s|%s|%s" % [s.seed, t.id, it.uid, t.npcId]) % 7) - 3) / 100.0
-	var market_cap := maxf(1, minf(99999, ceil(def.value * 2)))
+	var market_cap := maxf(1, minf(99999, ceil(WatchForgery.perceived_base(it) * 2)))
 	var floor_p := maxf(1, ceil(value * (0.68 + variation - minf(0.09, proof * 0.03))))
 	var ceiling := maxf(1, floor(value * ((0.98 if faction == "salvage" else 1.04) + variation + minf(0.09, proof * 0.03) + relation * 0.0003)))
 	var opening := maxf(1, minf(ceiling, floor(value * (0.78 + variation))))
@@ -805,7 +825,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			t.selectedUid = it.uid
 			t.evidenceUsed = []
 			t.price = trade_terms(s, t, it).opening
-			t.line = npc_dialogue(s, t.npcId, "counter", "%s可以考虑。我先出%sCr，检测结果好的话还可以谈。" % [D(it.defId).name, jnum(t.price)], t.price)
+			t.line = npc_dialogue(s, t.npcId, "counter", "%s可以考虑。我先出%sCr，检测结果好的话还可以谈。" % [WatchForgery.sale_name(it), jnum(t.price)], t.price)
 			return s
 		"CHECK":
 			var it = find_item(s, a.uid)
@@ -924,7 +944,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				var invalid = sale_eligibility(it, t.npcId)
 				if invalid != null:
 					return notice(s, invalid)
-				ledger(s, t.id, "sale", "售出 %s" % D(it.defId).name, t.price, it.cost)
+				ledger(s, t.id, "sale", "售出 %s" % WatchForgery.sale_name(it), t.price, it.cost)
 				_remove_item(s, it.uid)
 				var f: String = GameData.npc(t.npcId).faction
 				s.relations[f] = clampn(s.relations[f] + 2)
@@ -1127,8 +1147,11 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			if not progress is Dictionary or not WatchService.valid_progress(progress): return previous
 			if task.begins_with("forge_"):
 				var method := task.trim_prefix("forge_")
-				if not WatchForgery.METHODS.has(method) or WatchForgery.treatments(it).has(method): return previous
+				if not WatchForgery.available_methods(it).has(method) or WatchForgery.completed(it,method): return previous
 				if it.owner != "shop" or it.has("orderId"): return notice(s,"伪装加工只开放给店铺自有手表。")
+				if WatchForgery.target_id(it)!="":
+					if method in ["serial","weight"] and WatchForgery.appearance_id(it)!=WatchForgery.target_id(it): return notice(s,"请先完成目标换壳。")
+					if progress.get("complete",false) or progress.get("opened",false) or int(progress.get("step",0))>0 or progress.get("phase","started")!="idle": it.forgery.target_locked=true
 				if it.service.opened and it.service.get("forge_task", "") != task: return notice(s,"请先收妥内部维修并封盖。")
 				if progress.has("opened"):
 					it.service.opened = bool(progress.opened)
@@ -1136,6 +1159,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			else:
 				if not WatchService.TASKS.has(task) or task != WatchService.current(it) or it.service.done.has(task) or it.service.get("forge_task", "") != "": return previous
 				if task == "open" and progress.get("opened", false): it.service.opened = true
+			if task.begins_with("forge_"): progress=progress.duplicate(true);progress.targetId=WatchForgery.target_id(it)
 			it.service.operations[task] = progress.duplicate(true)
 			return s
 		"SERVICE_COMPLETE":

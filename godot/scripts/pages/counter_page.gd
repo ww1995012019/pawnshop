@@ -59,6 +59,7 @@ var tag_info: Label
 var idle_label: Label
 var idle_jobs: Label
 var offer_button: Button
+var multi_trade_button: Button
 var stage_root: Node2D
 var back_root: Node2D
 var resident_window: Control
@@ -217,6 +218,7 @@ func workspace_state_changed(opened: bool) -> void:
 			mat_item.end_drag()
 	else:
 		_refresh()
+		if TradeSession.session(Game.state).get("return_to_list",false): call_deferred("_open_trade_list")
 
 func _crate_point() -> Vector2:
 	return get_viewport().get_canvas_transform().affine_inverse() * crate.get_global_rect().get_center() if is_instance_valid(crate) else Vector2(940, 860)
@@ -370,6 +372,11 @@ func _build_crate() -> void:
 		if not _scene_blocked():
 			shell.go("warehouse"))
 	head.add_child(open_stock)
+	multi_trade_button=UIKit.button("多件买卖清单","primary",Vector2(200,44),18)
+	multi_trade_button.name="multi_trade_open"
+	multi_trade_button.pressed.connect(func():
+		if not _scene_blocked(): call_deferred("_open_trade_list"))
+	head.add_child(multi_trade_button)
 	v.add_child(head)
 	var sc := ScrollContainer.new()
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -546,7 +553,7 @@ func _stock_slot(it: Dictionary, picking: bool, display := false) -> Button:
 	if picking and it.owner != "shop":
 		why = "不是店铺自有货"
 	var slot := UIKit.button("", "chip", Vector2(76, 78) if display else Vector2(58, 58), 14)
-	slot.icon = UIKit.item_icon(it.defId)
+	slot.icon = UIKit.physical_icon(it)
 	slot.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	slot.expand_icon = true
 	slot.add_theme_constant_override("icon_max_width", 74 if display else 52)
@@ -622,7 +629,7 @@ func _refresh_desk() -> void:
 	var it = Model.trade_item(s) if t != null else null
 	tag.visible = it != null
 	if it != null:
-		tag_name.text = GameData.def(it.defId).name
+		tag_name.text = WatchForgery.sale_name(it)
 		tag_info.text = "%s · %s · 物证 %d" % [UIKit.pct(it.condition), "本店维护" if it.repaired else "状态待对照", Model.evidence_count(it)]
 	idle_label.visible = it == null
 	idle_jobs.visible = t == null
@@ -785,6 +792,7 @@ func _refresh() -> void:
 	_refresh_desk()
 	var s := Game.state
 	var t = s.trade
+	multi_trade_button.visible=t!=null and not t.get("inspectionVisit",false) and t.get("kind","") in ["buy","sell","merchant"]
 	offer_button = null
 	UIKit.clear(actions)
 	UIKit.clear(chips)
@@ -847,6 +855,19 @@ func _refresh() -> void:
 		_act("送客", "secondary", func(): Game.dispatch({"type": "REFUSE"}))
 		footer.text = "商人在店时才能购买维修材料"
 	else:
+		if not TradeSession.session(s).is_empty():
+			var totals=TradeSession.summary(s)
+			scr.head.text="双向买卖 · "+GameData.npc(t.npcId).name
+			scr.price.text="多件清单"
+			scr.line1.text="逐件议价与确认 · 统一交割"
+			scr.line2.text="已确认售出%d件 / 买入%d件" % [totals.sell_count,totals.buy_count]
+			scr.line3.text="收入%s · 支出%s · 差额%s Cr" % [Model.jnum(totals.income),Model.jnum(totals.expense),Model.jnum(totals.net)]
+			_act("打开多件清单", "primary", _open_trade_list)
+			if NightCrime.lost_item_problem(s)=="": _act("失物报警", "danger", _report_lost_original)
+			_act("结束接待", "secondary", func(): Game.dispatch({"type":"TRADE_END","tradeId":t.id}))
+			offer_panel.visible=false
+			footer.text="交割后可继续商谈，结束接待才送客。"
+			return
 		var it = Model.trade_item(s)
 		var npc := GameData.npc(t.npcId)
 		var buy: bool = t.kind == "buy"
@@ -854,7 +875,7 @@ func _refresh() -> void:
 		scr.price.text = Model.jnum(t.price) + " Cr" if it != null else "待选货"
 		if it != null:
 			var e := Model.estimate(it)
-			scr.line1.text = "%s · %s %s" % [GameData.def(it.defId).name.left(8), "估价", "%s–%s" % [Model.jnum(e.low), Model.jnum(e.high)]]
+			scr.line1.text = "%s · %s %s" % [WatchForgery.sale_name(it).left(8), "估价", "%s–%s" % [Model.jnum(e.low), Model.jnum(e.high)]]
 			scr.line2.text = "物证 %d · 议价 %d/3%s" % [Model.evidence_count(it), int(t.rounds), " · 已锁价" if t.locked else ""]
 		else:
 			scr.line1.text = "需求：" + Model.customer_need(t.npcId).left(20)
@@ -1012,7 +1033,7 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 		eligible += 1
 		var uid: String = item.uid
 		var price := Commerce.recovery_price(Game.state, item)
-		var sell_item := UIKit.button("出售旧物 %s · 收 %s" % [GameData.def(item.defId).name, UIKit.money(price)], "secondary", Vector2(0, 50), 17)
+		var sell_item := UIKit.button("出售旧物 %s · 收 %s" % [WatchForgery.sale_name(item), UIKit.money(price)], "secondary", Vector2(0, 50), 17)
 		sell_item.set_meta("merchant_focus", "item:" + uid)
 		focus_targets["item:" + uid] = sell_item
 		sell_item.disabled = s.ap < 1 or Commerce.forgery_rejected(s, item)
@@ -1064,13 +1085,13 @@ func _pick_goods() -> void:
 		var cv := UIKit.vbox(6)
 		card.add_child(cv)
 		var pic := TextureRect.new()
-		pic.texture = UIKit.item_icon(it.defId)
+		pic.texture = UIKit.physical_icon(it)
 		pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		pic.custom_minimum_size = Vector2(0, 120)
 		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		cv.add_child(pic)
-		cv.add_child(UIKit.label(GameData.def(it.defId).name, 19, UIKit.TEXT))
+		cv.add_child(UIKit.label(WatchForgery.sale_name(it), 19, UIKit.TEXT))
 		cv.add_child(UIKit.label("品相 %s · %s · 物证 %d" % [UIKit.pct(it.condition), "本店维护" if it.repaired else "状态待对照", Model.evidence_count(it)], 15, UIKit.MUTED))
 		var est := Model.estimate(it)
 		cv.add_child(UIKit.label("挂牌 %s · 成本 %s" % [UIKit.money(it.listPrice), UIKit.money(it.cost)], 15, UIKit.AMBER))
@@ -1234,13 +1255,13 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 			if nt != null and nt.locked:
 				customer.nod()
 				_say(nt.line, true, "happy")
-		"REFUSE":
+		"REFUSE", "TRADE_END":
 			if pt != null:
 				await _leave_with_goods(pt, "tired")
 		"DELIVER", "PAWN":
 			if pt != null and nt == null:
 				var sold = Model.trade_item(prev)
-				await _deal(pt, a.type == "PAWN", GameData.def(sold.defId).name if sold != null else "货物")
+				await _deal(pt, a.type == "PAWN", WatchForgery.sale_name(sold) if sold != null else "货物")
 		"ISSUE_WANTED", "ASK_VISITOR":
 			if nt != null: _say(nt.line,true,"focused")
 		"RESOLVE_INSPECTION":
@@ -1624,3 +1645,5 @@ func _report_lost_original() -> void:
 	var t = Game.state.trade
 	if t == null or NightCrime.lost_item_problem(Game.state) != "": return
 	shell.confirm("这是本店失物，报警核对", "已取得本件原物编号证据，警方将与失窃记录核对。无需先付款购买。未赔付原物归还店铺；已赔付原物移交保险方。", "核对原编号并报警", func(): Game.dispatch({"type":"REPORT_LOST_ITEM", "tradeId":t.id}))
+func _open_trade_list() -> void:
+	load("res://scripts/ui/trade_list.gd").open(shell)

@@ -58,6 +58,8 @@ jobs:
           python scripts/test-watch-service-web.py --permissions-only
           python scripts/test-store-costs-web.py
           NIGHT_WEB_VIEW=desktop python scripts/test-night-crime-web.py
+          python scripts/test-premium-counterfeit-web.py
+          python scripts/test-multi-item-trade-web.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

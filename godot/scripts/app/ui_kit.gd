@@ -514,3 +514,46 @@ static func wanted_portrait(profile: Dictionary) -> AtlasTexture:
 	face.atlas = tex("res://assets/atlas/wanted-faces.png")
 	face.region = Rect2(index % 8 * 160,index / 8 * 160,160,160)
 	return face
+
+## A target's shell and a separately painted mark never replace the true item ID.
+static func physical_texture(it: Dictionary, back := false) -> CanvasTexture:
+	var shell_id := WatchForgery.appearance_id(it)
+	var logo_id := WatchForgery.logo_id(it)
+	var variant := WatchRules.logo_variant(it)
+	var strap_id := shell_id
+	if WatchForgery.target_active(it,"case"):
+		strap_id=String(it.defId) if WatchForgery.treatments(it).case.get("strap_removed",false) else WatchForgery.target_id(it)
+	var key := "physical:"+JSON.stringify([shell_id,strap_id,logo_id,variant,back])
+	if _cache.has(key): return _cache[key]
+	var cell := item_cell(shell_id,back)
+	var atlas: Image=tex("res://assets/atlas/%s.png" % cell.key).get_image()
+	var start := Vector2i(cell.region.position-Vector2.ONE*8.96)
+	var image := atlas.get_region(Rect2i(start,Vector2i(256,256)))
+	if strap_id!=shell_id:
+		var strap_cell := item_cell(strap_id,back)
+		var strap_atlas: Image=tex("res://assets/atlas/%s.png" % strap_cell.key).get_image()
+		var strap_start := Vector2i(strap_cell.region.position-Vector2.ONE*8.96)
+		for band in [Rect2i(0,0,256,65),Rect2i(0,206,256,50)]:
+			image.blit_rect(strap_atlas,Rect2i(strap_start+band.position,band.size),band.position)
+	if not back:
+		var background := image.get_pixel(104,88)
+		var mark: Array=WatchLogo.pixels(shell_id,0)
+		var first: Array=mark[0]
+		var ink := image.get_pixel(104+int(first[0])*2,88+int(first[1])*2)
+		image.fill_rect(Rect2i(104,88,48,32),background)
+		for pixel in WatchLogo.pixels(logo_id,variant): image.fill_rect(Rect2i(104+int(pixel[0])*2,88+int(pixel[1])*2,2,2),ink)
+	var result := CanvasTexture.new()
+	result.diffuse_texture=ImageTexture.create_from_image(image)
+	var normal: Image=tex("res://assets/atlas/%s_n.png" % cell.key).get_image().get_region(Rect2i(start,Vector2i(256,256)))
+	result.normal_texture=ImageTexture.create_from_image(normal)
+	result.specular_color=Color(0.05,0.05,0.05)
+	result.specular_shininess=0.1
+	_cache[key]=result
+	return result
+
+static func physical_icon(it: Dictionary, back := false) -> Texture2D:
+	if WatchForgery.target_id(it)=="": return item_icon(it.defId,back)
+	var result := AtlasTexture.new()
+	result.atlas=physical_texture(it,back).diffuse_texture
+	result.region=Rect2(8.96,8.96,238.08,238.08)
+	return result

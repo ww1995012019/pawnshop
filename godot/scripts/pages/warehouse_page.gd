@@ -130,7 +130,7 @@ func _lists() -> void:
 		row.add_child(sc)
 		for it in items:
 			var b := UIKit.button("", "primary" if it.uid == selected else "chip", Vector2(52, 52))
-			b.icon = UIKit.item_icon(it.defId)
+			b.icon = UIKit.physical_icon(it)
 			b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 			b.expand_icon = true
 			b.tooltip_text = GameData.def(it.defId).name
@@ -254,7 +254,7 @@ func _detail() -> void:
 	record.add_child(UIKit.label("保管凭单 / " + String(it.uid), 15, UIKit.RUST, true))
 	var head := UIKit.hbox(14)
 	var pic := TextureRect.new()
-	pic.texture = UIKit.item_icon(it.defId)
+	pic.texture = UIKit.physical_icon(it)
 	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	pic.custom_minimum_size = Vector2(120, 120)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -289,17 +289,25 @@ func _detail() -> void:
 	detail.add_child(UIKit.module_header("出入库操作", "按保管权属办理", "CONTROL"))
 	var g := UIKit.grid(2, 10)
 	if t != null and t.kind == "sell" and it.owner == "shop":
-		if not it.sourceVerified and not it.sealed and it.location != "isolation" and not it.has("orderId") and not it.get("crimeRevealed", false):
-			var gray_uid: String = it.uid
-			_act(g, "灰色收售", "danger", func():
-				shell.confirm("确认灰色收售风险", "本件来源未核。完成交易增加 8 风险；警方可追索原物并处罚，登记不能洗白。确认为赃物不赔付，保费不退。此确认仅限本次交易。", "承担风险并选货", func():
-					Game.dispatch({"type":"GRAY_TRADE", "tradeId":t.id, "uid":gray_uid, "confirmed":true})
-					if Game.dispatch({"type":"SELECT_TRADE", "uid":gray_uid}): shell.go("counter")))
-		var why = Model.sale_eligibility(it, t.npcId)
-		if Commerce.forgery_rejected(s,it): why = "这位顾客本轮已识破本件加工，请更换货物。"
-		_act(g, "推荐给顾客", "primary", func():
-			if Game.dispatch({"type": "SELECT_TRADE", "uid": it.uid}):
-				shell.go("counter"), why == null, why if why != null else "")
+		if not TradeSession.session(s).is_empty():
+			var problem := TradeSession._stock_problem(s,it,"sell")
+			var batch_uid: String=it.uid
+			_act(g,"灰色收售" if not it.sourceVerified else "推荐给顾客","danger" if not it.sourceVerified else "primary",func():
+				if Game.dispatch({"type":"TRADE_ADD","tradeId":t.id,"uid":batch_uid,"direction":"sell"}):
+					Game.dispatch({"type":"TRADE_FOCUS","tradeId":t.id,"uid":batch_uid,"return_list":true})
+					shell.go("counter"),problem=="",problem)
+		else:
+			if not it.sourceVerified and not it.sealed and it.location != "isolation" and not it.has("orderId") and not it.get("crimeRevealed", false):
+				var gray_uid: String = it.uid
+				_act(g, "灰色收售", "danger", func():
+					shell.confirm("确认灰色收售风险", "本件来源未核。完成交易增加 8 风险；警方可追索原物并处罚，登记不能洗白。确认为赃物不赔付，保费不退。此确认仅限本次交易。", "承担风险并选货", func():
+						Game.dispatch({"type":"GRAY_TRADE", "tradeId":t.id, "uid":gray_uid, "confirmed":true})
+						if Game.dispatch({"type":"SELECT_TRADE", "uid":gray_uid}): shell.go("counter")))
+			var why = Model.sale_eligibility(it, t.npcId)
+			if Commerce.forgery_rejected(s,it): why = "这位顾客本轮已识破本件加工，请更换货物。"
+			_act(g, "推荐给顾客", "primary", func():
+				if Game.dispatch({"type": "SELECT_TRADE", "uid": it.uid}):
+					shell.go("counter"), why == null, why if why != null else "")
 	var reserved := Model.trade_reserved(s, it)
 	var shelf_why := _shelf_block(it, reserved)
 	_act(g, "下架" if it.location == "display" else "上架陈列", "good", {"type": "DISPLAY", "uid": it.uid}, shelf_why == "", shelf_why)
@@ -423,7 +431,7 @@ class StorageGrid extends Control:
 			if it.location != "warehouse":
 				continue
 			var tr := TextureRect.new()
-			tr.texture = UIKit.item_icon(it.defId)
+			tr.texture = UIKit.physical_icon(it)
 			tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 			tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED

@@ -1,0 +1,77 @@
+[
+  {
+    "test": "session_crime_integration_test",
+    "pass": true,
+    "log": "work/night-crime/session_crime_integration_test-integration-final.log"
+  },
+  {
+    "test": "session_crime_integration_ui_test",
+    "pass": true,
+    "log": "work/night-crime/session_crime_integration_ui_test-integration-final.log"
+  },
+  {
+    "test": "night_crime_test",
+    "pass": true,
+    "log": "work/night-crime/night_crime_test-integration-final.log"
+  },
+  {
+    "test": "night_crime_ui_test",
+    "pass": true,
+    "log": "work/night-crime/night_crime_ui_test-integration-final.log"
+  },
+  {
+    "test": "multi_item_trade_test",
+    "pass": true,
+    "log": "work/night-crime/multi_item_trade_test-integration-final.log"
+  },
+  {
+    "test": "multi_item_trade_ui_test",
+    "pass": true,
+    "log": "work/night-crime/multi_item_trade_ui_test-integration-final.log"
+  },
+  {
+    "test": "premium_counterfeit_test",
+    "pass": true,
+    "log": "work/night-crime/premium_counterfeit_test-integration-final.log"
+  },
+  {
+    "test": "premium_counterfeit_ui_test",
+    "pass": true,
+    "log": "work/night-crime/premium_counterfeit_ui_test-integration-final.log"
+  },
+  {
+    "test": "merchant_test",
+    "pass": true,
+    "log": "work/night-crime/merchant_test-integration-final.log"
+  },
+  {
+    "test": "commerce_ui_test",
+    "pass": true,
+    "log": "work/night-crime/commerce_ui_test-integration-final.log"
+  },
+  {
+    "test": "counter_payment_test",
+    "pass": true,
+    "log": "work/night-crime/counter_payment_test-integration-final.log"
+  },
+  {
+    "test": "forgery_test",
+    "pass": true,
+    "log": "work/night-crime/forgery_test-integration-final.log"
+  },
+  {
+    "test": "wanted_cases_test",
+    "pass": true,
+    "log": "work/night-crime/wanted_cases_test-integration-final.log"
+  },
+  {
+    "test": "crime_event_test",
+    "pass": true,
+    "log": "work/night-crime/crime_event_test-integration-final.log"
+  },
+  {
+    "test": "report_layout_test",
+    "pass": true,
+    "log": "work/night-crime/report_layout_test-integration-final.log"
+  }
+]

@@ -43,7 +43,7 @@ var operation_clock := 0.0
 func scene_name() -> String: return "workbench"
 
 func hint_text() -> String:
-	if mode == "forge": return "伪装只改变对应表象，会留下加工痕迹；不会修好真实故障。"
+	if mode == "forge": return "选高档兼容目标，再逐项加工；相似度影响估价，加工仍会留下可识破的痕迹。"
 	if task == "dust": return "按住手表来回擦拭。查看残留可指出未擦到的污渍，离开后进度保留。"
 	if is_instance_valid(art) and art.visible: return art.hint_text()
 	return "按本件故障工单处理；无故障的部件不需要重复维修。"
@@ -156,9 +156,9 @@ func _fill_list() -> void:
 		var status := "工单 %d/%d" % [completed,count] if count > 0 else ("已保养" if it.repaired else "待检查")
 		if mode == "forge":
 			var forged: int = WatchForgery.treatments(it).size()
-			status = "已加工 %d/%d" % [forged,WatchForgery.METHODS.size()] if forged > 0 else "自有库存 · 可加工"
+			status = "已加工 %d/%d" % [forged,WatchForgery.available_methods(it).size()] if forged > 0 else "自有库存 · 可加工"
 		row.text = Game.def_name(it.defId) + "\n" + status
-		row.icon = UIKit.item_icon(it.defId)
+		row.icon = UIKit.physical_icon(it)
 		row.expand_icon = true
 		row.add_theme_constant_override("icon_max_width",48)
 		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -195,16 +195,24 @@ func _refresh_info() -> void:
 			info.add_child(UIKit.label(_cost_text(WatchRefurbishment.cost(job)),16,UIKit.CYAN,false,true))
 		info.add_child(UIKit.label("品相 %s · 不修复机芯故障，不改变真伪。" % UIKit.pct(it.condition),17,UIKit.TEXT,false,true))
 	elif mode == "forge":
-		info.add_child(UIKit.note_card("伪装加工", "只改变标识、编号或读数；真实故障、缺件与真伪仍保留。被识破会影响交易与关系。"))
-		for method in WatchForgery.METHODS:
+		var target_picker := UIKit.button("选择仿冒目标" if WatchForgery.target_id(it)=="" else "更换目标 · "+Game.def_name(WatchForgery.target_id(it)),"primary",Vector2(0,52),18)
+		target_picker.name="counterfeit_target_picker"
+		target_picker.disabled=bool(it.get("forgery",{}).get("target_locked",false))
+		target_picker.pressed.connect(_target_dialog)
+		info.add_child(target_picker)
+		if target_picker.disabled: info.add_child(UIKit.label("目标已锁定 · 加工进度与本件原物绑定",16,UIKit.CYAN,false,true))
+		info.add_child(UIKit.note_card("仿冒高档款", "先选兼容高价款，再逐项改装；相似度影响顾客估价，专家仍可能识破。原表与内部故障保留。"))
+		for method in WatchForgery.available_methods(it):
 			var selected: bool = task == "forge_" + method
-			var button := UIKit.button(WatchForgery.LABELS[method],"primary" if selected else "secondary",Vector2(0,48),19)
+			var done := WatchForgery.completed(it,method)
+			var button := UIKit.button(("✓ " if done else "")+WatchForgery.LABELS[method],"primary" if selected else "secondary",Vector2(0,48),19)
+			button.name="counterfeit_job_"+method
 			var candidate: String = method
 			var blocked := Commerce.forgery_problem(Game.state,it,method)
-			button.disabled = blocked != ""
 			button.tooltip_text = blocked
 			button.pressed.connect(func(): call_deferred("open_forgery",candidate))
 			info.add_child(button)
+			if blocked!="": info.add_child(UIKit.label(blocked,16,UIKit.CYAN if done else UIKit.AMBER,false,true))
 			info.add_child(UIKit.label(WatchForgery.cost_text(method) + ("\n" + _power_copy("forge_" + method, it) if method in ["serial", "weight"] else ""),16,UIKit.MUTED,false,true))
 		if it.has("forgery"): info.add_child(UIKit.label(WatchForgery.summary(it),17,UIKit.AMBER,false,true))
 	else:
@@ -282,6 +290,10 @@ func _stage_ui() -> void:
 	if task == "": title = "本次工单已完成" if not Service.tasks(it).is_empty() and Service.finished(it) else "本件无需维修"
 	var mode_title := "独立翻新" if mode == "refurb" else ("伪装加工" if mode == "forge" else "维修保养")
 	guidance_body.add_child(UIKit.label(mode_title + "  /  " + title,22,UIKit.AMBER))
+	if mode=="forge" and WatchForgery.target_id(it)!="":
+		var summary := UIKit.label("原表：%s → 冒充：%s · %s" % [Game.def_name(it.defId),Game.def_name(WatchForgery.target_id(it)),WatchForgery.quality_text(it)],16,UIKit.CYAN,false,true)
+		summary.name="counterfeit_summary"
+		guidance_body.add_child(summary)
 	instruction = UIKit.label("",18,UIKit.TEXT,false,true)
 	instruction.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	guidance_body.add_child(instruction)
@@ -409,7 +421,7 @@ func open_forgery(method := "") -> void:
 	mode = "forge"
 	if method == "":
 		method = "logo"
-		for candidate in WatchForgery.METHODS:
+		for candidate in WatchForgery.available_methods(it):
 			if Commerce.forgery_problem(Game.state,it,candidate) == "":
 				method = candidate
 				break
@@ -670,7 +682,7 @@ func snapshot() -> Dictionary:
 		var b: Vector2 = body_transform * (item.tex_size()*0.5) / ratio
 		object_rect = {"x":a.x,"y":a.y,"width":b.x-a.x,"height":b.y-a.y}
 	return {"repair_uid":it_uid,"repair_mode":mode,"repair_task":task,"repair_tasks":Service.tasks(it),
-		"forge_uid":it_uid,"forge_name":Game.def_name(it.defId),"forge_done":not WatchForgery.treatments(it).is_empty(),
+		"forge_target":WatchForgery.target_id(it),"forge_similarity":WatchForgery.similarity(it),"forge_uid":it_uid,"forge_name":Game.def_name(it.defId),"forge_done":not WatchForgery.treatments(it).is_empty(),
 		"refurb_done":it.get("refurbishment",{}).get("done",[]),"refurb_condition":it.condition,
 		"repair_done":service.get("done",[]),"repair_opened":service.get("opened",false),
 		"repair_grime":dirty if task == "dust" else 0.0,"repair_reason":_current_problem(),
@@ -682,3 +694,33 @@ func leave() -> void:
 	_save_cleaning()
 	_save_operation()
 	super.leave()
+
+func _choose_target(id: String) -> void:
+	_save_operation()
+	Game.dispatch({"type":"FORGE_TARGET","uid":it_uid,"target":id})
+	open_forgery()
+
+func _target_dialog() -> void:
+	var it=Game.item(it_uid)
+	if it==null: return
+	var modal: Array=shell.modal("选择兼容的高档目标",760)
+	var col: VBoxContainer=modal[0]
+	col.add_child(UIKit.label("原表："+Game.def_name(it.defId)+" · 仅列出外形、机芯兼容且目录价更高的款式。选款不收费，开始加工后锁定。",18,UIKit.TEXT,false,true))
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size=Vector2(0,minf(440,get_viewport_rect().size.y*0.5))
+	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	col.add_child(scroll)
+	var list := UIKit.vbox(8)
+	list.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	var targets := WatchForgery.compatible_targets(it)
+	if targets.is_empty(): list.add_child(UIKit.label("本件暂无兼容且更贵的目标款。",20,UIKit.AMBER,false,true))
+	for target in targets:
+		var id: String=target
+		var definition := GameData.def(id)
+		var button := UIKit.button("%s · 目录 %s Cr" % [definition.name,Model.jnum(definition.value)],"secondary",Vector2(0,66),20)
+		button.icon=UIKit.item_icon(id)
+		button.expand_icon=true
+		button.add_theme_constant_override("icon_max_width",52)
+		button.pressed.connect(func(): modal[1].call(); call_deferred("_choose_target",id))
+		list.add_child(button)

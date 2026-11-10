@@ -225,9 +225,10 @@ static func _recover(s: Dictionary, c: Dictionary, row: Dictionary) -> void:
 	if row.resolved: return
 	var live = Model.find_inventory(s,row.uid)
 	if live != null: row.item = live.duplicate(true)
-	elif s.trade != null and s.trade.get("item") is Dictionary and s.trade.item.uid == row.uid:
-		row.item = s.trade.item.duplicate(true)
-	Model._remove_item(s,row.uid)
+	elif s.trade != null:
+		var physical = TradeSession.item(s,row.uid) if not TradeSession.session(s).is_empty() else s.trade.get("item")
+		if physical is Dictionary and physical.uid==row.uid: row.item=physical.duplicate(true)
+	_remove_live_original(s,row.uid)
 	if c.origin == "shop" and not row.paid and row.get("originalLawful",true):
 		var item: Dictionary = row.item.duplicate(true)
 		item.erase("stolen")
@@ -308,10 +309,13 @@ static func _inspect(s: Dictionary) -> Dictionary:
 	return _finish(s,text)
 
 static func lost_item_problem(s: Dictionary) -> String:
-	if s.phase != "open" or s.trade == null or not s.trade.get("crimeCaseId","").begins_with("NIGHT-"): return "柜台没有可核对的本店失物。"
-	var c := _case(s,s.trade.crimeCaseId)
+	if s.phase != "open" or s.trade == null: return "柜台没有可核对的本店失物。"
+	var physical = Model.trade_item(s)
+	if physical==null or not physical.get("crimeCaseId","").begins_with("NIGHT-"): return "柜台没有可核对的本店失物。"
+	var c := _case(s,physical.crimeCaseId)
 	if c.is_empty() or c.arrested: return "该案已经处置。"
-	if not s.trade.item.evidence.has("TOL-002"): return "先用编号检测取得这件原物的编号证据，再与案件记录核对。"
+	if physical.get("crimeCaseId","")!=c.id: return "请先选择案件中的本店失物。"
+	if not physical.evidence.has("TOL-002"): return "先用编号检测取得这件原物的编号证据，再与案件记录核对。"
 	return ""
 
 static func public_report(s: Dictionary) -> Dictionary:
@@ -360,7 +364,7 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 	if type == "SETTLE" and inspection_pending(s): return Model.notice(s,"打烊前须接待待到场的查货；0 AP也可呼叫巡警完成核对。")
 	if s.trade != null and s.trade.get("inspectionVisit",false):
 		if type == "RESOLVE_INSPECTION" and action.get("tradeId","") == s.trade.id: return _inspect(s)
-		if type == "REFUSE": return Model.notice(s,"请先完成本次查货核对。")
+		if type in ["REFUSE","TRADE_OPEN","TRADE_END"]: return Model.notice(s,"请先完成本次查货核对。")
 	if type in ["ARRIVE","ARRIVE_INSPECTION"] and s.trade == null and inspection_pending(s):
 		if type == "ARRIVE_INSPECTION" or int(s.cursor) >= int(d.inspectionSlot):
 			return _start_inspection(s,type == "ARRIVE_INSPECTION" or int(s.cursor) >= 6 or int(s.cursor) != int(d.inspectionSlot))
@@ -386,9 +390,10 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 		if s.trade == null or action.get("tradeId","") != s.trade.id: return previous
 		var problem := lost_item_problem(s)
 		if problem != "": return Model.notice(s,problem)
-		var c := _case(s,s.trade.crimeCaseId)
-		var row := _row(c,s.trade.item.uid)
-		row.item = s.trade.item.duplicate(true)
+		var physical = Model.trade_item(s)
+		var c := _case(s,physical.crimeCaseId)
+		var row := _row(c,physical.uid)
+		row.item = physical.duplicate(true)
 		Wanted.ensure(s)
 		if not s.police.caught.has(c.culprit): s.police.caught.append(c.culprit)
 		if s.police.wanted.has(c.culprit):
@@ -400,8 +405,13 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 		return _finish(s,"警方核对原编号与失窃记录一致，已抓获作案者；"+row.recovery+"。有效协警已登记。")
 	if type == "GRAY_TRADE":
 		if not action.get("confirmed",false) or s.trade == null or action.get("tradeId","") != s.trade.id or s.trade.locked: return previous
-		var item = s.trade.item if s.trade.kind == "buy" else Model.find_inventory(s,action.get("uid",""))
-		if item == null or item.owner != "shop" or item.has("orderId") or item.sealed or item.location == "isolation" or item.get("crimeRevealed",false): return Model.notice(s,"顾客、抵押、封存与明确立案物不能灰色收售。")
+		var multi := not TradeSession.session(s).is_empty()
+		var item = TradeSession.item(s,action.get("uid","")) if multi else (s.trade.item if s.trade.kind == "buy" else Model.find_inventory(s,action.get("uid","")))
+		if item == null or item.owner not in (["shop","npc"] if multi else ["shop"]) or item.has("orderId") or item.sealed or item.location == "isolation" or item.get("crimeRevealed",false): return Model.notice(s,"顾客、抵押、封存与明确立案物不能灰色收售。")
+		if multi:
+			var line := TradeSession.row(s,item.uid)
+			if line.is_empty() or not Model.valid_price(action.get("price")) or action.get("version",-1)!=TradeSession.summary(s).version or action.get("quote","")!=gray_quote(item,action.price): return previous
+			item.grayQuote = gray_quote(item,action.price)
 		item.grayAuthorized = s.trade.id
 		item.graySale = true
 		return Model.notice(s,"已确认来源未核风险：本次完成灰色收售将增加8风险；登记不改变真实归属，确切赃物仍可能追回。")
@@ -435,8 +445,50 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 		return Model.notice(s,"原物已移交警方，案件登记完成；同一案件不重复增加协警次数。")
 	return null
 
+static func gray_quote(item: Dictionary, price) -> String:
+	return JSON.stringify([item.uid,price,TradeSession.fingerprint(item)])
+
+static func batch_gray_problem(s: Dictionary, item: Dictionary, price) -> String:
+	if int(s.day)<3 or item.sourceVerified: return ""
+	if item.get("grayAuthorized","")!=s.trade.id or item.get("grayQuote","")!=gray_quote(item,price):
+		return "来源未核货须先确认本件当前报价的灰色收售风险。"
+	return ""
+
+static func _remove_live_original(s: Dictionary, uid: String) -> void:
+	Model._remove_item(s,uid)
+	if s.trade!=null:
+		if s.trade.get("item") is Dictionary and s.trade.item.uid==uid: s.trade.item=null
+		var se := TradeSession.session(s)
+		if not se.is_empty():
+			se.goods=se.goods.filter(func(it):return it.uid!=uid)
+			se.acquired=se.acquired.filter(func(it):return it.uid!=uid)
+			for line in se.lines:
+				if line.uid==uid: line.selected=false;line.status="done";line.reason="原物已由警方追回"
+	for record in s.get("npcTrade",{}).values():
+		record.owned=record.owned.filter(func(it):return it.uid!=uid)
+
 static func after_action(previous: Dictionary, s: Dictionary, action: Dictionary) -> void:
 	ensure(s)
+	var before_session := TradeSession.session(previous)
+	var current_session := TradeSession.session(s)
+	if action.get("type","")=="TRADE_OPEN" and not current_session.is_empty():
+		for physical in current_session.goods:
+			var tracked := _row(_case(s,String(physical.get("crimeCaseId",""))),physical.uid)
+			if not tracked.is_empty() and not tracked.resolved: tracked.holder="trade"
+	if action.get("type","")=="TRADE_CHECKOUT" and not before_session.is_empty() and not current_session.is_empty():
+		var gray := false
+		for line in current_session.lines:
+			var old := TradeSession.row(previous,line.uid)
+			if line.status!="done" or old.get("status","")=="done": continue
+			var physical = TradeSession.item(previous,line.uid)
+			if physical==null: continue
+			gray=gray or (not physical.sourceVerified and physical.get("grayAuthorized","")==previous.trade.id and int(s.day)>=3)
+			var tracked := _row(_case(s,String(physical.get("crimeCaseId",""))),physical.uid)
+			if not tracked.is_empty():
+				tracked.holder="inventory" if line.direction=="buy" else "buyer"
+				tracked.handled=true;tracked.liabilityResolved=false;tracked.item=physical.duplicate(true)
+		if gray: s.risk=Model.clampn(s.risk+8)
+		return
 	# Every removal path must move the canonical holder, including terminal returns
 	# that have no active counter trade. Historical records never resurrect it.
 	for c in s.nightCrime.cases:
@@ -456,7 +508,7 @@ static func after_action(previous: Dictionary, s: Dictionary, action: Dictionary
 				row.holder = "buyer" if action.get("type","") in ["DELIVER","SELL_MERCHANT_ITEM","EMERGENCY_SALE","DELIVER_ORDER"] else "disposed"
 				row.handled = true
 
-	if previous.trade == null: return
+	if previous.trade == null or not before_session.is_empty(): return
 	var trade: Dictionary = previous.trade
 	var item = Model.trade_item(previous,trade)
 	if item == null: return

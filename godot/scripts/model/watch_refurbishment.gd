@@ -61,6 +61,7 @@ static func commit(s: Dictionary, it: Dictionary, job: String) -> String:
  it.refurbishment.paid[job] = price.duplicate(true)
  it.refurbishment.done.append(job)
  it.condition = maxf(float(it.condition),minf(0.95,float(it.condition)+GAINS[job]))
+ if job in ["case","strap"]: WatchForgery.restore_exterior(it,job)
  if job == "case":
   it.refurbishment.active_case = false
   it.service.opened = false
