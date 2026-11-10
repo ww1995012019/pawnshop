@@ -25,6 +25,8 @@ var last_viewport := Vector2.ZERO
 var touches := {}
 var pinch_distance := 0.0
 var pinch_zoom := 1.0
+const RESIZE_HIT_PIXELS := 48.0
+var last_css_scale := 0.0
 
 func configure(title: String, key: String, dimensions := Vector2(720,760)) -> void:
 	geometry_key = key
@@ -37,6 +39,7 @@ func configure(title: String, key: String, dimensions := Vector2(720,760)) -> vo
 	header = UIKit.hbox(8)
 	header.custom_minimum_size.y = 48
 	header.mouse_filter = Control.MOUSE_FILTER_STOP
+	header.mouse_default_cursor_shape = Control.CURSOR_CAN_DROP
 	header.gui_input.connect(_header_input)
 	body.add_child(header)
 	var heading := UIKit.label(title,23,UIKit.INK,true)
@@ -60,7 +63,9 @@ func configure(title: String, key: String, dimensions := Vector2(720,760)) -> vo
 	add_child(corners)
 	for entry in [["tl",Vector2(0,0)],["tr",Vector2(1,0)],["bl",Vector2(0,1)],["br",Vector2(1,1)]]:
 		var corner: Vector2 = entry[1]
-		var handle := Control.new()
+		var handle := ResizeGrip.new()
+		handle.document = self
+		handle.corner = corner
 		handle.name = "document_corner_"+entry[0]
 		handle.mouse_filter = Control.MOUSE_FILTER_STOP
 		handle.mouse_default_cursor_shape = Control.CURSOR_FDIAGSIZE if corner.x==corner.y else Control.CURSOR_BDIAGSIZE
@@ -112,10 +117,50 @@ func relayout() -> void:
 	var applied := minf(document_zoom,fit)
 	scale = Vector2.ONE * maxf(0.1,applied)
 	position = _clamped(position)
+	_layout_grips()
+
+func _css_scale() -> float:
+	var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1",true)) if OS.has_feature("web") else 1.0
+	return maxf(0.01,absf((get_viewport().get_screen_transform()*get_global_transform_with_canvas()).get_scale().x)/ratio)
+
+func _layout_grips() -> void:
+	last_css_scale = _css_scale()
+	var extent := minf(RESIZE_HIT_PIXELS/last_css_scale,minf(size.x,size.y)*0.3)
 	for handle in corner_handles:
-		var hit_size := Vector2.ONE * clampf(24.0/scale.x,24.0,56.0)
-		handle.size = hit_size
-		handle.position = (size-hit_size) * (handle.get_meta("corner") as Vector2) - (handle.get_parent() as Control).position
+		handle.size = Vector2.ONE*extent
+		handle.position = size*(handle.get_meta("corner") as Vector2)-handle.size*0.5-(handle.get_parent() as Control).position
+
+func resize_cursor_shape() -> int:
+	return Control.CURSOR_FDIAGSIZE if resize_anchor_corner.x == resize_anchor_corner.y else Control.CURSOR_BDIAGSIZE
+
+func cursor_at(_point: Vector2) -> int:
+	return resize_cursor_shape() if resizing else (Control.CURSOR_DRAG if dragging else Control.CURSOR_ARROW)
+
+## A visible brass corner with a larger, screen-sized mouse/touch target.
+class ResizeGrip extends Control:
+	var document: FloatingDocument
+	var corner := Vector2.ZERO
+	var hovered := false
+	func _ready() -> void:
+		resized.connect(queue_redraw)
+		mouse_entered.connect(func(): hovered = true; queue_redraw())
+		mouse_exited.connect(func(): hovered = false; queue_redraw())
+	func _has_point(point: Vector2) -> bool:
+		if not Rect2(Vector2.ZERO,size).has_point(point): return false
+		# The close key retains every pixel of its own clickable rectangle.
+		if is_instance_valid(document.close_button) and document.close_button.get_global_rect().has_point(get_global_transform()*point): return false
+		return true
+	func _draw() -> void:
+		if not is_instance_valid(document): return
+		var unit := 1.0/document._css_scale()
+		var inward := Vector2.ONE-corner*2.0
+		var c := size*0.5
+		var a := c+inward*1.5*unit
+		var points := [a+Vector2(inward.x*16*unit,0),a,a+Vector2(0,inward.y*16*unit)]
+		var color := UIKit.AMBER if hovered or document.resizing else UIKit.AMBER_DEEP
+		draw_polyline(PackedVector2Array(points),UIKit.INK,4.0*unit,false)
+		draw_polyline(PackedVector2Array(points),color,2.0*unit,false)
+		draw_line(a+Vector2(inward.x*5*unit,0),a+Vector2(inward.x*12*unit,0),Color("f1deb3"),unit,false)
 
 func close_document() -> void:
 	_store_geometry()
@@ -148,7 +193,7 @@ func _begin_corner_resize(corner: Vector2, pointer: Vector2) -> void:
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
 		var point: Vector2 = event.position
-		var margin := 24.0/scale.x
+		var margin := minf(RESIZE_HIT_PIXELS*0.5/_css_scale(),minf(size.x,size.y)*0.15)
 		if (point.x<margin or point.x>size.x-margin) and (point.y<margin or point.y>size.y-margin):
 			_begin_corner_resize(Vector2(1 if point.x>size.x/2 else 0,1 if point.y>size.y/2 else 0),get_global_mouse_position())
 			accept_event()
@@ -204,5 +249,4 @@ func _input(event: InputEvent) -> void:
 func _process(_delta: float) -> void:
 	if is_visible_in_tree():
 		if get_viewport_rect().size != last_viewport: relayout()
-		for handle in corner_handles:
-			handle.position = (size-handle.size)*(handle.get_meta("corner") as Vector2)-(handle.get_parent() as Control).position
+		_layout_grips()
