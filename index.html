@@ -4,6 +4,10 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, viewport-fit=cover">
 	<meta name="theme-color" content="#28232e">
+	<meta name="mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+	<meta name="apple-mobile-web-app-title" content="轨道旧货局">
 	<meta name="description" content="轨道旧货局：空间站旧货铺经营游戏。鉴定、议价、维修、仓储与订单。">
 	<title>轨道旧货局 · 回环九号</title>
 	<style>
@@ -68,8 +72,8 @@ h1 { margin: 0; color: var(--paper); font-size: clamp(24px, 4.5vw, 31px); letter
 @media (prefers-reduced-motion: reduce) { #loader, .fill, #tip { transition: none; } .track.indeterminate .fill { animation: none; width: 100% !important; opacity: .6; } }
 
 	</style>
-	<link rel="stylesheet" href="touch-43bd148871944e24.css">
-	<link rel="icon" href="engine-309843874cfdebe8.icon.png">
+	<link rel="stylesheet" href="touch-bdbde4a14119ce55.css">
+	<link rel="icon" href="engine-309843874cfdebe8.icon.png"><link rel="apple-touch-icon" href="engine-309843874cfdebe8.apple-touch-icon.png">
 </head>
 <body>
 	<canvas id="canvas">你的浏览器不支持画布。</canvas>
@@ -95,10 +99,10 @@ h1 { margin: 0; color: var(--paper); font-size: clamp(24px, 4.5vw, 31px); letter
 	</div>
 
 	<script src="assets-533fed85b3ac376a.js"></script>
-	<script src="touch-87ebe53bccd8d159.js"></script>
+	<script src="touch-5942295f04a3c516.js"></script>
 	<script src="engine-309843874cfdebe8.js"></script>
 	<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":0,"executable":"engine-309843874cfdebe8","mainPack":"workbench-c6dbf81bf6902165.pck","fileSizes":{"workbench-c6dbf81bf6902165.pck":3171924,"engine-309843874cfdebe8.wasm":37700666},"focusCanvas":true,"gdextensionLibs":[],"ensureCrossOriginIsolationHeaders":false,"transport":{"workbench-c6dbf81bf6902165.pck":{"sha256":"c6dbf81bf69021655cadac6fef3ecf07727aa37b5f02802741024033267bc6b2","bytes":3171924,"type":"application/octet-stream","gzip":"workbench-c6dbf81bf6902165.pck.gz","gzipBytes":2889863},"engine-309843874cfdebe8.wasm":{"sha256":"26b61ce95247012ab3dca3ff51e96d1cdbff44ee91a8c20a83e150afca83f1b6","bytes":37700666,"type":"application/wasm","gzip":"engine-309843874cfdebe8.wasm.gz","gzipBytes":9382282},"music-8ad9f8f323428f98.ogg":{"sha256":"8ad9f8f323428f98804c867c2ca5c00c4e16885b804aa64650471b6b6d005b9c","bytes":846727,"type":"audio/ogg","gzip":null,"gzipBytes":846727},"music-73c915ee8894b734.ogg":{"sha256":"73c915ee8894b734dc255384aaf0c1ae2834b3d1fee00a62025bb5954849d7f3","bytes":654520,"type":"audio/ogg","gzip":null,"gzipBytes":654520},"music-f06ef4243f86b03f.ogg":{"sha256":"f06ef4243f86b03f6f7ed0719e450a193c826c1d94988d9eb357f73a6c296570","bytes":809644,"type":"audio/ogg","gzip":null,"gzipBytes":809644},"music-30ff78a0e0f53f91.ogg":{"sha256":"30ff78a0e0f53f91658c4ebd0a6c827c92dffdc59803f270ed0689288766778d","bytes":397829,"type":"audio/ogg","gzip":null,"gzipBytes":397829}},"music":{"shop":"music-8ad9f8f323428f98.ogg","workbench":"music-73c915ee8894b734.ogg","storeroom":"music-f06ef4243f86b03f.ogg","ledger":"music-30ff78a0e0f53f91.ogg"},"previousAssets":["workbench-4a4e85ff8891e103.pck","engine-309843874cfdebe8.wasm","music-8ad9f8f323428f98.ogg","music-73c915ee8894b734.ogg","music-f06ef4243f86b03f.ogg","music-30ff78a0e0f53f91.ogg"]};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":0,"executable":"engine-309843874cfdebe8","mainPack":"workbench-ad0fb999df57bbac.pck","fileSizes":{"workbench-ad0fb999df57bbac.pck":3170948,"engine-309843874cfdebe8.wasm":37700666},"focusCanvas":true,"gdextensionLibs":[],"ensureCrossOriginIsolationHeaders":false,"transport":{"workbench-ad0fb999df57bbac.pck":{"sha256":"ad0fb999df57bbac09215a42645568a57614cf0054afc5a69db1d9705a30cc22","bytes":3170948,"type":"application/octet-stream","gzip":"workbench-ad0fb999df57bbac.pck.gz","gzipBytes":2890260},"engine-309843874cfdebe8.wasm":{"sha256":"26b61ce95247012ab3dca3ff51e96d1cdbff44ee91a8c20a83e150afca83f1b6","bytes":37700666,"type":"application/wasm","gzip":"engine-309843874cfdebe8.wasm.gz","gzipBytes":9382282},"music-8ad9f8f323428f98.ogg":{"sha256":"8ad9f8f323428f98804c867c2ca5c00c4e16885b804aa64650471b6b6d005b9c","bytes":846727,"type":"audio/ogg","gzip":null,"gzipBytes":846727},"music-73c915ee8894b734.ogg":{"sha256":"73c915ee8894b734dc255384aaf0c1ae2834b3d1fee00a62025bb5954849d7f3","bytes":654520,"type":"audio/ogg","gzip":null,"gzipBytes":654520},"music-f06ef4243f86b03f.ogg":{"sha256":"f06ef4243f86b03f6f7ed0719e450a193c826c1d94988d9eb357f73a6c296570","bytes":809644,"type":"audio/ogg","gzip":null,"gzipBytes":809644},"music-30ff78a0e0f53f91.ogg":{"sha256":"30ff78a0e0f53f91658c4ebd0a6c827c92dffdc59803f270ed0689288766778d","bytes":397829,"type":"audio/ogg","gzip":null,"gzipBytes":397829}},"music":{"shop":"music-8ad9f8f323428f98.ogg","workbench":"music-73c915ee8894b734.ogg","storeroom":"music-f06ef4243f86b03f.ogg","ledger":"music-30ff78a0e0f53f91.ogg"},"previousAssets":["workbench-c6dbf81bf6902165.pck","engine-309843874cfdebe8.wasm","music-8ad9f8f323428f98.ogg","music-73c915ee8894b734.ogg","music-f06ef4243f86b03f.ogg","music-30ff78a0e0f53f91.ogg"]};
 const GODOT_THREADS_ENABLED = false;
 window.OrbitalAssets.install(GODOT_CONFIG);
 const engine = new Engine(GODOT_CONFIG);
@@ -177,7 +181,7 @@ const engine = new Engine(GODOT_CONFIG);
 		downloaded = current >= total;
 		stage.textContent = downloaded ? '正在通电、点亮柜台…' : '正在读取压缩货架与库存…';
 	};
-	window.OrbitalTouch.whenLandscape().then(() => Promise.all([
+	Promise.all([
 		// Observe the public load Promise too: vendor init does not forward WASM failures.
 		Engine.load(GODOT_CONFIG.executable, GODOT_CONFIG.fileSizes[GODOT_CONFIG.executable + '.wasm']),
 		engine.startGame({
@@ -185,7 +189,7 @@ const engine = new Engine(GODOT_CONFIG);
 			if (finished) return;
 			if (downloaded) stage.textContent = '正在通电、点亮柜台…';
 		},
-	})])).then(open, fail);
+	})]).then(open, fail);
 }());
 	</script>
 </body>

@@ -1,0 +1,7 @@
+[hidden] { display: none !important; }
+/* A phone held upright shows the landscape game turned a quarter turn. */
+#canvas { position: fixed; left: 0; top: 0; transform-origin: 0 0; }
+html.turned #loader {
+  inset: auto; left: 0; top: 0; width: 100vh; height: 100vw;
+  transform-origin: 0 0; transform: translateX(100vw) rotate(90deg);
+}
