@@ -38,6 +38,10 @@ var scale_attempt_revision := ""
 var remove_button: Button
 var optical_fixed := false
 var optical_position := Vector2.ZERO
+var optical_dragging := false
+var optical_pinned := false
+var optical_pin_button: Button
+var optical_attempt_revision := ""
 var pending_tool := ""
 
 func scene_name() -> String:
@@ -200,6 +204,7 @@ func _optical_face_visible() -> bool:
 
 func _reset_optical_observation() -> void:
 	progress = 0.0
+	optical_attempt_revision = ""
 	if is_instance_valid(lens_ring):
 		lens_ring.progress = 0.0
 		lens_ring.queue_redraw()
@@ -222,6 +227,9 @@ func _set_tool(id: String) -> void:
 	pending_tool = id if id in ["TOL-001", "TOL-002"] else ""
 	progress = 0.0
 	optical_fixed = false
+	optical_pinned = false
+	optical_dragging = false
+	optical_attempt_revision = ""
 	tared = false
 	if is_instance_valid(item):
 		item.end_drag()
@@ -275,10 +283,13 @@ func _optical(id: String) -> void:
 	add_world(node,"top")
 	bench_body.add_child(UIKit.label("移动镜片观察表盘标识；停住记录细节。" if id == "TOL-001" else "移动紫外灯照亮后盖编号；停住记录字符。",18,UIKit.TEXT,false,true))
 	var fixed := UIKit.button("定位并固定标识" if id == "TOL-001" else "定位并固定编号","primary",Vector2(0,48),18)
+	optical_pin_button = fixed
 	fixed.pressed.connect(func():
-		optical_fixed = not optical_fixed
+		optical_pinned = not optical_pinned
+		optical_fixed = optical_pinned
+		optical_dragging = false
 		optical_position = _optical_target()
-		fixed.text = "解除固定" if optical_fixed else "定位并固定观察点")
+		fixed.text = "解除固定" if optical_pinned else "定位并固定观察点")
 	bench_body.add_child(fixed)
 
 func _optical_target() -> Vector2:
@@ -377,10 +388,14 @@ func _unhandled_input(e: InputEvent) -> void:
 					if item.contains(p):
 						drag_origin = item.position
 						item.begin_drag(p)
-				elif tool == "TOL-001" or tool == "TOL-002":
+				elif (tool == "TOL-001" or tool == "TOL-002") and mat_rect.has_point(shell.world_to_ui(p)):
 					optical_fixed = true
+					optical_pinned = false
+					optical_dragging = true
 					optical_position = p
+					if is_instance_valid(optical_pin_button): optical_pin_button.text = "定位并固定标识" if tool == "TOL-001" else "定位并固定编号"
 			else:
+				optical_dragging = false
 				if item.dragging and tool == "TOL-005" and item.position.distance_to(scale_target)<125:
 					_scale_place()
 				item.end_drag()
@@ -417,6 +432,9 @@ func _process(delta: float) -> void:
 		_scale_controls()
 	elif tool == "TOL-001" or tool == "TOL-002":
 		var node: Node2D = lens if tool == "TOL-001" else wand
+		if optical_dragging:
+			if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): optical_position = p
+			else: optical_dragging = false
 		var at := optical_position if optical_fixed else p
 		node.global_position = at
 		if not _optical_face_visible():
@@ -433,7 +451,13 @@ func _process(delta: float) -> void:
 			item.reveal.material.set_shader_parameter("uv_r",150.0)
 		if at.distance_to(_optical_target())<65:
 			progress = minf(1.0,progress+delta/.9)
-			if progress >= 1.0: _record()
+			if progress >= 1.0:
+				var revision := Model.appraisal_revision(it)+":"+str(Game.state.ap)
+				if revision != optical_attempt_revision:
+					optical_attempt_revision = revision
+					_record()
+					var current = Game.item(it_uid)
+					if current != null: optical_attempt_revision = Model.appraisal_revision(current)+":"+str(Game.state.ap)
 		else: progress = 0.0
 		lens_ring.progress = progress
 		lens_ring.queue_redraw()

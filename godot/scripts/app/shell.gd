@@ -109,6 +109,7 @@ func _ready() -> void:
 	else:
 		_show_title()
 	_sync_wanted_notice()
+	add_child(preload("res://scripts/app/touch_scroll.gd").new())
 	if OS.has_feature("web"):
 		var touch := preload("res://scripts/app/web_touch.gd").new()
 		add_child(touch)
