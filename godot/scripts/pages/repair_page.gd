@@ -30,6 +30,9 @@ var cleaning_unsaved := false
 var save_clock := 0.0
 var grime_label: Label
 var action_button: Button
+var mode_buttons: Dictionary = {}
+var guidance: PanelContainer
+var guidance_body: VBoxContainer
 var instruction: Label
 var refresh_pending := false
 var pending_operation := {}
@@ -51,10 +54,12 @@ func enter() -> void:
 	list_panel.add_child(left)
 	left.add_child(UIKit.module_header("修表台", "逐件记录 · 随时续修", "SERVICE"))
 	var modes := UIKit.vbox(6)
-	for spec in [["维修保养", open_service], ["伪装加工", open_forgery]]:
+	for spec in [["维修保养", open_service, "service"], ["伪装加工", open_forgery, "forge"]]:
 		var b := UIKit.button(spec[0], "secondary", Vector2(0, 48), 18)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.toggle_mode = true
 		b.pressed.connect(spec[1])
+		mode_buttons[spec[2]] = b
 		modes.add_child(b)
 	left.add_child(modes)
 	var scroll := ScrollContainer.new()
@@ -71,6 +76,13 @@ func enter() -> void:
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	details.add_child(info)
 	detail_panel.add_child(details)
+	guidance = UIKit.plate(UIKit.screen_style(12))
+	guidance.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	guidance_body = UIKit.vbox(4)
+	guidance_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	guidance_body.minimum_size_changed.connect(queue_relayout)
+	guidance.add_child(guidance_body)
+	add_child(guidance)
 	bench = UIKit.plate()
 	add_child(bench)
 	bench_body = UIKit.vbox(6)
@@ -203,6 +215,8 @@ func _current_problem() -> String:
 
 func _stage_ui() -> void:
 	UIKit.clear(bench_body)
+	UIKit.clear(guidance_body)
+	_sync_modes()
 	grime_label = null
 	var it = Game.item(it_uid)
 	if it == null:
@@ -219,9 +233,10 @@ func _stage_ui() -> void:
 	art.set_process(art.visible)
 	var title: String = WatchForgery.LABELS.get(task.trim_prefix("forge_"),"伪装加工") if mode == "forge" else Service.label(task,it)
 	if task == "": title = "本次工单已完成" if not Service.tasks(it).is_empty() and Service.finished(it) else "本件无需维修"
-	bench_body.add_child(UIKit.module_header(title,"","SERVICE / BENCH"))
+	var mode_title := "伪装加工" if mode == "forge" else "维修保养"
+	guidance_body.add_child(UIKit.label(mode_title + "  /  " + title,22,UIKit.AMBER))
 	instruction = UIKit.label("",18,UIKit.TEXT,false,true)
-	bench_body.add_child(instruction)
+	guidance_body.add_child(instruction)
 	var row := UIKit.hbox(10)
 	action_button = UIKit.button("","primary",Vector2(0,50),20)
 	action_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -250,9 +265,26 @@ func _stage_ui() -> void:
 	inspect.pressed.connect(func(): call_deferred("_open_inspection"))
 	row.add_child(inspect)
 	bench_body.add_child(row)
+	_update_guidance()
 	shell.hint(hint_text())
 	queue_relayout()
 	queue_redraw()
+
+func _sync_modes() -> void:
+	for id in mode_buttons:
+		var button: Button = mode_buttons[id]
+		var selected: bool = id == mode
+		button.set_pressed_no_signal(selected)
+		button.text = ("✓ " if selected else "") + ("维修保养" if id == "service" else "伪装加工")
+		for state in ["normal", "hover", "pressed", "hover_pressed"]:
+			button.add_theme_stylebox_override(state, UIKit.key_style("primary" if selected else "secondary", "normal" if state == "hover_pressed" else state, false))
+
+func _update_guidance() -> void:
+	if not is_instance_valid(instruction): return
+	var why := _current_problem()
+	instruction.text = "暂不能操作 · " + why if why != "" else (art.hint_text() if art.visible else instruction.text)
+	instruction.add_theme_color_override("font_color", UIKit.DANGER if why != "" else UIKit.TEXT)
+	instruction.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _open_inspection() -> void:
 	if it_uid != "": shell.go("inspect",it_uid)
@@ -265,6 +297,7 @@ func open_service() -> void:
 	_refresh_info()
 
 func open_forgery(method := "") -> void:
+	_sync_modes()
 	_save_cleaning()
 	_save_operation()
 	var it = Game.item(it_uid)
@@ -272,6 +305,7 @@ func open_forgery(method := "") -> void:
 	var ongoing: String = it.get("service",{}).get("forge_task", "")
 	if ongoing != "": method = ongoing.trim_prefix("forge_")
 	if it.get("service",{}).get("opened",false) and ongoing == "":
+		_sync_modes()
 		shell.toast("先完成当前机芯回装与封盖，再切换加工。")
 		return
 	mode = "forge"
@@ -314,7 +348,7 @@ func _operation_progressed(progress: Dictionary) -> void:
 		saved_boundary = boundary
 		_save_operation()
 	if is_instance_valid(action_button): action_button.text = art.action_text()
-	if is_instance_valid(instruction): instruction.text = art.hint_text()
+	_update_guidance()
 
 func _save_operation() -> void:
 	if pending_operation.is_empty() or pending_task == "" or it_uid == "": return
@@ -369,10 +403,14 @@ func _save_cleaning() -> void:
 func relayout() -> void:
 	if not is_instance_valid(bench) or not is_instance_valid(art): return
 	mat_rect = layout_workbench(list_panel,detail_panel,bench,260,350)
-	art.position = mat_rect.position
-	art.size = mat_rect.size
+	guidance.position = mat_rect.position
+	guidance.size.x = mat_rect.size.x
+	guidance.size.y = maxf(132.0, guidance.get_combined_minimum_size().y)
+	var working := Rect2(mat_rect.position + Vector2(0,guidance.size.y + 10), mat_rect.size - Vector2(0,guidance.size.y + 10))
+	art.position = working.position
+	art.size = working.size
 	if is_instance_valid(item):
-		item_home = fit_workbench_item(item,mat_rect)
+		item_home = fit_workbench_item(item,working)
 		item.position = item_home
 	queue_redraw()
 
@@ -394,6 +432,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		last_uv = uv
 
 func _process(delta: float) -> void:
+	if is_instance_valid(instruction):
+		# Preserve layout while a transient notice occupies the instruction row.
+		instruction.self_modulate.a = 0.0 if shell.toast_box.get_child_count() > 0 else 1.0
 	save_clock += delta
 	operation_clock += delta
 	if save_clock >= 0.4:
@@ -420,9 +461,8 @@ func world_cursor_shape(point: Vector2) -> int:
 	return Input.CURSOR_CROSS if task == "dust" and is_instance_valid(item) and item.contains(point) else Input.CURSOR_ARROW
 
 func toast_rect() -> Rect2:
-	# Notices belong on the paperwork, never over the watch/tool contact area.
-	if not is_instance_valid(detail_panel): return Rect2()
-	return Rect2(Vector2(detail_panel.position.x + 8,shell.content_rect().end.y - 130),Vector2(detail_panel.size.x - 16,120))
+	if not is_instance_valid(guidance): return Rect2()
+	return Rect2(guidance.position + Vector2(0,48), Vector2(guidance.size.x, guidance.size.y - 48))
 
 func on_changed(_prev: Dictionary,_next: Dictionary,action: Dictionary) -> void:
 	if action.type == "SERVICE_PROGRESS" or action.type == "SERVICE_BEGIN": return

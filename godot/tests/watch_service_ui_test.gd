@@ -45,6 +45,15 @@ func run() -> void:
 		check(page.cleaning.serialize() == saved, "leaving and returning preserves partial cleaning")
 	page.open_forgery("logo")
 	await settle()
+	var mode_buttons: Array[Node] = page.list_panel.find_children("*", "Button", true, false)
+	var selected_forge := false
+	for button in mode_buttons:
+		if button.text.contains("伪装加工"): selected_forge = button.button_pressed
+	check(selected_forge, "selected forgery mode stays visibly pressed after pointer release")
+	check(page.toast_rect().position.y < page.mat_rect.position.y + page.mat_rect.size.y * 0.35, "notices occupy the top guidance area rather than the bottom paperwork")
+	check(page.toast_rect().position.y > page.guidance_body.get_child(0).get_global_rect().end.y, "transient notice stays below the persistent mode heading")
+	check(not page.guidance.get_rect().intersects(page.art.get_rect()), "top guidance reserves space outside the physical tool surface")
+	check(page.instruction.text != "", "current action guidance stays visible above the watch")
 	check(page.mode == "forge" and page.task == "forge_logo", "forgery uses same repair workspace and selected lot")
 	check(is_instance_valid(page.art) and page.art.visible, "forgery exposes actual animated work surface")
 	var active = shell.active_shell()
@@ -80,6 +89,16 @@ func run() -> void:
 	page.open_service()
 	await settle()
 	check(game.item(uid).watch == truth and page.mode == "service", "mode switch does not repair or alter physical truth")
+	check(page.mode_buttons.service.button_pressed and not page.mode_buttons.forge.button_pressed, "switching back highlights service exclusively")
+	var selected_before_block: Dictionary = game.item(uid)
+	var prior_verified: bool = selected_before_block.sourceVerified
+	selected_before_block.sourceVerified = false
+	page._stage_ui()
+	await settle()
+	check(page.instruction.text.contains("暂不能操作") and page.instruction.text.contains(page._current_problem()), "blocked work displays the exact restriction in the persistent top guidance")
+	selected_before_block.sourceVerified = prior_verified
+	page._stage_ui()
+	await settle()
 	if page.task == "dust":
 		var dust_progress: Dictionary = game.item(uid).service.operations.get("dust",{}).duplicate(true)
 		page.art._process(10.0)

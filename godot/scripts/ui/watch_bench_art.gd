@@ -264,35 +264,40 @@ func _animate() -> void:
 	var a: Dictionary = _plan[int(_state.step)]
 	var t := clampf(float(_state.elapsed) / maxf(0.001, _phase_duration()), 0.0, 1.0)
 	var eased := t * t * (3.0 - 2.0 * t)
-	var contact := _v(a.at)
+	var contact := _motion_tip(a, 0.0)
 	var rack := _rack(a.tool)
-	var end := _v(a.get("to", a.at))
 	var tip := rack
 	var angle := 0.0
 	match String(_state.phase):
 		"take": tip = rack + Vector2(0, -10 * eased)
 		"contact": tip = (rack + Vector2(0, -10)).lerp(contact, eased)
 		"act":
-			tip = contact
-			match String(a.get("motion", "press")):
-				"turn": angle = sin(t * TAU * 2) * 0.24
-				"lever": tip += Vector2(3 * sin(t * PI), -9 * sin(t * PI))
-				"transfer":
-					tip = contact.lerp(end, eased) + Vector2(0, -35 * sin(t * PI))
-					_state.parts[a.part] = _arr(tip)
-					if a.part == "watch": _state.watch_scale = lerpf(1.0, 0.94, eased)
-				"wash": tip += Vector2(sin(t * TAU * 3) * 6, sin(t * TAU * 6) * 2)
-				"blow": tip += Vector2(0, sin(t * TAU * 3) * 3)
-				"glyph": tip = _glyph_point(t)
-				"serial": tip = Vector2(165.0 + 163.0 * t, 230.0 + 7.0 * sin(t * TAU * 14))
-				"trace": tip += Vector2(sin(t * TAU * 2) * 4, 0)
-				"oil": tip += Vector2(0, 2 * sin(t * PI))
-				"settle": tip += Vector2(0, 3 * sin(t * PI))
+			tip = _motion_tip(a, t)
+			if String(a.get("motion", "press")) == "turn": angle = sin(t * TAU * 2) * 0.24
+			if a.has("part"):
+				_state.parts[a.part] = _arr(tip)
+				if a.part == "watch": _state.watch_scale = lerpf(1.0, 0.94, eased)
 			_update_visual_effect(a, t)
-		"release": tip = end.lerp(rack, eased)
+		"release":
+			tip = _motion_tip(a, 1.0).lerp(rack, eased) + Vector2(0, -18 * sin(t * PI))
 		"result": tip = rack
 	_state.tool.position = _arr(tip)
 	_state.tool.angle = angle
+
+func _motion_tip(a: Dictionary, t: float) -> Vector2:
+	var contact := _v(a.at)
+	var eased := t * t * (3.0 - 2.0 * t)
+	match String(a.get("motion", "press")):
+		"lever": return contact + Vector2(3 * sin(t * PI), -9 * sin(t * PI))
+		"transfer": return contact.lerp(_v(a.get("to",a.at)), eased) + Vector2(0, -35 * sin(t * PI))
+		"wash": return contact + Vector2(sin(t * TAU * 3) * 6, sin(t * TAU * 6) * 2)
+		"blow": return contact + Vector2(0, sin(t * TAU * 3) * 3)
+		"glyph": return _glyph_point(t)
+		"serial": return Vector2(165.0 + 163.0 * t, 230.0 + 7.0 * sin(t * TAU * 14))
+		"trace": return contact + Vector2(sin(t * TAU * 2) * 4, 0)
+		"oil": return contact + Vector2(0, 2 * sin(t * PI))
+		"settle": return contact + Vector2(0, 3 * sin(t * PI))
+	return contact
 
 func _update_visual_effect(a: Dictionary, t: float) -> void:
 	match String(a.id):
@@ -459,9 +464,11 @@ func _screw_pos(index: int) -> Vector2:
 
 func _glyph_point(t: float) -> Vector2:
 	if _glyph.is_empty(): return Vector2(248, 155)
-	var index := clampi(int(t * float(_glyph.size() - 1)), 0, _glyph.size() - 1)
+	var cursor := clampf(t,0.0,1.0) * float(_glyph.size() - 1)
+	var index := int(cursor)
 	var p: Array = _glyph[index]
-	return Vector2(200 + float(p[0]) * 4, 125 + float(p[1]) * 4)
+	var next: Array = _glyph[mini(index + 1,_glyph.size() - 1)]
+	return Vector2(200 + float(p[0]) * 4,125 + float(p[1]) * 4).lerp(Vector2(200 + float(next[0]) * 4,125 + float(next[1]) * 4), cursor - index)
 
 func _result_text() -> String:
 	match _task:
@@ -877,12 +884,13 @@ func _draw_rack() -> void:
 	for x in range(47, 593, 39):
 		draw_line(Vector2(x, 409), Vector2(x + 18, 409), Color("516a56"), 2)
 	_text(Vector2(43, 444), "软垫表座 · 工具接触后操作 · 零件留在原工位", 10, MUTED)
-	# Resting implements are small, but still drawn as physical tools.
-	for tool in ["driver", "tweezers", "oiler", "brush", "pen", "probe", "blower", "opener"]:
-		if _state.tool.kind == tool: continue
+	# Each slot contains the same recognizable implement used at contact.
+	for tool in ["driver", "tweezers", "oiler", "brush", "pen", "probe", "blower", "opener", "caseknife", "uv", "swab", "press"]:
 		var p := _rack(tool)
-		draw_line(p, p + Vector2(8, -27), Color("7e9587"), 2, true)
-		draw_line(p + Vector2(8, -27), p + Vector2(11, -35), Color("8e7656"), 5, true)
+		if _state.tool.kind == tool:
+			draw_arc(p + Vector2(3,-9),8,0,TAU,20,Color(CYAN,0.5),1,true)
+			continue
+		_draw_implement(tool, p, 0.0, 0.42, false)
 
 func _draw_contact() -> void:
 	if _state.complete or _plan.is_empty() or _state.phase != "idle": return
@@ -903,11 +911,21 @@ func _draw_contact() -> void:
 
 func _draw_tool() -> void:
 	if _state.tool.kind == "": return
-	var tip := _v(_state.tool.position)
-	var angle := float(_state.tool.angle)
+	var ratio := 1.0
+	var t := clampf(float(_state.elapsed) / maxf(0.001,_phase_duration()),0.0,1.0) if _state.phase != "idle" else 1.0
+	var eased := t * t * (3.0 - 2.0 * t)
+	if _state.phase == "take": ratio = lerpf(0.42,1.0,eased)
+	elif _state.phase == "release": ratio = lerpf(1.0,0.42,eased)
+	elif _state.phase == "result": ratio = 0.42
+	_draw_implement(String(_state.tool.kind), _v(_state.tool.position), float(_state.tool.angle), ratio, _state.phase == "act")
+
+func _draw_implement(tool: String, tip: Vector2, angle: float, ratio: float, working: bool) -> void:
+	var rect := stage_working_rect()
+	var unit := rect.size.x / SURFACE.x
+	draw_set_transform(rect.position + tip * unit, 0.0, Vector2.ONE * unit * ratio)
+	tip = Vector2.ZERO
 	var axis := Vector2(0.46, -0.89).rotated(angle)
 	var side := axis.orthogonal()
-	var tool := String(_state.tool.kind)
 	# Every implement is constructed from its physical contact tip. All motion
 	# uses this same anchor, so a screw turn cannot drift off the screw head.
 	var shadow := tip + Vector2(5, 7)
@@ -928,7 +946,7 @@ func _draw_tool() -> void:
 			draw_line(tip, tip + axis * 27, Color("899f8e"), 5, true)
 			draw_circle(tip + axis * 52, 20, Color("634f3d"))
 			draw_arc(tip + axis * 52, 17, -2.6, -0.6, 20, Color("a38a64"), 2, true)
-			if _state.phase == "act":
+			if working:
 				for i in range(3):
 					var p := tip - axis * (8 + i * 7)
 					draw_line(p - side * (2 + i * 2), p + side * (2 + i * 2), Color(0.74, 0.86, 0.79, 0.5 - i * 0.12), 1.2, true)
@@ -942,22 +960,30 @@ func _draw_tool() -> void:
 				draw_line(p, p + Vector2(30, -7), Color("b49b79"), 12, true)
 				draw_line(p + Vector2(1, -2), p + Vector2(16, -5), Color("d2bd98"), 3, true)
 		_:
-			draw_line(tip, tip + axis * 35, Color("c6d1bd"), 2.6, true)
+			draw_line(tip, tip + axis * 36, Color("56666a"), 4, true)
+			draw_line(tip - side * 0.8, tip + axis * 35 - side * 0.8, Color("e1e6da"), 1.2, true)
 			var color := Color("7e5742")
 			if tool == "oiler": color = Color("985a43")
 			if tool == "probe": color = Color("98794b")
 			if tool == "uv": color = Color("635f88")
 			if tool == "pen": color = Color("c0ad71")
-			draw_line(tip + axis * 34, tip + axis * 77, color, 9, true)
+			draw_line(tip + axis * 34, tip + axis * 77, color.darkened(0.4), 12, true)
+			draw_line(tip + axis * 34 - side, tip + axis * 76 - side, color, 9, true)
+			draw_circle(tip + axis * 77, 5, Color("bcc8bf"))
+			draw_line(tip + axis * 75 - side * 3, tip + axis * 75 + side * 3, Color("eff0d7"), 1.1, true)
+			for grip in range(47,70,4):
+				draw_line(tip + axis * grip - side * 3.5, tip + axis * (grip + 1) + side * 3.5, color.darkened(0.3), 1, true)
 			draw_line(tip + axis * 35 - side * 2, tip + axis * 72 - side * 2, color.lightened(0.25), 1.4, true)
 			draw_line(tip + axis * 36, tip + axis * 40, Color("c8c6a1"), 10, true)
 			if tool in ["brush", "swab"]:
 				for i in range(-3, 4): draw_line(tip + side * i * 1.5, tip + axis * 10 + side * i, Color("c6c09c"), 1.5, true)
 			if tool == "caseknife":
 				draw_colored_polygon(PackedVector2Array([tip, tip + axis * 20 + side * 5, tip + axis * 24 - side * 4]), Color("b9c9bc"))
-			if tool == "oiler" and _state.phase == "act": draw_circle(tip, 2.5, Color("e7d591"))
-			if tool == "uv" and _state.phase == "act":
+			if tool == "oiler" and working: draw_circle(tip, 2.5, Color("e7d591"))
+			if tool == "uv" and working:
 				draw_colored_polygon(PackedVector2Array([tip, tip - axis * 42 - side * 35, tip - axis * 42 + side * 35]), Color(0.47, 0.37, 0.85, 0.14))
+
+	draw_set_transform(rect.position, 0.0, Vector2.ONE * unit)
 
 func _draw_labels() -> void:
 	var names := {"open":"开盖拆检", "wash":"金属件清洗 / 干燥", "replace":"故障件更换", "assemble":"定点润滑 / 回装", "test":"走时校验 / 封盖", "forge_logo":"重描标识", "forge_serial":"紫外编号覆印", "forge_weight":"后盖配重加工"}

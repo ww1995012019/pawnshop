@@ -60,6 +60,18 @@ func run() -> void:
 	var game = root.get_node("Game")
 	game.prefs.sound = false
 	game.prefs.reduced_motion = false
+	# Pen tracing ends away from the action's initial contact point.
+	var tracing = bench(item(), "forge_serial")
+	tracing._state.step = 1
+	tracing.advance()
+	tracing._state.phase = "act"
+	tracing._state.elapsed = tracing._phase_duration() - 0.00001
+	tracing._animate()
+	var before: Vector2 = tracing._v(tracing._state.tool.position)
+	tracing._process(0.00002)
+	var after: Vector2 = tracing._v(tracing._state.tool.position)
+	check(before.distance_to(after) < 0.1, "serial pen stays continuous when lifting off its final ink stroke")
+	tracing.queue_free()
 	var original := item()
 	var immutable := JSON.stringify(original)
 	var art = bench(original, "replace")
