@@ -14,8 +14,7 @@ func run() -> void:
 	it.erase("service")
 	WatchService.ensure(it,state.seed)
 	Model.put_in(state,it)
-	var out := FileAccess.open("res://../work/watch-expansion/task-3-fixture.json",FileAccess.WRITE)
-	out.store_string(JSON.stringify(state))
-	out.close()
+	if preload("res://tests/fixture_output.gd").write_json("res://../work/watch-expansion/task-3-fixture.json",state) != OK:
+		quit(1);return
 	print("BENCH POLISH FIXTURE ",it.uid," ",GameData.def(it.defId).name)
 	quit()

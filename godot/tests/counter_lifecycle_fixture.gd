@@ -43,5 +43,6 @@ static func build() -> Dictionary:
  expert.expertise.watch=expertise
  return {"arrest":s,"false_report":false_report,"capacity":capacity,"pending":pending,"forgery":forged}
 func _initialize() -> void:
- var f=FileAccess.open("res://../work/watch-expansion/counter-lifecycle-fixture.json",FileAccess.WRITE)
- f.store_string(JSON.stringify(build()));f.close();quit()
+ if preload("res://tests/fixture_output.gd").write_json("res://../work/watch-expansion/counter-lifecycle-fixture.json",build()) != OK:
+  quit(1);return
+ quit()

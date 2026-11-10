@@ -13,6 +13,6 @@ func _initialize() -> void:
   state.ap = 100
   Model.put_in(state,Model.new_item(state,id,{"authentic":true,"condition":1.0,"working":true,"sourceVerified":true}))
   fixtures[id] = state
- var file := FileAccess.open("res://../work/watch-expansion/optical/fixtures.json",FileAccess.WRITE)
- file.store_string(JSON.stringify(fixtures));file.close()
+ if preload("res://tests/fixture_output.gd").write_json("res://../work/watch-expansion/optical/fixtures.json",fixtures) != OK:
+  quit(1);return
  quit()

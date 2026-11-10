@@ -6,5 +6,6 @@ func _initialize():
  TradeSession.ensure(s)
  var se=TradeSession.session(s);se.cash=5000;se.want_count=6;se.goods=[]
  for id in ["WCH-002","WCH-005"]: se.goods.append(Model.new_item(s,id,{"owner":"npc","condition":0.8,"working":true,"authentic":true,"sourceVerified":true}))
- var f=FileAccess.open("res://../work/multi-item-trade/fixture.json",FileAccess.WRITE)
- f.store_string(JSON.stringify(s));f.close();quit()
+ if preload("res://tests/fixture_output.gd").write_json("res://../work/multi-item-trade/fixture.json",s) != OK:
+  quit(1);return
+ quit()

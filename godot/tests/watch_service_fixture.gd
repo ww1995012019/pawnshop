@@ -29,8 +29,7 @@ func run() -> void:
 		serial += 1
 	if permissions:
 		Model.put_in(state,Model.new_item(state,"WCH-033",{"owner":"customer","orderId":"BROWSER-REPAIR-ORDER","condition":0.55,"working":false}))
-	var out := FileAccess.open("res://../work/watch-repair/browser-fixture.json",FileAccess.WRITE)
-	out.store_string(JSON.stringify(state))
-	out.close()
+	if preload("res://tests/fixture_output.gd").write_json("res://../work/watch-repair/browser-fixture.json",state) != OK:
+		quit(1);return
 	print("BROWSER FIXTURE ",state.inventory.size()," watches")
 	quit()

@@ -45,8 +45,8 @@ static func build() -> Dictionary:
 	return result
 func run() -> void:
 	var result := build()
-	var out := FileAccess.open("res://../work/night-crime/browser-fixture.json",FileAccess.WRITE)
-	out.store_string(JSON.stringify(result)); out.close()
+	if preload("res://tests/fixture_output.gd").write_json("res://../work/night-crime/browser-fixture.json",result) != OK:
+		quit(1);return
 	print("NIGHT FIXTURE actual losses=",result.meta.lossUIDs.size()," payout=",result.meta.payout," premium=",result.meta.premium," inspector=",not result.inspection_pending.is_empty())
 	quit(0 if result.meta.lossUIDs.size()==2 and not result.inspection_pending.is_empty() else 1)
 
