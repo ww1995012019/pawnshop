@@ -35,7 +35,6 @@ var scale_label: Label
 var tare_button: Button
 var place_button: Button
 var scale_attempt_revision := ""
-var remove_button: Button
 var optical_fixed := false
 var optical_position := Vector2.ZERO
 var optical_dragging := false
@@ -323,28 +322,29 @@ func _scale() -> void:
 	scale_label = UIKit.label("0.0 g · 请先空秤归零",22,UIKit.CYAN)
 	bench_body.add_child(scale_label)
 	bench_body.add_child(UIKit.label(_power_copy("TOL-005"), 16, UIKit.CYAN, false, true))
-	var grid := UIKit.grid(3,8)
+	var grid := UIKit.grid(2,8)
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for entry in [["空秤归零",_scale_tare],["放到秤上",_scale_place],["取回手表",_scale_remove]]:
+	for entry in [["空秤归零",_scale_tare],["放到秤上",_scale_place]]:
 		var b := UIKit.button(entry[0],"secondary",Vector2(0,44),18)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(entry[1])
 		grid.add_child(b)
 	tare_button = grid.get_child(0)
 	place_button = grid.get_child(1)
-	remove_button = grid.get_child(2)
 	bench_body.add_child(grid)
 	_scale_controls()
 
 func _scale_tare() -> bool:
-	if tool != "TOL-005" or _tool_problem(tool) != "" or scale_occupied: return false
+	if tool != "TOL-005" or _tool_problem(tool) != "": return false
+	if scale_occupied: _scale_remove()
 	tared = true
 	scale_reading = 0.0
 	_scale_controls()
 	return true
 
 func _scale_place() -> bool:
-	if tool != "TOL-005" or _tool_problem(tool) != "" or not tared or scale_occupied or item.busy: return false
+	if tool != "TOL-005" or _tool_problem(tool) != "" or not tared or item.busy: return false
+	if scale_occupied: _scale_remove()
 	scale_origin = drag_origin if item.dragging else item.position
 	item.end_drag()
 	item.draggable = false
@@ -376,9 +376,9 @@ func _scale_record() -> bool:
 
 func _scale_controls() -> void:
 	if not is_instance_valid(scale_label): return
-	tare_button.disabled = scale_occupied or _tool_problem(tool) != ""
-	place_button.disabled = not tared or scale_occupied or _tool_problem(tool) != ""
-	remove_button.disabled = not scale_occupied
+	tare_button.disabled = _tool_problem(tool) != ""
+	place_button.disabled = not tared or _tool_problem(tool) != ""
+	place_button.text = "重新称量" if scale_occupied else "放到秤上"
 	scale_label.text = "%.1f g · %s" % [scale_reading,"稳定 ✓" if scale_stable else "正在稳定…" if scale_occupied else "空秤已归零" if tared else "请先空秤归零"]
 
 func _record() -> void:

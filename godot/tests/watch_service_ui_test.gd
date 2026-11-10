@@ -88,7 +88,7 @@ func run() -> void:
 		check(page.cleaning.serialize() == saved, "leaving and returning preserves partial cleaning")
 	page.open_forgery("logo")
 	await settle()
-	var mode_buttons: Array[Node] = page.list_panel.find_children("*", "Button", true, false)
+	var mode_buttons: Array[Node] = page.mode_bar.find_children("*", "Button", true, false)
 	var selected_forge := false
 	for button in mode_buttons:
 		if button.text.contains("伪装加工"): selected_forge = button.button_pressed

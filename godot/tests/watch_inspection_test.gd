@@ -37,7 +37,11 @@ func run():
 		check(page._scale_tare(), "empty scale can tare")
 		check(page._scale_place(), "touch placement puts current item on pan")
 		check(page.item == original and page.scale_occupied, "same item occupies scale")
-		check(not page._scale_place() and not page._scale_tare(), "occupied scale cannot place twice or tare")
+		check(page.bench_body.find_children("*","Button",true,false).all(func(button):return button.text!="取回手表"),"scale has no redundant return-watch button")
+		check(page._scale_place() and page.scale_occupied and not page.scale_stable,"place action can restart weighing the same original")
+		check(page._scale_tare() and not page.scale_occupied and page.item==original,"tare automatically clears the same original before zeroing")
+		if page.scale_occupied: page._scale_remove()
+		page._scale_tare();page._scale_place()
 		check(not page._scale_record(), "unsettled scale cannot record")
 		await create_timer(0.65).timeout
 		check(not page.scale_stable and not page._scale_record(), "reduced motion still waits for stable reading")

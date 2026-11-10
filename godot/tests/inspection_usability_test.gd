@@ -28,7 +28,7 @@ func run() -> void:
 	var page = shell.active_shell().page
 	page._set_tool("TOL-005")
 	await settle()
-	check_row([page.tare_button, page.place_button, page.remove_button], "scale")
+	check_row([page.tare_button, page.place_button], "scale")
 	var actions := []
 	for button in page.detail_panel.find_children("*", "Button", true, false):
 		if button.text in ["翻面 F", "实物归位", "回柜台", "去维修"]: actions.append(button)

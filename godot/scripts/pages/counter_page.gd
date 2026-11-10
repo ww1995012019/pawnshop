@@ -593,13 +593,11 @@ func _stock_slot(it: Dictionary, picking: bool, display := false) -> Button:
 		slot.add_theme_stylebox_override("normal", _flat(Color(0.24, 0.48, 0.4, 0.3), Color("8db99d"), 2))
 	elif picking:
 		slot.modulate.a = 0.45
-	if def.get("tier") == "luxury":
-		if not picking:
-			slot.add_theme_stylebox_override("normal", _flat(Color(0.27, 0.22, 0.12, 0.25), Color("bd995b"), 2))
-		var crest := UIKit.tier_badge(it.defId, 18.0)
-		crest.position = Vector2(slot.custom_minimum_size.x - 20, 1)
-		slot.add_child(crest)
+	if UIKit.presentation_tier(it) == "luxury" and not picking:
+		slot.add_theme_stylebox_override("normal", _flat(Color(0.27, 0.22, 0.12, 0.25), Color("bd995b"), 2))
+	UIKit.decorate_item(slot, it)
 	slot.tooltip_text = "%s · 品相 %s%s" % [def.name, UIKit.pct(it.condition), " · 陈列中" if it.location == "display" else ""]
+	if UIKit.is_modified(it): slot.tooltip_text += " · 改装 / 已加工"
 	slot.tooltip_text += ("\n点击推荐给顾客" if why == null else "\n" + String(why)) if picking else "\n点击在仓储查看"
 	var uid: String = it.uid
 	slot.name="stock_recommend_"+uid

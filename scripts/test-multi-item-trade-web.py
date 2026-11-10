@@ -58,7 +58,11 @@ def main():
     tap('定位并固定标识');page.wait_for_function('OrbitalTouch.state.appraisal?.count>=1')
     tap('回柜台');phone.wait(page,"s.workspace==='' && !s.blocked && s.dialogue")
     assert state()['trade_session']['sell_count']==3
-    tap('接受 ');phone.wait(page,"s.locked && s.trade_session.lines.some(l=>l.uid===s.dialogue_uid && l.selected)")
+    offer_cash=state()['cash'];offer_ap=state()['ap']
+    cmd({'type':'quote','value':int(state()['price'])});page.wait_for_timeout(200)
+    tap('出价 ');phone.wait(page,"s.locked && s.can_deliver && s.trade_session.lines.some(l=>l.uid===s.dialogue_uid && l.selected)")
+    assert state()['cash']==offer_cash and state()['ap']==offer_ap,'agreed player offer waits for delivery without an extra acceptance/payment'
+    snap('accepted-offer-direct-delivery')
     summary=state()['trade_session'];assert summary['sell_count']==3 and summary['buy_count']==1
     before_ap=state()['ap'];before_cash=state()['cash'];snap('normal-agreement')
     tap('谈妥的 4 件一起交割');phone.wait(page,'!s.busy && s.dialogue',timeout=15000)

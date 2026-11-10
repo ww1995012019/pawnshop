@@ -31,6 +31,7 @@ var save_clock := 0.0
 var grime_label: Label
 var action_button: Button
 var mode_buttons: Dictionary = {}
+var mode_bar: HBoxContainer
 var guidance: PanelContainer
 var guidance_body: VBoxContainer
 var instruction: Label
@@ -53,15 +54,6 @@ func enter() -> void:
 	var left := UIKit.vbox(10)
 	list_panel.add_child(left)
 	left.add_child(UIKit.module_header("修表台", "逐件记录 · 随时续修", "SERVICE"))
-	var modes := UIKit.vbox(6)
-	for spec in [["维修保养", open_service, "service"], ["独立翻新", open_refurb, "refurb"], ["伪装加工", open_forgery, "forge"]]:
-		var b := UIKit.button(spec[0], "secondary", Vector2(0, 48), 18)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.toggle_mode = true
-		b.pressed.connect(spec[1])
-		mode_buttons[spec[2]] = b
-		modes.add_child(b)
-	left.add_child(modes)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -78,10 +70,23 @@ func enter() -> void:
 	detail_panel.add_child(details)
 	guidance = UIKit.plate(UIKit.screen_style(12))
 	guidance.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var guidance_stack:=UIKit.vbox(8)
+	guidance_stack.minimum_size_changed.connect(queue_relayout)
+	guidance.add_child(guidance_stack)
+	mode_bar = UIKit.hbox(8)
+	mode_bar.name="workbench_modes"
+	for spec in [["维修保养", open_service, "service"], ["独立翻新", open_refurb, "refurb"], ["伪装加工", open_forgery, "forge"]]:
+		var b := UIKit.button(spec[0], "secondary", Vector2(0, 44), 16)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.toggle_mode = true
+		b.pressed.connect(spec[1])
+		mode_buttons[spec[2]] = b
+		mode_bar.add_child(b)
+	guidance_stack.add_child(mode_bar)
 	guidance_body = UIKit.vbox(4)
 	guidance_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	guidance_body.minimum_size_changed.connect(queue_relayout)
-	guidance.add_child(guidance_body)
+	guidance_stack.add_child(guidance_body)
 	add_child(guidance)
 	bench = UIKit.plate()
 	add_child(bench)
@@ -162,6 +167,7 @@ func _fill_list() -> void:
 		row.expand_icon = true
 		row.add_theme_constant_override("icon_max_width",48)
 		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		UIKit.decorate_item(row,it,18)
 		var uid: String = it.uid
 		row.pressed.connect(func(): call_deferred("_select",uid))
 		list_box.add_child(row)
@@ -187,7 +193,9 @@ func _refresh_info() -> void:
 		info.add_child(UIKit.module_header("独立翻新项目","自由选择 · 完成时单独结算","REFURBISH"))
 		for job in WatchRefurbishment.JOBS:
 			var done: bool = it.get("refurbishment",{}).get("done",[]).has(job)
-			var button := UIKit.button(("✓ " if done else "")+WatchRefurbishment.LABELS[job],"primary" if task == "refurb_"+job else "secondary",Vector2(0,48),18)
+			var button := UIKit.button(("✓ " if done else "")+WatchRefurbishment.LABELS[job],"primary" if task == "refurb_"+job and not done else "secondary",Vector2(0,48),18)
+			button.disabled=done
+			button.tooltip_text="本项翻新已完成，可选择其他项目。" if done else ""
 			var candidate: String = job
 			button.pressed.connect(func(): call_deferred("open_refurb",candidate))
 			info.add_child(button)
@@ -199,14 +207,16 @@ func _refresh_info() -> void:
 		target_picker.name="counterfeit_target_picker"
 		target_picker.disabled=bool(it.get("forgery",{}).get("target_locked",false))
 		target_picker.pressed.connect(_target_dialog)
+		if target_picker.disabled: target_picker.add_theme_stylebox_override("disabled",UIKit.key_style("secondary","disabled"))
 		info.add_child(target_picker)
 		if target_picker.disabled: info.add_child(UIKit.label("目标已锁定 · 加工进度与本件原物绑定",16,UIKit.CYAN,false,true))
 		info.add_child(UIKit.note_card("仿冒高档款", "先选兼容高价款，再逐项改装；相似度影响顾客估价，专家仍可能识破。原表与内部故障保留。"))
 		for method in WatchForgery.available_methods(it):
 			var selected: bool = task == "forge_" + method
 			var done := WatchForgery.completed(it,method)
-			var button := UIKit.button(("✓ " if done else "")+WatchForgery.LABELS[method],"primary" if selected else "secondary",Vector2(0,48),19)
+			var button := UIKit.button(("✓ " if done else "")+WatchForgery.LABELS[method],"primary" if selected and not done else "secondary",Vector2(0,48),19)
 			button.name="counterfeit_job_"+method
+			button.disabled=done
 			var candidate: String = method
 			var blocked := Commerce.forgery_problem(Game.state,it,method)
 			button.tooltip_text = blocked
@@ -295,10 +305,12 @@ func _stage_ui() -> void:
 		summary.name="counterfeit_summary"
 		guidance_body.add_child(summary)
 	instruction = UIKit.label("",18,UIKit.TEXT,false,true)
+	instruction.custom_minimum_size.y=52
 	instruction.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	guidance_body.add_child(instruction)
 	var row := UIKit.hbox(10)
 	action_button = UIKit.button("","primary",Vector2(0,50),20)
+	action_button.add_theme_stylebox_override("disabled",UIKit.key_style("secondary","disabled"))
 	action_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	action_button.pressed.connect(_primary_action)
 	row.add_child(action_button)
@@ -310,6 +322,7 @@ func _stage_ui() -> void:
 	else:
 		if task != "":
 			var saved: Dictionary = it.get("refurbishment",{}).get("operations",{}).get(task.trim_prefix("refurb_"),{}) if mode == "refurb" else it.get("service",{}).get("operations",{}).get(task,{})
+			art.set_supplies(Game.state.materials)
 			art.configure(it,task,saved)
 			instruction.text = art.hint_text()
 			action_button.text = art.action_text()
@@ -568,6 +581,8 @@ func relayout() -> void:
 	guidance.size.x = mat_rect.size.x
 	guidance.size.y = maxf(132.0, guidance.get_combined_minimum_size().y)
 	var working := Rect2(mat_rect.position + Vector2(0,guidance.size.y + 10), mat_rect.size - Vector2(0,guidance.size.y + 10))
+	var inset:=minf(12.0,minf(working.size.x*.03,working.size.y*.035))
+	working=working.grow(-inset)
 	art.position = working.position
 	art.size = working.size
 	if is_instance_valid(item):
@@ -601,8 +616,8 @@ func _process(delta: float) -> void:
 	if is_instance_valid(art) and art.visible and art.interaction_allowed != (_current_problem() == ""):
 		_update_guidance()
 	if is_instance_valid(instruction):
-		# Preserve layout while a transient notice occupies the instruction row.
-		instruction.self_modulate.a = 0.0 if shell.toast_box.get_child_count() > 0 else 1.0
+		# Keep the current permission/action hint readable during short notices.
+		instruction.self_modulate.a = 1.0
 	if scrubbing and task == "dust" and mode == "service" and is_instance_valid(item):
 		if shell.modal_open() or _cleaning_problem() != "":
 			scrubbing = false
@@ -641,7 +656,7 @@ func world_cursor_shape(point: Vector2) -> int:
 
 func toast_rect() -> Rect2:
 	if not is_instance_valid(guidance): return Rect2()
-	return Rect2(guidance.position + Vector2(0,48), Vector2(guidance.size.x, guidance.size.y - 48))
+	return Rect2(Vector2(guidance.position.x+12,guidance.get_rect().end.y-64),Vector2(maxf(1,guidance.size.x-24),52))
 
 func on_changed(_prev: Dictionary,_next: Dictionary,action: Dictionary) -> void:
 	if action.type in ["SERVICE_PROGRESS","SERVICE_BEGIN","REFURB_PROGRESS"]: return
