@@ -43,7 +43,7 @@ def main():
      tap('@stock_recommend_'+lot['uid']);phone.wait(page,"s.dialogue_uid==='"+lot['uid']+"'")
      assert not state()['blocked'] and lot['defId'].split('-')[0]=='WCH'
      assert Game_name(lot['defId']) in state()['dialogue_line']
-     tap('接受 ');phone.wait(page,'s.locked')
+     tap('接受 ');phone.wait(page,"s.locked && s.trade_session.lines.some(l=>l.uid===s.dialogue_uid && l.selected)")
     assert state()['trade_session']['sell_count']==3
     tap('@dialogue_next_goods');phone.wait(page,'s.buy && s.has_item && !s.locked')
     offered=state()['dialogue_uid'];tap('拿去鉴定');phone.wait(page,"s.workspace==='inspect'")
@@ -52,7 +52,7 @@ def main():
     tap('定位并固定标识');page.wait_for_function('OrbitalTouch.state.appraisal?.count>=1')
     tap('回柜台');phone.wait(page,"s.workspace==='' && !s.blocked && s.dialogue")
     assert state()['trade_session']['sell_count']==3
-    tap('接受 ');phone.wait(page,'s.locked')
+    tap('接受 ');phone.wait(page,"s.locked && s.trade_session.lines.some(l=>l.uid===s.dialogue_uid && l.selected)")
     summary=state()['trade_session'];assert summary['sell_count']==3 and summary['buy_count']==1
     before_ap=state()['ap'];before_cash=state()['cash'];snap('normal-agreement')
     tap('谈妥的 4 件一起交割');phone.wait(page,'!s.busy && s.dialogue',timeout=15000)

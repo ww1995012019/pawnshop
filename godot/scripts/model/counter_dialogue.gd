@@ -14,6 +14,9 @@ static func begin(s: Dictionary) -> Dictionary:
  var line := current(s)
  if not line.is_empty() and line.status!="done":
   _sync(s,line)
+  if line.direction=="buy":
+   for index in se.goods.size():
+    if se.goods[index].uid==line.uid: se.offer_cursor=index
   if line.status=="confirmed": _reply(s,line)
   elif line.direction=="buy": s.trade.line="这只%s我想出手，开价%s Cr。你先看看，价钱咱们可以谈。" % [GameData.def(TradeSession.item(s,line.uid).defId).name,Model.jnum(line.context.price)]
  else: _idle(s,"我想找些合适的旧表。你店里的货可以一件件拿给我看；我带的东西也能给你瞧瞧。")
@@ -71,7 +74,7 @@ static func next_offer(s: Dictionary) -> Dictionary:
   var index := (start+offset)%goods.size()
   var lot: Dictionary=goods[index]
   var old := TradeSession.row(s,lot.uid)
-  if not old.is_empty() and old.status in ["confirmed","done"]: continue
+  if not old.is_empty() and old.status=="done": continue
   s=_call(s,"TRADE_ADD",{"uid":lot.uid,"direction":"buy"})
   TradeSession.session(s).offer_cursor=index
   var line := TradeSession.row(s,lot.uid)
@@ -89,6 +92,8 @@ static func reduce(previous: Dictionary,a: Dictionary):
  var line := current(s)
  if type=="REFUSE": return _call(s,"TRADE_END")
  if type=="COUNTER_NEXT": return next_offer(s)
+ if type in ["OFFER","ACCEPT","PAWN","COUNTER_CANCEL"]:
+  if a.get("uid","")!=String(se.focus) or a.get("version",-1)!=se.version: return Model.notice(s,"刚才商谈的货物已变化，请按当前这一件重新确认。")
  if type=="COUNTER_CANCEL":
   if not line.is_empty(): s=_call(s,"TRADE_REMOVE",{"uid":line.uid})
   _idle(s,"这只先放一边。你有其他货可以再拿给我看看，我带的货也还能接着聊。")
@@ -98,9 +103,11 @@ static func reduce(previous: Dictionary,a: Dictionary):
   if not uid is String: return previous
   var why := TradeSession._stock_problem(s,TradeSession.item(s,uid),"sell")
   if why!="": s.trade.line="这只暂时不能收。"+why;return Model.notice(s,why)
+  if not line.is_empty() and line.uid!=uid and not line.selected and line.status!="done":
+   line.included=false;se.version+=1
   s=_call(s,"TRADE_ADD",{"uid":uid,"direction":"sell"})
   line=TradeSession.row(s,uid)
-  if line.is_empty() or line.status=="done": return s
+  if line.is_empty() or line.status=="done": s.trade.line=s.notice;return s
   _judge(s,line);_reply(s,line)
   return s
  if type=="PAWN":
@@ -120,16 +127,18 @@ static func reduce(previous: Dictionary,a: Dictionary):
   return result
  if type=="DELIVER":
   if a.get("tradeId","")!=s.trade.id: return previous
+  if a.get("version",-1)!=se.version or not a.get("batch",null) is String: return Model.notice(s,"商谈内容已变化，请重新核对这次交割；钱货未变动。")
   var summary := TradeSession.summary(s)
   if summary.sell_count+summary.buy_count==0: return Model.notice(s,"先把这一件的价钱谈妥，再确认交割。")
   var before_batches: int=se.completed.size()
-  var result := _call(s,"TRADE_CHECKOUT",{"version":summary.version,"batch":"counter-"+str(summary.version)})
+  var result := _call(s,"TRADE_CHECKOUT",{"version":a.version,"batch":a.batch})
   if TradeSession.session(result).completed.size()==before_batches: result.trade.line=result.notice;return result
   var receipt := {"income":summary.income,"expense":summary.expense,"net":summary.net,"count":summary.sell_count+summary.buy_count}
   TradeSession.session(result).last_receipt=receipt
   _idle(result,"说好的都交割好了。我还在，你可以继续拿货给我看，也可以看看我带的其他东西。")
   return next_offer(result)
  if line.is_empty() or line.status=="done": return Model.notice(s,"你可以拿一只货给我看看，或者问问我带来的东西。")
+ if type in ["OFFER","ACCEPT"] and (line.selected or line.status=="confirmed"): return previous
  if type=="OFFER":
   s=_call(s,"TRADE_OFFER",{"uid":line.uid,"price":a.get("price"),"evidence":a.get("evidence",null)})
   line=TradeSession.row(s,line.uid)
@@ -143,3 +152,8 @@ static func reduce(previous: Dictionary,a: Dictionary):
   line=TradeSession.row(s,line.uid);_reply(s,line)
   return s
  return null
+
+static func action_for(s: Dictionary,type: String,extra: Dictionary={}) -> Dictionary:
+ var se := TradeSession.session(s)
+ var version: int=int(se.get("version",0))
+ return {"type":type,"tradeId":s.trade.id,"uid":String(se.get("focus","")),"version":version,"batch":"counter-"+str(version)}.merged(extra,true)

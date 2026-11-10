@@ -117,6 +117,7 @@ func snapshot() -> Dictionary:
 			result.merge({"forge_uid": uid, "forge_name": GameData.def(selected.defId).name,
 				"forge_reason": Commerce.forgery_problem(state, selected), "forge_done": selected.has("forgery")})
 	if trade != null:
+		result.locked=bool(trade.locked)
 		var buy: bool = trade.kind == "buy"
 		var merchant: bool = trade.kind == "merchant"
 		result.merge({"price": trade.price, "buy": buy, "locked": trade.locked,
@@ -245,10 +246,10 @@ func command(data: Dictionary) -> void:
 				shell.page._offer()
 		"accept":
 			if status.get("can_accept", false):
-				Game.dispatch({"type": "ACCEPT"})
+				Game.dispatch(CounterDialogue.action_for(Game.state,"ACCEPT") if CounterDialogue.active(Game.state) else {"type":"ACCEPT"})
 		"deliver":
 			if status.get("can_deliver", false):
-				Game.dispatch({"type": "DELIVER", "tradeId": trade.id})
+				Game.dispatch(CounterDialogue.action_for(Game.state,"DELIVER") if CounterDialogue.active(Game.state) else {"type":"DELIVER","tradeId":trade.id})
 		"refuse":
 			if trade != null:
 				Game.dispatch({"type": "REFUSE"})

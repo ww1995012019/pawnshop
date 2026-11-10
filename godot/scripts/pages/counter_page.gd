@@ -60,6 +60,10 @@ var idle_label: Label
 var idle_jobs: Label
 var offer_button: Button
 var dialogue_next_goods: Button
+var dialogue_choices: HBoxContainer
+var dialogue_put_aside: Button
+var chosen_evidence_uid := ""
+var handover_history: Array = []
 var stage_root: Node2D
 var back_root: Node2D
 var resident_window: Control
@@ -263,12 +267,13 @@ func _spawn_mat_item(it: Dictionary, animate: bool, from := Vector2.ZERO) -> voi
 		var dest := MAT_POS
 		mat_item.position = start
 		mat_item.body.rotation = -0.4
-		var tw := create_tween()
+		var incoming:=mat_item
+		var tw := incoming.create_tween()
 		tw.tween_method(func(p: float):
-			mat_item.position = start.lerp(dest, p)
-			mat_item.lift = sin(p * PI) * 65.0 + (1.0 - p) * 20.0
-			mat_item.body.rotation = lerpf(-0.4, 0.0, p), 0.0, 1.0, 0.55).set_trans(Tween.TRANS_SINE)
-		tw.tween_callback(func(): mat_item.land())
+			incoming.position = start.lerp(dest, p)
+			incoming.lift = sin(p * PI) * 65.0 + (1.0 - p) * 20.0
+			incoming.body.rotation = lerpf(-0.4, 0.0, p), 0.0, 1.0, 0.55).set_trans(Tween.TRANS_SINE)
+		tw.tween_callback(func(): incoming.land())
 
 func _flat(fill: Color, edge := Color.TRANSPARENT, pad := 0) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -792,7 +797,13 @@ func _refresh() -> void:
 	var dialogue := CounterDialogue.active(s)
 	var pending := TradeSession.summary(s)
 	var pending_count: int=pending.sell_count+pending.buy_count
-	dialogue_next_goods.visible=dialogue
+	dialogue_choices.visible=dialogue
+	dialogue_put_aside.disabled=busy or _scene_blocked() or CounterDialogue.current(s).is_empty()
+	if dialogue: dialogue_put_aside.set_meta("action",CounterDialogue.action_for(s,"COUNTER_CANCEL"))
+	var delivery_action: Dictionary=CounterDialogue.action_for(s,"DELIVER") if dialogue else {"type":"DELIVER","tradeId":t.id if t!=null else ""}
+	var shown_original=Model.trade_item(s) if t!=null else null
+	var shown_uid: String=shown_original.uid if shown_original!=null else ""
+	if chosen_evidence_uid!=shown_uid: chosen_evidence="";chosen_evidence_uid=shown_uid
 	dialogue_next_goods.disabled=busy or _scene_blocked()
 	offer_button = null
 	UIKit.clear(actions)
@@ -864,16 +875,16 @@ func _refresh() -> void:
 		scr.line3.text = "%s %s · 余 %s · 1 AP" % ["支出" if buy else "收入", UIKit.money(t.price), UIKit.money(cash_after)] if it != null else "选定货物后核对金额"
 		scr.line3.tooltip_text = scr.line3.text
 		if t.locked:
-			_act(("谈妥的 %d 件一起交割" % pending_count) if dialogue and pending_count>1 else (("支付 " if buy else "收款 ") + UIKit.money(t.price) + " 并交割"), "primary", func(): Game.dispatch({"type": "DELIVER", "tradeId": t.id}), s.ap >= 1)
-			_act("这件先不算" if dialogue else "取消交易", "secondary", func(): Game.dispatch({"type": "COUNTER_CANCEL" if dialogue else "REFUSE"}))
+			_act(("谈妥的 %d 件一起交割" % pending_count) if dialogue and pending_count>1 else (("支付 " if buy else "收款 ") + UIKit.money(t.price) + " 并交割"), "primary", func(): Game.dispatch(delivery_action), s.ap >= 1)
+			_act("这件先不算" if dialogue else "取消交易", "secondary", func(): Game.dispatch(CounterDialogue.action_for(s,"COUNTER_CANCEL") if dialogue else {"type":"REFUSE"}))
 			if dialogue: _act("送客", "secondary", func(): Game.dispatch({"type":"REFUSE"}))
 		elif it == null:
-			if dialogue and pending_count>0: _act("先交割谈妥的%d件" % pending_count,"primary",func(): Game.dispatch({"type":"DELIVER","tradeId":t.id}))
+			if dialogue and pending_count>0: _act("先交割谈妥的%d件" % pending_count,"primary",func(): Game.dispatch(delivery_action))
 			_act("挑选货物", "primary", _pick_goods)
 			_act("送客", "danger", func(): Game.dispatch({"type": "REFUSE"}))
 		else:
 			dial_on = true
-			var bnd := Model.offer_bounds(s, t, it)
+			var bnd := {"min":1,"max":Model.trade_terms(s,t,it).marketCap} if dialogue else Model.offer_bounds(s, t, it)
 			dial.min_value = 1
 			dial.max_value = int(maxf(1, bnd.max))
 			var drafts: Dictionary = Game.get_meta("counter_offer_drafts", {})
@@ -895,14 +906,14 @@ func _refresh() -> void:
 				chips.add_child(chip)
 			if chips.get_child_count() == 0:
 				chips.add_child(UIKit.label("物证插槽 · 先在鉴定仪取证", 13, Color("36463e")))
-			offer_button = _act("出价 " + UIKit.money(dial.value), "primary", func(): _offer(), quote_problem == "", false, quote_problem)
-			_act("接受 " + UIKit.money(t.price), "good", func(): Game.dispatch({"type": "ACCEPT"}), s.ap >= 1 and (not buy or s.cash >= t.price) and quote_problem == "", false, quote_problem)
+			offer_button = _act("出价 " + UIKit.money(dial.value), "primary", func(): _offer(it.uid if dialogue else "",int(pending.version) if dialogue else -1), quote_problem == "", false, quote_problem)
+			_act("接受 " + UIKit.money(t.price), "good", func(): Game.dispatch(CounterDialogue.action_for(s,"ACCEPT") if dialogue else {"type":"ACCEPT"}), s.ap >= 1 and (dialogue or not buy or s.cash >= t.price) and quote_problem == "", false, quote_problem)
 			_act("拿去鉴定", "secondary", func(): shell.go("inspect", it.uid))
 			if dialogue and pending_count>0:
-				_act("先交割%d件" % pending_count,"secondary",func(): Game.dispatch({"type":"DELIVER","tradeId":t.id}))
+				_act("先交割%d件" % pending_count,"secondary",func(): Game.dispatch(delivery_action))
 			elif buy:
 				var pawn_ok := Model.evidence_count(it) >= 2
-				_act("签抵押合同" if pawn_ok else "抵押（需 2 条物证）", "secondary", func(): Game.dispatch({"type": "PAWN", "tradeId": t.id}), pawn_ok, false, "需两条物证；付估值约 40% 本金，3 天赎期")
+				_act("签抵押合同" if pawn_ok else "抵押（需 2 条物证）", "secondary", func(): Game.dispatch(CounterDialogue.action_for(s,"PAWN") if dialogue else {"type":"PAWN","tradeId":t.id}), pawn_ok, false, "需两条物证；付估值约 40% 本金，3 天赎期")
 			else:
 				_act("换一件", "secondary", _pick_goods)
 			_act("送客", "danger", func(): Game.dispatch({"type": "REFUSE"}))
@@ -1055,9 +1066,10 @@ func _update_offer_value(value: int) -> void:
 		drafts[key] = value
 		Game.set_meta("counter_offer_drafts", drafts)
 
-func _offer() -> void:
-	var a := {"type": "OFFER", "price": dial.value}
-	if chosen_evidence != "":
+func _offer(expected_uid := "", expected_version := -1) -> void:
+	var a: Dictionary=CounterDialogue.action_for(Game.state,"OFFER",{"price":dial.value}) if CounterDialogue.active(Game.state) else {"type":"OFFER","price":dial.value}
+	if expected_uid!="": a.uid=expected_uid;a.version=expected_version
+	if chosen_evidence != "" and (not CounterDialogue.active(Game.state) or a.uid==chosen_evidence_uid):
 		a.evidence = chosen_evidence
 	Game.dispatch(a)
 
@@ -1130,11 +1142,20 @@ func _build_bubble() -> void:
 	bubble_label.mouse_filter = Control.MOUSE_FILTER_STOP
 	bubble.add_child(bubble_label)
 	footer.reparent(bubble)
-	dialogue_next_goods=UIKit.button("你还带了别的货吗？","secondary",Vector2(0,38),17)
+	dialogue_choices=UIKit.hbox(4)
+	bubble.add_child(dialogue_choices)
+	dialogue_put_aside=UIKit.button("这件先放下","secondary",Vector2(0,38),16)
+	dialogue_put_aside.name="dialogue_put_aside"
+	dialogue_put_aside.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	dialogue_put_aside.pressed.connect(func():
+		if not busy and not _scene_blocked(): Game.dispatch(dialogue_put_aside.get_meta("action")))
+	dialogue_choices.add_child(dialogue_put_aside)
+	dialogue_next_goods=UIKit.button("再看看你的货","secondary",Vector2(0,38),16)
+	dialogue_next_goods.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	dialogue_next_goods.name="dialogue_next_goods"
 	dialogue_next_goods.pressed.connect(func():
 		if not _scene_blocked() and not busy: Game.dispatch({"type":"COUNTER_NEXT"}))
-	bubble.add_child(dialogue_next_goods)
+	dialogue_choices.add_child(dialogue_next_goods)
 
 func _layout_bubble_content() -> void:
 	if not is_instance_valid(bubble) or not is_instance_valid(bubble_label) or not is_instance_valid(footer):
@@ -1149,8 +1170,8 @@ func _layout_bubble_content() -> void:
 	footer.position.y = note_y
 	bubble.size.y = note_y + (80.0 if natural else 56.0)
 	if natural:
-		dialogue_next_goods.position=Vector2(12,note_y+34)
-		dialogue_next_goods.size=Vector2(bubble_rect.size.x-24,38)
+		dialogue_choices.position=Vector2(12,note_y+34)
+		dialogue_choices.size=Vector2(bubble_rect.size.x-24,38)
 
 func _say(text: String, type := true, mood := "") -> void:
 	# Leave time to read this line before the visitor volunteers another detail.
@@ -1265,6 +1286,9 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 				var proxy: Dictionary=pt.duplicate(true)
 				proxy.kind="buy" if receipt.net<0 else "sell"
 				proxy.price=absf(float(receipt.net));proxy.batch_income=receipt.income;proxy.batch_expense=receipt.expense
+				proxy.handoffs=[]
+				for line in TradeSession.session(prev).lines:
+					if line.selected and line.status=="confirmed": proxy.handoffs.append({"original":TradeSession.item(prev,line.uid),"direction":line.direction})
 				await _deal(proxy,false,"本次说好的 %d 件原物" % int(receipt.count),true)
 			elif pt != null and nt == null:
 				var sold = Model.trade_item(prev)
@@ -1337,20 +1361,10 @@ func _deal(t: Dictionary, pawn: bool, item_name: String, stay := false) -> void:
 	# the actual item tween, rather than a shorter, unrelated timer.
 	_receipt(t, price, pawn, item_name)
 	customer.nod()
-	if is_instance_valid(mat_item):
-		var item := mat_item
-		item.draggable = false
-		if not Game.prefs.reduced_motion:
-			var start := item.global_position
-			var dest: Vector2 = _crate_point() if buy else customer.hands()
-			var tw := create_tween()
-			tw.tween_method(func(p: float):
-				item.global_position = start.lerp(dest, p) + Vector2(0, -sin(p * PI) * 80.0)
-				item.scale = Vector2.ONE * lerpf(1.0, 0.25 if buy else 0.6, p)
-				item.modulate.a = 1.0 - smoothstep(0.75, 1.0, p), 0.0, 1.0, 0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			await tw.finished
-		item.queue_free()
-		mat_item = null
+	handover_history=[]
+	if stay:
+		for handoff in t.get("handoffs",[]): await _handover(handoff.original,String(handoff.direction))
+	elif is_instance_valid(mat_item): await _handover(null,"buy" if buy else "sell")
 	if stay:
 		busy=false
 		_refresh()
@@ -1365,6 +1379,29 @@ func _deal(t: Dictionary, pawn: bool, item_name: String, stay := false) -> void:
 	customer = null
 	busy = false
 	_refresh()
+
+func _handover(original, direction: String) -> void:
+	if original!=null:
+		if not is_instance_valid(mat_item) or mat_item.uid!=original.uid: _spawn_mat_item(original,false)
+		handover_history.append({"uid":original.uid,"direction":direction})
+		if Game.item(original.uid)==null and WatchForgery.target_id(original)!="":
+			mat_item.body.texture=UIKit.physical_texture(original,mat_item.back)
+			mat_item.body.region_rect=Rect2(8.96,8.96,238.08,238.08)
+			mat_item.mat.set_shader_parameter("region",Vector4(8.96/256.0,8.96/256.0,238.08/256.0,238.08/256.0))
+	if not is_instance_valid(mat_item): return
+	var moving:=mat_item
+	moving.draggable=false
+	if not Game.prefs.reduced_motion:
+		var start:=moving.global_position
+		var dest: Vector2=_crate_point() if direction=="buy" else customer.hands()
+		var tw:=moving.create_tween()
+		tw.tween_method(func(p: float):
+			moving.global_position=start.lerp(dest,p)+Vector2(0,-sin(p*PI)*80)
+			moving.scale=Vector2.ONE*lerpf(1.0,0.25 if direction=="buy" else 0.6,p)
+			moving.modulate.a=1.0-smoothstep(0.75,1.0,p),0.0,1.0,0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		await tw.finished
+	moving.queue_free()
+	if mat_item==moving: mat_item=null
 
 func _bill(from: Vector2, to: Vector2, i: int, landing_cash: float) -> Tween:
 	var b := preload("res://scripts/ui/cash_tray.gd").new()
