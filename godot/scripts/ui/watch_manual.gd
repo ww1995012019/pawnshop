@@ -40,7 +40,7 @@ static func populate_reference(content: VBoxContainer, id: String, paper := fals
 	if GameData.def(id).get("tier") == "luxury":
 		var distinction := UIKit.hbox(8)
 		distinction.add_child(UIKit.tier_badge(id))
-		distinction.add_child(UIKit.label("名贵型号 · 金饰徽章", 16, UIKit.AMBER))
+		distinction.add_child(UIKit.label("名贵型号 · 金饰徽章", 18, UIKit.INK if paper else UIKit.AMBER))
 		content.add_child(distinction)
 	var art_card := UIKit.plate(UIKit.paper_style(12))
 	var art_body := UIKit.vbox(8)
