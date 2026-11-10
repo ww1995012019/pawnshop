@@ -55,6 +55,7 @@ jobs:
           python scripts/test-merchant-phone.py http://127.0.0.1:4174/
           python scripts/test-watch-appraisal-web.py
           python scripts/test-document-web.py
+          python scripts/test-watch-expansion-web.py
           python scripts/test-mobile-gestures-web.py
           python scripts/test-watch-service-web.py --permissions-only
           python scripts/test-store-costs-web.py
