@@ -15,10 +15,13 @@ func scene_name() -> String:
 	return "warehouse"
 
 func hint_text() -> String:
+	var closed := Model.business_hours_problem(Game.state)
+	if closed != "": return closed
 	return "接取订单后，从库存挑选合格原物交付（1 AP）；委修单必须交还顾客原物。"
 
 func enter() -> void:
 	board = UIKit.plate()
+	board.minimum_size_changed.connect(queue_relayout)
 	add_child(board)
 	var surface := UIKit.vbox(16)
 	board.add_child(surface)
@@ -32,7 +35,7 @@ func enter() -> void:
 		tab_row.add_child(tab)
 		tabs[key] = tab
 	surface.add_child(UIKit.rule())
-	status_note = UIKit.label("", 19, UIKit.MUTED)
+	status_note = UIKit.label("", 19, UIKit.MUTED, false, true)
 	surface.add_child(status_note)
 	for key in ["open", "active", "closed"]:
 		var sc := ScrollContainer.new()
@@ -77,6 +80,9 @@ func _select_status(key: String) -> void:
 		"active": "逐项核对品相与维修要求，交付消耗 1 行动点。",
 		"closed": "查看已交付和已过期的委托记录。"
 	}[key]
+	var closed := Model.business_hours_problem(Game.state)
+	if closed != "": status_note.text = "已打烊 · 不能接单或交付。请收起终端，先开始下一营业日。" if Game.state.phase != "ending" else closed
+	status_note.add_theme_color_override("font_color",UIKit.AMBER if closed != "" else UIKit.MUTED)
 	if status_changed:
 		tabs[key].call_deferred("grab_focus")
 
@@ -175,17 +181,29 @@ func _readable(text: String) -> String:
 		text = text.replace(m.get_string(), "「%s」" % r.name if not r.is_empty() else "对应工序")
 	return text
 
+func _hours_blocked() -> bool:
+	var reason := Model.business_hours_problem(Game.state)
+	if reason == "": return false
+	shell.toast(reason)
+	shell.hint(reason)
+	return true
+
+func _take_order(id: String) -> void:
+	if _hours_blocked(): return
+	Game.dispatch({"type":"TAKE_ORDER","id":id})
+	var order = Model._order_state(Game.state,id)
+	if order != null and order.status == "active": _select_status("active")
+
 func _refresh() -> void:
 	for k in cols:
 		UIKit.clear(cols[k])
 	var s := Game.state
 	for def in Model.available_orders(s):
 		var v := _card(def)
-		var b := UIKit.button("接取订单", "primary", Vector2(0, 56), 22)
+		var closed: bool = s.phase != "open"
+		var b := UIKit.button("已打烊 · 不能接单" if closed else "接取订单", "secondary" if closed else "primary", Vector2(0, 56), 22)
 		var id: String = def.id
-		b.pressed.connect(func():
-			if Game.dispatch({"type": "TAKE_ORDER", "id": id}):
-				_select_status("active"))
+		b.pressed.connect(func(): _take_order(id))
 		v.add_child(b)
 		cols.open.add_child(v.get_parent())
 	for o in s.orders:
@@ -212,12 +230,19 @@ func _refresh() -> void:
 			var why := UIKit.label("", 18, UIKit.RUST, false, true)
 			var b := UIKit.button("交付（1 AP）", "good", Vector2(0, 56), 22)
 			var check := func():
+				var closed := Model.business_hours_problem(Game.state)
+				b.text = "已打烊 · 不能交付" if closed != "" else "交付（1 AP）"
+				if closed != "":
+					why.text = closed
+					b.disabled = false
+					return
 				if opt.item_count == 0:
 					why.text = "库存里还没有这件货。"
 					b.disabled = true
 					return
 				var it = Game.item(opt.get_item_metadata(opt.selected))
-				var bad = Model.order_item_valid(s, def.id, it)
+				var bad = Model.order_item_valid(Game.state, def.id, it)
+				if bad == null and not Model.has_ap(Game.state,1): bad = "行动点不足：交付订单需要 1 AP。"
 				why.text = bad if bad != null else "可以交付。"
 				why.add_theme_color_override("font_color", UIKit.RUST if bad != null else Color("2f6b3a"))
 				b.disabled = bad != null
@@ -225,7 +250,11 @@ func _refresh() -> void:
 			check.call()
 			var id: String = def.id
 			b.pressed.connect(func():
-				if Game.dispatch({"type": "DELIVER_ORDER", "id": id, "uid": opt.get_item_metadata(opt.selected)}):
+				if _hours_blocked(): return
+				if opt.item_count == 0: return
+				Game.dispatch({"type": "DELIVER_ORDER", "id": id, "uid": opt.get_item_metadata(opt.selected)})
+				var order = Model._order_state(Game.state,id)
+				if order != null and order.status == "done":
 					shell.sound("coin", -2)
 					if not Game.prefs.reduced_motion:
 						shell.shake = 0.3)

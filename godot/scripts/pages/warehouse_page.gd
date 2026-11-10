@@ -479,7 +479,8 @@ class StorageGrid extends Control:
 					Game.dispatch({"type": "MOVE", "uid": uid, "x": int(tl.x), "y": int(tl.y), "rotated": drag_rot})
 					var placed = Game.item(uid)
 					if placed == null or placed.x != int(tl.x) or placed.y != int(tl.y) or placed.rotated != drag_rot:
-						page.shell.toast("放置会重叠或越界，货物已回到原位。")
+						var closed := Model.business_hours_problem(Game.state)
+						page.shell.toast(closed if closed != "" else "放置会重叠或越界，货物已回到原位。")
 					else:
 						prepared_uid = ""
 						page.shell.sound("drop", -6, 1.1)
