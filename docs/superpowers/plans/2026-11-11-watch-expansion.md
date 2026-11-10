@@ -9,7 +9,7 @@
 
 ## Global Constraints
 
-- Preserve original 33 definitions, identities, cropped art pixels, evidence and old saves. Append WCH-034..078: low 15, mid 15, luxury 10, ultra 5. Totals 27/27/19/5.
+- Preserve original 33 definitions, identities, cropped art pixels, evidence and old saves, except the six explicitly repriced Star values from concurrent approved main7642914. Append WCH-034..078: low 15, mid 15, luxury 10, ultra 5. Totals 27/27/19/5.
 - Ultra rarity is 0.5% per procedural fresh physical item, all five combined; counterfeit generation approximately 20%, independently sampled, including merchant luxury/ultra stock.
 - Theft risk is 300 + 8 × luxury + 10 × ultra basis points; 1 each yields 318 basis points. Tier-first theft weights 80/15/4/1, absent tiers excluded.
 - Protect customer/service/sealed goods and existing insurance/provenance/police/counter sessions. No rerolls of existing physical goods.
@@ -32,7 +32,7 @@
 
 - [ ] Add failing catalogue/art/rare-animation tests for 78 models and tier counts 27/27/19/5; old 33 fixtures/crops unchanged; all new recipes/parts/serial/mass/altered logos usable. Replace finite-campaign assumption that every model appears with deterministic non-probability model validation (rarity distribution belongs Task 2).
 - [ ] Run targeted tests and retain expected failures.
-- [ ] Append data: three new low families with five models each (85–210), three mid families (220–330), two luxury families (420–1100), ultra family 穹铸 with five distinctive names 环日/极光/星仪/赤冕/月蚀 (1200/1450/1700/1950/2200). Existing price tiers must remain nonoverlapping; current mid max 325 and luxury min 337. Complete corresponding repair recipes and sprite mappings.
+- [ ] Append data: three new low families with five models each (85–210), three mid families (220–330), two luxury families (420–1100), ultra family 穹铸 with five distinctive names 环日/极光/星仪/赤冕/月蚀 (15000/18000/22000/26000/32000; reconciled with latest Star ceiling 12000). Existing price tiers must remain nonoverlapping; current mid max 325 and luxury min 337. Complete corresponding repair recipes and sprite mappings.
 - [ ] Extend deterministic generator without changing original 33 render paths. Author distinctive new cases/dials/straps and five individually recognizable rare silhouettes/materials. Atlas five columns, sixteen rows (1280×4096); update all row metadata and normal maps. Back markings stay bounded. Authentic and altered logo readings match generated marks.
 - [ ] Add fourth catalogue section with tier navigation usable on mobile and animated rare detail preview. Integrate restrained distinct effects into selected physical appearance, respecting reduced motion, logo masking, forgery appearance and back face. No per-card animations.
 - [ ] Run meaningful targeted tests, inspect generated art contact sheet, self-review and commit. Do not run full native suite while root Chromium runs; coordinate before tests.

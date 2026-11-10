@@ -3676,7 +3676,7 @@
       "id": "WCH-074",
       "name": "穹铸 Q01 环日",
       "category": "watch",
-      "value": 1200,
+      "value": 15000,
       "sprite": 73,
       "size": [
         1,
@@ -3727,7 +3727,7 @@
       "id": "WCH-075",
       "name": "穹铸 Q02 极光",
       "category": "watch",
-      "value": 1450,
+      "value": 18000,
       "sprite": 74,
       "size": [
         1,
@@ -3778,7 +3778,7 @@
       "id": "WCH-076",
       "name": "穹铸 Q03 星仪",
       "category": "watch",
-      "value": 1700,
+      "value": 22000,
       "sprite": 75,
       "size": [
         1,
@@ -3829,7 +3829,7 @@
       "id": "WCH-077",
       "name": "穹铸 Q04 赤冕",
       "category": "watch",
-      "value": 1950,
+      "value": 26000,
       "sprite": 76,
       "size": [
         1,
@@ -3880,7 +3880,7 @@
       "id": "WCH-078",
       "name": "穹铸 Q05 月蚀",
       "category": "watch",
-      "value": 2200,
+      "value": 32000,
       "sprite": 77,
       "size": [
         1,
