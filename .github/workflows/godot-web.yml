@@ -63,6 +63,7 @@ jobs:
           NIGHT_WEB_VIEW=desktop python scripts/test-night-crime-web.py
           python scripts/test-premium-counterfeit-web.py
           python scripts/test-multi-item-trade-web.py
+          COUNTER_WEB_CASES=arrest python scripts/test-counter-lifecycle-web.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
