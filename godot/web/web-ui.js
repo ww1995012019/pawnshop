@@ -10,14 +10,37 @@
   let turned = false;
   let state = {ready: false};
 
-  // The engine reads clientX/clientY against the canvas box. While the canvas
-  // is turned, hand it positions in the canvas's own landscape space.
+  // The engine reads clientX/clientY against the canvas box. Hand it positions
+  // in the canvas's own landscape space while the canvas is turned, and move a
+  // finger that lands just beside a small button onto it. The game decides
+  // where each new touch lands; the same shift then follows that finger.
   const POINTER = /^(mouse|touch|pointer|wheel|contextmenu|click|dblclick)/;
   const LISTS = new Set(['touches', 'changedTouches', 'targetTouches']);
+  const shifts = new Map();
+  const inCanvas = point => turned ? [point.clientY, innerWidth - point.clientX] : [point.clientX, point.clientY];
+  function place(touch) {
+    const [x, y] = inCanvas(touch);
+    let shift = [0, 0];
+    try {
+      window.orbitalPlacedX = window.orbitalPlacedY = null;
+      window.orbitalTouchPlace?.(x, y);
+      if (Number.isFinite(window.orbitalPlacedX) && Number.isFinite(window.orbitalPlacedY)) shift = [window.orbitalPlacedX - x, window.orbitalPlacedY - y];
+    } catch { /* The game is still loading: leave the touch where it is. */ }
+    shifts.set(touch.identifier, shift);
+  }
+  canvas.addEventListener('touchstart', event => { for (const touch of event.changedTouches) place(touch); }, true);
+  for (const type of ['touchend', 'touchcancel']) {
+    addEventListener(type, event => {
+      const done = Array.from(event.changedTouches, touch => touch.identifier);
+      setTimeout(() => done.forEach(id => shifts.delete(id)));
+    }, true);
+  }
   function turnedPoint(point) {
     return new Proxy(point, {get(target, key) {
-      if (key === 'clientX') return target.clientY;
-      if (key === 'clientY') return innerWidth - target.clientX;
+      if (key === 'clientX' || key === 'clientY') {
+        const shift = shifts.get(target.identifier) || [0, 0];
+        return key === 'clientX' ? inCanvas(target)[0] + shift[0] : inCanvas(target)[1] + shift[1];
+      }
       if (LISTS.has(key)) return Array.from(target[key], turnedPoint);
       const value = target[key];
       return typeof value === 'function' ? value.bind(target) : value;
@@ -31,7 +54,7 @@
       const key = type + (options === true || options?.capture ? ':capture' : '');
       if (!wrapped.has(listener)) wrapped.set(listener, new Map());
       const byType = wrapped.get(listener);
-      if (!byType.has(key)) byType.set(key, event => listener.call(target, turned ? turnedPoint(event) : event));
+      if (!byType.has(key)) byType.set(key, event => listener.call(target, turned || shifts.size ? turnedPoint(event) : event));
       return add(type, byType.get(key), options);
     };
     target.removeEventListener = (type, listener, options) => {

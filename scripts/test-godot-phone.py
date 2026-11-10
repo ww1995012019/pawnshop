@@ -133,7 +133,11 @@ def main():
             page.screenshot(path=str(args.screenshots / '02-landscape-counter.png'))
 
             # The counter's own fixtures drive the day: bell, instruments, drawers.
-            tap(page, '接客铃')
+            # The till's own button is only a few millimetres tall on a phone: a
+            # finger landing just above it must still press it.
+            small = locate(page, '接待下一位来客')
+            assert small['height'] < 24, f"Expected a small till button, got {small['height']:.0f} CSS px"
+            page.touchscreen.tap(small['x'], small['y'] - small['height'] / 2 - 8)
             wait(page, "s.trade && !s.busy")
             price = state(page, 'price')
             assert locate(page, '接受')['label'].endswith(f'{price} Cr'), 'The quote console must show the asking price'

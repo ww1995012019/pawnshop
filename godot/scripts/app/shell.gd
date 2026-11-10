@@ -406,25 +406,67 @@ func _build_nav() -> void:
 func counter_offset() -> Vector2:
 	if workspace_mode:
 		return Vector2.ZERO
-	return ((get_viewport().get_visible_rect().size - Vector2(1920, 1080)) * 0.5).floor()
+	return ((get_viewport().get_visible_rect().size - Vector2(1920, 1080)) * 0.5).floor() - view_shift
 
-## Wide phone screens leave blank wall at both sides while the shop itself is
-## limited by the screen height. Enlarge the whole picture there, hiding only
-## the ceiling and floor strips that carry no controls.
-const WIDE_SCREEN_ZOOM := 1080.0 / 1000.0
+## The shop is limited by the screen height on wide screens and leaves blank
+## wall at both sides, so the whole picture is enlarged there, hiding only the
+## ceiling and floor strips that carry no controls. Phones are small: they also
+## give up the bare wall beside the fixtures and frame just the working shop.
+const WIDE_VIEW := Rect2(0, 40, 1920, 1000)
+const PHONE_VIEW := Rect2(130, 45, 1755, 990)
+var view_shift := Vector2.ZERO
+const TouchAssist := preload("res://scripts/app/touch_assist.gd")
 
-func _fit_wide_screen() -> void:
+func _fit_view() -> void:
 	var window := get_window()
 	var pixels := Vector2(window.size)
 	if pixels.x <= 0.0 or pixels.y <= 0.0:
 		return
-	var factor := clampf(pixels.x / pixels.y / (1920.0 / 1080.0), 1.0, WIDE_SCREEN_ZOOM)
+	var view := PHONE_VIEW if _landscape_phone() else WIDE_VIEW
+	var base := minf(pixels.x / 1920.0, pixels.y / 1080.0)
+	var factor := maxf(1.0, minf(pixels.x / view.size.x, pixels.y / view.size.y) / base)
 	if not is_equal_approx(window.content_scale_factor, factor):
 		window.content_scale_factor = factor
+	# Move the picture only as far as the framed part needs to stay on screen.
+	var half := pixels / (base * factor) * 0.5
+	var low := view.end - half - CENTER
+	var high := view.position + half - CENTER
+	view_shift = Vector2(clampf(0.0, minf(low.x, high.x), maxf(low.x, high.x)),
+		clampf(0.0, minf(low.y, high.y), maxf(low.y, high.y))).round()
+
+## CSS pixels per unit of this shell's viewport, for finger-sized targets.
+var touch_scale_override := 0.0
+func touch_scale() -> float:
+	if touch_scale_override > 0.0:
+		return touch_scale_override
+	if workspace_mode:
+		return workspace_parent.touch_scale() * workspace_parent.workspace_frame.scale.x
+	var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1", true)) if OS.has_feature("web") else 1.0
+	return absf(get_viewport().get_final_transform().get_scale().x) / maxf(ratio, 0.1)
+
+func _touch_root() -> Control:
+	if modal_open():
+		return modal_layer
+	if is_instance_valid(title) and not title.is_queued_for_deletion():
+		return title
+	if not workspace_mode and workspace_open():
+		return workspace_overlay
+	return root_ui
+
+## Where a touch at `point` (this shell's viewport) should land.
+func place_touch(point: Vector2) -> Vector2:
+	if not workspace_mode and workspace_open() and not modal_open():
+		# The drawer is its own viewport: decide there, in its coordinates.
+		var to_screen := workspace_container.get_global_transform_with_canvas()
+		var inside := to_screen.affine_inverse() * point
+		if Rect2(Vector2.ZERO, workspace_container.size).has_point(inside):
+			var ratio := workspace_logical_size / workspace_container.size
+			return to_screen * (workspace_shell.place_touch(inside * ratio) / ratio)
+	return TouchAssist.snap(point, _touch_root(), touch_scale())
 
 func _fit() -> void:
 	if not workspace_mode:
-		_fit_wide_screen()
+		_fit_view()
 	var vis := get_viewport().get_visible_rect().size
 	if workspace_mode:
 		cam.position = vis * 0.5
@@ -624,7 +666,10 @@ func _layout_workspace() -> void:
 	var output_scale := get_viewport().get_final_transform().get_scale()
 	_set_workspace_render_scale(maxf(absf(output_scale.x), absf(output_scale.y)) * fit)
 
+var phone_override := false
 func _landscape_phone() -> bool:
+	if phone_override or (workspace_mode and workspace_parent.phone_override):
+		return true
 	if not OS.has_feature("web"):
 		return false
 	return bool(JavaScriptBridge.eval("!!(window.OrbitalTouch && window.OrbitalTouch.phone())", true))
@@ -1399,7 +1444,7 @@ func _process(delta: float) -> void:
 	var t := Time.get_ticks_msec() / 1000.0
 	ambient.color = ambient.color.lerp(ambient_target, 1.0 - exp(-delta * 6.0))
 	cam.zoom = Vector2.ONE if workspace_mode else Vector2.ONE * zoom_base * (1.0 + 0.14 * focus)
-	cam.position = get_viewport().get_visible_rect().size * 0.5 if workspace_mode else CENTER.lerp(focus_point, focus * 0.55)
+	cam.position = get_viewport().get_visible_rect().size * 0.5 if workspace_mode else (CENTER + view_shift).lerp(focus_point, focus * 0.55)
 	shake = maxf(0.0, shake - delta * 1.6)
 	cam.offset = Vector2.ZERO if workspace_mode else Vector2(randf_range(-1, 1), randf_range(-1, 1)) * shake * shake * 22.0
 	var still: bool = Game.prefs.reduced_motion

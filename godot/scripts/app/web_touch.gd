@@ -3,6 +3,7 @@ extends Node
 const Commerce = preload("res://scripts/model/commerce.gd")
 var shell
 var callback: JavaScriptObject
+var place_callback: JavaScriptObject
 var window: JavaScriptObject
 var elapsed := 0.0
 var last_json := ""
@@ -16,10 +17,24 @@ func setup(owner_shell: Node) -> void:
 	window = JavaScriptBridge.get_interface("window")
 	callback = JavaScriptBridge.create_callback(_receive)
 	window.orbitalTouchSend = callback
+	place_callback = JavaScriptBridge.create_callback(_place)
+	window.orbitalTouchPlace = place_callback
 
 func _exit_tree() -> void:
 	if window != null:
 		window.orbitalTouchSend = null
+		window.orbitalTouchPlace = null
+
+## A finger went down at this canvas position (CSS pixels). Answer at once
+## where it should land, so a near miss still presses a small button.
+func _place(args: Array) -> void:
+	if args.size() < 2 or not is_instance_valid(shell):
+		return
+	var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1", true))
+	var to_canvas: Transform2D = shell.get_viewport().get_screen_transform()
+	var landed: Vector2 = to_canvas * shell.place_touch(to_canvas.affine_inverse() * (Vector2(float(args[0]), float(args[1])) * ratio)) / ratio
+	window.orbitalPlacedX = landed.x
+	window.orbitalPlacedY = landed.y
 
 func _receive(args: Array) -> void:
 	if args.is_empty() or not args[0] is String:
