@@ -141,7 +141,13 @@ static func _reject_forgery(s: Dictionary, item: Dictionary, caught: Array[Strin
 
 static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 	GameData.ensure()
+	var batch_result=TradeSession.reduce(previous,action)
+	if batch_result!=null: return batch_result
 	var kind: String = action.get("type", "")
+	if not TradeSession.session(previous).is_empty():
+		if kind=="REFUSE": return TradeSession.reduce(previous,{"type":"TRADE_END"})
+		if kind in ["SELECT_TRADE","OFFER","ACCEPT","DELIVER","PAWN","SELL_MERCHANT_ITEM"]:
+			return _message(previous,"本次使用多件清单，请在清单逐件确认并统一交割，或结束接待。")
 	var wanted_result = Wanted.reduce(previous, action)
 	if wanted_result != null: return wanted_result
 	if kind == "CHOOSE_EVENT" and CrimeEvents.is_crime(CrimeEvents.event_for_day(previous)):
@@ -168,6 +174,9 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 		var s: Dictionary=previous.duplicate(true)
 		item=Model.find_inventory(s,item.uid)
 		if not item.get("forgery") is Dictionary: item.forgery={"methods":{}}
+		if item.forgery.get("targetId","")!=id:
+			for method in WatchForgery.TARGET_METHODS:
+				item.get("service",{}).get("operations",{}).erase("forge_"+method)
 		item.forgery.version=2
 		item.forgery.targetId=id
 		return Model.notice(s,"目标已选：%s。完成加工后才会改变外观与顾客估价。" % GameData.def(id).name)
@@ -177,7 +186,7 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 		var problem := forgery_problem(previous, item, method)
 		if problem != "": return _message(previous, problem)
 		var operation: Dictionary = item.get("service", {}).get("operations", {}).get("forge_" + method, {})
-		if not operation.get("complete", false) or operation.get("opened", false):
+		if not operation.get("complete", false) or operation.get("opened", false) or operation.get("targetId","")!=WatchForgery.target_id(item):
 			return _message(previous, "请先在修表工作台完成这项加工的实际操作与封盖。")
 		var s: Dictionary = previous.duplicate(true)
 		item = Model.find_inventory(s, item.uid)
@@ -186,7 +195,7 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 			item.cost += GameData.material(id).price * WatchForgery.COSTS[method][id]
 		Model.spend(s, 1)
 		WatchForgery.apply(item, method)
-		if method in ["serial","weight"]: StoreCosts.record(s,"uv" if method == "serial" else "scale","forge|%s|%s" % [item.uid,method],0.5)
+		if method in ["serial","weight"]: StoreCosts.record(s,"uv" if method == "serial" else "scale","forge|%s|%s|%s" % [item.uid,WatchForgery.target_id(item),method],0.5)
 		item.service.opened = false
 		item.service.erase("forge_task")
 		return Model.notice(s, "%s完成：加工痕迹与实物变化已记录，请复测；内部机芯故障仍需维修。" % WatchForgery.LABELS[method])
@@ -295,7 +304,7 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 		if previous.cash + price > 1000000000:
 			return _message(previous, "现金已达到保存上限，本次没有出售旧物。")
 		var s: Dictionary = checked_state
-		Model.ledger(s, Model.next_id(s, "merchant-sale"), "sale", "商人回收 %s" % GameData.def(item.defId).name, price, item.cost)
+		Model.ledger(s, Model.next_id(s, "merchant-sale"), "sale", "商人回收 %s" % WatchForgery.sale_name(item), price, item.cost)
 		Model._remove_item(s, item.uid)
 		Model.spend(s, 1)
 		return Model.notice(s, "旧物已移交商人，收到 %s Cr。" % Model.jnum(price))

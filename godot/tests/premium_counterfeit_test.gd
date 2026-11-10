@@ -103,5 +103,28 @@ func run():
  progress_state=Model.reduce(progress_state,{"type":"SERVICE_PROGRESS","uid":uid,"task":"forge_logo","progress":{"task":"forge_logo","step":0,"complete":false,"opened":false}})
  var refused=Commerce.reduce(progress_state,{"type":"FORGE_TARGET","uid":uid,"target":"WCH-029"})
  check(WatchForgery.target_id(Model.find_inventory(refused,uid))=="WCH-033","saved partial work also locks target")
+ # Reviewer regressions: old physical work cannot satisfy a new target.
+ var reuse=untouched.duplicate(true);var old_item=Model.find_inventory(reuse,uid)
+ reuse=forge(reuse,uid,"logo")
+ reuse=Commerce.reduce(reuse,{"type":"FORGE_TARGET","uid":uid,"target":"WCH-033"})
+ var reused=Commerce.reduce(reuse,{"type":"FORGE","uid":uid,"method":"logo"})
+ check(not WatchForgery.target_active(Model.find_inventory(reused,uid),"logo") and reused.ap==reuse.ap,"legacy completed operation cannot satisfy new target work")
+ # Knowledge of original identity survives later physical changes.
+ var known_item=Model.find_inventory(progress_state,uid)
+ WatchForgery.apply(known_item,"logo")
+ var known_trade={"id":"known-identity","npcId":"CHR-004","kind":"sell","evidenceUsed":[]}
+ Model.record_inspection(known_item,"TOL-001")
+ Model.disclose_evidence(known_trade,known_item,"TOL-001")
+ var disclosed=Model.npc_knowledge(known_trade,known_item)
+ check(disclosed.get("identityRevealed",false),"explicit original report informs buyer")
+ WatchForgery.apply(known_item,"case")
+ var remembered=Model.npc_knowledge(known_trade,known_item)
+ check(remembered.get("identityRevealed",false) and remembered.evidence.has("TOL-001") and remembered.appraisedValue<=GameData.def(known_item.defId).value,"later counterfeit work cannot erase disclosed identity or evidence")
+ # A newly fitted counterfeit case/strap permits a new paid lawful restoration.
+ known_item.refurbishment={"version":1,"done":["case","strap"],"operations":{"case":{"complete":true,"opened":false},"strap":{"complete":true,"opened":false}},"paid":{"case":{"ap":1},"strap":{"ap":0.5}},"active_case":false}
+ WatchForgery.apply(known_item,"case")
+ var restore_state=s.duplicate(true);restore_state.inventory=[known_item]
+ for job in ["case","strap"]:
+  check(WatchRefurbishment.problem(restore_state,known_item,job)=="","earlier lawful job cannot block restoring later counterfeit "+job)
  print("PREMIUM failures=",failures)
  quit(1 if failures else 0)

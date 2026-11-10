@@ -141,6 +141,7 @@ func snapshot() -> Dictionary:
 					sellable.append({"uid": item.uid, "name": GameData.def(item.defId).name,
 						"price": Commerce.recovery_price(state, item)})
 			result.merchant_items = sellable
+	if not TradeSession.session(state).is_empty(): result.trade_session=TradeSession.summary(state)
 	return result
 
 func command(data: Dictionary) -> void:
@@ -182,6 +183,10 @@ func command(data: Dictionary) -> void:
 				shell.page._open_instrument(target)
 			else:
 				shell.go(target)
+		return
+	if kind=="trade_list":
+		var active=shell.active_shell()
+		if active.page_name=="counter": active.page._open_trade_list()
 		return
 	if kind == "manual":
 		var active = shell.active_shell()
@@ -267,6 +272,9 @@ func _locate(text: String) -> void:
 			stack.append(child)
 		if node is Button and text != "" and (node as Button).is_visible_in_tree():
 			var b := node as Button
+			if text.begins_with("@"):
+				if String(b.name)==text.substr(1): found=b;break
+				continue
 			if b.text == text or (found == null or found.text != text) and (b.text.contains(text) or b.tooltip_text.contains(text)):
 				found = b
 	var result := {"found": found != null, "text": text}

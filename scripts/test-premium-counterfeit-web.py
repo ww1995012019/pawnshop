@@ -35,7 +35,7 @@ def main():
     for attempt in range(12):
      target=phone.locate(page,text)
      if height*.16 < target['y'] < height*.87:break
-     x=width*.87
+     x=max(20,min(width-20,target["x"]))
      if mobile:
       a,b=(height*.73,height*.37) if target['y']>=height*.87 else (height*.37,height*.73)
       phone.touch_drag(context,page,[(x,a),(x,(a+b)/2),(x,b)])
@@ -61,7 +61,7 @@ def main():
     uid=status()['repair_uid'];before_ap=status()['ap']
     click('伪装加工');phone.wait(page,"s.repair_mode==='forge'")
     click('选择仿冒目标');page.wait_for_timeout(250)
-    click('星冕 X06');phone.wait(page,"s.forge_target==='WCH-033'")
+    click('星冕 X06');page.wait_for_timeout(300);snap('target-click');phone.wait(page,"s.forge_target==='WCH-033'")
     assert status()['ap']==before_ap
     snap('selected-target')
     for job,title in [('logo','重描标识'),('case','改装目标外壳'),('serial','伪造紫外编号'),('weight','配重校准')]:

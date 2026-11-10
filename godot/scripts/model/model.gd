@@ -71,6 +71,10 @@ static func owns(it: Dictionary) -> bool:
 	return it.owner == "shop"
 
 static func trade_reserved(s: Dictionary, it: Dictionary) -> bool:
+	if s.trade!=null and s.trade.get("session") is Dictionary:
+		for line in s.trade.session.get("lines",[]):
+			if line.uid==it.uid and line.get("selected",false) and line.get("status","")=="confirmed": return true
+		return false
 	return s.trade != null and s.trade.get("selectedUid", null) == it.uid
 
 static func evidence_count(it: Dictionary) -> int:
@@ -151,6 +155,10 @@ static func find_item(s: Dictionary, uid):
 	var it = find_inventory(s, uid)
 	if it != null:
 		return it
+	if s.trade!=null and s.trade.get("session") is Dictionary:
+		for lot in s.trade.session.get("goods",[]):
+			if lot.uid==uid: return lot
+		return null
 	if s.trade != null and s.trade.item != null and s.trade.item.uid == uid:
 		return s.trade.item
 	return null
@@ -234,6 +242,7 @@ static func trade_item(s: Dictionary, t = null):
 		t = s.trade
 	if t == null:
 		return null
+	if t.get("session") is Dictionary: return find_item(s,t.session.get("focus",""))
 	if t.kind == "sell":
 		return find_inventory(s, t.get("selectedUid", ""))
 	return t.item
@@ -270,6 +279,7 @@ static func watch_expertise(npc_id: String) -> Dictionary:
 static func npc_knowledge(t: Dictionary, it: Dictionary) -> Dictionary:
 	var all_known: Dictionary = t.get("npcKnowledge", {})
 	if not all_known.has(it.uid) or all_known[it.uid].get("forgerySignature","") != (WatchForgery.signature(it) if WatchForgery.is_targeted(it) else ""):
+		var learned: Dictionary=all_known.get(it.uid,{}).duplicate(true)
 		var visible := sale_appearance(it)
 		var expertise := watch_expertise(t.npcId)
 		var specialist := maxf(float(expertise.market), maxf(float(expertise.logo), maxf(float(expertise.serial), float(expertise.structure)))) >= 80.0
@@ -291,6 +301,12 @@ static func npc_knowledge(t: Dictionary, it: Dictionary) -> Dictionary:
 			"marketFactor":1.0 + market_error, "evidence":{}, "risk":clampf(visible_risk,0,0.45), "visibleRisks":visible_risks, "appraisalGrade":grade,
 			"appraisalError":0.0 if specialist else error, "forgerySignature":WatchForgery.signature(it) if WatchForgery.is_targeted(it) else ""}
 		if recognized and not WatchForgery.is_targeted(it): all_known[it.uid].appraisedValue = maxf(1, jround(item_value(it) * (1.0 if specialist else 1.0 + error)))
+		if learned.get("identityRevealed",false):
+			all_known[it.uid].identityRevealed=true
+			all_known[it.uid].evidence=learned.get("evidence",{}).duplicate(true)
+			all_known[it.uid].appraisalGrade=learned.get("appraisalGrade","impression")
+			all_known[it.uid].appraisalError=learned.get("appraisalError",0)
+			all_known[it.uid].appraisedValue=maxf(1,jround(item_value(it)*(1.0+float(learned.get("appraisalError",0)))))
 		t.npcKnowledge = all_known
 	return all_known[it.uid]
 
@@ -1137,6 +1153,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			else:
 				if not WatchService.TASKS.has(task) or task != WatchService.current(it) or it.service.done.has(task) or it.service.get("forge_task", "") != "": return previous
 				if task == "open" and progress.get("opened", false): it.service.opened = true
+			if task.begins_with("forge_"): progress=progress.duplicate(true);progress.targetId=WatchForgery.target_id(it)
 			it.service.operations[task] = progress.duplicate(true)
 			return s
 		"SERVICE_COMPLETE":

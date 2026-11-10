@@ -42,6 +42,14 @@ static func apply(it: Dictionary, method: String) -> void:
 		var ref_id := target_id(it) if target_id(it)!="" else String(it.defId)
 		entry.ballast = snappedf(maxf(0,float(GameData.def(ref_id).watch.nominal_mass)-float(it.watch.mass)-mass_delta(it)),0.1)
 	if method == "case":
+		var refurbishment: Dictionary=it.get("refurbishment",{})
+		if not refurbishment.is_empty():
+			if not refurbishment.has("history"): refurbishment.history=[]
+			for job in ["case","strap"]:
+				if refurbishment.get("done",[]).has(job):
+					refurbishment.history.append({"job":job,"paid":refurbishment.get("paid",{}).get(job,{}).duplicate(true)})
+					refurbishment.done.erase(job)
+					refurbishment.get("operations",{}).erase(job)
 		var delta := float(GameData.def(target_id(it)).watch.nominal_mass)-float(GameData.def(it.defId).watch.nominal_mass)
 		entry.case_delta=delta*0.7
 		entry.strap_delta=delta*0.3

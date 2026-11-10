@@ -836,9 +836,23 @@ func _refresh() -> void:
 		scr.line3.text = "可买材料，也可出售闲置物资"
 		offer_label.text = "—"
 		_act("查看商品", "primary", _merchant_shop)
+		_act("手表多件买卖", "secondary", _open_trade_list)
 		_act("送客", "secondary", func(): Game.dispatch({"type": "REFUSE"}))
 		footer.text = "商人在店时才能购买维修材料"
 	else:
+		var multi_button := _act("多件买卖清单", "primary", _open_trade_list)
+		multi_button.name="multi_trade_open"
+		if not TradeSession.session(s).is_empty():
+			var totals=TradeSession.summary(s)
+			scr.head.text="双向买卖 · "+GameData.npc(t.npcId).name
+			scr.price.text="多件清单"
+			scr.line1.text="逐件议价与确认 · 统一交割"
+			scr.line2.text="已确认售出%d件 / 买入%d件" % [totals.sell_count,totals.buy_count]
+			scr.line3.text="收入%s · 支出%s · 差额%s Cr" % [Model.jnum(totals.income),Model.jnum(totals.expense),Model.jnum(totals.net)]
+			_act("结束接待", "secondary", func(): Game.dispatch({"type":"TRADE_END"}))
+			offer_panel.visible=false
+			footer.text="交割后可继续商谈，结束接待才送客。"
+			return
 		var it = Model.trade_item(s)
 		var npc := GameData.npc(t.npcId)
 		var buy: bool = t.kind == "buy"
@@ -1224,7 +1238,7 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 			if nt != null and nt.locked:
 				customer.nod()
 				_say(nt.line, true, "happy")
-		"REFUSE":
+		"REFUSE", "TRADE_END":
 			if pt != null:
 				await _leave_with_goods(pt, "tired")
 		"DELIVER", "PAWN":
@@ -1588,3 +1602,6 @@ func _police_response(previous_trade: Dictionary) -> void:
 	_hide_bubble()
 	busy=false
 	_refresh()
+
+func _open_trade_list() -> void:
+	load("res://scripts/ui/trade_list.gd").open(shell)
