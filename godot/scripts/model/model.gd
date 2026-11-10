@@ -583,10 +583,11 @@ static func create(seed := "ORBITAL-P0") -> Dictionary:
 	var s := {"schema": 4, "serviceVersion": 1, "seed": seed, "day": 1, "ap": 12, "cash": 1200, "phase": "open", "risk": 12, "relations": {"station": 30, "salvage": 35, "merchant": 20},
 		"inventory": [], "trade": null, "cursor": 0, "ledger": [], "completedTrades": [], "orders": orders, "materials": mats, "events": [], "repairProgress": {},
 		"scanned": [], "inspection": "announced", "upgrades": {"lamp": false, "shelf": false}, "report": null,
-		"notice": "回环九号旧港重新点灯。先接待来客，对照说明书检验手表，再安排维护和订单。", "nextId": 1, "tutorial": 0}
+		"storeCosts": {"version": 1, "fromDay": 1}, "notice": "回环九号旧港重新点灯。先接待来客，对照说明书检验手表，再安排维护和订单。", "nextId": 1, "tutorial": 0}
 	for id in ["WCH-001", "WCH-002", "WCH-003", "WCH-010", "WCH-011", "WCH-014"]:
 		var it := new_item(s, id, {"condition": 0.55 if id == "WCH-001" else 0.85, "working": id != "WCH-001", "source": "前任店主移交清单 / 所有权已核对", "cost": jround(D(id).value * 0.28)})
 		put_in(s, it)
+	StoreCosts.ensure(s)
 	return s
 
 static func validated_trade_item(s: Dictionary, t: Dictionary):
@@ -640,6 +641,7 @@ static func _remove_item(s: Dictionary, uid: String) -> void:
 static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 	GameData.ensure()
 	var s: Dictionary = previous.duplicate(true)
+	StoreCosts.ensure(s)
 	var type: String = a.type
 	if type == "NEXT":
 		if s.phase != "report":
@@ -669,7 +671,8 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 					it.y = pos.y
 				it.erase("pawnPrincipal")
 				it.erase("pawnDay")
-		var text := "第%s天开门。核对订单与到期抵押，租金和维护费在日结显示。" % jnum(s.day)
+		StoreCosts.ensure(s)
+		var text := "第%s天开门。核对订单与到期抵押，店铺电费、清洁费和租金在日结显示。" % jnum(s.day)
 		if s.day == 2:
 			text = "第2天：阿篁与澄九带来委修预约。到订单页接单，再到维修台换件复测。"
 		elif s.day == 3:
@@ -687,11 +690,18 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			return notice(s, "升级需要%sCr，现金不足。" % jnum(cost))
 		ledger(s, "upgrade-%s" % a.id, "upgrade", "可变焦工作灯升级" if a.id == "lamp" else "模组陈列架升级", -cost)
 		s.upgrades[a.id] = true
+		StoreCosts.ensure(s)
 		s.report.upgraded = true
 		s.report.cash = s.cash
 		return notice(s, "工作灯已换装：新日鉴定首次费用减为0AP。" if a.id == "lamp" else "陈列架已换装：合法货物的陈列报价提高5%。")
 	if s.phase != "open":
 		return previous
+	var required_device := ""
+	if type in ["SELECT_TRADE","OFFER","ACCEPT","PRICE"]: required_device = "quote_terminal"
+	if type in ["TAKE_ORDER","DELIVER_ORDER"]: required_device = "order_terminal"
+	if required_device != "":
+		var problem := StoreCosts.device_problem(s,required_device)
+		if problem != "": return notice(s,problem)
 	match type:
 		"CHOOSE_EVENT":
 			var event = event_for_day(s.seed, s.day)
@@ -784,7 +794,12 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			var it = find_item(s, a.uid)
 			if it == null or not GameData.tool_ids.has(a.tool):
 				return previous
+			var device: String = "uv" if a.tool == "TOL-002" else "scale" if a.tool == "TOL-005" else ""
+			if device != "":
+				var problem := StoreCosts.device_problem(s,device)
+				if problem != "": return notice(s,problem)
 			if it.evidence.has(a.tool):
+				if device != "": StoreCosts.record(s,device,"check|%s|%s|%s" % [it.uid,a.tool,WatchRules.reading(it,a.tool)],0.5)
 				record_inspection(it, a.tool)
 				return notice(s, "本次实物读数已更新，复测不重复扣AP。")
 			if not it.inspectedPaid:
@@ -793,6 +808,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 					return notice(s, "今日行动点不足，明日可继续，物证不会丢失。")
 				spend(s, cost)
 				it.inspectedPaid = true
+			if device != "": StoreCosts.record(s,device,"check|%s|%s|%s" % [it.uid,a.tool,WatchRules.reading(it,a.tool)],0.5)
 			it.evidence.append(a.tool)
 			record_inspection(it, a.tool)
 			s.tutorial = maxf(s.tutorial, 1)
@@ -1021,6 +1037,9 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			var it = find_inventory(s, a.uid)
 			if it == null:
 				return previous
+			var problem := StoreCosts.device_problem(s,"scanner")
+			if problem != "": return notice(s,problem)
+			StoreCosts.record(s,"scanner","scan|%s|%s" % [it.uid,JSON.stringify([it.get("source",""),it.sourceVerified,it.owner,it.get("orderId","")])],0.5)
 			if not s.scanned.has(it.uid):
 				s.scanned.append(it.uid)
 			if s.day >= 3 and inspection_ready(s):
@@ -1075,6 +1094,10 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			if blocked != "": return notice(s,blocked)
 			var task := String(a.get("task", ""))
 			var progress = a.get("progress", null)
+			var device: String = "repair_tester" if task == "test" else "uv" if task == "forge_serial" else "scale" if task == "forge_weight" else ""
+			if device != "":
+				var problem := StoreCosts.device_problem(s,device)
+				if problem != "": return notice(s,problem)
 			if not progress is Dictionary or not WatchService.valid_progress(progress): return previous
 			if task.begins_with("forge_"):
 				var method := task.trim_prefix("forge_")
@@ -1098,6 +1121,9 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			var blocked := WatchService.problem(s,it,task)
 			if blocked != "": return notice(s,blocked)
 			if not it.service.operations.get(task, {}).get("complete", false): return notice(s,"请先完成这道工序的实际操作。")
+			if task == "test":
+				var problem := StoreCosts.device_problem(s,"repair_tester")
+				if problem != "": return notice(s,problem)
 			var cost := WatchService.step_cost(task,it)
 			for id in cost.materials:
 				s.materials[id] -= cost.materials[id]
@@ -1105,6 +1131,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			spend(s,cost.ap)
 			it.service.paid[task] = cost.duplicate(true)
 			WatchService.commit(it,task)
+			if task == "test": StoreCosts.record(s,"repair_tester","service|%s|test" % it.uid,1.5 if WatchService.profile(it).movement == "mechanical" else 1.0)
 			it.listPrice = jround(D(it.defId).value * it.condition * 0.88)
 			return notice(s,"已完成：%s。实物变化已记录，请按需复测旧物证。" % WatchService.label(task,it))
 		"SERVICE_FINISH":
@@ -1182,7 +1209,9 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			if s.day >= 3 and s.inspection == "pending" and not inspection_ready(s):
 				return notice(s, "预约安检尚未完成：把来源待核货物扫描并登记，或放入隔离柜。")
 			var due := rent_due(s.day)
-			var maintenance := 20.0
+			var costs := StoreCosts.quote(s)
+			var maintenance: int = costs.maintenance
+			var payment: float = costs.total + due
 			var income := 0.0
 			var expenses := 0.0
 			for r in s.ledger:
@@ -1192,7 +1221,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 					income += r.amount
 				if r.amount < 0:
 					expenses -= r.amount
-			if s.cash < maintenance + due:
+			if s.cash < payment:
 				var current := false
 				var used := false
 				for r in s.ledger:
@@ -1202,18 +1231,23 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 							current = true
 				if not used:
 					ledger(s, "relief-day-%s" % jnum(s.day), "relief-window", "首次欠费：限期清仓救济窗口", 0)
-					return notice(s, "结算暂缓：维护%sCr、租金%sCr，尚缺%sCr。首次救济已开放，可在仓储应急清仓合法自有货，0AP变现；也可完成维修订单补齐后再结算。" % [jnum(maintenance), jnum(due), jnum(maintenance + due - s.cash)])
+					return notice(s, "结算暂缓：店铺费用%sCr、租金%sCr，尚缺%sCr。首次救济已开放，可在仓储应急清仓合法自有货，0AP变现；也可完成维修订单补齐后再结算。" % [jnum(costs.total), jnum(due), jnum(payment - s.cash)])
 				if current and s.inventory.any(func(it): return owns(it) and not it.has("orderId") and it.sourceVerified and not it.sealed and it.location != "isolation"):
-					return notice(s, "本次欠费还差%sCr。清仓窗口仍开放，请到仓储处理合法自有货再结算。" % jnum(maintenance + due - s.cash))
+					return notice(s, "本次欠费还差%sCr。清仓窗口仍开放，请到仓储处理合法自有货再结算。" % jnum(payment - s.cash))
 				s.phase = "ending"
 				s.outcome = "限期清仓后仍无力支付店铺费用"
 				return notice(s, "一次限期清仓机会已经提供；本次无法补齐费用，进入可回看的清算。")
-			ledger(s, "maintenance-day-%s" % jnum(s.day), "maintenance", "每日能源维护", -maintenance)
+			if costs.legacy:
+				ledger(s, "maintenance-day-%s" % jnum(s.day), "maintenance", "旧版能源维护", -maintenance)
+			else:
+				ledger(s, "electricity-day-%s" % jnum(s.day), "electricity", "店铺电费", -costs.electricity)
+				s.ledger.back().details = costs.details.duplicate(true)
+				ledger(s, "cleaning-day-%s" % jnum(s.day), "cleaning", "店铺清洁费", -costs.cleaning)
 			if due:
 				ledger(s, "rent-day-%s" % jnum(s.day), "rent", "第%s天租金" % jnum(s.day), -due)
-			s.report = {"day": s.day, "income": income, "expenses": expenses, "maintenance": maintenance, "rent": due, "cash": s.cash, "upgraded": false}
+			s.report = {"day": s.day, "income": income, "expenses": expenses, "maintenance": maintenance, "electricity": costs.electricity, "cleaning": costs.cleaning, "costs": costs.duplicate(true), "rent": due, "cash": s.cash, "upgraded": false}
 			s.phase = "report"
 			if s.day == 21:
 				s.outcome = "高风险转运站" if s.risk >= 60 else ("稀有收藏行" if s.relations.merchant > s.relations.salvage else "可信赖维修店")
-			return notice(s, "日结完成。选择工作灯或模组货架作为首个升级，明日能看到变化。" if s.day >= 3 and not s.upgrades.lamp and not s.upgrades.shelf else "日结完成，租金与维护收据已归档。")
+			return notice(s, "日结完成：旧版能源维护 %s Cr，租金 %s Cr；本次支付 %s Cr。" % [jnum(maintenance),jnum(due),jnum(payment)] if costs.legacy else "日结完成：电费 %s Cr，清洁费 %s Cr，租金 %s Cr；本次支付 %s Cr。" % [jnum(costs.electricity),jnum(costs.cleaning),jnum(due),jnum(payment)])
 	return previous
