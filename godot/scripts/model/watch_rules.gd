@@ -34,7 +34,7 @@ static func initialize(it: Dictionary, seed := "") -> void:
 
 static func mass(it: Dictionary) -> float:
 	initialize(it)
-	return float(it.watch.mass) + (float(WatchForgery.treatments(it).weight.get("ballast", 0)) if WatchForgery.active(it, "weight") else 0.0)
+	return float(it.watch.mass) + WatchForgery.mass_delta(it) + (float(WatchForgery.treatments(it).weight.get("ballast", 0)) if WatchForgery.active(it, "weight") else 0.0)
 
 static func serial(it: Dictionary) -> String:
 	initialize(it)
@@ -45,7 +45,7 @@ static func logo_variant(it: Dictionary) -> int:
 	return 0 if WatchForgery.active(it, "logo") else int(it.watch.logo_variant)
 
 static func logo_note(it: Dictionary) -> String:
-	var ref := model_reference(it.defId)
+	var ref := model_reference(WatchForgery.logo_id(it))
 	if logo_variant(it) and ref.has("logo_altered"):
 		return "可见标识：%s。" % ref.logo_altered
 	var altered := ["星标下方短横缺失", "星标下方短横缺失", "星标下方短横缺失", "双浪线中段相连", "双浪线中段相连", "双浪线中段相连", "方框右上角封闭", "月标小点偏到右侧", "方框右上角封闭", "中峰偏低", "中峰偏低且基线偏短", "盾框内中峰偏低", "船锚右侧横臂偏短", "年份末字缺一笔", "船锚右侧横臂偏短"]

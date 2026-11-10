@@ -5,7 +5,9 @@ const TASKS := ["dust", "open", "wash", "replace", "assemble", "test"]
 const LABELS := {"dust":"清洁除尘", "open":"开盖拆检", "wash":"零件清洗与干燥", "replace":"故障件修复与更换", "assemble":"定点润滑与回装", "test":"走时校验与交工"}
 
 static func profile(it: Dictionary) -> Dictionary:
-	return it.get("service", {}).get("profile", WatchRules.model_reference(it.defId)).duplicate(true)
+	var result: Dictionary=it.get("service", {}).get("profile", WatchRules.model_reference(it.defId)).duplicate(true)
+	result.caseback=WatchRules.model_reference(WatchForgery.appearance_id(it)).caseback
+	return result
 
 static func _fault(id: String, text: String, internal: bool, functional := false) -> Dictionary:
 	return {"id":id,"kind":id,"label":text,"internal":internal,"functional":functional,"resolved":false,"discovered":not internal}
