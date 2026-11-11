@@ -22,6 +22,10 @@ var document_zoom := 1.0
 var logical_size := Vector2(720,760)
 var geometry_key := ""
 var last_viewport := Vector2.ZERO
+
+func compact_mobile() -> bool:
+	return is_instance_valid(document_shell) and document_shell.landscape_mode()
+
 var touches := {}
 var pinch_distance := 0.0
 var pinch_zoom := 1.0
@@ -55,11 +59,11 @@ func configure(title: String, key: String, dimensions := Vector2(720,760)) -> vo
 	logical_size = dimensions
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	add_theme_stylebox_override("panel", UIKit.paper_style(16))
+	add_theme_stylebox_override("panel", UIKit.paper_style(6 if compact_mobile() else 16))
 	body = UIKit.vbox(8)
 	add_child(body)
 	header = UIKit.hbox(8)
-	header.custom_minimum_size.y = 48
+	header.custom_minimum_size.y = 28 if compact_mobile() else 48
 	header.mouse_filter = Control.MOUSE_FILTER_STOP
 	header.mouse_default_cursor_shape = Control.CURSOR_CAN_DROP
 	header.gui_input.connect(_header_input)
@@ -68,8 +72,10 @@ func configure(title: String, key: String, dimensions := Vector2(720,760)) -> vo
 	heading.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(heading)
-	close_button = UIKit.button("X","secondary",Vector2(44,44),22)
+	close_button = UIKit.button("","secondary",Vector2(28,28) if compact_mobile() else Vector2(44,44),14,"close")
 	close_button.name = "document_close"
+	close_button.add_theme_constant_override("icon_max_width",16)
+	close_button.tooltip_text = "关闭"
 	close_button.pressed.connect(close_document)
 	header.add_child(close_button)
 	document_scroll = ScrollContainer.new()
@@ -133,6 +139,16 @@ func move_document(point: Vector2) -> void:
 
 func relayout() -> void:
 	last_viewport = get_viewport_rect().size
+	# Mobile papers reflow at native size instead of scaling down a desktop page.
+	if compact_mobile():
+		var area: Rect2 = document_shell.safe_area()
+		size = Vector2(minf(650,area.size.x-16),area.size.y-16)
+		scale = Vector2.ONE
+		position = area.position+Vector2((area.size.x-size.x)*0.5,8)
+		for handle in corner_handles: handle.hide()
+		_layout_grips()
+		return
+	for handle in corner_handles: handle.show()
 	# Logical content scrolls rather than stretching the document beyond the view.
 	size = logical_size
 	var fit := minf((last_viewport.x-16)/size.x,(last_viewport.y-16)/size.y)
@@ -217,6 +233,7 @@ func _begin_corner_resize(corner: Vector2, pointer: Vector2) -> void:
 	resize_anchor = position+size*scale*resize_anchor_corner
 
 func _gui_input(event: InputEvent) -> void:
+	if compact_mobile(): return
 	if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
 		var point: Vector2 = event.position
 		var margin := minf(RESIZE_HIT_PIXELS*0.5/_css_scale(),minf(size.x,size.y)*0.15)
@@ -235,7 +252,7 @@ func _resize_to(pointer: Vector2) -> void:
 	position = _clamped(resize_anchor-size*scale*resize_anchor_corner)
 
 func _input(event: InputEvent) -> void:
-	if not is_visible_in_tree() or (is_instance_valid(document_shell) and document_shell.modal_open()): return
+	if compact_mobile() or not is_visible_in_tree() or (is_instance_valid(document_shell) and document_shell.modal_open()): return
 	if event is InputEventMouseMotion:
 		if resizing:
 			_resize_to(get_global_mouse_position())

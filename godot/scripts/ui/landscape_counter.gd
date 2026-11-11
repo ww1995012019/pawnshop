@@ -9,7 +9,8 @@ var panels: Array[Control] = []
 var heading: Label
 var balance: Label
 var visitor_name: Label
-var speech: Button
+var speech: PanelContainer
+var dialogue_scroll: ScrollContainer
 var speech_copy: Label
 var item_name: Label
 var hint: Label
@@ -44,19 +45,16 @@ func setup(owner_adapter) -> void:
 	heading = _label("轨道旧货局",20,UIKit.TEXT)
 	balance = _label("",18,UIKit.AMBER)
 	visitor_name = _label("",15,UIKit.AMBER)
-	speech = _key("",adapter._dialogue_popup)
-	speech.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	speech_copy = UIKit.label("",15,UIKit.TEXT,false,true)
-	speech_copy.max_lines_visible = 3
-	speech_copy.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	speech_copy.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	speech_copy.offset_left = 8
-	speech_copy.offset_right = -8
-	speech_copy.offset_top = 6
-	speech_copy.offset_bottom = -6
-	speech_copy.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	speech.add_child(speech_copy)
-	speech.add_theme_font_size_override("font_size",15)
+	speech = UIKit.plate(PortraitSkin.panel("wine",5))
+	add_child(speech)
+	dialogue_scroll = ScrollContainer.new()
+	dialogue_scroll.name = "DialogueScroll"
+	dialogue_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	speech.add_child(dialogue_scroll)
+	speech_copy = UIKit.label("",14,UIKit.TEXT,false,true)
+	speech_copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	speech_copy.mouse_filter = Control.MOUSE_FILTER_PASS
+	dialogue_scroll.add_child(speech_copy)
 	item_name = _label("",17,UIKit.TEXT)
 	hint = _label("拖动实物 · 轻点选中",14,UIKit.MUTED)
 	price = _label("",18,UIKit.AMBER)
@@ -96,7 +94,7 @@ func _label(text: String, font_size: int, color: Color) -> Label:
 func _key(text: String, action: Callable, accent := false) -> Button:
 	var button: Button = adapter._key(text,action,"primary" if accent else "secondary")
 	PortraitSkin.button(button,accent,true)
-	button.custom_minimum_size = Vector2(0,32)
+	button.custom_minimum_size = Vector2(0,28)
 	button.clip_text = true
 	button.add_theme_font_size_override("font_size",14)
 	add_child(button)
@@ -177,12 +175,12 @@ func _layout() -> void:
 			if not actor.walking: actor.position=Vector2((left-12)*(.25 if actor==desk.customer else .75),customer_h)
 	_place(speech,Rect2(14,top+customer_h+34,left-16,inner_h-customer_h-40))
 	_place(item_name,Rect2(mat.position+Vector2(8,4),Vector2(mat.size.x-76,24)))
-	_place(flip,Rect2(mat.end.x-64,mat.position.y+4,58,32))
+	_place(flip,Rect2(mat.end.x-64,mat.position.y+4,58,28))
 	_place(hint,Rect2(mat.position+Vector2(8,33),Vector2(mat.size.x-16,20)))
 	for i in 3:
 		var width := (mat.size.x-24)/3
 		tool_keys[i].add_theme_font_size_override("font_size",13 if width<80 else 14)
-		_place(tool_keys[i],Rect2(mat.position.x+8+i*(width+4),mat.end.y-38,width,32))
+		_place(tool_keys[i],Rect2(mat.position.x+8+i*(width+4),mat.end.y-36,width,30))
 	desk.MAT_POS = inset+Vector2(mat.get_center().x,mat.position.y+130)
 	desk.counter_table.presentation_rect = Rect2(inset+mat.position+Vector2(42,96),Vector2(maxf(80,mat.size.x-84),maxf(30,inner_h-150)))
 	desk._sync_table()
@@ -200,11 +198,11 @@ func _layout() -> void:
 	goods.visible = screen.y >= 320
 	var action_top := bottom-122 if goods.visible else bottom-84
 	_place(price,Rect2(tx,action_top-26,right-12,24))
-	_place(primary,Rect2(tx,action_top,right-12,36))
-	_place(more,Rect2(tx,action_top+40,right-12,34))
-	if goods.visible: _place(goods,Rect2(tx,bottom-38,right-12,34))
+	_place(primary,Rect2(tx,action_top,right-12,32))
+	_place(more,Rect2(tx,action_top+36,right-12,30))
+	if goods.visible: _place(goods,Rect2(tx,bottom-34,right-12,30))
 	var dock_width := (screen.x-16)/5
-	for i in 5: _place(dock_keys[i],Rect2(8+i*dock_width,bottom+4,dock_width-4,32))
+	for i in 5: _place(dock_keys[i],Rect2(8+i*dock_width,bottom+4,dock_width-4,30))
 
 func _process(_delta: float) -> void:
 	if not active: return
@@ -213,8 +211,9 @@ func _process(_delta: float) -> void:
 	heading.text = "轨道旧货局 · 第 %02d 天" % Game.state.day
 	balance.text = "%s Cr   ·   AP %s" % [Model.jnum(desk.cash_tray.cash if desk.busy else Game.state.cash),Game.state.ap]
 	visitor_name.text = adapter.visitor_name.text
-	speech_copy.text = adapter.speech.text
-	speech.tooltip_text = "点击展开完整对话"
+	if speech_copy.text != adapter.speech.text:
+		if not adapter.speech.text.begins_with(speech_copy.text): dialogue_scroll.scroll_vertical = 0
+		speech_copy.text = adapter.speech.text
 	item_name.text = adapter.item_name.text
 	price.text = adapter.price.text
 	primary.text = adapter.primary.text

@@ -681,7 +681,8 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	workspace_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	header.add_child(workspace_title)
 	if not mobile_mode(): header.add_child(UIKit.label("店内操作  /  ESC 收起", 18, UIKit.MUTED))
-	workspace_close = UIKit.button("关闭" if mobile_mode() else "收起", "secondary", Vector2(76 if landscape_mode() else 108,34 if landscape_mode() else 54 if mobile_mode() else 48),14 if landscape_mode() else 20,"close")
+	workspace_close = UIKit.button("" if mobile_mode() else "收起", "secondary", Vector2(28,28) if mobile_mode() else Vector2(108,48),14 if mobile_mode() else 20,"close")
+	workspace_close.add_theme_constant_override("icon_max_width",16 if mobile_mode() else 24)
 	workspace_close.tooltip_text = "关闭并返回柜台"
 	workspace_close.pressed.connect(close_workspace)
 	header.add_child(workspace_close)
@@ -789,7 +790,8 @@ func close_workspace() -> void:
 	if mobile_mode() and workspace_shell.page.has_method("can_close_workspace") and not workspace_shell.page.can_close_workspace():
 		workspace_shell.page.request_close_workspace()
 		workspace_close_pending = true
-		workspace_close.text = "稍后关闭"
+		workspace_close.text = "" if mobile_mode() else "稍后关闭"
+		workspace_close.tooltip_text = "当前动画结束后关闭"
 		workspace_close.disabled = true
 		workspace_title.text = "当前动作结束后关闭 · 进度会保存"
 		return
@@ -1212,11 +1214,11 @@ func modal(title_text: String, width := 900.0) -> Array:
 		tw.tween_property(sheet, "scale", Vector2(0.98, 0.98), 0.14).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		tw.tween_property(dim, "modulate:a", 0.0, 0.14)
 		tw.chain().tween_callback(dim.queue_free)
-	var x := UIKit.button("关闭" if mobile_mode() else "", "secondary", Vector2(72,32) if compact else Vector2(100,54) if mobile_mode() else Vector2(52,52),14 if compact else 18)
+	var x := UIKit.button("", "secondary", Vector2(28,28) if mobile_mode() else Vector2(52,52),14 if mobile_mode() else 18)
 	x.name = "modal_close"
 	x.icon = UIKit.icon("close")
 	x.expand_icon = true
-	x.add_theme_constant_override("icon_max_width",18 if compact else 24)
+	x.add_theme_constant_override("icon_max_width",16 if mobile_mode() else 24)
 	x.tooltip_text = "关闭"
 	x.pressed.connect(close)
 	head.add_child(x)
