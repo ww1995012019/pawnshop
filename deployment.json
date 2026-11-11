@@ -1,8 +1,8 @@
 {
-  "source_commit": "f67e7b7697bc710b0b28596b0734018441db5847",
-  "release_id": "b06d6ffcceb76429",
-  "pack": "workbench-6e35f035d6a12030.pck",
-  "html_sha256": "83dc021388991d986d7cffff31cc29ac5dd7dc3ba6450c103e2585b38035e672",
+  "source_commit": "5645f758ff5bb4aef105ccbecca9fe0b941a4517",
+  "release_id": "f2ab5ec7d9d64c46",
+  "pack": "workbench-c95a0b1d06bf3a2f.pck",
+  "html_sha256": "a8979308236406e9074995a18dfa8bea7f38013e1179ca80bc8be007a5d840b6",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -36,5 +36,9 @@
   "portrait_ui_version": 1,
   "portrait_art_version": 1,
   "portrait_fixed_screen_version": 1,
-  "portrait_modal_close_version": 1
+  "portrait_modal_close_version": 1,
+  "landscape_ui_version": 1,
+  "landscape_live_animation_version": 1,
+  "stable_workspace_close_version": 1,
+  "mobile_background_pause_version": 1
 }
