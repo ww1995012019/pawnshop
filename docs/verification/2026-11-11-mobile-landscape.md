@@ -1,6 +1,6 @@
 # 手机横屏界面与原动画保留核验
 
-2026 年 11 月 11 日。实现依据：`docs/superpowers/specs/2026-11-11-mobile-landscape-animation-design.md`。
+2026 年 11 月 11 日。已发布横屏版本。实现依据：`docs/superpowers/specs/2026-11-11-mobile-landscape-animation-design.md`。
 
 ## 实现
 
@@ -29,6 +29,7 @@
 | `test-landscape-web.py --jobs-only` | 吹灰、清洁、抛光、换壳、换带完整通过；后台暂停、中途关闭/续做、同件物品、旋转及一次扣费通过 |
 | `test-watch-service-web.py --phone-only --mechanical-only` | 实际按钮触屏完成机械表开盖、洗件、干燥、点油、回装、校表、封盖；保留完整工具阶段 |
 | 物理加工核验 | `test-premium-counterfeit-web.py --phone-only` 完整通过标识、目标外壳、紫外编号、配重四项加工、实物匹配、费用与刷新恢复 |
+| 报警联动 | 手机触屏完成名单关闭、报警确认、双人进场、原物交接、离场与下一位接待；浏览器无错误 |
 | 交割专项录屏 | 实际现金盘、飞钞、同一原物交接、回执打印、盖章和撕走，直到最后落稳画面通过 |
 | 定向回归 | 竖屏、实物台面、鉴定、工作区布局、现金结算及 Web 桥接通过；Python 语法和 `git diff --check` 通过 |
 
@@ -56,3 +57,13 @@
 - 核验日志：`work/landscape-implementation/`；完整原生分组日志：`work/godot-tests/`。
 
 浏览器验证使用 Chromium WebGL 触屏仿真，常规手机为 2 倍像素密度。尚未在实体 iPhone Safari 或微信内置浏览器上进行硬件验证。
+
+## 发布
+
+- 源码：`5645f758ff5bb4aef105ccbecca9fe0b941a4517`。
+- 发布包：`f2ab5ec7d9d64c46` / `workbench-c95a0b1d06bf3a2f.pck`。
+- Pages：`da5d437cdbc9f19aa5b3ed6c24905788abca18b9`。
+- [Pages 部署记录](https://github.com/ww1995012019/pawnshop/actions/runs/42975623665)：build、deploy、report-build-status 均成功。
+- [查看版本](https://ww1995012019.github.io/pawnshop/?v=f2ab5ec7d9d64c46)。
+
+发布树中的 HTML、release.json、资源包和 deployment.json 已与本地核验版本逐字节校验。旧发布资源保留，避免已打开的旧客户端遇到资源失效。

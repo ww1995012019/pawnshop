@@ -33,7 +33,7 @@
 ### Task 3: Verification and delivery
 - [x] Run native suite and mobile browser journeys with real animation enabled.
 - [x] Capture screenshots, short video and animation/closure evidence; review diff.
-- [ ] Commit reviewed changes and update existing deployment after checks.
+- [x] Commit reviewed changes and update existing deployment after checks.
 
 ## Execution ledger
 - Pre-flight: presenter consumes Shell.landscape_mode and original CounterPage; workspaces consume the same mobile viewport. Model rules and identifiers remain unchanged.
@@ -42,3 +42,5 @@
 - Implemented: CSS-pixel landscape counter with original actor/item/cash nodes, live workspaces, reversible coordinates, background pause and stable-boundary close/reflow.
 - Review: independent reviewer checked UID routing, scale geometry, navigation guards, slow-close actions, handoff canvas and restoration.
 - Verification: full npm/native suite plus current 29 landscape assertions, phone journey, three tools, five refurbishment jobs, mechanical service, four target-forgery jobs and complete receipt recording passed. See docs/verification/2026-11-11-mobile-landscape.md.
+
+- Published: source 5645f758ff5bb4aef105ccbecca9fe0b941a4517; release f2ab5ec7d9d64c46; Pages commit da5d437cdbc9f19aa5b3ed6c24905788abca18b9; Pages run 42975623665 build/deploy/report all succeeded.
