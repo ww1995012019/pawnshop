@@ -1,8 +1,8 @@
 {
-  "source_commit": "bada76b9439126f801134f6b591cd4c3b1bc8a61",
-  "release_id": "22b06bb8eb0280d3",
-  "pack": "workbench-53de22783a94c88d.pck",
-  "html_sha256": "fcfb8e82830a64fa7b14915dfaa5ff3341e0a14de33e0ce096c741abd831dc52",
+  "source_commit": "5a27ea821874aa3aa17d2931c73394e566c4df82",
+  "release_id": "e6136f5ecc9afaf3",
+  "pack": "workbench-a0c3d119826cd2a7.pck",
+  "html_sha256": "fe059927c474f46ce8ce94918804bb97189d952dcb8d969196e39621585dc596",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -51,5 +51,6 @@
     10
   ],
   "teaching_min_daily_visits": 6,
-  "native_regression_groups": 75
+  "native_regression_groups": 75,
+  "mobile_landscape_sizing_version": 2
 }
