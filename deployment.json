@@ -1,8 +1,8 @@
 {
-  "source_commit": "2e29dd20b2b6f18d47a56d0eefb3263f0e79efde",
-  "release_id": "930cc4a13926ae14",
-  "pack": "workbench-22ae7f817fe5b673.pck",
-  "html_sha256": "8a98eff9c4b9a3ef36c5bed79f28af87346322fee13170fe92f568af86f66a55",
+  "source_commit": "38f7ebc586ef27905c3562cc0d3e5dc2d070a794",
+  "release_id": "8973734be04d5aed",
+  "pack": "workbench-d1e7bcc2a32625b3.pck",
+  "html_sha256": "8b0bc8b8935b4165b5351dd19604652c67397246c1dfd517704e53b9039321eb",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 93,
+  "native_regression_groups": 99,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -83,6 +83,29 @@
   "shop_journal_version": 1,
   "shop_extension_version": 1,
   "shop_plan_browser_viewports": [
+    [
+      844,
+      390
+    ],
+    [
+      568,
+      320
+    ],
+    [
+      390,
+      844
+    ],
+    [
+      1280,
+      800
+    ]
+  ],
+  "cross_day_events_version": 1,
+  "ownership_claims_version": 1,
+  "warranty_cases_version": 1,
+  "auction_nights_version": 1,
+  "service_receipt_baselines_version": 1,
+  "event_book_browser_viewports": [
     [
       844,
       390
