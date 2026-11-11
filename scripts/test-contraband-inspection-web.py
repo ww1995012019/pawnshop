@@ -48,8 +48,11 @@ def main():
                         page.mouse.move(width*.8,height*.6)
                         page.mouse.wheel(0,direction*220)
                     else:
-                        start = .78 if direction>0 else .56
-                        phone.touch_drag(context,page,[(width*.75,height*(start-direction*i*.0275)) for i in range(9)])
+                        # Short drags stay inside the warehouse's lower pane.
+                        # Pause before release so inertia cannot skip the target.
+                        start = .72 if direction>0 else .62
+                        points = [(width*.75,height*(start-direction*i*.01)) for i in range(9)]
+                        phone.touch_drag(context,page,points+[points[-1]]*15)
                     page.wait_for_timeout(250)
                 assert target['found'] and not target['disabled'],(text,target)
                 assert 0<target['x']<width and low<target['y']<high,(text,target)

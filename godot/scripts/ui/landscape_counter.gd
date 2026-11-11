@@ -9,7 +9,8 @@ var panels: Array[Control] = []
 var heading: Label
 var balance: Label
 var visitor_name: Label
-var speech: Button
+var speech: PanelContainer
+var dialogue_scroll: ScrollContainer
 var speech_copy: Label
 var item_name: Label
 var hint: Label
@@ -44,19 +45,16 @@ func setup(owner_adapter) -> void:
 	heading = _label("轨道旧货局",20,UIKit.TEXT)
 	balance = _label("",18,UIKit.AMBER)
 	visitor_name = _label("",15,UIKit.AMBER)
-	speech = _key("",adapter._dialogue_popup)
-	speech.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	speech_copy = UIKit.label("",15,UIKit.TEXT,false,true)
-	speech_copy.max_lines_visible = 3
-	speech_copy.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	speech_copy.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	speech_copy.offset_left = 8
-	speech_copy.offset_right = -8
-	speech_copy.offset_top = 6
-	speech_copy.offset_bottom = -6
-	speech_copy.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	speech.add_child(speech_copy)
-	speech.add_theme_font_size_override("font_size",15)
+	speech = UIKit.plate(PortraitSkin.panel("wine",5))
+	add_child(speech)
+	dialogue_scroll = ScrollContainer.new()
+	dialogue_scroll.name = "DialogueScroll"
+	dialogue_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	speech.add_child(dialogue_scroll)
+	speech_copy = UIKit.label("",14,UIKit.TEXT,false,true)
+	speech_copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	speech_copy.mouse_filter = Control.MOUSE_FILTER_PASS
+	dialogue_scroll.add_child(speech_copy)
 	item_name = _label("",17,UIKit.TEXT)
 	hint = _label("拖动实物 · 轻点选中",14,UIKit.MUTED)
 	price = _label("",18,UIKit.AMBER)
@@ -95,9 +93,10 @@ func _label(text: String, font_size: int, color: Color) -> Label:
 
 func _key(text: String, action: Callable, accent := false) -> Button:
 	var button: Button = adapter._key(text,action,"primary" if accent else "secondary")
-	button.custom_minimum_size = Vector2(0,44)
+	PortraitSkin.button(button,accent,true)
+	button.custom_minimum_size = Vector2(0,28)
 	button.clip_text = true
-	button.add_theme_font_size_override("font_size",16)
+	button.add_theme_font_size_override("font_size",14)
 	add_child(button)
 	return button
 
@@ -147,22 +146,22 @@ func _layout() -> void:
 	if screen == last_size and inset == area.position: return
 	inset = area.position
 	last_size = screen
-	var left := clampf(screen.x*.23,165,224)
-	var right := clampf(screen.x*.24,178,240)
-	var top := 48.0
-	var bottom := screen.y-54
+	var left := clampf(screen.x*.22,145,200)
+	var right := clampf(screen.x*.22,150,200)
+	var top := 36.0
+	var bottom := screen.y-40
 	var inner_h := bottom-top-6
-	mat = Rect2(left+12,top,screen.x-left-right-24,inner_h)
-	_place(panels[0],Rect2(0,0,screen.x,44))
-	_place(panels[1],Rect2(6,top,left,inner_h))
+	mat = Rect2(left+8,top,screen.x-left-right-16,inner_h)
+	_place(panels[0],Rect2(0,0,screen.x,32))
+	_place(panels[1],Rect2(4,top,left,inner_h))
 	_place(panels[2],mat)
-	_place(panels[3],Rect2(screen.x-right-6,top,right,inner_h))
-	_place(panels[4],Rect2(0,bottom,screen.x,54))
-	_place(heading,Rect2(18,5,220,34))
-	_place(balance,Rect2(screen.x-350,5,332,34))
+	_place(panels[3],Rect2(screen.x-right-4,top,right,inner_h))
+	_place(panels[4],Rect2(0,bottom,screen.x,40))
+	_place(heading,Rect2(12,2,240,28))
+	_place(balance,Rect2(screen.x-350,2,338,28))
 	balance.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_place(visitor_name,Rect2(18,top+8,left-24,24))
-	var customer_h := clampf(inner_h-122,80,180)
+	var customer_h := clampf(inner_h-108,80,180)
 	desk.resident_window.position = inset+Vector2(12,top+32)
 	desk.resident_window.size = Vector2(left-12,customer_h)
 	desk.STAND = desk.resident_window.position + Vector2((left-12)*.5,customer_h)
@@ -175,35 +174,35 @@ func _layout() -> void:
 			actor.scale=Vector2.ONE*minf(customer_h/actor.size.y,(left-12)*.46/actor.size.x)
 			if not actor.walking: actor.position=Vector2((left-12)*(.25 if actor==desk.customer else .75),customer_h)
 	_place(speech,Rect2(14,top+customer_h+34,left-16,inner_h-customer_h-40))
-	_place(item_name,Rect2(mat.position+Vector2(12,8),Vector2(mat.size.x-96,28)))
-	_place(flip,Rect2(mat.end.x-80,mat.position.y+4,72,44))
-	_place(hint,Rect2(mat.position+Vector2(12,43),Vector2(mat.size.x-24,22)))
+	_place(item_name,Rect2(mat.position+Vector2(8,4),Vector2(mat.size.x-76,24)))
+	_place(flip,Rect2(mat.end.x-64,mat.position.y+4,58,28))
+	_place(hint,Rect2(mat.position+Vector2(8,33),Vector2(mat.size.x-16,20)))
 	for i in 3:
 		var width := (mat.size.x-24)/3
-		tool_keys[i].add_theme_font_size_override("font_size",14 if width<80 else 16)
-		_place(tool_keys[i],Rect2(mat.position.x+8+i*(width+4),mat.end.y-52,width,44))
+		tool_keys[i].add_theme_font_size_override("font_size",13 if width<80 else 14)
+		_place(tool_keys[i],Rect2(mat.position.x+8+i*(width+4),mat.end.y-36,width,30))
 	desk.MAT_POS = inset+Vector2(mat.get_center().x,mat.position.y+130)
-	desk.counter_table.presentation_rect = Rect2(inset+mat.position+Vector2(42,96),Vector2(maxf(80,mat.size.x-84),maxf(30,inner_h-178)))
+	desk.counter_table.presentation_rect = Rect2(inset+mat.position+Vector2(42,96),Vector2(maxf(80,mat.size.x-84),maxf(30,inner_h-150)))
 	desk._sync_table()
 	if is_instance_valid(desk.mat_item) and not CounterDialogue.active(Game.state):
 		desk.mat_item.position = desk.MAT_POS
 		desk.mat_item.bounds = desk.counter_table.presentation_rect
 	var tx := screen.x-right+4
-	desk.bell.position = inset+Vector2(tx+32,top+70)
+	desk.bell.position = inset+Vector2(tx+32,top+54)
 	desk.bell.resting_scale = Vector2.ONE*(.55 if right<190 else .65)
 	desk.bell.scale = desk.bell.resting_scale
-	_place(desk.cash_tray,Rect2(tx+74,top+20,right-88,54))
+	_place(desk.cash_tray,Rect2(tx+74,top+12,right-88,44))
 	desk.cash_tray.show()
 	desk.mobile_cash = desk.cash_tray.note_center()
 	desk.mobile_goods = inset+Vector2(18+left*.5,bottom+22)
-	goods.visible = screen.y >= 360
-	var action_top := bottom-156 if goods.visible else bottom-104
-	_place(price,Rect2(tx,action_top-34,right-20,28))
-	_place(primary,Rect2(tx,action_top,right-20,50))
-	_place(more,Rect2(tx,action_top+56,right-20,44))
-	if goods.visible: _place(goods,Rect2(tx,bottom-50,right-20,44))
+	goods.visible = screen.y >= 320
+	var action_top := bottom-122 if goods.visible else bottom-84
+	_place(price,Rect2(tx,action_top-26,right-12,24))
+	_place(primary,Rect2(tx,action_top,right-12,32))
+	_place(more,Rect2(tx,action_top+36,right-12,30))
+	if goods.visible: _place(goods,Rect2(tx,bottom-34,right-12,30))
 	var dock_width := (screen.x-16)/5
-	for i in 5: _place(dock_keys[i],Rect2(8+i*dock_width,bottom+5,dock_width-4,44))
+	for i in 5: _place(dock_keys[i],Rect2(8+i*dock_width,bottom+4,dock_width-4,30))
 
 func _process(_delta: float) -> void:
 	if not active: return
@@ -212,8 +211,9 @@ func _process(_delta: float) -> void:
 	heading.text = "轨道旧货局 · 第 %02d 天" % Game.state.day
 	balance.text = "%s Cr   ·   AP %s" % [Model.jnum(desk.cash_tray.cash if desk.busy else Game.state.cash),Game.state.ap]
 	visitor_name.text = adapter.visitor_name.text
-	speech_copy.text = adapter.speech.text
-	speech.tooltip_text = "点击展开完整对话"
+	if speech_copy.text != adapter.speech.text:
+		if not adapter.speech.text.begins_with(speech_copy.text): dialogue_scroll.scroll_vertical = 0
+		speech_copy.text = adapter.speech.text
 	item_name.text = adapter.item_name.text
 	price.text = adapter.price.text
 	primary.text = adapter.primary.text

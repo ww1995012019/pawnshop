@@ -162,11 +162,14 @@ func relayout() -> void:
 		if is_instance_valid(optic): optic.scale = Vector2.ONE*(.5 if shell.landscape_mode() else 1.0)
 	if is_instance_valid(uv_light): uv_light.scale = Vector2(.62,.38)*(.5 if shell.landscape_mode() else 1.0)
 	var guide_button := get_node_or_null("watch_manual") as Button
-	if guide_button != null: guide_button.position = Vector2(shell.content_rect().end.x-150,shell.content_rect().position.y) if shell.landscape_mode() else Vector2(mat_rect.end.x-158,mat_rect.position.y+12)
+	if guide_button != null:
+		guide_button.position = Vector2(shell.content_rect().end.x-104,shell.content_rect().position.y) if shell.landscape_mode() else Vector2(mat_rect.end.x-158,mat_rect.position.y+12)
+		if shell.landscape_mode(): guide_button.custom_minimum_size = Vector2(104,30); guide_button.size = Vector2(104,30)
 	var records := get_node_or_null("portrait_records") as Button
 	if records != null:
 		records.visible = shell.mobile_mode()
-		records.position = Vector2(shell.content_rect().end.x-292,shell.content_rect().position.y) if shell.landscape_mode() else mat_rect.position+Vector2(12,12)
+		if shell.landscape_mode(): records.custom_minimum_size = Vector2(98,30); records.size = Vector2(98,30)
+		records.position = Vector2(shell.content_rect().end.x-208,shell.content_rect().position.y) if shell.landscape_mode() else mat_rect.position+Vector2(12,12)
 	if is_instance_valid(item):
 		var fitting := mat_rect
 		if shell.landscape_mode() and tool == "TOL-005": fitting.size.y -= 48
@@ -198,39 +201,54 @@ func _landscape_layout() -> Rect2:
 		add_child(portrait_tools)
 	portrait_tools.show()
 	portrait_tools.position = r.position
-	portrait_tools.size = Vector2(r.size.x-300,44)
+	portrait_tools.size = Vector2(r.size.x-220,30)
 	for id in TOOL_IDS:
 		var key: Button = tool_buttons[id]
 		if key.get_parent() != portrait_tools: key.reparent(portrait_tools)
-		key.custom_minimum_size = Vector2(0,44)
+		key.custom_minimum_size = Vector2(0,30)
 		key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		key.add_theme_font_size_override("font_size",14)
 		key.text = {"TOL-001":"放大镜","TOL-002":"紫外灯","TOL-005":"电子秤"}[id]
 		key.clip_text = true
-		PortraitSkin.button(key)
+		PortraitSkin.button(key,false,true)
 		key.icon = null
 	var actions := find_child("inspection_actions",true,false) as GridContainer
 	if actions.get_parent() != self: actions.reparent(self)
-	actions.position = Vector2(r.position.x,r.end.y-44)
-	actions.size = Vector2(r.size.x-256,44)
+	actions.position = Vector2(r.position.x,r.end.y-30)
+	actions.size = Vector2(r.size.x-208,30)
 	for key in actions.get_children():
-		key.custom_minimum_size = Vector2(0,44)
+		key.custom_minimum_size = Vector2(0,30)
 		key.add_theme_font_size_override("font_size",14)
 		key.text = {"翻面 F":"翻面","实物归位":"归位","回柜台":"回柜台","去维修":"去维修"}.get(key.get_meta("desktop_caption"),key.text)
 		key.clip_text = true
-		PortraitSkin.button(key)
-	var sidebar := 248.0
-	detail_panel.position = Vector2(r.end.x-sidebar,r.position.y+52)
-	detail_panel.size = Vector2(sidebar,52)
+		PortraitSkin.button(key,false,true)
+	var sidebar := 200.0
+	detail_panel.position = Vector2(r.end.x-sidebar,r.position.y+36)
+	detail_panel.size = Vector2(sidebar,30)
 	detail_panel.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",4))
-	bench.position = Vector2(r.end.x-sidebar,r.position.y+110)
-	bench.size = Vector2(sidebar,r.size.y-110)
+	picker.custom_minimum_size = Vector2(0,30)
+	picker.add_theme_font_size_override("font_size",14)
+	picker.get_popup().add_theme_font_size_override("font_size",14)
+	picker.expand_icon = true
+	picker.add_theme_constant_override("icon_max_width",18)
+	for state in ["normal","hover","pressed"]:
+		var style := UIKit.key_style("secondary",state,true)
+		style.content_margin_top = 2
+		style.content_margin_bottom = 2
+		picker.add_theme_stylebox_override(state,style)
+	picker.fit_to_longest_item = false
+	picker.clip_text = true
+	bench.position = Vector2(r.end.x-sidebar,r.position.y+72)
+	bench.size = Vector2(sidebar,r.size.y-72)
 	bench.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",8))
-	var mat := Rect2(r.position+Vector2(0,52),Vector2(r.size.x-sidebar-8,r.size.y-102))
+	var mat := Rect2(r.position+Vector2(0,36),Vector2(r.size.x-sidebar-8,r.size.y-72))
 	for node in bench_body.find_children("*","Label",true,false):
-		node.add_theme_font_size_override("font_size",15)
+		node.add_theme_font_size_override("font_size",13)
 		node.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		node.custom_minimum_size.x = 0
+	for node in bench_body.find_children("*","Button",true,false):
+		node.custom_minimum_size.y = 30
+		node.add_theme_font_size_override("font_size",13)
 	shell.work_surface.set_mat(mat)
 	return mat
 

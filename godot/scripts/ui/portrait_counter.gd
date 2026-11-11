@@ -58,6 +58,9 @@ func _picture(texture: Texture2D, height: float) -> TextureRect:
 func _key(text: String, action: Callable, kind := "secondary", icon := "") -> Button:
 	var key := UIKit.button(text, kind, Vector2(0,48), 16, icon)
 	PortraitSkin.button(key,kind == "primary")
+	if shell.landscape_mode():
+		key.custom_minimum_size.y = 30
+		key.add_theme_font_size_override("font_size",14)
 	key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	key.pressed.connect(action)
 	return key
@@ -318,7 +321,10 @@ func _open_instrument(id: String) -> void:
 	if shell.workspace_open(): shell.workspace_shell.page._set_tool(id)
 
 func _goods_popup() -> void:
-	var modal: Array = shell.modal("柜台货物 / 店内库存",360)
+	var modal: Array = shell.modal("柜台货物 / 店内库存",520)
+	var table_grid := UIKit.grid(4 if shell.landscape_mode() else 3,6)
+	table_grid.name = "table_goods_grid"
+	modal[0].add_child(table_grid)
 	for good in CounterDialogue.table_items(Game.state):
 		var uid: String = good.uid
 		var item = TradeSession.item(Game.state,uid)
@@ -326,12 +332,13 @@ func _goods_popup() -> void:
 		var key := _key(GameData.def(item.defId).name,func():
 			modal[1].call()
 			desk._focus_table(uid))
-		key.icon = UIKit.physical_icon(item)
-		key.expand_icon = true
-		key.add_theme_constant_override("icon_max_width",40)
-		modal[0].add_child(key)
+		_goods_tile(key,UIKit.physical_icon(item),GameData.def(item.defId).name)
+		table_grid.add_child(key)
 
-	modal[0].add_child(UIKit.label("店内库存 · 点击推荐 / 查看",16,UIKit.AMBER))
+	modal[0].add_child(UIKit.label("店内库存 · 点击推荐 / 查看",14,UIKit.AMBER))
+	var stock := UIKit.grid(4 if shell.landscape_mode() else 3,6)
+	stock.name = "stock_goods_grid"
+	modal[0].add_child(stock)
 	for original in desk.stock_grid.get_children():
 		if not original is Button or not (String(original.name).begins_with("stock_recommend_") or original.name == "wanted_inventory"): continue
 		var ref: WeakRef = weakref(original)
@@ -339,11 +346,30 @@ func _goods_popup() -> void:
 			modal[1].call()
 			_invoke.call_deferred(ref))
 		key.name = "mobile_"+String(original.name)
-		key.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		key.icon = original.icon
-		key.expand_icon = true
-		key.add_theme_constant_override("icon_max_width",36)
-		modal[0].add_child(key)
+		key.disabled = original.disabled
+		_goods_tile(key,original.icon,original.tooltip_text.get_slice("\n",0))
+		stock.add_child(key)
+
+func _goods_tile(key: Button, texture: Texture2D, caption: String) -> void:
+	key.tooltip_text = caption
+	key.text = ""
+	key.custom_minimum_size = Vector2(0,92)
+	var stack := UIKit.vbox(2)
+	stack.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	stack.offset_left = 5
+	stack.offset_right = -5
+	stack.offset_top = 5
+	stack.offset_bottom = -5
+	stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.add_child(_picture(texture,44))
+	var title := UIKit.label(caption,12,UIKit.TEXT,false,true)
+	title.name = "TileCaption"
+	title.max_lines_visible = 2
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.add_child(title)
+	key.add_child(stack)
 
 func _quote_popup() -> void:
 	var modal: Array = shell.modal("议价",360)
@@ -353,15 +379,32 @@ func _quote_popup() -> void:
 	quote.min_value = desk.dial.min_value
 	quote.max_value = desk.dial.max_value
 	quote.set_value_no_signal(desk.dial.value)
-	quote.custom_minimum_size.y = 56
+	quote.custom_minimum_size.y = 34 if shell.landscape_mode() else 56
+	quote.name = "mobile_quote"
+	quote.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	quote.get_line_edit().virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
 	quote.suffix = " Cr"
-	quote.get_line_edit().add_theme_font_size_override("font_size",24)
-	modal[0].add_child(quote)
+	quote.get_line_edit().add_theme_font_size_override("font_size",17 if shell.landscape_mode() else 24)
+	var quote_row := UIKit.hbox(4)
+	modal[0].add_child(quote_row)
+	for step in [-5,-1,0,1,5]:
+		if step == 0:
+			quote_row.add_child(quote)
+			continue
+		var amount: int = step
+		var nudge := _key(("+" if step>0 else "−") + str(absi(step)),func():
+			quote.apply()
+			quote.value += amount)
+		nudge.name = "quote_step_"+str(step)
+		nudge.custom_minimum_size = Vector2(36,34)
+		nudge.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		quote_row.add_child(nudge)
 	var buttons: Array = desk.actions.get_children()
 	for original in buttons:
 		if original != desk.offer_button and not String(original.text).begins_with("接受 "): continue
 		var ref: WeakRef = weakref(original)
 		var key := _key(original.text,func():
+			quote.apply()
 			modal[1].call()
 			_invoke.call_deferred(ref),"primary" if original == desk.offer_button else "secondary")
 		key.disabled = original.disabled
@@ -369,7 +412,8 @@ func _quote_popup() -> void:
 		if original == desk.offer_button:
 			var preview: WeakRef = weakref(key)
 			quote.value_changed.connect(func(value):
-				desk.dial.set_value(int(value))
+				desk.dial.set_value(int(value),false)
+				desk._update_offer_value(desk.dial.value)
 				if is_instance_valid(preview.get_ref()): preview.get_ref().text = "出价 " + UIKit.money(value))
 
 func _actions() -> void:

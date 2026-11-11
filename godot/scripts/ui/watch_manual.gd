@@ -18,14 +18,14 @@ static func open(shell: Node, def_id := "") -> void:
 		var catalogue := UIKit.button("浏览全部手表图鉴", "secondary", Vector2(0,48),18)
 		catalogue.pressed.connect(func(): host.open_watch_catalogue())
 		paper.content.add_child(catalogue)
-		populate_reference(paper.content,id,true)
+		populate_reference(paper.content,id,true,host.landscape_mode())
 		paper.document_scroll.scroll_vertical = 0
 	paper.show()
 	host.root_ui.move_child(paper,-1)
 	host.root_ui.move_child(host.modal_layer,-1)
 	paper.relayout()
 
-static func populate_reference(content: VBoxContainer, id: String, paper := false) -> void:
+static func populate_reference(content: VBoxContainer, id: String, paper := false, compact := false) -> void:
 	var d: Dictionary = GameData.def(id)
 	var reference: Dictionary = WatchRules.model_reference(id)
 	var heading := UIKit.module_header(d.name, "型号参考档案 · 对照实物逐项查阅", String(reference.get("model", "型号参考")))
@@ -59,7 +59,7 @@ static func populate_reference(content: VBoxContainer, id: String, paper := fals
 			image.name = "rare_reference_back" if back else "rare_reference_preview"
 		else:
 			image.texture = UIKit.item_icon(id, back)
-		image.custom_minimum_size = Vector2(140, 170)
+		image.custom_minimum_size = Vector2(92,108) if compact else Vector2(140,170)
 		image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		figure.add_child(image)
@@ -70,7 +70,7 @@ static func populate_reference(content: VBoxContainer, id: String, paper := fals
 	var logo_figure := UIKit.vbox(4)
 	var logo = load("res://scripts/world/watch_logo.gd").new()
 	logo.setup(id, 0)
-	logo.custom_minimum_size = Vector2(144, 154)
+	logo.custom_minimum_size = Vector2(96,96) if compact else Vector2(144,154)
 	var logo_mount := UIKit.plate(UIKit.screen_style(8))
 	logo_mount.add_child(logo)
 	logo_figure.add_child(logo_mount)

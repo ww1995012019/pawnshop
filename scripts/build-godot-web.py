@@ -73,7 +73,7 @@ def package_web(pack, runtime, output):
     previous_assets = old.get("previous_assets", []) if transport == old.get("transport") else list(old.get("transport", {}))
     config = {"args": [], "canvasResizePolicy": 0, "executable": engine,
               "mainPack": pack_name, "fileSizes": {pack_name: len(pack_data),
-              engine + ".wasm": len(assets[engine + ".wasm"])}, "focusCanvas": True,
+              engine + ".wasm": len(assets[engine + ".wasm"])}, "focusCanvas": True, "experimentalVK": True,
               "gdextensionLibs": [], "ensureCrossOriginIsolationHeaders": False,
               "transport": transport, "music": music,
               "previousAssets": previous_assets}

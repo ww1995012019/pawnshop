@@ -669,7 +669,7 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	workspace_overlay.add_child(dim)
-	workspace_frame = UIKit.plate(PortraitSkin.panel("wine",12) if mobile_mode() else UIKit.skin("rail", "lg", 16))
+	workspace_frame = UIKit.plate(PortraitSkin.panel("wine",6 if landscape_mode() else 12) if mobile_mode() else UIKit.skin("rail", "lg", 16))
 	workspace_overlay.add_child(workspace_frame)
 	var body := UIKit.vbox(4 if landscape_mode() else 12)
 	workspace_frame.add_child(body)
@@ -681,7 +681,8 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	workspace_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	header.add_child(workspace_title)
 	if not mobile_mode(): header.add_child(UIKit.label("店内操作  /  ESC 收起", 18, UIKit.MUTED))
-	workspace_close = UIKit.button("关闭" if mobile_mode() else "收起", "secondary", Vector2(108,44 if landscape_mode() else 54 if mobile_mode() else 48),20,"close")
+	workspace_close = UIKit.button("" if mobile_mode() else "收起", "secondary", Vector2(28,28) if mobile_mode() else Vector2(108,48),14 if mobile_mode() else 20,"close")
+	workspace_close.add_theme_constant_override("icon_max_width",16 if mobile_mode() else 24)
 	workspace_close.tooltip_text = "关闭并返回柜台"
 	workspace_close.pressed.connect(close_workspace)
 	header.add_child(workspace_close)
@@ -789,7 +790,8 @@ func close_workspace() -> void:
 	if mobile_mode() and workspace_shell.page.has_method("can_close_workspace") and not workspace_shell.page.can_close_workspace():
 		workspace_shell.page.request_close_workspace()
 		workspace_close_pending = true
-		workspace_close.text = "稍后关闭"
+		workspace_close.text = "" if mobile_mode() else "稍后关闭"
+		workspace_close.tooltip_text = "当前动画结束后关闭"
 		workspace_close.disabled = true
 		workspace_title.text = "当前动作结束后关闭 · 进度会保存"
 		return
@@ -978,8 +980,12 @@ func _focusable_controls(node: Node) -> Array[Control]:
 		var control := node as Control
 		if not control.is_visible_in_tree():
 			return controls
-		if control.focus_mode == Control.FOCUS_ALL and not (control is BaseButton and control.disabled):
+		if control.focus_mode != Control.FOCUS_NONE and not (control is BaseButton and control.disabled):
 			controls.append(control)
+		# SpinBox owns an internal LineEdit, omitted by get_children().
+		# It must remain a valid focus owner while entering a quote.
+		if control is SpinBox and control.editable:
+			controls.append(control.get_line_edit())
 	for child in node.get_children():
 		controls.append_array(_focusable_controls(child))
 	return controls
@@ -1171,10 +1177,12 @@ func modal(title_text: String, width := 900.0) -> Array:
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.add_child(center)
-	var sheet := UIKit.plate()
+	var compact := landscape_mode()
+	var sheet := UIKit.plate(UIKit.skin("rail","sm",6) if compact else null)
+	sheet.name = "ModalSheet"
 	sheet.custom_minimum_size = Vector2(minf(width, get_viewport().get_visible_rect().size.x - 48.0), 0)
 	center.add_child(sheet)
-	var v := UIKit.vbox(12)
+	var v := UIKit.vbox(6 if compact else 12)
 	sheet.add_child(v)
 	var status_line := HBoxContainer.new()
 	status_line.add_theme_constant_override("separation", 4)
@@ -1186,8 +1194,8 @@ func modal(title_text: String, width := 900.0) -> Array:
 		segment.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		status_line.add_child(segment)
 	v.add_child(status_line)
-	var head := UIKit.hbox()
-	var t := UIKit.label(title_text,24 if mobile_mode() else 30,UIKit.AMBER)
+	var head := UIKit.hbox(6 if compact else 12)
+	var t := UIKit.label(title_text,16 if compact else 24 if mobile_mode() else 30,UIKit.AMBER)
 	t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(t)
@@ -1206,18 +1214,18 @@ func modal(title_text: String, width := 900.0) -> Array:
 		tw.tween_property(sheet, "scale", Vector2(0.98, 0.98), 0.14).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		tw.tween_property(dim, "modulate:a", 0.0, 0.14)
 		tw.chain().tween_callback(dim.queue_free)
-	var x := UIKit.button("关闭" if mobile_mode() else "", "secondary", Vector2(100,54) if mobile_mode() else Vector2(52,52),18)
+	var x := UIKit.button("", "secondary", Vector2(28,28) if mobile_mode() else Vector2(52,52),14 if mobile_mode() else 18)
 	x.name = "modal_close"
 	x.icon = UIKit.icon("close")
 	x.expand_icon = true
-	x.add_theme_constant_override("icon_max_width",24)
+	x.add_theme_constant_override("icon_max_width",16 if mobile_mode() else 24)
 	x.tooltip_text = "关闭"
 	x.pressed.connect(close)
 	head.add_child(x)
 	focus_host.call_deferred("_restore_keyboard_focus", x)
 	v.add_child(head)
 	v.add_child(UIKit.rule())
-	var body := UIKit.vbox(14)
+	var body := UIKit.vbox(6 if compact else 14)
 	if mobile_mode():
 		var scroll := ScrollContainer.new()
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
@@ -1226,7 +1234,7 @@ func modal(title_text: String, width := 900.0) -> Array:
 		scroll.add_child(body)
 		v.add_child(scroll)
 		body.minimum_size_changed.connect(func():
-			scroll.custom_minimum_size.y = minf(body.get_combined_minimum_size().y,get_viewport().get_visible_rect().size.y-180))
+			scroll.custom_minimum_size.y = minf(body.get_combined_minimum_size().y,get_viewport().get_visible_rect().size.y-(88 if compact else 180)))
 	else:
 		v.add_child(body)
 	# Esc (see _input) and a click on the dimmed backdrop both dismiss the sheet.
@@ -1459,9 +1467,9 @@ func open_help() -> void:
 ## One mixer channel: name, slider and percentage; saves when released.
 func _volume_row(text: String, key: String, fallback: float) -> Control:
 	var row := UIKit.hbox(14)
-	row.custom_minimum_size = Vector2(0, 46)
+	row.custom_minimum_size = Vector2(0, 34 if landscape_mode() else 46)
 	var caption := UIKit.label(text, 20, UIKit.TEXT)
-	caption.custom_minimum_size.x = 110
+	caption.custom_minimum_size.x = 48 if landscape_mode() else 110
 	row.add_child(caption)
 	var slider := HSlider.new()
 	slider.min_value = 0
@@ -1474,7 +1482,7 @@ func _volume_row(text: String, key: String, fallback: float) -> Control:
 	slider.focus_mode = Control.FOCUS_ALL
 	row.add_child(slider)
 	var pct := UIKit.label("%d%%" % int(slider.value), 18, UIKit.AMBER, true)
-	pct.custom_minimum_size.x = 64
+	pct.custom_minimum_size.x = 42 if landscape_mode() else 64
 	pct.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(pct)
 	slider.value_changed.connect(func(v: float):

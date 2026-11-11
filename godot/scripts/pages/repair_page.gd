@@ -646,7 +646,7 @@ func _layout_landscape() -> void:
 	bench.visible = operation
 	art.visible = operation and not (mode == "service" and task == "dust") and task != ""
 	art.wide_layout = true
-	var area := Rect2(r.position+Vector2(0,56),r.size-Vector2(0,56))
+	var area := Rect2(r.position+Vector2(0,40),r.size-Vector2(0,40))
 	var sidebar := clampf(area.size.x*.27,180,240)
 	guidance_scroll.custom_minimum_size.y = 0
 	guidance.add_theme_stylebox_override("panel",UIKit.screen_style(6))

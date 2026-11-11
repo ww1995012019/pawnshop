@@ -28,7 +28,8 @@ func run():
   for phone_size in [Vector2i(320,568),Vector2i(360,640),Vector2i(390,844),Vector2i(430,932)]:
    root.size = phone_size
    await frames()
-   check(mobile.find_children("*","ScrollContainer",true,false).is_empty(), "main counter never scrolls at "+str(phone_size))
+   # The hidden landscape UI now has an allowed dialogue-only scroller.
+   check(mobile.layout.find_children("*","ScrollContainer",true,false).is_empty(), "main counter never scrolls at "+str(phone_size))
    var bounds := Rect2(Vector2.ZERO,shell.get_viewport().get_visible_rect().size)
    check(bounds.encloses(mobile.primary.get_global_rect()) and bounds.encloses(mobile.more.get_global_rect()), "trade controls fit without swiping at "+str(phone_size))
   root.size = Vector2i(390,844)
