@@ -117,10 +117,10 @@ func run() -> void:
 		state.day = 2 + Model.fnv(state.seed + "/first-patrol") % 2
 		var slot: int = cases.officer_slot(state,4)
 		officer_slots[slot] = true
-		check(slot != 4 and slot >= 0 and slot < 6, "police reservation never replaces merchant")
+		check(slot != 4 and slot >= 0 and slot < Model.daily_visit_limit(state), "police reservation never replaces merchant")
 		state.police = issued.police.duplicate(true)
 		state.day = 5
-		for cursor in 6:
+		for cursor in Model.daily_visit_limit(state):
 			state.cursor = cursor
 			var id: String = cases.visitor_override(state,-1)
 			if id != "" and id != cases.OFFICER_ID: seen_live[id] = true

@@ -168,30 +168,27 @@ static func morning(s: Dictionary, previous_day: int) -> void:
 	s.nightCrime.reportOpen=not receipt.acknowledged
 
 static func _merchant_slot(s: Dictionary) -> int:
-	var day := int(s.day)
-	if day == 1: return 4
-	var cycle := int((day-2)/2)
-	var draw := Model.fnv("%s/merchant/%d" % [s.seed,cycle])
-	if day != 2+cycle*2+draw%2: return -1
-	return 4+int((draw>>3)%2) if day <= 3 else int((draw>>3)%6)
+	return preload("res://scripts/model/visit_schedule.gd").merchant_slot(s)
 
 static func ensure_day(s: Dictionary) -> void:
 	ensure(s)
 	Wanted.ensure(s)
 	var key := str(int(s.day))
+	var quota := Model.daily_visit_limit(s)
 	if s.phase != "open" or s.nightCrime.days.has(key): return
 	var day := int(s.day)
 	var inspection: bool = day >= 3 and Model.fnv("%s/police/inspection/%d" % [s.seed,day])%100 < inspection_chance(s.risk)
 	var merchant := _merchant_slot(s)
 	var patrol := Wanted.officer_slot(s,merchant)
+	var landlord: int = preload("res://scripts/model/visit_schedule.gd").landlord_slot(s)
 	var available := []
-	for slot in 6:
-		if slot == merchant or slot == patrol or (day <= 3 and slot < 4): continue
+	for slot in quota:
+		if slot == merchant or slot == patrol or slot == landlord or (day <= 3 and slot < 4): continue
 		available.append(slot)
-	var inspector: int = patrol if patrol >= 0 else (int(available.pop_front()) if not available.is_empty() else 6)
+	var inspector: int = patrol if patrol >= 0 else (int(available.pop_front()) if not available.is_empty() else quota)
 	var d := {"inspection":inspection,"inspectionDone":false,"inspectionSlot":inspector,"inspectionStarted":false,"leniency":false,"fence":{},"fenceDone":false}
 	s.nightCrime.days[key] = d
-	if not inspection and inspector != patrol and inspector < 6: available.push_front(inspector)
+	if not inspection and inspector != patrol and inspector < quota: available.push_front(inspector)
 	if available.is_empty() or day < 3: return
 	var active := thieves(s)
 	if active.is_empty(): return
@@ -223,7 +220,7 @@ static func visitor_override(s: Dictionary) -> String:
 	return ""
 
 static func can_arrive(s: Dictionary) -> bool:
-	return s.phase == "open" and s.trade == null and (int(s.cursor)<6 or inspection_pending(s))
+	return s.phase == "open" and s.trade == null and (int(s.cursor)<Model.daily_visit_limit(s) or inspection_pending(s))
 
 static func _case(s: Dictionary, id: String) -> Dictionary:
 	for c in s.nightCrime.cases:
@@ -238,6 +235,7 @@ static func _row(c: Dictionary, uid: String) -> Dictionary:
 static func _start_inspection(s: Dictionary, bonus: bool) -> Dictionary:
 	var d: Dictionary = s.nightCrime.days[str(int(s.day))]
 	if not d.inspectionStarted:
+		preload("res://scripts/model/visit_schedule.gd").reserve_inspection(s)
 		d.inspectionStarted = true
 		d.leniency = Model.fnv("%s/police/leniency/%d" % [s.seed,int(s.day)])%100 < leniency_chance(int(s.nightCrime.cooperation.count))
 	s.trade = Wanted.new_officer_trade(s)
@@ -404,7 +402,7 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 		if type in ["REFUSE","TRADE_OPEN","TRADE_END"]: return Model.notice(s,"请先完成本次查货核对。")
 	if type in ["ARRIVE","ARRIVE_INSPECTION"] and s.trade == null and inspection_pending(s):
 		if type == "ARRIVE_INSPECTION" or int(s.cursor) >= int(d.inspectionSlot):
-			return _start_inspection(s,type == "ARRIVE_INSPECTION" or int(s.cursor) >= 6 or int(s.cursor) != int(d.inspectionSlot))
+			return _start_inspection(s,int(s.cursor) >= Model.daily_visit_limit(s) or int(s.cursor) > int(d.inspectionSlot))
 	if type == "ARRIVE_INSPECTION": return previous
 	if type == "ARRIVE" and s.trade == null and not d.fenceDone and not d.fence.is_empty() and int(s.cursor) == int(d.fence.slot):
 		var active := thieves(s)

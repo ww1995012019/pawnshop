@@ -245,6 +245,11 @@ func _refresh() -> void:
 		if not quote.get_line_edit().has_focus(): quote.set_value_no_signal(desk.dial.value)
 		quote.set_block_signals(false)
 	price.text = "顾客%s %s Cr" % ["开价" if t.kind == "buy" else "出价", Model.jnum(t.price)] if t != null and item != null else desk.scr.line1.text
+	if t != null and t.kind == "landlord":
+		item_name.text = "本期店面租金"
+		item_hint.text = "当面核对租金 · 付款后收好回执"
+		item_art.texture = UIKit.icon("credits")
+		price.text = "本期租金已结清" if Landlord.outstanding(s)==0 else "本期应交 %d Cr" % Landlord.outstanding(s)
 	primary.text = "开始议价" if is_instance_valid(desk.offer_button) else "按铃接待来客"
 	var buttons: Array = desk.actions.get_children()
 	if t != null and (item == null or t.locked or not is_instance_valid(desk.offer_button)):

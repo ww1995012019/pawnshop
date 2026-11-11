@@ -5,6 +5,7 @@ extends Node
 
 const MASK := 0xFFFFFFFF
 const FACTIONS := ["station", "salvage", "merchant"]
+const Negotiation = preload("res://scripts/model/negotiation.gd")
 const FIXED_EVENT_DAYS := {1: "EVT-001", 7: "EVT-007", 14: "EVT-014", 20: "EVT-020", 21: "EVT-021"}
 
 # Only actual business commands produce a closed-hours notice; unknown input stays a no-op.
@@ -411,28 +412,36 @@ static func trade_terms(s: Dictionary, t: Dictionary, it: Dictionary) -> Diction
 	var floor_p := maxf(1, ceil(value * (0.68 + variation - minf(0.09, proof * 0.03))))
 	var ceiling := maxf(1, floor(value * ((0.98 if faction == "salvage" else 1.04) + variation + minf(0.09, proof * 0.03) + relation * 0.0003)))
 	var opening := maxf(1, minf(ceiling, floor(value * (0.78 + variation))))
-	return {"value": value, "floor": floor_p, "ceiling": ceiling, "opening": opening, "marketCap": market_cap, "proof": proof}
+	var provenance := Negotiation.provenance(priced, it)
+	var source_adjustment := 0.03 if provenance == "verified" else -0.06 if provenance == "contradictory" else -0.03 if provenance == "unverified" else 0.0
+	ceiling = maxf(1, floor(ceiling + value * source_adjustment))
+	floor_p = maxf(1, ceil(floor_p + value * minf(0, source_adjustment)))
+	opening = minf(opening, ceiling)
+	return {"value": value, "floor": floor_p, "ceiling": ceiling, "opening": opening, "marketCap": market_cap, "proof": proof, "provenance": provenance}
 
 static func offer_bounds(s: Dictionary, t: Dictionary, it: Dictionary) -> Dictionary:
 	var terms := trade_terms(s, t, it)
 	return {"min": 1, "max": minf(terms.marketCap, floor(s.cash)) if t.kind == "buy" else terms.marketCap}
 
 static func price_agreed(s: Dictionary, t: Dictionary, it: Dictionary, price = null) -> bool:
+	if t.get("negotiation", {}).get(it.uid, {}).get("status", "") == "rejected": return false
 	var p = t.price if price == null else price
 	var terms := trade_terms(s, t, it)
 	return float(p) == floor(float(p)) and p >= 1 and p <= terms.marketCap and (p <= terms.ceiling if t.kind == "sell" else p >= terms.floor)
 
 static func counter_price(s: Dictionary, t: Dictionary, it: Dictionary) -> float:
 	var terms := trade_terms(s, t, it)
-	var step := maxf(1, ceil(terms.value * 0.07))
+	var discussion: Dictionary = t.get("negotiation", {}).get(it.uid, {})
+	var step := maxf(1, ceil(terms.value * (0.03 + minf(0.03, terms.proof * 0.01))))
+	var previous_quote := float(discussion.get("lastCounter", t.price))
 	if t.kind == "sell":
-		return minf(terms.ceiling, maxf(terms.opening, t.price) + step)
-	return maxf(terms.floor, minf(terms.marketCap, t.price) - step)
+		return minf(terms.ceiling, maxf(terms.opening, previous_quote) + step)
+	return maxf(terms.floor, minf(terms.marketCap, previous_quote) - step)
 
 # ------------------------------------------------------------ market
 
-static func daily_visit_limit() -> int:
-	return 6
+static func daily_visit_limit(s: Dictionary = {}) -> int:
+	return preload("res://scripts/model/visit_schedule.gd").limit(s)
 
 static func market_stock(s: Dictionary, day = null, slot = null) -> Dictionary:
 	var dd: int = int(s.day if day == null else day)
@@ -757,12 +766,13 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 		"EMERGENCY_SALE":
 			var window := false
 			for r in s.ledger:
-				if r.kind == "relief-window" and r.day == s.day:
+				if r.kind in ["relief-window","rent-relief"] and r.day == s.day:
 					window = true
 			if not window:
 				return notice(s, "限期清仓只在首次结算欠费的救济窗口开放。")
-			var due := rent_due(s.day)
-			if s.cash >= 20 + due:
+			var due := Landlord.outstanding(s)
+			var required: float = StoreCosts.quote(s).total + due
+			if s.cash >= required:
 				return notice(s, "维护与租金缺口已补齐，请返回日结，清仓不会继续低价出售。")
 			var it = find_inventory(s, a.uid)
 			if it == null:
@@ -773,12 +783,12 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			if not ledger(s, "relief-sale-%s" % it.uid, "clearance", "应急清仓 %s" % D(it.defId).name, amount, it.cost):
 				return previous
 			_remove_item(s, it.uid)
-			return notice(s, "原物按清仓报价%sCr移交，未消耗AP。%s" % [jnum(amount), "欠款已补齐，可以重新结算。" if s.cash >= 20 + due else "可继续处理合法自有库存，直到补齐本次欠款。"])
+			return notice(s, "原物按清仓报价%sCr移交，未消耗AP。%s" % [jnum(amount), "欠款已补齐，可以重新结算。" if s.cash >= required else "可继续处理合法自有库存，直到补齐本次欠款。"])
 		"ARRIVE":
 			if s.trade != null:
 				return notice(s, "先完成当前交易，或请客人收好物品。")
-			if s.cursor >= daily_visit_limit():
-				return notice(s, "今日六位预约已处理。可以维修、履约或提前打烊。")
+			if s.cursor >= daily_visit_limit(s):
+				return notice(s, "今日预约已处理。可以维修、履约或提前打烊。")
 			var sell := int(s.cursor) % 2 == 1
 			var npc_id := market_npc_id(s)
 			var greeting := npc_dialogue(s, npc_id, "arrival", GameData.npc(npc_id).line)
@@ -851,32 +861,24 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				return notice(s, "现金不足1Cr，暂时无法提出收购报价，可以先送客整理库存。")
 			if not valid_price(a.price) or a.price < bounds.min or a.price > bounds.max:
 				return notice(s, "本件报价范围为1–%sCr%s，无效报价不计轮次。" % [jnum(bounds.max), "（受现金余额限制）" if t.kind == "buy" else ""])
-			if t.rounds >= 3:
-				return notice(s, "三次有效还价已用完，可以接受当前报价或送客。")
 			var ev = a.get("evidence", null)
-			if ev != null and (not it.evidence.has(ev) or not GameData.relevant_tool(it.defId, ev)):
+			if ev != null and (not ev is String or not it.evidence.has(ev) or not GameData.relevant_tool(it.defId, ev)):
 				return notice(s, "请选这件实物已取得的相关物证，其他读数不能支撑议价。")
 			t.evidenceUsed = relevant_evidence(it, t.evidenceUsed)
-			if ev != null:
-				if not t.evidenceUsed.has(ev):
-					t.evidenceUsed.append(ev)
-				disclose_evidence(t, it, ev)
-			var terms := trade_terms(s, t, it)
-			var acceptable := price_agreed(s, t, it, a.price)
-			t.rounds += 1
+			var decision := Negotiation.decide(s, t, it, a.price, ev)
+			if decision.decision == "leave":
+				return finish_trade(s, decision.reason)
+			if decision.duplicate or decision.decision == "refuse":
+				t.line = decision.reason
+				return notice(s, decision.reason)
+			var acceptable: bool = decision.decision == "accept"
 			if acceptable:
 				t.price = a.price
 				t.locked = true
 				t.line = npc_dialogue(s, t.npcId, "agreed", "物证说得通。价格确认，我们按这个数交割。", t.price)
 			else:
-				var insulting: bool = a.price > terms.ceiling * 1.5 if t.kind == "sell" else a.price < terms.floor * 0.55
-				if t.rounds >= 3 or (insulting and t.rounds >= 2):
-					return finish_trade(s, "%s %s" % [npc_dialogue(s, t.npcId, "refused", "今天先到这里。"), "连续悬殊报价耗尽了耐心，客人收起票据离开。钱货未发生变化。" if insulting else "三轮议价仍未达成一致，客人离开了。下一位预约仍可接待。"])
 				t.price = counter_price(s, t, it)
-				if insulting:
-					t.line = "这个数太离谱了。我的报价是%sCr，再这样我就走。" % jnum(t.price)
-				else:
-					t.line = "%s 还剩%s轮。" % [npc_dialogue(s, t.npcId, "counter", "我只能让到%sCr。" % jnum(t.price), t.price), jnum(3 - t.rounds)]
+				t.line = "%s 我的报价是%sCr。" % [decision.reason, jnum(t.price)]
 			return notice(s, "证据与报价已确认，交割前不会扣款。" if acceptable else "客人递回反报价。还价不消耗额外AP。")
 		"ACCEPT":
 			var t = s.trade
@@ -1238,13 +1240,15 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			s.materials[m.id] = s.materials.get(m.id, 0) + a.qty
 			return notice(s, "耗材已入工具柜，采购不消耗AP。")
 		"SETTLE":
+			var rent_result = Landlord.reduce(previous,a)
+			if rent_result != null: return rent_result
 			if NightCrime.inspection_pending(s):
 				return notice(s,"打烊前须接待待到场的查货；0 AP也可呼叫巡警完成核对。")
 			if s.trade != null:
 				return notice(s, "先交割或送客，再打烊。")
 			if s.day >= 3 and s.inspection == "pending" and not inspection_ready(s):
 				return notice(s, "预约安检尚未完成：把来源待核货物扫描并登记，或放入隔离柜。")
-			var due := rent_due(s.day)
+			var due := Landlord.outstanding(s)
 			var costs := StoreCosts.quote(s)
 			var maintenance: int = costs.maintenance
 			var payment: float = costs.total + due
@@ -1281,7 +1285,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				ledger(s, "cleaning-day-%s" % jnum(s.day), "cleaning", "店铺清洁费", -costs.cleaning)
 			if due:
 				ledger(s, "rent-day-%s" % jnum(s.day), "rent", "第%s天租金" % jnum(s.day), -due)
-			s.report = {"day": s.day, "income": income, "expenses": expenses, "maintenance": maintenance, "electricity": costs.electricity, "cleaning": costs.cleaning, "costs": costs.duplicate(true), "rent": due, "cash": s.cash, "upgraded": false}
+			s.report = {"day": s.day, "income": income, "expenses": expenses, "maintenance": maintenance, "electricity": costs.electricity, "cleaning": costs.cleaning, "costs": costs.duplicate(true), "rent": rent_due(s.day), "settlementRent": due, "cash": s.cash, "upgraded": false}
 			s.phase = "report"
 			NightCrime.settle(s)
 			if s.day == 21:

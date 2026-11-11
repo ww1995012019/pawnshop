@@ -134,6 +134,7 @@ static func _review(s: Dictionary) -> void:
  var funds: float=float(se.cash)+totals.expense
  for line in se.lines:
   if not line.included or line.status=="done" or line.status=="confirmed" or line.direction!="sell": continue
+  if line.context.get("negotiation",{}).get(line.uid,{}).get("status","")=="rejected": continue
   var it=item(s,line.uid)
   var why := _stock_problem(s,it,line.direction)
   line.selected=false
@@ -244,15 +245,16 @@ static func reduce(previous: Dictionary, action: Dictionary):
    var price=action.get("price")
    var terms := Model.trade_terms(s,line.context,it)
    if not Model.valid_price(price) or float(price)>float(terms.marketCap): return Model.notice(s,"无效报价，本件有效议价次数未变化。")
-   if int(line.context.rounds)>=3: return Model.notice(s,"本件三次有效还价已用完，可接受当前报价或取消。")
    var evidence=action.get("evidence",null)
    if evidence!=null:
-    if not evidence is String or not it.evidence.has(evidence): return Model.notice(s,"请选择本件已经取得的物证。")
-    Model.disclose_evidence(line.context,it,evidence)
-    if not line.context.evidenceUsed.has(evidence): line.context.evidenceUsed.append(evidence)
-   line.context.rounds+=1;line.context.price=price;line.selected=false
-   if Model.price_agreed(s,line.context,it): line.status="ready";line.reason="此价可以，等待逐件确认。"
-   else: line.context.price=Model.counter_price(s,line.context,it);line.status="counter";line.reason="对方还价，可接受当前价或继续谈。"
+    if not evidence is String or not it.evidence.has(evidence) or not GameData.relevant_tool(it.defId,evidence): return Model.notice(s,"请选择本件已经取得的相关物证。")
+   var decision: Dictionary=Model.Negotiation.decide(s,line.context,it,price,evidence)
+   if decision.decision=="leave": return Model.finish_trade(s,decision.reason)
+   if decision.duplicate: return Model.notice(s,decision.reason)
+   line.selected=false;line.reason=decision.reason
+   if decision.decision=="refuse": line.status="rejected"
+   elif decision.decision=="accept": line.context.price=price;line.status="ready";line.reason="此价可以，等待逐件确认。"
+   else: line.context.price=Model.counter_price(s,line.context,it);line.status="counter"
    line.fingerprint=fingerprint(it);se.version+=1
    _rebalance(s)
    return s

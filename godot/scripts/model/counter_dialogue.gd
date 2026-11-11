@@ -6,7 +6,7 @@ static func active(s: Dictionary) -> bool:
  return s.get("trade")!=null and not s.trade.get("inspectionVisit",false) and bool(TradeSession.session(s).get("dialogue",false))
 static func current(s: Dictionary) -> Dictionary:
  return TradeSession.row(s,String(TradeSession.session(s).get("focus","")))
-## A refusal ends this visit only after every already-agreed original is delivered.
+## Per-item refusals keep this visitor available; explicit walkouts finish in the reducer.
 static func departure_reason(s: Dictionary) -> String:
  var trade=s.get("trade")
  if trade==null or trade.get("inspectionVisit",false): return ""
@@ -15,7 +15,7 @@ static func departure_reason(s: Dictionary) -> String:
  var totals:=TradeSession.summary(s)
  if totals.sell_count+totals.buy_count>0: return ""
  var line:=current(s)
- if line.get("status","")=="rejected": return "refused"
+ if line.get("status","")=="rejected" and line.get("context",{}).get("negotiation",{}).get(line.get("uid",""),{}).get("status","")!="rejected": return "refused"
  var se:=TradeSession.session(s)
  if not se.get("had_deal",false) or not se.goods.is_empty(): return ""
  if int(se.bought)>=int(se.want_count): return "completed"
@@ -90,7 +90,7 @@ static func _sync(s: Dictionary,line: Dictionary) -> void:
  t.item=null
  if line.direction=="sell": t.selectedUid=line.uid
  else: t.erase("selectedUid")
- for key in ["price","rounds","evidenceUsed","npcKnowledge","forgeryChecks"]: t[key]=line.context.get(key,{} if key in ["npcKnowledge","forgeryChecks"] else [] if key=="evidenceUsed" else 0)
+ for key in ["price","rounds","evidenceUsed","npcKnowledge","forgeryChecks","negotiation"]: t[key]=line.context.get(key,{} if key in ["npcKnowledge","forgeryChecks","negotiation"] else [] if key=="evidenceUsed" else 0)
  t.locked=line.status=="confirmed" and line.selected
 static func _idle(s: Dictionary,words: String) -> void:
  var t: Dictionary=s.trade
@@ -101,6 +101,7 @@ static func _judge(s: Dictionary,line: Dictionary) -> void:
  var why := TradeSession._stock_problem(s,it,line.direction)
  if why!="": line.status="blocked";line.reason=why;line.selected=false;return
  if TradeSession._check_forgery(s,line,it): return
+ if line.context.get("negotiation",{}).get(line.uid,{}).get("status","")=="rejected": line.status="rejected";line.selected=false;return
  if line.direction=="sell" and not line.selected:
   var totals := TradeSession.summary(s)
   if int(TradeSession.session(s).bought)+int(totals.sell_count)>=int(TradeSession.session(s).want_count): line.status="rejected";line.reason="这趟要的数量已经够了，其他的我先不收。";return
@@ -122,9 +123,9 @@ static func _reply(s: Dictionary,line: Dictionary) -> void:
  elif line.status=="confirmed":
   s.trade.line="行，%s就按%s Cr。说好的几件我都记着，你还有别的可以接着拿。" % [name,Model.jnum(line.context.price)]
  elif line.direction=="buy":
-  s.trade.line="这只%s我开%s Cr，你可以先鉴定，再跟我谈。" % [name,Model.jnum(line.context.price)]
+  s.trade.line="这只%s我开%s Cr，你可以先鉴定，再跟我谈。%s" % [name,Model.jnum(line.context.price),line.reason if int(line.context.rounds)>0 else ""]
  else:
-  s.trade.line="%s我可以考虑，我出%s Cr。合适的话就这么说定，也可以继续谈。%s" % [name,Model.jnum(line.context.price),line.reason if "预算" in line.reason else ""]
+  s.trade.line="%s我可以考虑，我出%s Cr。合适的话就这么说定，也可以继续谈。%s" % [name,Model.jnum(line.context.price),line.reason]
 static func _call(s: Dictionary,type: String,extra: Dictionary={}) -> Dictionary:
  return TradeSession.reduce(s,{"type":type,"tradeId":s.trade.id}.merged(extra,true))
 static func next_offer(s: Dictionary) -> Dictionary:
@@ -237,6 +238,7 @@ static func reduce(previous: Dictionary,a: Dictionary):
  if type in ["OFFER","ACCEPT"] and (line.selected or line.status=="confirmed"): return previous
  if type=="OFFER":
   s=_call(s,"TRADE_OFFER",{"uid":line.uid,"price":a.get("price"),"evidence":a.get("evidence",null)})
+  if s.trade==null: return s
   line=TradeSession.row(s,line.uid)
   if int(line.context.rounds)==int(current(previous).context.rounds): s.trade.line=s.notice;return s
   # Judgement can mark a changed NPC counterprice ready; only the submitted price carries player consent.

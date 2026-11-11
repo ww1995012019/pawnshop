@@ -8,19 +8,13 @@ const CrimeEvents = preload("res://scripts/model/crime_events.gd")
 const RARE_ITEMS := ["WCH-003", "WCH-008", "WCH-012", "WCH-015"]
 
 static func merchant_slot(s: Dictionary) -> int:
-	var day := int(s.day)
-	if day == 1:
-		return 4 # Keep the first four tutorial visitors intact.
-	var cycle := int((day - 2) / 2)
-	var draw := Model.fnv("%s/merchant/%d" % [s.seed, cycle])
-	if day != 2 + cycle * 2 + draw % 2:
-		return -1
-	return 4 + int((draw >> 3) % 2) if day <= 3 else int((draw >> 3) % Model.daily_visit_limit())
+	return preload("res://scripts/model/visit_schedule.gd").merchant_slot(s)
 
 static func merchant_due(s: Dictionary) -> bool:
-	return s.phase == "open" and s.trade == null and int(s.cursor) == merchant_slot(s)
+	return s.phase == "open" and s.trade == null and int(s.cursor) < Model.daily_visit_limit(s) and int(s.cursor) == merchant_slot(s)
 
 static func next_visitor(s: Dictionary) -> String:
+	if Landlord.scheduled(s): return Landlord.NPC_ID
 	var night_visitor := NightCrime.visitor_override(s)
 	if night_visitor != "": return night_visitor
 	if merchant_due(s):
@@ -143,6 +137,8 @@ static func _reject_forgery(s: Dictionary, item: Dictionary, caught: Array[Strin
 	return Model.notice(s, "伪装被识破：%s；本次未售出。%s" % ["、".join(caught), "关注+10，阵营关系-8。" if first_penalty else "同一轮已记录处罚，不重复扣关系或增加关注。"])
 
 static func reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
+	var rent_result = Landlord.reduce(previous,action)
+	if rent_result != null: return rent_result
 	var night_result = NightCrime.reduce(previous,action)
 	if night_result != null:
 		if action.get("type","")=="ARRIVE" and previous.trade==null and night_result.trade!=null and night_result.trade.kind in ["buy","sell"]:
@@ -246,7 +242,7 @@ static func _reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 		var s: Dictionary = previous.duplicate(true)
 		s.trade = _new_merchant(s)
 		return Model.notice(s, "流动商人已到店，可以购买维修材料、交易多余物资。")
-	if kind == "ARRIVE" and previous.trade == null and previous.phase == "open" and next_visitor(previous) == Wanted.OFFICER_ID:
+	if kind == "ARRIVE" and previous.trade == null and previous.phase == "open" and int(previous.cursor) < Model.daily_visit_limit(previous) and next_visitor(previous) == Wanted.OFFICER_ID:
 		var state := previous.duplicate(true)
 		Wanted.ensure(state)
 		state.trade = Wanted.new_officer_trade(state)

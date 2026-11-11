@@ -31,6 +31,8 @@ var _item: Dictionary = {}
 var _task := ""
 var _profile := {"movement":"quartz", "caseback":"screw"}
 var _plan: Array[Dictionary] = []
+var _screw_layout: Dictionary = {}
+var _legacy_screws := false
 var _state: Dictionary = {}
 var _pressed := false
 var _drag_origin := Vector2.ZERO
@@ -84,12 +86,31 @@ func configure(it: Dictionary, task: String, progress: Dictionary = {}) -> void:
 		# The reducer updates service.opened during this operation. Its original
 		# plan basis must survive that change, or numeric action indices shift.
 		_started_opened = bool(progress.get("started_opened", _started_opened))
+	var restoring: bool = progress.get("version", 0) == 1 and progress.get("task", "") == task
+	_screw_layout = progress.get("screw_layout", {}).duplicate(true) if restoring else {}
+	var legacy_action := ""
+	if restoring and not progress.has("screw_layout"):
+		# Numeric v1 indices refer to individual screws, including in-flight
+		# phases. Recover the original action before reducing the plan.
+		_legacy_screws = true
+		_build_plan()
+		var old_step := clampi(int(progress.get("step", 0)), 0, _plan.size())
+		if old_step < _plan.size(): legacy_action = _plan[old_step].id
+		_migrate_screw_layout(old_step, String(progress.get("phase", "idle")))
+		_legacy_screws = false
 	_build_plan()
 	_state = _initial_state()
 	if progress.get("version", 0) == 1 and progress.get("task", "") == task:
 		for key in _state:
 			if progress.has(key):
 				_state[key] = progress[key].duplicate(true) if progress[key] is Dictionary or progress[key] is Array else progress[key]
+		if not progress.has("screw_layout"):
+			_state.screw_layout = _screw_layout.duplicate(true)
+			_state.step = _plan.size()
+			for n in range(_plan.size()):
+				if _plan[n].id == legacy_action or _plan[n].get("legacy_ids", []).has(legacy_action):
+					_state.step = n
+					break
 		_state.step = clampi(int(_state.step), 0, _plan.size())
 		if not PHASES.has(_state.phase) and _state.phase != "idle":
 			_state.phase = "idle"
@@ -105,12 +126,14 @@ func _initial_state() -> Dictionary:
 	var cover_off: bool = _task in ["wash", "assemble", "test"] or (_task == "replace" and _replacement_internal()) or bool(_item.get("service", {}).get("opened", false))
 	if _task in ["forge_logo", "forge_serial"]:
 		cover_off = false
+	var screws_off: bool = cover_off and _profile.get("caseback", "screw") == "bolts"
 	var part := Vector2(518, 251) if _task == "assemble" else GEAR_SEAT
 	return {"version":1, "task":_task, "step":0, "phase":"idle", "elapsed":0.0,
 		"tool":{"kind":"", "position":[74.0, 407.0], "angle":0.0},
 		"parts":{"cover":_arr(COVER_TRAY if cover_off else CENTER), "component":_arr(part),
 			"old_part":[275.0, 252.0], "new_part":[555.0, 268.0], "ballast":[558.0, 270.0], "fixing":[540.0, 251.0], "link":[560.0, 269.0], "watch":[248.0,227.0], "scale_pan":[248.0,237.0]},
-		"screws":[false, false, false, false], "power_safe":false, "clamp_open":false,
+		"screw_layout":_screw_layout.duplicate(true),
+		"screws":[screws_off, screws_off, screws_off, screws_off], "power_safe":false, "clamp_open":false,
 		"washed":0.0, "dry":0.0, "oil":[], "seated":false, "test":0.0,
 		"logo":0.0, "serial":0.0, "uv":false, "ballast_set":false, "scale":0.0, "watch_on_scale":false, "watch_scale":1.0,
 		"trace":"", "complete":false, "opened":cover_off, "started_opened":_started_opened}
@@ -312,7 +335,7 @@ func _animate() -> void:
 		"contact": tip = (rack + Vector2(0, -10)).lerp(contact, eased)
 		"act":
 			tip = _motion_tip(a, t)
-			if String(a.get("motion", "press")) == "turn": angle = sin(t * TAU * 2) * 0.24
+			if String(a.get("motion", "press")) in ["turn", "screw_group"]: angle = sin(t * TAU * 2) * 0.24
 			if a.has("part"):
 				_state.parts[a.part] = _arr(tip)
 				if a.part == "watch": _state.watch_scale = lerpf(1.0, 0.94, eased)
@@ -327,6 +350,14 @@ func _motion_tip(a: Dictionary, t: float) -> Vector2:
 	var contact := _v(a.at)
 	var eased := t * t * (3.0 - 2.0 * t)
 	match String(a.get("motion", "press")):
+		"screw_group":
+			var screws: Array = a.screw_indices
+			if screws.size() == 1: return contact
+			var second := _screw_pos(int(screws[1]))
+			if t <= 0.42: return contact
+			if t >= 0.58: return second
+			var travel := (t - 0.42) / 0.16
+			return contact.lerp(second, travel) + Vector2(0, -12 * sin(travel * PI))
 		"lever": return contact + Vector2(3 * sin(t * PI), -9 * sin(t * PI))
 		"transfer": return contact.lerp(_v(a.get("to",a.at)), eased) + Vector2(0, -35 * sin(t * PI))
 		"wash": return contact + Vector2(sin(t * TAU * 3) * 6, sin(t * TAU * 6) * 2)
@@ -339,6 +370,9 @@ func _motion_tip(a: Dictionary, t: float) -> Vector2:
 	return contact
 
 func _update_visual_effect(a: Dictionary, t: float) -> void:
+	if a.has("screw_indices") and a.screw_indices.size() > 1 and t >= 0.42:
+		# The first physical screw is stored before crossing to its partner.
+		_set_screw(int(a.screw_indices[0]), String(a.id).begins_with("unscrew_"))
 	match String(a.id):
 		"wash_metal": _state.washed = t
 		"dry_metal": _state.dry = t
@@ -350,15 +384,17 @@ func _update_visual_effect(a: Dictionary, t: float) -> void:
 func _apply_effect(a: Dictionary) -> void:
 	if a.has("part"): _state.parts[a.part] = a.to.duplicate()
 	var id := String(a.id)
-	if id.begins_with("unscrew_") and id != "unscrew_cover":
-		_state.screws[id.trim_prefix("unscrew_").to_int()] = true
-		_state.opened = true
-	if id.begins_with("fasten_"):
-		_state.screws[id.trim_prefix("fasten_").to_int()] = false
-		if id == "fasten_3": _state.opened = false
+	if a.has("screw_indices"):
+		for index in a.screw_indices:
+			_set_screw(int(index), id.begins_with("unscrew_"))
+		if id.begins_with("fasten_") and int(a.screw_indices[-1]) == 3: _state.opened = false
 	if id.begins_with("oil_"):
 		if not _state.oil.has(id): _state.oil.append(id)
 	match id:
+		"return_cover":
+			# Replacement shells may introduce bolts on a formerly snap-fit case.
+			if int(_state.step) + 1 < _plan.size() and _plan[int(_state.step) + 1].has("screw_indices"):
+				_state.screws = [true, true, true, true]
 		"lift_cover", "unscrew_cover", "lever_snap": _state.opened = true
 		"tighten_cover", "press_snap": _state.opened = false
 		"safe_quartz", "safe_mechanical": _state.power_safe = true
@@ -479,8 +515,7 @@ func _safe_action() -> void:
 func _open_actions() -> void:
 	match String(_profile.get("caseback", "screw")):
 		"bolts":
-			for i in range(4):
-				_action("unscrew_%d" % i, "卸下后盖螺钉 %d / 4" % (i + 1), "刀口对准螺钉槽，旋松后收到零件盘", "driver", _screw_pos(i), "turn", 0.85)
+			_screw_actions("unscrew", [0, 1, 2, 3])
 		"snap": _action("lever_snap", "从缺口撬起压入式后盖", "刀口仅插入壳侧缺口，轻抬至盖缘分离", "caseknife", _snap_contact(), "lever", 1.0)
 		_: _action("unscrew_cover", "双爪旋开旋入式后盖", "开盖器两爪卡入对侧槽口，逆时针旋松", "opener", CENTER, "turn", 1.4)
 	_transfer("lift_cover", "取下后盖放入零件盘", "夹住盖缘，抬起后移入有软垫的后盖格", "cover", CENTER, COVER_TRAY)
@@ -489,10 +524,55 @@ func _close_actions() -> void:
 	_transfer("return_cover", "对准密封圈放回后盖", "确认边缘齐平，后盖回到原壳位", "cover", COVER_TRAY, CENTER)
 	match String(_profile.get("caseback", "screw")):
 		"bolts":
-			for i in [0, 2, 1, 3]:
-				_action("fasten_%d" % i, "交叉紧固后盖螺钉 %d" % (i + 1), "螺钉依次回位，避免盖缘偏斜", "driver", _screw_pos(i), "turn", 0.75)
+			_screw_actions("fasten", [0, 2, 1, 3])
 		"snap": _action("press_snap", "均匀压合压入式后盖", "沿盖缘均匀施力，确认后盖完全落座", "press", CENTER, "press", 1.0)
 		_: _action("tighten_cover", "顺时针旋紧后盖", "双爪卡住槽口，顺时针旋至盖缘齐平", "opener", CENTER, "turn", 1.15)
+
+# Persist the actual grouping for migrated work. Completed screws stay behind
+# the cursor; an active old single-screw animation retains its exact trajectory.
+func _migrate_screw_layout(step: int, phase: String) -> void:
+	_screw_layout.clear()
+	for prefix in ["unscrew", "fasten"]:
+		var completed_screws := []
+		var pending := []
+		var active := []
+		for n in range(_plan.size()):
+			var action: Dictionary = _plan[n]
+			if not String(action.id).begins_with(prefix + "_") or not action.has("screw_indices"): continue
+			var screw: int = action.screw_indices[0]
+			if n < step: completed_screws.append(screw)
+			elif n == step and phase != "idle": active.append(screw)
+			else: pending.append(screw)
+		var groups := []
+		for n in range(0, completed_screws.size(), 2): groups.append(completed_screws.slice(n, n + 2))
+		if not active.is_empty(): groups.append(active)
+		for n in range(0, pending.size(), 2): groups.append(pending.slice(n, n + 2))
+		if not groups.is_empty(): _screw_layout[prefix] = groups
+
+func _screw_actions(prefix: String, order: Array) -> void:
+	var groups: Array = _screw_layout.get(prefix, [order.slice(0, 2), order.slice(2, 4)])
+	if _legacy_screws:
+		groups = []
+		for index in order: groups.append([index])
+	for group in groups:
+		var legacy_ids := []
+		var suffix := ""
+		var numbers := PackedStringArray()
+		for index in group:
+			legacy_ids.append("%s_%d" % [prefix, int(index)])
+			suffix += str(int(index))
+			numbers.append(str(int(index) + 1))
+		var opening := prefix == "unscrew"
+		var id: String = legacy_ids[0] if _legacy_screws else "%s_group_%s" % [prefix, suffix]
+		_action(id, ("卸下后盖螺钉组 · " if opening else "交叉紧固后盖螺钉组 · ") + " / ".join(numbers),
+			"刀口对准槽口，同组螺钉依次旋松后收入零件盘" if opening else "先紧固对角螺钉，再交叉收妥另一组，避免盖缘偏斜",
+			"driver", _screw_pos(int(group[0])), "turn" if group.size() == 1 else "screw_group", 0.85 if opening else 0.75)
+		_plan[-1].screw_indices = group.duplicate()
+		_plan[-1].legacy_ids = legacy_ids
+
+func _set_screw(index: int, removed: bool) -> void:
+	_state.screws[index] = removed
+	if removed: _state.opened = true
 
 func _rack(_tool: String) -> Vector2:
 	return Vector2(91, 430)

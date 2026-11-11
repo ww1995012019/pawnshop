@@ -127,6 +127,8 @@ func snapshot() -> Dictionary:
 			"projected_cash": state.cash + (-float(trade.price) if buy else float(trade.price)),
 			"can_accept": lot != null and not trade.locked and state.ap >= 1 and (not buy or state.cash >= trade.price),
 			"can_deliver": trade.locked and state.ap >= 1 and (not buy or state.cash >= trade.price)})
+		if trade.kind == "landlord":
+			result.projected_cash = state.cash - Landlord.outstanding(state)
 		if merchant:
 			var goods := []
 			for material in GameData.materials:

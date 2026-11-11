@@ -51,9 +51,10 @@ func submitted_offer_tests() -> void:
  check(no_delivery.cash==before.cash and no_delivery.ap==before.ap and no_delivery.inventory==before.inventory,"unaccepted counteroffer cannot be delivered")
  var accepted=verb(counter,"ACCEPT")
  check(accepted.trade.locked and accepted.trade.price==counter.trade.price and accepted.cash==before.cash and accepted.ap==before.ap,"explicit accept locks a counteroffer without payment")
- for round_index in 2: counter=verb(counter,"OFFER",{"price":1})
- var exhausted=verb(counter,"OFFER",{"price":100})
- check(counter.trade.rounds==3 and exhausted.trade.rounds==3 and not exhausted.trade.locked,"fourth offer cannot bypass the three-round limit into agreement")
+ for round_index in 4: counter=verb(counter,"OFFER",{"price":1})
+ check(counter.trade.rounds==1 and not counter.trade.locked,"repeating the same extreme bid neither rerolls reaction nor spends more willingness")
+ var improved=verb(counter,"OFFER",{"price":100})
+ check(improved.trade.locked and improved.trade.price==100,"a real concession can resolve discussion after repeated duplicate inputs")
  var budget=offer_fixture("sell")
  TradeSession.session(budget).cash=0
  budget=verb(budget,"OFFER",{"price":1})

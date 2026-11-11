@@ -35,6 +35,7 @@ func _ready() -> void:
 		state = Model.create()
 	else:
 		state = migrate_service_save(state)
+	Landlord.ensure(state)
 	StoreCosts.ensure(state)
 	Wanted.ensure(state)
 	NightCrime.ensure(state)
@@ -84,6 +85,7 @@ func legacy_save_text() -> String:
 func new_game(seed := "") -> void:
 	var prev := state
 	state = Model.create(seed if seed != "" else "ORBITAL-%08X" % randi())
+	Landlord.ensure(state)
 	Wanted.ensure(state)
 	NightCrime.ensure(state)
 	focus_uid = ""
@@ -103,6 +105,7 @@ func dispatch(a: Dictionary) -> bool:
 
 func save() -> void:
 	NightCrime.ensure(state)
+	Landlord.ensure(state)
 	StoreCosts.ensure(state)
 	if state.get("serviceVersion", 0) < 1:
 		state = migrate_service_save(state)

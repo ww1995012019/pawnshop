@@ -420,7 +420,8 @@ static func lit_atlas(key: String) -> CanvasTexture:
 		return _cache[k]
 	var c := CanvasTexture.new()
 	c.diffuse_texture = tex("res://assets/atlas/%s.png" % key)
-	c.normal_texture = tex("res://assets/atlas/%s_n.png" % key)
+	if ResourceLoader.exists("res://assets/atlas/%s_n.png" % key):
+		c.normal_texture = tex("res://assets/atlas/%s_n.png" % key)
 	var pixel_item := key.begins_with("watches-") or key.begins_with("shop-residents") or key.begins_with("orbital-items-") or key.begins_with("orbital-expansion-") or key.begins_with("orbital-annex-")
 	c.specular_color = Color(0.05, 0.05, 0.05) if pixel_item else Color(0.45, 0.45, 0.45)
 	c.specular_shininess = 0.1 if pixel_item else 0.6
@@ -457,6 +458,8 @@ static func watch_variant_texture(def_id: String) -> CanvasTexture:
 
 ## Portrait cell for an NPC and mood; moods exist for the first five residents.
 static func npc_cell(npc_id: String, _mood := "neutral") -> Dictionary:
+	if npc_id == "CHR-034":
+		return {"key":"shop-landlord","region":Rect2(Vector2.ZERO,tex("res://assets/atlas/shop-landlord.png").get_size())}
 	var index := maxi(int(npc_id.trim_prefix("CHR-")) - 1, 0)
 	if index >= 13 and index < 33:
 		index -= 13

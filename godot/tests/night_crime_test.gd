@@ -30,7 +30,12 @@ func close(s: Dictionary) -> Dictionary:
 	# Resolve actual pending police visits, not a test-only force flag.
 	s = act(s,"ARRIVE_INSPECTION")
 	if s.trade != null and s.trade.get("inspectionVisit",false): s = act(s,"RESOLVE_INSPECTION",{"tradeId":s.trade.id})
-	return act(s,"SETTLE")
+	s = act(s,"SETTLE")
+	if s.trade != null and s.trade.kind == "landlord":
+		s = act(s,"PAY_RENT",{"tradeId":s.trade.id})
+		s = act(s,"REFUSE")
+		s = act(s,"SETTLE")
+	return s
 func return_seed() -> String:
 	for n in 100000:
 		var seed := "LOOP-%d" % n
@@ -38,7 +43,7 @@ func return_seed() -> String:
 			return seed
 	return ""
 func find_fence(s: Dictionary) -> Dictionary:
-	while s.cursor < 6:
+	while s.cursor < Model.daily_visit_limit(s):
 		s = act(s,"ARRIVE")
 		if s.trade == null: break
 		if s.trade.has("crimeCaseId"): return s
@@ -109,7 +114,7 @@ func loop_tests(night) -> void:
 	s = act(s,"REGISTER",{"uid":uid})
 	check(not Model.find_inventory(s,uid).sourceVerified and s.cash == cash,"registration never launders true stolen provenance")
 	# Find a real buyer and sell through the ordinary quote and delivery path.
-	while s.cursor < 6:
+	while s.cursor < Model.daily_visit_limit(s):
 		s = act(s,"ARRIVE")
 		if s.trade == null: break
 		if s.trade.get("inspectionVisit",false): s = act(s,"RESOLVE_INSPECTION",{"tradeId":s.trade.id})
@@ -371,19 +376,19 @@ func run() -> void:
 	for n in 100:
 		s = fresh("INSPECT-%d" % n)
 		s.risk = 100
-		s.cursor = 6
+		s.cursor = Model.daily_visit_limit(s)
 		s.ap = 0
 		night.ensure_day(s)
 		if night.inspection_pending(s): break
 	check(night.inspection_pending(s),"deterministic fixture finds scheduled police")
 	s = act(s,"ARRIVE")
-	check(s.trade != null and s.trade.get("inspectionVisit",false) and s.ap == 0,"bonus inspection arrives at six visitors and zero AP")
+	check(s.trade != null and s.trade.get("inspectionVisit",false) and s.ap == 0,"overdue inspection remains reachable at capacity and zero AP")
 	var held := Model.new_item(s,"WCH-003",{"stolen":true,"sourceVerified":false,"source":"外部失窃案","crimeCaseId":"EXTERNAL-ONE"})
 	s.inventory.append(held)
 	s.cash = 7
 	var uid: String = held.uid
 	s = act(s,"RESOLVE_INSPECTION",{"tradeId":s.trade.id})
-	check(s.cash == 0 and s.cursor == 6 and s.ap == 0 and Model.find_inventory(s,uid) == null,"inspection confiscates exact original, caps fine and preserves bonus cursor/AP")
+	check(s.cash == 0 and s.cursor == Model.daily_visit_limit(s) and s.ap == 0 and Model.find_inventory(s,uid) == null,"inspection confiscates exact original, caps fine and preserves bonus cursor/AP")
 	check(night.public_report(s).lastInspection.fineDue >= 30 and night.public_report(s).lastInspection.finePaid == 7,"receipt reports assessed and paid fine separately")
 	loop_tests(night)
 	additional_tests(night)

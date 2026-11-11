@@ -130,8 +130,15 @@ func run() -> void:
 	var rent := normal.duplicate(true)
 	rent.day = 7
 	daily(rent)
+	NightCrime.ensure_day(rent)
+	rent.nightCrime.days["7"].inspection = false
+	rent.nightCrime.days["7"].inspectionDone = true
+	var before_rent: float = rent.cash
 	rent = Model.reduce(rent,{"type":"SETTLE"})
-	check(rent.report.rent == 450 and rent.report.costs.total + rent.report.rent == 472,"day7 daily example totals472 with unchanged rent")
+	rent = load("res://scripts/model/commerce.gd").reduce(rent,{"type":"PAY_RENT","tradeId":rent.trade.id})
+	rent = load("res://scripts/model/commerce.gd").reduce(rent,{"type":"REFUSE"})
+	rent = Model.reduce(rent,{"type":"SETTLE"})
+	check(rent.report.rent == 450 and rent.report.settlementRent == 0 and before_rent-rent.cash == 472,"day7 costs and explicit landlord payment total472 without duplicate rent")
 	var old := Model.create("COST-LEGACY")
 	old.erase("storeCosts")
 	old.day = 4

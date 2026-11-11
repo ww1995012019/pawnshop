@@ -62,8 +62,10 @@ func run() -> void:
 	var bolt_points=[Vector2(183.6533,162.6533),Vector2(312.3467,162.6533),Vector2(312.3467,291.3467),Vector2(183.6533,291.3467)]
 	for i in 4:
 		close_to(bolts._screw_pos(i),bolt_points[i],"original diagonal bolt retained")
+	for i in 2:
 		bolts._state.step=i+1
-		close_to(bolts.interaction_targets()[0].position,bolt_points[i],"bolt action retains shared diagonal anchor")
+		close_to(bolts.interaction_targets()[0].position,bolt_points[i*2],"group starts on first physical screw")
+		close_to(bolts._motion_tip(bolts._plan[i+1],1.0),bolt_points[i*2+1],"group finishes on second physical screw")
 	var quartz_test=bench("WCH-075","screw","test")
 	for action in quartz_test._plan:
 		if action.id=="set_crown": close_to(quartz_test._v(action.at),Vector2(370.85,227),"quartz setting uses attached crown")

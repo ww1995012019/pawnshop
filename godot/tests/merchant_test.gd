@@ -164,7 +164,7 @@ func run() -> void:
 		var daily := Model.create("TWENTY-ONE-DAYS")
 		daily.day = day
 		var visited := false
-		for slot in Model.daily_visit_limit():
+		for slot in Model.daily_visit_limit(daily):
 			var predicted: String = commerce.next_visitor(daily)
 			daily = commerce.reduce(daily, {"type": "ARRIVE"})
 			if daily.trade == null or daily.trade.npcId != predicted:

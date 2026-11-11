@@ -50,6 +50,11 @@ static func def(id: String) -> Dictionary:
 
 static func npc(id: String) -> Dictionary:
 	ensure()
+	if id == "CHR-034":
+		return {"id":"CHR-034","name":"梁叔","title":"店面房东","faction":"station","sprite":33,
+			"line":"生意慢慢做，账要记清楚。今天来核对这一期租金。","bio":"旧港店面的房东，带着账簿与钥匙按期上门收租。",
+			"desire":"核对租金并当面交付回执。","expertise":{"watch":{"logo":25,"serial":25,"structure":25,"market":40}},
+			"conversations":{"identity":"叫我梁叔就好，我负责这间店面的租约。","origin":"刚从站务那边核对完租期，带账簿来收租。","goods":"今天不收旧表，只核对租金。付款后我给你回执。","destination":"收好账去隔壁维修铺，今天还有两家要拜访。"}}
 	for n in npcs + extra_npcs + new_residents:
 		if n.id == id:
 			return n

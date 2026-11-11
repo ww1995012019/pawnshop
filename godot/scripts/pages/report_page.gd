@@ -19,7 +19,7 @@ func scene_name() -> String:
 func hint_text() -> String:
 	var s := Game.state
 	if s.phase == "open":
-		return "处理完今天的客人与订单后，打烊结算电费、清洁费与租金。"
+		return "处理完今天的客人与订单后，打烊结算电费与清洁费，租金由房东上门收取。"
 	if s.phase == "report":
 		return "日结完成：选择升级（第 3 天起），然后迎接明天。"
 	return "经营结束。可以回看账目，或新开一家店。"
@@ -168,7 +168,7 @@ func _refresh() -> void:
 	totals.add_child(right)
 	right.add_child(UIKit.label("结算联 / TOTALS", 18, UIKit.INK, true))
 	var g := UIKit.grid(2, 8)
-	var due := Model.rent_due(s.day)
+	var due := Landlord.outstanding(s)
 	var paid: bool = s.phase == "report" and s.report != null
 	# Historic reports preserve the old single charge; never recalculate them.
 	var costs: Dictionary = s.report.get("costs", {"legacy":true,"maintenance":s.report.get("maintenance",20),"electricity":0,"cleaning":0,"total":s.report.get("maintenance",20),"details":{}}) if paid else StoreCosts.quote(s)
@@ -182,10 +182,10 @@ func _refresh() -> void:
 	else:
 		_row(g, "店铺电费" if paid else "预计电费", UIKit.money(costs.electricity))
 		_row(g, "店铺清洁费" if paid else "固定清洁费", UIKit.money(costs.cleaning))
-	var rent: float = s.report.rent if paid else due
-	_row(g, "租金" if paid else "今晚租金", UIKit.money(rent))
-	_row(g, "本次支付" if paid else "预计合计", UIKit.money(costs.total + rent), UIKit.RUST)
-	_row(g, "结余现金" if paid else "支付后现金", UIKit.money(s.report.cash if paid else s.cash - costs.total - rent), UIKit.RUST)
+	var rent: float = s.report.get("settlementRent",s.report.rent) if paid else due
+	_row(g, "本期租金已交房东" if Landlord.paid(s) else "待交房东的租金", UIKit.money(Model.rent_due(s.day)))
+	_row(g, "本次支付" if paid else "本次日结预计支付", UIKit.money(costs.total + (rent if paid else 0)), UIKit.RUST)
+	_row(g, "结余现金" if paid else "支付后现金", UIKit.money(s.report.cash if paid else s.cash - costs.total), UIKit.RUST)
 	if not paid:
 		_row(g, "剩余行动点", "%d AP" % int(s.ap))
 	right.add_child(g)
@@ -194,13 +194,19 @@ func _refresh() -> void:
 	body.add_child(cols)
 	body.add_child(UIKit.rule())
 	if s.phase == "open":
-		var b := UIKit.button("打烊结算", "primary", Vector2(0, 64), 24)
+		var rent_pending := Landlord.outstanding(s) > 0
+		var b := UIKit.button("请房东上门收租" if rent_pending else "打烊结算", "primary", Vector2(0, 64), 24)
 		b.disabled = s.trade != null or bool(NightCrime.public_report(s).inspection.pending)
 		if s.trade != null:
 			body.add_child(UIKit.label("柜台还有客人：先交割或送客。", 18, UIKit.DANGER))
 		b.pressed.connect(func():
 			shell.sound("drop", -4, 0.8)
-			Game.dispatch({"type": "SETTLE"}))
+			if rent_pending:
+				var host = shell.workspace_parent if shell.workspace_mode else shell
+				host.close_workspace()
+				Game.dispatch({"type":"CALL_LANDLORD"})
+			else:
+				Game.dispatch({"type":"SETTLE"}))
 		body.add_child(b)
 	elif s.phase == "report":
 		if day >= 3 and not s.report.upgraded:

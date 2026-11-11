@@ -153,7 +153,7 @@ func hint_text() -> String:
 	if s.phase != "open":
 		return "今日已打烊，打开日结账本迎接明天。"
 	if s.trade == null:
-		return "按柜台上的服务铃，请下一位客人进来。" if s.cursor < Model.daily_visit_limit() else "今天的预约都接待完了：去维修、整理仓储或打烊。"
+		return "按柜台上的服务铃，请下一位客人进来。" if s.cursor < Model.daily_visit_limit(s) else "今天的预约都接待完了：去维修、整理仓储或打烊。"
 	var t: Dictionary = s.trade
 	if t.locked:
 		return "价格已锁定：确认钱货交割（1 AP）。"
@@ -567,7 +567,7 @@ func _refresh_board() -> void:
 	var day := int(s.day)
 	board_day.text = "第 %02d 天 · %s" % [day, "营业" if s.phase == "open" else "休息"]
 	var rent_day := mini(int(ceil(day / 7.0)) * 7, 21)
-	board_rent.text = "今晚缴租 · 点此看事件" if rent_day == day else "租期余 %d 天 · 事件" % (rent_day - day)
+	board_rent.text = ("房东待收租" if Landlord.outstanding(s)>0 else "本期租金已交") if rent_day == day else "租期余 %d 天 · 事件" % (rent_day - day)
 	fixture_buttons.events.tooltip_text = "今日事件 · " + ("已处理" if Game.event_done() else "待查看")
 	status_values.cash.text = "%s Cr" % Model.jnum(s.cash)
 	status_values.ap.text = "AP %d" % int(s.ap)
@@ -668,9 +668,9 @@ func _refresh_desk() -> void:
 	idle_label.visible = it == null
 	idle_jobs.visible = t == null
 	if t == null:
-		idle_label.text = "按左侧服务铃 · 接待下一位来客" if s.phase == "open" and s.cursor < Model.daily_visit_limit() else "预约已接待完 · 打开日结账本"
+		idle_label.text = "按左侧服务铃 · 接待下一位来客" if s.phase == "open" and s.cursor < Model.daily_visit_limit(s) else "预约已接待完 · 打开日结账本"
 	else:
-		idle_label.text = "巡警到店 · 领取协查名单，听巡警说明" if t.kind == "police" else "商人到店 · 在报价台查看商品" if t.kind == "merchant" else "请从陈列柜或下方抽屉选货"
+		idle_label.text = ("租金已交 · 收好回执，送房东离开" if Landlord.paid(s) else "房东到店 · 核对本期账单后缴租") if t.kind == "landlord" else "巡警到店 · 领取协查名单，听巡警说明" if t.kind == "police" else "商人到店 · 在报价台查看商品" if t.kind == "merchant" else "请从陈列柜或下方抽屉选货"
 
 func _stock_clicked(uid: String, picking: bool, why) -> void:
 	if busy or _scene_blocked():
@@ -843,16 +843,18 @@ func _refresh() -> void:
 	var dial_on := false
 	var quote_problem := StoreCosts.device_problem(s, "quote_terminal")
 	if t == null:
-		var closed: bool = s.cursor >= Model.daily_visit_limit()
-		scr.head.text = "今日营业中" if s.phase == "open" else "已打烊"
-		scr.price.text = "%d/%d" % [mini(int(s.cursor) + 1, Model.daily_visit_limit()), Model.daily_visit_limit()]
+		var closed: bool = s.cursor >= Model.daily_visit_limit(s)
+		scr.head.text = "今日已接待" if s.phase == "open" else "已打烊"
+		scr.price.text = "%d / %d" % [mini(int(s.cursor), Model.daily_visit_limit(s)), Model.daily_visit_limit(s)]
 		var nid := Commerce.next_visitor(s)
 		if closed:
-			scr.line1.text = "六位预约已处理"
+			scr.line1.text = "今日预约已处理"
 			scr.line2.text = "整理仓储、维修或履约后可以打烊"
 		else:
 			scr.line1.text = "下一位：%s · %s" % [GameData.npc(nid).name, GameData.npc(nid).title]
-			if nid == Commerce.MERCHANT_ID:
+			if nid == Landlord.NPC_ID:
+				scr.line2.text = "房东上门核对本期租金"
+			elif nid == Commerce.MERCHANT_ID:
 				scr.line2.text = "来售：维修材料与补给"
 			elif int(s.cursor) % 2 == 0:
 				var pv := Model.stock_preview(s)
@@ -870,6 +872,22 @@ func _refresh() -> void:
 			if i.location == "display":
 				shown += 1
 		footer.text = "陈列架：%d 件 · 可在仓储上架" % shown
+	elif t.kind == "landlord":
+		scr.head.text = "房东到访 · 梁叔"
+		var due := Landlord.outstanding(s)
+		scr.price.text = "本期回执" if due == 0 else "%d Cr" % due
+		scr.line1.text = "第 %d 天租金 · 当面核对" % int(s.day)
+		scr.line2.text = "已收款，日结不重复扣租金" if due == 0 else "确认缴租后才会扣款"
+		scr.line3.text = t.line
+		offer_label.text = "—"
+		if due == 0:
+			_act("收好回执，送房东", "primary", func(): Game.dispatch({"type":"REFUSE"}))
+		else:
+			_act("缴纳本期租金 · %d Cr" % due,"primary",func(): Game.dispatch({"type":"PAY_RENT","tradeId":t.id}),s.cash>=due)
+			_act("先筹钱，稍后再交","secondary",func(): Game.dispatch({"type":"LANDLORD_LATER","tradeId":t.id}))
+			if s.cash < due and s.get("rent",{}).get("days",{}).get(str(int(s.day)),{}).get("deferred",false):
+				_act("无法续租，确认停业","danger",func(): Game.dispatch({"type":"RENT_DEFAULT","tradeId":t.id}))
+		footer.text = "收租不消耗 AP · 现金不足可先筹钱或应急清仓"
 	elif t.kind == "police":
 		scr.head.text="巡警到访 · 衡岚"
 		scr.price.text="协查档案"
@@ -907,7 +925,7 @@ func _refresh() -> void:
 		if it != null:
 			var e := Model.estimate(it)
 			scr.line1.text = "%s · %s %s" % [WatchForgery.sale_name(it).left(8), "估价", "%s–%s" % [Model.jnum(e.low), Model.jnum(e.high)]]
-			scr.line2.text = "物证 %d · 议价 %d/3%s" % [Model.evidence_count(it), int(t.rounds), " · 已锁价" if t.locked else ""]
+			scr.line2.text = "物证 %d · 已商谈 %d 次%s" % [Model.evidence_count(it), int(t.rounds), " · 已锁价" if t.locked else ""]
 		else:
 			scr.line1.text = "需求：" + Model.customer_need(t.npcId).left(20)
 			scr.line2.text = "在货箱里挑一件合格的自有货"
@@ -1001,10 +1019,11 @@ func _merchant_shop() -> void:
 	var panel: Array = shell.modal("流动商人的补给", 1100)
 	var body: VBoxContainer = panel[0]
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(1000, 620)
+	scroll.custom_minimum_size = Vector2(0, minf(620, get_viewport_rect().size.y - 230))
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	body.add_child(scroll)
 	var contents := UIKit.vbox(10)
+	contents.name = "merchant_contents"
 	contents.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(contents)
 	_populate_merchant(contents)
@@ -1027,37 +1046,22 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 	if t == null or t.kind != "merchant":
 		contents.add_child(UIKit.label("商人已经离开。", 20, UIKit.MUTED))
 		return
-	contents.add_child(UIKit.label("现金 %s · 维修材料交易不消耗 AP" % UIKit.money(s.cash), 19, UIKit.AMBER))
-	contents.add_child(UIKit.label("常用材料：商人离店后不能购买", 20, UIKit.TEXT))
-	for material in GameData.materials:
-		var row := UIKit.hbox(10)
-		var id: String = material.id
-		var name: String = material.name
-		var available: int = int(t.stock.get(id, 0))
-		var owned: int = int(s.materials.get(id, 0))
-		var description := UIKit.label("%s  ·  商人 %d / 持有 %d" % [name, available, owned], 18, UIKit.TEXT)
-		description.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(description)
-		var buy := UIKit.button("购买 %s · %s" % [name, UIKit.money(material.price)], "primary", Vector2(220, 50), 17)
-		buy.set_meta("merchant_focus", "buy:" + id)
-		focus_targets["buy:" + id] = buy
-		buy.disabled = available < 1 or s.cash < material.price
-		buy.pressed.connect(func(): _merchant_transaction({"type": "BUY_MATERIAL", "id": id, "qty": 1}, contents))
-		row.add_child(buy)
-		var sell_price := maxi(1, floori(float(material.price) * 0.5))
-		var sell := UIKit.button("出售 · %s" % UIKit.money(sell_price), "secondary", Vector2(135, 50), 17)
-		sell.set_meta("merchant_focus", "sell:" + id)
-		focus_targets["sell:" + id] = sell
-		sell.disabled = owned < 1
-		sell.pressed.connect(func(): _merchant_transaction({"type": "SELL_MATERIAL", "id": id, "qty": 1}, contents))
-		row.add_child(sell)
-		contents.add_child(row)
+	contents.add_child(UIKit.label("现金 %s · 维修材料交易不消耗 AP" % UIKit.money(s.cash), 19, UIKit.AMBER, false, true))
+	contents.add_child(UIKit.label("常用材料：商人离店后不能购买", 20, UIKit.TEXT, false, true))
+	var materials = load("res://scripts/ui/merchant_materials.gd").new()
+	contents.add_child(materials)
+	materials.setup(s, String(contents.get_meta("material_id", "MAT-001")), int(contents.get_meta("material_quantity", 1)))
+	materials.selection_changed.connect(func(id: String, quantity: int):
+		contents.set_meta("material_id", id)
+		contents.set_meta("material_quantity", quantity))
+	materials.transaction_requested.connect(func(action: Dictionary): _merchant_transaction(action, contents))
+	focus_targets.merge(materials.focus_targets)
 	contents.add_child(UIKit.rule())
 	var rare = t.get("rare", null)
 	if rare is Dictionary and rare.get("available", false):
-		var rare_row := UIKit.hbox(10)
+		var rare_row := HFlowContainer.new()
 		var rare_name: String = GameData.def(rare.defId).name
-		var label := UIKit.label("随行货：%s · 入后仓" % rare_name, 19, UIKit.AMBER)
+		var label := UIKit.label("随行货：%s · 入后仓" % rare_name, 19, UIKit.AMBER, false, true)
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		rare_row.add_child(label)
 		var buy_rare := UIKit.button("购买随行货 · %s · 1 AP" % UIKit.money(rare.price), "good", Vector2(270, 50), 17)
@@ -1070,7 +1074,7 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 	else:
 		contents.add_child(UIKit.label("本次没有可购买的随行货。", 18, UIKit.MUTED))
 	contents.add_child(UIKit.rule())
-	contents.add_child(UIKit.label("出售手表 · 商人按自己的判断报价，每件消耗1 AP", 19, UIKit.TEXT))
+	contents.add_child(UIKit.label("出售手表 · 商人按自己的判断报价，每件消耗1 AP", 19, UIKit.TEXT, false, true))
 	var eligible := 0
 	for item in s.inventory:
 		if item.owner != "shop" or item.has("orderId") or item.sealed or item.location == "isolation" or not item.sourceVerified:
@@ -1079,6 +1083,7 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 		var uid: String = item.uid
 		var price := Commerce.recovery_price(Game.state, item)
 		var sell_item := UIKit.button("出售旧物 %s · 收 %s" % [WatchForgery.sale_name(item), UIKit.money(price)], "secondary", Vector2(0, 50), 17)
+		sell_item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		sell_item.set_meta("merchant_focus", "item:" + uid)
 		focus_targets["item:" + uid] = sell_item
 		sell_item.disabled = s.ap < 1 or Commerce.forgery_rejected(s, item)
@@ -1275,7 +1280,10 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 		_departure_key = ""
 	var pt = prev.trade
 	var nt = next.trade
-	match a.type:
+	var scene_action: String = a.type
+	if pt == null and nt != null and nt.kind == "landlord" and a.type in ["SETTLE","CALL_LANDLORD"]:
+		scene_action = "ARRIVE"
+	match scene_action:
 		"ARRIVE", "ARRIVE_INSPECTION":
 			if pt == null and nt != null:
 				busy = true
@@ -1330,7 +1338,7 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 			if nt != null and nt.locked:
 				customer.nod()
 				_say(nt.line, true, "happy")
-		"REFUSE", "TRADE_END":
+		"REFUSE", "TRADE_END", "LANDLORD_LATER":
 			if pt != null:
 				await _leave_with_goods(pt, "tired")
 		"DELIVER", "PAWN":
@@ -1348,6 +1356,12 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 				await _deal(pt, a.type == "PAWN", WatchForgery.sale_name(sold) if sold != null else "货物")
 		"ISSUE_WANTED", "ASK_VISITOR":
 			if nt != null: _say(nt.line,true,"focused")
+		"PAY_RENT":
+			if nt != null and is_instance_valid(customer):
+				customer.nod()
+				_say(nt.line,true,"happy" if nt.get("rentPaid",false) else "focused")
+		"RENT_DEFAULT":
+			if pt != null and nt == null: await _leave_with_goods(pt,"tired")
 		"RESOLVE_INSPECTION":
 			if pt != null and nt == null:
 				await _leave_with_goods(pt, "focused")

@@ -44,9 +44,12 @@ static func officer_slot(s: Dictionary, reserved_slot: int) -> int:
 		if day < first or (day != first and draw % 3 != 0): return -1
 	elif draw % 3 != 0:
 		return -1
-	var slot := 4 + int(draw % 2) if day <= 3 else int(draw % 6)
-	if slot == reserved_slot: slot = (slot + 1) % 6
-	return slot
+	var visits = preload("res://scripts/model/visit_schedule.gd")
+	var quota := Model.daily_visit_limit(s)
+	var slot := 4 + int(draw % 2) if day <= 3 else int(draw % (6 if visits.legacy(s) else quota))
+	var final_slot := quota-1 if int(s.day) in [7,14,21] else -1
+	var canonical_merchant: int = visits.original_slot(s,reserved_slot)
+	return visits.remap_slot(s,visits.available_slot(s,slot,[canonical_merchant,final_slot]))
 
 static func live_candidates(s: Dictionary) -> Array:
 	var result := []
@@ -102,7 +105,7 @@ static func report_reason(s: Dictionary) -> String:
 	if s.phase != "open": return "营业期间才可呼叫警官。"
 	if not has_notice(s): return "先向巡警领取带照片的通缉名单。"
 	if s.trade == null: return "柜台没有需要核对的来客。"
-	if s.trade.kind in ["police","merchant"]: return "巡警和补给商不是这次核对的目标。"
+	if s.trade.kind in ["police","merchant","landlord"]: return "巡警、补给商和房东不是这次核对的目标。"
 	for report in case_state(s).reports:
 		if report.tradeId == s.trade.id: return "这次来访已经核对过。"
 	return ""

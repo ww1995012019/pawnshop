@@ -371,13 +371,14 @@ func _detail() -> void:
 		_act(g, "客人赎回", "good", {"type": "REDEEM", "uid": it.uid})
 	var relief := false
 	for r in s.ledger:
-		if r.kind == "relief-window" and r.day == s.day:
+		if r.kind in ["relief-window","rent-relief"] and r.day == s.day:
 			relief = true
 	var item_name: String = def.name
 	var uid: String = it.uid
 	if relief:
-		_act(g, "应急清仓（55%）", "danger", func():
-			shell.confirm("应急清仓", "「%s」将按估值的 55%% 立即卖出，不能撤回。" % item_name, "确认清仓", func():
+		var clearance_price := maxi(1,floori(float(def.value)*float(Model.sale_appearance(it).condition)*0.45))
+		_act(g, "应急清仓 · %d Cr" % clearance_price, "danger", func():
+			shell.confirm("应急清仓", "「%s」将按清仓价 %d Cr 立即卖出。" % [item_name,clearance_price], "确认清仓", func():
 				Game.dispatch({"type": "EMERGENCY_SALE", "uid": uid})))
 	var return_text := "原物会移交原主并从库存移除，不能撤回。"
 	if it.owner == "shop":
