@@ -624,7 +624,8 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	workspace_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(workspace_title)
 	if not portrait_mode(): header.add_child(UIKit.label("店内操作  /  ESC 收起", 18, UIKit.MUTED))
-	workspace_close = UIKit.button("收起", "secondary", Vector2(108, 48), 20, "close")
+	workspace_close = UIKit.button("关闭" if portrait_mode() else "收起", "secondary", Vector2(108,54 if portrait_mode() else 48),20,"close")
+	workspace_close.tooltip_text = "关闭并返回柜台"
 	workspace_close.pressed.connect(close_workspace)
 	header.add_child(workspace_close)
 	body.add_child(header_mount)
@@ -1094,7 +1095,8 @@ func modal(title_text: String, width := 900.0) -> Array:
 		status_line.add_child(segment)
 	v.add_child(status_line)
 	var head := UIKit.hbox()
-	var t := UIKit.label(title_text, 30, UIKit.AMBER)
+	var t := UIKit.label(title_text,24 if portrait_mode() else 30,UIKit.AMBER)
+	t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(t)
 	var close := func():
@@ -1112,9 +1114,11 @@ func modal(title_text: String, width := 900.0) -> Array:
 		tw.tween_property(sheet, "scale", Vector2(0.98, 0.98), 0.14).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		tw.tween_property(dim, "modulate:a", 0.0, 0.14)
 		tw.chain().tween_callback(dim.queue_free)
-	var x := UIKit.button("", "secondary", Vector2(52, 52))
+	var x := UIKit.button("关闭" if portrait_mode() else "", "secondary", Vector2(100,54) if portrait_mode() else Vector2(52,52),18)
+	x.name = "modal_close"
 	x.icon = UIKit.icon("close")
 	x.expand_icon = true
+	x.add_theme_constant_override("icon_max_width",24)
 	x.tooltip_text = "关闭"
 	x.pressed.connect(close)
 	head.add_child(x)

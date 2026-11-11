@@ -51,3 +51,13 @@ final result: passed
 - Content: names, price, dialogue and gameplay copy unchanged by the polish. Navigation and tool controls retain existing actions and disabled states.
 - Validation: native portrait/rotation regression passes; touch arrival/quote/accept/delivery, five workspaces, records sheet, short-screen navigation and desktop restoration passed; browser console clean. Latest final smoke is recorded in `work/mobile-polish/web-final.log`.
 - Final visual review: no remaining P0/P1/P2 in the polished counter. P3: future character-specific dialogue line balancing could reduce short final lines for some long item names.
+
+
+## Fixed main page and closable sheets
+User superseded the earlier scrolling treatment: main counter must fit a single screen. Removed the main ScrollContainer and moved full dialogue, item details, tools, multiple-goods choice and quotation inputs to sheets. Only the illustration flexes with height. Primary transaction and More share one row above the fixed dock. Modal headers have explicit X + 关闭 controls; portrait workspace headers say 关闭 and return to the counter.
+
+Evidence: `work/fixed-counter/trade.png`, `fixed-320.png`, `negotiation.png`, `tools.png`, `item-details.png`. Reviewed fixed 320×568 and 390×844 captures: main object, dialogue summary, price/actions and navigation are fully visible; quotation sheet has a persistent, reachable close control. Intentional change from the original concept: three tool tiles now appear on demand in a sheet so main controls never require scrolling. Full dialogue is readable through the summary's detail action.
+
+Verification: native long-dialogue and 320/360/390/430 px layout assertions pass; no main ScrollContainer; closing quotation does not submit; open-workspace rotation remains supported. Complete native suite: 68/68 groups; packaging/font/loading checks passed. Browser regression uses actual wheel/finger input to confirm the main screen stays fixed, opens/closes dialogue/item/tool/quote/records sheets with their real close buttons, and completes quote/accept/delivery. See `work/fixed-counter/web-final.log` and `suite.log`.
+
+Final result for this follow-up: passed.

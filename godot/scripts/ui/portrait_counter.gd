@@ -3,7 +3,6 @@ extends Control
 var desk
 var shell
 var layout: VBoxContainer
-var scroll: ScrollContainer
 var body: VBoxContainer
 var visitor: TextureRect
 var speech: Label
@@ -16,13 +15,11 @@ var day: Label
 var price: Label
 var primary: Button
 var more: Button
-var quote_box: HBoxContainer
 var quote: SpinBox
 var tools: HBoxContainer
-var inventory: HBoxContainer
+var goods_button: Button
+var window_frame: PanelContainer
 var flipped := false
-var negotiating := false
-var last_trade := ""
 var last_item := ""
 var desktop_ui: Control
 var active := false
@@ -90,30 +87,36 @@ func _build() -> void:
 	settings.add_theme_constant_override("icon_max_width",26)
 	settings.expand_icon = true
 	head.add_child(settings)
-	scroll = ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	layout.add_child(scroll)
 	body = UIKit.vbox(6)
-	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(body)
-	var window_frame := UIKit.plate(PortraitSkin.panel("wine",14))
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(body)
+	window_frame = UIKit.plate(PortraitSkin.panel("wine",12))
 	body.add_child(window_frame)
 	var window_row := UIKit.hbox(8)
 	window_frame.add_child(window_row)
-	visitor = _picture(null, 136)
-	visitor.custom_minimum_size.x = 120
+	visitor = _picture(null, 80)
+	visitor.custom_minimum_size.x = 100
 	visitor.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	window_row.add_child(visitor)
-	var conversation := UIKit.vbox(8)
+	var conversation := UIKit.vbox(2)
 	conversation.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	conversation.alignment = BoxContainer.ALIGNMENT_CENTER
 	window_row.add_child(conversation)
-	visitor_name = UIKit.label("", 16, UIKit.AMBER, false, true)
+	visitor_name = UIKit.label("",16,UIKit.AMBER)
+	visitor_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	conversation.add_child(visitor_name)
 	speech = UIKit.label("", 17, UIKit.TEXT, false, true)
+	speech.max_lines_visible = 2
+	speech.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	conversation.add_child(speech)
+	conversation.add_child(UIKit.label("点此查看完整对话",13,UIKit.AMBER))
+	var expand := Button.new()
+	expand.tooltip_text = "查看完整对话"
+	for state in ["normal","hover","pressed","disabled"]: expand.add_theme_stylebox_override(state,StyleBoxEmpty.new())
+	expand.pressed.connect(_dialogue_popup)
+	window_frame.add_child(expand)
 	var mat := UIKit.plate(PortraitSkin.panel("felt",14))
+	mat.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_child(mat)
 	var mat_body := UIKit.vbox(4)
 	mat.add_child(mat_body)
@@ -128,49 +131,42 @@ func _build() -> void:
 	flip.size_flags_horizontal = Control.SIZE_SHRINK_END
 	title_row.add_child(flip)
 	mat_body.add_child(title_row)
-	item_art = _picture(null, 152)
+	item_art = _picture(null,0)
+	item_art.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	item_art.mouse_filter = Control.MOUSE_FILTER_STOP
+	item_art.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			_item_popup())
 	mat_body.add_child(item_art)
-	item_hint = UIKit.label("", 14, UIKit.MUTED, false, true)
+	item_hint = UIKit.label("",14,UIKit.MUTED)
+	item_hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	item_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	mat_body.add_child(item_hint)
-	inventory = UIKit.hbox(4)
-	mat_body.add_child(inventory)
 	tools = UIKit.hbox(6)
 	mat_body.add_child(tools)
-	for spec in [["放大镜","TOL-001"],["紫外灯","TOL-002"],["电子秤","TOL-005"]]:
-		var id: String = spec[1]
-		var button := _key(spec[0], func():
-			shell.go("inspect")
-			if shell.workspace_open(): shell.workspace_shell.page._set_tool(id))
-		button.custom_minimum_size.y = 76
-		button.tooltip_text = spec[0]
-		button.text = ""
-		_decorate_key(button,PortraitSkin.tool(id),spec[0],44)
-		tools.add_child(button)
+	tools.add_child(_key("鉴定工具",_tools_popup,"secondary","inspect"))
+	goods_button = _key("选择货物",_goods_popup)
+	tools.add_child(goods_button)
 	var transaction := UIKit.plate(PortraitSkin.panel("wine",10))
 	layout.add_child(transaction)
 	var trade_body := UIKit.vbox(8)
 	transaction.add_child(trade_body)
-	price = UIKit.label("", 20, UIKit.AMBER, false, true)
+	price = UIKit.label("",20,UIKit.AMBER)
+	price.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	price.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	trade_body.add_child(price)
-	quote_box = UIKit.hbox(8)
-	trade_body.add_child(quote_box)
-	quote_box.add_child(UIKit.label("我的报价",16))
-	quote = SpinBox.new()
-	quote.custom_minimum_size = Vector2(0,48)
-	quote.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	quote.add_theme_font_size_override("font_size",22)
-	quote.suffix = " Cr"
-	quote.value_changed.connect(func(value): desk.dial.set_value(int(value)))
-	quote_box.add_child(quote)
-	primary = _key("", _primary, "primary")
+	var trade_row := UIKit.hbox(6)
+	trade_body.add_child(trade_row)
+	primary = _key("",_primary,"primary")
 	primary.custom_minimum_size.y = 56
-	primary.add_theme_font_size_override("font_size",23)
-	trade_body.add_child(primary)
-	more = _key("更多交易操作", _actions)
-	trade_body.add_child(more)
-	var dock := UIKit.plate(PortraitSkin.panel("wine",10))
+	primary.clip_text = true
+	primary.add_theme_font_size_override("font_size",22)
+	trade_row.add_child(primary)
+	more = _key("更多",_actions)
+	more.size_flags_horizontal = Control.SIZE_SHRINK_END
+	more.custom_minimum_size = Vector2(68,56)
+	trade_row.add_child(more)
+	var dock := UIKit.plate(PortraitSkin.panel("wine",6))
 	layout.add_child(dock)
 	var row := UIKit.hbox(4)
 	dock.add_child(row)
@@ -208,6 +204,9 @@ func _sync_layout() -> void:
 	desk.back_root.visible = not next
 	desk.stage_root.visible = not next
 	active = next
+	if next:
+		# Only the illustration flexes; text and touch controls retain their size.
+		window_frame.custom_minimum_size.y = clampf(get_viewport_rect().size.y*0.18,110,154)
 
 func _process(delta: float) -> void:
 	_sync_layout()
@@ -225,11 +224,7 @@ func _refresh() -> void:
 	var s: Dictionary = Game.state
 	var t = s.trade
 	var item = Model.trade_item(s) if t != null else null
-	var trade_id: String = str(t.id) if t != null else ""
 	var uid: String = str(item.uid) if item != null else ""
-	if trade_id != last_trade:
-		negotiating = false
-		last_trade = trade_id
 	if uid != last_item:
 		flipped = false
 		last_item = uid
@@ -241,51 +236,114 @@ func _refresh() -> void:
 	var line: String = desk.bubble_label.get_parsed_text()
 	speech.text = line if t != null and line != "" else "柜台已经准备好了。\n按响服务铃，接待下一位来客。"
 	item_name.text = GameData.def(item.defId).name if item != null else "等候查验的旧物" if t == null else "请先挑选货物"
-	item_hint.text = "已记录 %d 条物证 · 点击工具继续检验" % Model.evidence_count(item) if item != null else "仓储与维修各有独立工作页面"
-	for key in tools.get_children():
-		key.disabled = item == null or desk.busy
-		key.modulate = Color(0.55,0.55,0.55) if key.disabled else Color.WHITE
-	quote_box.visible = negotiating and t != null and not t.locked and item != null
-	if quote_box.visible:
+	item_hint.text = "点实物查看详情 · 已有 %d 条物证" % Model.evidence_count(item) if item != null else "鉴定旧物 · 商议价格 · 经营柜台"
+	tools.get_child(0).disabled = item == null or desk.busy
+	if is_instance_valid(quote):
 		quote.set_block_signals(true)
 		quote.min_value = desk.dial.min_value
 		quote.max_value = desk.dial.max_value
 		if not quote.get_line_edit().has_focus(): quote.set_value_no_signal(desk.dial.value)
 		quote.set_block_signals(false)
 	price.text = "顾客%s %s Cr" % ["开价" if t.kind == "buy" else "出价", Model.jnum(t.price)] if t != null and item != null else desk.scr.line1.text
-	primary.text = "开始议价" if t != null and item != null and not t.locked and not negotiating else "按铃接待来客"
+	primary.text = "开始议价" if is_instance_valid(desk.offer_button) else "按铃接待来客"
 	var buttons: Array = desk.actions.get_children()
-	if t != null and (item == null or t.locked or negotiating):
+	if t != null and (item == null or t.locked or not is_instance_valid(desk.offer_button)):
 		primary.text = buttons[0].text if not buttons.is_empty() else "等待顾客回应"
 	elif t == null and not buttons.is_empty(): primary.text = buttons[0].text
+	if t != null and t.locked: primary.text = "确认交割"
+	primary.tooltip_text = ""
 	primary.disabled = desk.busy or desk._scene_blocked() or (not buttons.is_empty() and buttons[0].disabled)
 	more.disabled = desk.busy
-	more.text = "更多交易操作" if t != null else "店内事务与打烊"
-	# Physical tabletop selection stays available for multi-item customers.
+	more.text = "更多"
 	var goods: Array = CounterDialogue.table_items(s) if CounterDialogue.active(s) else []
-	var signature := str(goods.map(func(g): return g.get("uid", ""))) + uid
-	if inventory.get_meta("goods", "") != signature:
-		inventory.set_meta("goods",signature)
-		UIKit.clear(inventory)
-		for good in goods:
-			var id: String = good.uid
-			var b := _key(str(inventory.get_child_count()+1),func(): desk._focus_table(id),"primary" if id == uid else "secondary")
-			b.icon = UIKit.physical_icon(TradeSession.item(s,id))
-			b.expand_icon = true
-			b.add_theme_constant_override("icon_max_width",24)
-			inventory.add_child(b)
-	inventory.visible = goods.size() > 1
+	goods_button.text = "货物 · %d 件" % goods.size()
+	goods_button.visible = goods.size() > 1
 
 func _primary() -> void:
 	if desk.busy or desk._scene_blocked(): return
 	var t = Game.state.trade
-	if t != null and Model.trade_item(Game.state) != null and not t.locked and not negotiating:
-		negotiating = true
-		_refresh()
+	if t != null and not t.locked and is_instance_valid(desk.offer_button):
+		_quote_popup()
 		return
 	var buttons: Array = desk.actions.get_children()
 	if not buttons.is_empty() and not buttons[0].disabled: buttons[0].pressed.emit()
 	_refresh()
+
+func _dialogue_popup() -> void:
+	var modal: Array = shell.modal("顾客对话",360)
+	modal[0].add_child(UIKit.label(visitor_name.text,20,UIKit.AMBER,false,true))
+	modal[0].add_child(UIKit.label(desk.bubble_label.get_parsed_text() if Game.state.trade != null else speech.text,19,UIKit.TEXT,false,true))
+
+func _item_popup() -> void:
+	var item = Model.trade_item(Game.state) if Game.state.trade != null else null
+	if item == null: return
+	var modal: Array = shell.modal("物品详情",360)
+	modal[0].add_child(UIKit.label(GameData.def(item.defId).name,22,UIKit.AMBER,false,true))
+	modal[0].add_child(_picture(UIKit.physical_icon(item,flipped),220))
+	modal[0].add_child(UIKit.label(Model.appraisal_text(item),18,UIKit.TEXT,false,true))
+	modal[0].add_child(UIKit.label(GameData.def(item.defId).description,18,UIKit.TEXT,false,true))
+
+func _tools_popup() -> void:
+	var modal: Array = shell.modal("鉴定工具",360)
+	var row := UIKit.hbox(6)
+	modal[0].add_child(row)
+	for spec in [["放大镜","TOL-001"],["紫外灯","TOL-002"],["电子秤","TOL-005"]]:
+		var id: String = spec[1]
+		var key := _key("",func():
+			modal[1].call()
+			_open_instrument.call_deferred(id))
+		key.tooltip_text = spec[0]
+		key.custom_minimum_size.y = 88
+		_decorate_key(key,PortraitSkin.tool(id),spec[0],48)
+		row.add_child(key)
+
+func _open_instrument(id: String) -> void:
+	await get_tree().create_timer(0.18).timeout
+	if shell.modal_open() or desk.busy: return
+	shell.go("inspect")
+	if shell.workspace_open(): shell.workspace_shell.page._set_tool(id)
+
+func _goods_popup() -> void:
+	if not CounterDialogue.active(Game.state): return
+	var modal: Array = shell.modal("选择柜台货物",360)
+	for good in CounterDialogue.table_items(Game.state):
+		var uid: String = good.uid
+		var item = TradeSession.item(Game.state,uid)
+		if item == null: continue
+		var key := _key(GameData.def(item.defId).name,func():
+			modal[1].call()
+			desk._focus_table(uid))
+		key.icon = UIKit.physical_icon(item)
+		key.expand_icon = true
+		key.add_theme_constant_override("icon_max_width",40)
+		modal[0].add_child(key)
+
+func _quote_popup() -> void:
+	var modal: Array = shell.modal("议价",360)
+	modal[0].add_child(UIKit.label(price.text,22,UIKit.AMBER,false,true))
+	modal[0].add_child(UIKit.label("我的报价",17,UIKit.TEXT))
+	quote = SpinBox.new()
+	quote.min_value = desk.dial.min_value
+	quote.max_value = desk.dial.max_value
+	quote.set_value_no_signal(desk.dial.value)
+	quote.custom_minimum_size.y = 56
+	quote.suffix = " Cr"
+	quote.get_line_edit().add_theme_font_size_override("font_size",24)
+	modal[0].add_child(quote)
+	var buttons: Array = desk.actions.get_children()
+	for original in buttons:
+		if original != desk.offer_button and not String(original.text).begins_with("接受 "): continue
+		var ref: WeakRef = weakref(original)
+		var key := _key(original.text,func():
+			modal[1].call()
+			_invoke.call_deferred(ref),"primary" if original == desk.offer_button else "secondary")
+		key.disabled = original.disabled
+		modal[0].add_child(key)
+		if original == desk.offer_button:
+			var preview: WeakRef = weakref(key)
+			quote.value_changed.connect(func(value):
+				desk.dial.set_value(int(value))
+				if is_instance_valid(preview.get_ref()): preview.get_ref().text = "出价 " + UIKit.money(value))
 
 func _actions() -> void:
 	var modal: Array = shell.modal("交易操作" if Game.state.trade != null else "柜台事务",360)

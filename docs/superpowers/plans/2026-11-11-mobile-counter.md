@@ -15,7 +15,7 @@
 - No duplicated transactions: actions delegate to existing enabled buttons.
 - Empty counter, visitors without goods and locked trades need usable states.
 - Workspace tools and back navigation must remain reachable.
-- Short phone screens must scroll instead of clipping primary controls.
+- Updated by the user: the main counter never scrolls; detailed content belongs in explicitly closable sheets. Only sheet contents may scroll.
 
 ### Task 1: Portrait presentation and canvas
 - [x] Add failing portrait regression: upright viewport, readable counter, arrival and navigation.
@@ -30,3 +30,6 @@ Native full suite initially 66/68; both failing cleaning-input groups fixed and 
 
 ## Visual polish follow-up
 User authorized continued visual refinement after reviewing the first screenshots. Replaced stretched room crops with dedicated mobile nine-slice artwork; enlarged tool artwork; added labeled navigation icons; retained the approved hierarchy, live text, controls and rules. Verification uses the existing portrait regression plus real touch transaction/workspace checks and matching 390×844 screenshot comparison.
+
+## Fixed-screen follow-up
+User requested a non-scrolling main page with clear close buttons. Removed the main ScrollContainer; allowed the watch illustration to flex while keeping controls at touch size. Long dialogue and item details, tool selection, multiple goods and quotation inputs now use separate sheets. Main actions remain visible in one row. Added text close buttons to portrait sheets/workspaces and regression coverage for 320/360/390/430 px screens, long dialogue, closing without trading and real swipes on the main screen.
