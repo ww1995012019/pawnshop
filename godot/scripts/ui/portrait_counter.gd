@@ -58,6 +58,9 @@ func _picture(texture: Texture2D, height: float) -> TextureRect:
 func _key(text: String, action: Callable, kind := "secondary", icon := "") -> Button:
 	var key := UIKit.button(text, kind, Vector2(0,48), 16, icon)
 	PortraitSkin.button(key,kind == "primary")
+	if shell.landscape_mode():
+		key.custom_minimum_size.y = 34
+		key.add_theme_font_size_override("font_size",14)
 	key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	key.pressed.connect(action)
 	return key
@@ -353,15 +356,32 @@ func _quote_popup() -> void:
 	quote.min_value = desk.dial.min_value
 	quote.max_value = desk.dial.max_value
 	quote.set_value_no_signal(desk.dial.value)
-	quote.custom_minimum_size.y = 56
+	quote.custom_minimum_size.y = 34 if shell.landscape_mode() else 56
+	quote.name = "mobile_quote"
+	quote.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	quote.get_line_edit().virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
 	quote.suffix = " Cr"
-	quote.get_line_edit().add_theme_font_size_override("font_size",24)
-	modal[0].add_child(quote)
+	quote.get_line_edit().add_theme_font_size_override("font_size",17 if shell.landscape_mode() else 24)
+	var quote_row := UIKit.hbox(4)
+	modal[0].add_child(quote_row)
+	for step in [-5,-1,0,1,5]:
+		if step == 0:
+			quote_row.add_child(quote)
+			continue
+		var amount: int = step
+		var nudge := _key(("+" if step>0 else "−") + str(absi(step)),func():
+			quote.apply()
+			quote.value += amount)
+		nudge.name = "quote_step_"+str(step)
+		nudge.custom_minimum_size = Vector2(36,34)
+		nudge.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		quote_row.add_child(nudge)
 	var buttons: Array = desk.actions.get_children()
 	for original in buttons:
 		if original != desk.offer_button and not String(original.text).begins_with("接受 "): continue
 		var ref: WeakRef = weakref(original)
 		var key := _key(original.text,func():
+			quote.apply()
 			modal[1].call()
 			_invoke.call_deferred(ref),"primary" if original == desk.offer_button else "secondary")
 		key.disabled = original.disabled
@@ -369,7 +389,8 @@ func _quote_popup() -> void:
 		if original == desk.offer_button:
 			var preview: WeakRef = weakref(key)
 			quote.value_changed.connect(func(value):
-				desk.dial.set_value(int(value))
+				desk.dial.set_value(int(value),false)
+				desk._update_offer_value(desk.dial.value)
 				if is_instance_valid(preview.get_ref()): preview.get_ref().text = "出价 " + UIKit.money(value))
 
 func _actions() -> void:

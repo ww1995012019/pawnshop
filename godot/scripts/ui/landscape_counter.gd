@@ -95,9 +95,10 @@ func _label(text: String, font_size: int, color: Color) -> Label:
 
 func _key(text: String, action: Callable, accent := false) -> Button:
 	var button: Button = adapter._key(text,action,"primary" if accent else "secondary")
-	button.custom_minimum_size = Vector2(0,44)
+	PortraitSkin.button(button,accent,true)
+	button.custom_minimum_size = Vector2(0,32)
 	button.clip_text = true
-	button.add_theme_font_size_override("font_size",16)
+	button.add_theme_font_size_override("font_size",14)
 	add_child(button)
 	return button
 
@@ -147,22 +148,22 @@ func _layout() -> void:
 	if screen == last_size and inset == area.position: return
 	inset = area.position
 	last_size = screen
-	var left := clampf(screen.x*.23,165,224)
-	var right := clampf(screen.x*.24,178,240)
-	var top := 48.0
-	var bottom := screen.y-54
+	var left := clampf(screen.x*.22,145,200)
+	var right := clampf(screen.x*.22,150,200)
+	var top := 36.0
+	var bottom := screen.y-40
 	var inner_h := bottom-top-6
-	mat = Rect2(left+12,top,screen.x-left-right-24,inner_h)
-	_place(panels[0],Rect2(0,0,screen.x,44))
-	_place(panels[1],Rect2(6,top,left,inner_h))
+	mat = Rect2(left+8,top,screen.x-left-right-16,inner_h)
+	_place(panels[0],Rect2(0,0,screen.x,32))
+	_place(panels[1],Rect2(4,top,left,inner_h))
 	_place(panels[2],mat)
-	_place(panels[3],Rect2(screen.x-right-6,top,right,inner_h))
-	_place(panels[4],Rect2(0,bottom,screen.x,54))
-	_place(heading,Rect2(18,5,220,34))
-	_place(balance,Rect2(screen.x-350,5,332,34))
+	_place(panels[3],Rect2(screen.x-right-4,top,right,inner_h))
+	_place(panels[4],Rect2(0,bottom,screen.x,40))
+	_place(heading,Rect2(12,2,240,28))
+	_place(balance,Rect2(screen.x-350,2,338,28))
 	balance.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_place(visitor_name,Rect2(18,top+8,left-24,24))
-	var customer_h := clampf(inner_h-122,80,180)
+	var customer_h := clampf(inner_h-108,80,180)
 	desk.resident_window.position = inset+Vector2(12,top+32)
 	desk.resident_window.size = Vector2(left-12,customer_h)
 	desk.STAND = desk.resident_window.position + Vector2((left-12)*.5,customer_h)
@@ -175,35 +176,35 @@ func _layout() -> void:
 			actor.scale=Vector2.ONE*minf(customer_h/actor.size.y,(left-12)*.46/actor.size.x)
 			if not actor.walking: actor.position=Vector2((left-12)*(.25 if actor==desk.customer else .75),customer_h)
 	_place(speech,Rect2(14,top+customer_h+34,left-16,inner_h-customer_h-40))
-	_place(item_name,Rect2(mat.position+Vector2(12,8),Vector2(mat.size.x-96,28)))
-	_place(flip,Rect2(mat.end.x-80,mat.position.y+4,72,44))
-	_place(hint,Rect2(mat.position+Vector2(12,43),Vector2(mat.size.x-24,22)))
+	_place(item_name,Rect2(mat.position+Vector2(8,4),Vector2(mat.size.x-76,24)))
+	_place(flip,Rect2(mat.end.x-64,mat.position.y+4,58,32))
+	_place(hint,Rect2(mat.position+Vector2(8,33),Vector2(mat.size.x-16,20)))
 	for i in 3:
 		var width := (mat.size.x-24)/3
-		tool_keys[i].add_theme_font_size_override("font_size",14 if width<80 else 16)
-		_place(tool_keys[i],Rect2(mat.position.x+8+i*(width+4),mat.end.y-52,width,44))
+		tool_keys[i].add_theme_font_size_override("font_size",13 if width<80 else 14)
+		_place(tool_keys[i],Rect2(mat.position.x+8+i*(width+4),mat.end.y-38,width,32))
 	desk.MAT_POS = inset+Vector2(mat.get_center().x,mat.position.y+130)
-	desk.counter_table.presentation_rect = Rect2(inset+mat.position+Vector2(42,96),Vector2(maxf(80,mat.size.x-84),maxf(30,inner_h-178)))
+	desk.counter_table.presentation_rect = Rect2(inset+mat.position+Vector2(42,96),Vector2(maxf(80,mat.size.x-84),maxf(30,inner_h-150)))
 	desk._sync_table()
 	if is_instance_valid(desk.mat_item) and not CounterDialogue.active(Game.state):
 		desk.mat_item.position = desk.MAT_POS
 		desk.mat_item.bounds = desk.counter_table.presentation_rect
 	var tx := screen.x-right+4
-	desk.bell.position = inset+Vector2(tx+32,top+70)
+	desk.bell.position = inset+Vector2(tx+32,top+54)
 	desk.bell.resting_scale = Vector2.ONE*(.55 if right<190 else .65)
 	desk.bell.scale = desk.bell.resting_scale
-	_place(desk.cash_tray,Rect2(tx+74,top+20,right-88,54))
+	_place(desk.cash_tray,Rect2(tx+74,top+12,right-88,44))
 	desk.cash_tray.show()
 	desk.mobile_cash = desk.cash_tray.note_center()
 	desk.mobile_goods = inset+Vector2(18+left*.5,bottom+22)
-	goods.visible = screen.y >= 360
-	var action_top := bottom-156 if goods.visible else bottom-104
-	_place(price,Rect2(tx,action_top-34,right-20,28))
-	_place(primary,Rect2(tx,action_top,right-20,50))
-	_place(more,Rect2(tx,action_top+56,right-20,44))
-	if goods.visible: _place(goods,Rect2(tx,bottom-50,right-20,44))
+	goods.visible = screen.y >= 320
+	var action_top := bottom-122 if goods.visible else bottom-84
+	_place(price,Rect2(tx,action_top-26,right-12,24))
+	_place(primary,Rect2(tx,action_top,right-12,36))
+	_place(more,Rect2(tx,action_top+40,right-12,34))
+	if goods.visible: _place(goods,Rect2(tx,bottom-38,right-12,34))
 	var dock_width := (screen.x-16)/5
-	for i in 5: _place(dock_keys[i],Rect2(8+i*dock_width,bottom+5,dock_width-4,44))
+	for i in 5: _place(dock_keys[i],Rect2(8+i*dock_width,bottom+4,dock_width-4,32))
 
 func _process(_delta: float) -> void:
 	if not active: return

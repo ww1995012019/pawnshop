@@ -37,13 +37,13 @@ static func tool(id: String) -> Texture2D:
 	textures[key] = result
 	return result
 
-static func button(key: Button, primary := false) -> void:
+static func button(key: Button, primary := false, compact := false) -> void:
 	for state in ["normal","hover","pressed","disabled"]:
 		var tint := Color.WHITE
 		if state == "hover": tint = Color(1.12,1.10,1.04)
 		elif state == "pressed": tint = Color(0.78,0.76,0.72)
 		elif state == "disabled": tint = Color(0.55,0.55,0.55,0.8)
-		key.add_theme_stylebox_override(state,panel("amber" if primary else "wine",8,tint))
+		key.add_theme_stylebox_override(state,panel("amber" if primary else "wine",3 if compact or UIKit.phone_landscape() else 8,tint))
 	if primary:
 		for state in ["font_color","font_hover_color","font_focus_color","font_pressed_color"]:
 			key.add_theme_color_override(state,Color("382113"))

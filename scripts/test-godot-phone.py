@@ -169,7 +169,7 @@ def main():
             # The till's own button is only a few millimetres tall on a phone: a
             # finger landing just above it must still press it.
             small = locate(page, '接待下一位来客')
-            assert small['height'] >= 44, 'Native mobile primary is finger-sized'
+            assert 32 <= small['height'] <= 36, 'Native mobile primary uses the compact landscape height'
             page.touchscreen.tap(small['x'], small['y'])
             wait(page, "s.trade && !s.busy")
             price = state(page, 'price')

@@ -83,7 +83,7 @@ static func skin(name: String, size := "lg", pad := -1.0, tint := Color.WHITE) -
 	return surface
 
 static func plate_style() -> StyleBox:
-	return skin("rail", "lg", 10 if phone_landscape() else PAD + 6)
+	return skin("rail", "lg", 6 if phone_landscape() else PAD + 6)
 
 static func inset_style(pad := 14) -> StyleBox:
 	return skin("socket", "xs", minf(pad,8) if phone_landscape() else pad)
@@ -175,7 +175,7 @@ static func label(text: String, size := 22, color := TEXT, is_mono := false, wra
 	ensure()
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", mini(size,18) if phone_landscape() else size)
+	l.add_theme_font_size_override("font_size", mini(size,14) if phone_landscape() else size)
 	l.add_theme_color_override("font_color", color)
 	if is_mono:
 		l.add_theme_font_override("font", mono)
@@ -188,11 +188,11 @@ static func label(text: String, size := 22, color := TEXT, is_mono := false, wra
 static func button(text: String, kind := "secondary", min_size := Vector2(0, 58), size := 22, icon_name := "") -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(minf(min_size.x,140),clampf(min_size.y,44,48)) if phone_landscape() and text!="" else min_size
+	b.custom_minimum_size = Vector2(minf(min_size.x,140),clampf(min_size.y,32,36)) if phone_landscape() and text!="" else min_size
 	b.focus_mode = Control.FOCUS_ALL
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	b.add_theme_font_size_override("font_size", mini(size,16) if phone_landscape() else size)
+	b.add_theme_font_size_override("font_size", mini(size,14) if phone_landscape() else size)
 	var compact := text == ""
 	for st in ["normal", "hover", "pressed", "disabled"]:
 		b.add_theme_stylebox_override(st, key_style(kind, st, compact))
@@ -245,16 +245,16 @@ static func switch_row(text: String, on: bool, fn: Callable) -> Button:
 	b.button_pressed = on
 	b.text = text
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	b.custom_minimum_size = Vector2(0, 62)
+	b.custom_minimum_size = Vector2(0, 34 if phone_landscape() else 62)
 	b.focus_mode = Control.FOCUS_ALL
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	b.add_theme_font_size_override("font_size", 21)
+	b.add_theme_font_size_override("font_size", 14 if phone_landscape() else 21)
 	for st in ["normal", "hover", "pressed", "disabled", "hover_pressed"]:
 		var base := "hover" if st == "hover" or st == "hover_pressed" else "normal"
 		var sb := key_style("chip", base)
-		sb.content_margin_left = 20
-		sb.content_margin_right = 100
+		sb.content_margin_left = 8 if phone_landscape() else 20
+		sb.content_margin_right = 76 if phone_landscape() else 100
 		b.add_theme_stylebox_override(st, sb)
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
 		b.add_theme_color_override(c, TEXT)
@@ -270,12 +270,13 @@ static func switch_row(text: String, on: bool, fn: Callable) -> Button:
 class SwitchKnob extends Control:
 	func _draw() -> void:
 		var on: bool = (get_parent() as Button).button_pressed
-		var r := Rect2(size.x - 88, size.y * 0.5 - 16, 64, 32)
+		var compact := size.y < 44
+		var r := Rect2(size.x - (50 if compact else 88), size.y * 0.5 - (10 if compact else 16), 38 if compact else 64, 20 if compact else 32)
 		draw_style_box(UIKit.box(Color("8a5226") if on else Color("10171a"), Color("f0b56a") if on else Color("4b5a5a"), 16, 2, 0, 0), r)
-		var knob := Vector2(r.end.x - 16 if on else r.position.x + 16, r.get_center().y)
-		draw_circle(knob + Vector2(0, 2), 12, Color(0, 0, 0, 0.35))
-		draw_circle(knob, 12, Color("fff3df") if on else Color("8b939a"))
-		draw_string(UIKit.font, Vector2(r.position.x - 44, r.get_center().y + 7), "开" if on else "关", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, UIKit.AMBER if on else UIKit.MUTED)
+		var knob := Vector2(r.end.x - r.size.y*0.5 if on else r.position.x + r.size.y*0.5, r.get_center().y)
+		draw_circle(knob + Vector2(0, 2), 7 if compact else 12, Color(0, 0, 0, 0.35))
+		draw_circle(knob, 7 if compact else 12, Color("fff3df") if on else Color("8b939a"))
+		draw_string(UIKit.font, Vector2(r.position.x - (24 if compact else 44), r.get_center().y + (5 if compact else 7)), "开" if on else "关", HORIZONTAL_ALIGNMENT_LEFT, -1, 13 if compact else 18, UIKit.AMBER if on else UIKit.MUTED)
 
 ## Re-skin an existing key as compact (thin rim, tight padding).
 static func compact(b: Button, kind := "secondary") -> void:

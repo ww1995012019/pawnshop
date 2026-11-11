@@ -57,8 +57,10 @@ func layout_workbench(left: Control, right: Control, bench: Control, left_width:
 				portrait_tabs.add_child(key)
 		portrait_tabs.show()
 		portrait_tabs.position = r.position
-		portrait_tabs.size = Vector2(r.size.x,48)
-		var area := Rect2(r.position+Vector2(0,56),r.size-Vector2(0,56))
+		var tabs_height := 34.0 if shell.landscape_mode() else 48.0
+		portrait_tabs.size = Vector2(r.size.x,tabs_height)
+		var offset := tabs_height+6.0
+		var area := Rect2(r.position+Vector2(0,offset),r.size-Vector2(0,offset))
 		for panel in [left,right]:
 			panel.position = area.position
 			panel.size = area.size
@@ -68,6 +70,8 @@ func layout_workbench(left: Control, right: Control, bench: Control, left_width:
 		for node in world_nodes:
 			if is_instance_valid(node) and node is CanvasItem: node.visible = portrait_section == 1
 		for i in 3:
+			portrait_tabs.get_child(i).custom_minimum_size.y = tabs_height
+			portrait_tabs.get_child(i).add_theme_font_size_override("font_size",14 if shell.landscape_mode() else 16)
 			portrait_tabs.get_child(i).add_theme_stylebox_override("normal",UIKit.key_style("primary" if i==portrait_section else "secondary","normal"))
 		var height := maxf(52 if shell.landscape_mode() else 100,bench.get_combined_minimum_size().y)
 		bench.position = Vector2(area.position.x,area.end.y-height)
