@@ -14,7 +14,8 @@ var mat_rect := Rect2()
 var list_panel: PanelContainer
 var detail_panel: PanelContainer
 var bench: PanelContainer
-var list_box: VBoxContainer
+var list_box: GridContainer
+var list_landscape := false
 var info: VBoxContainer
 var bench_body: VBoxContainer
 var art: Control
@@ -59,7 +60,8 @@ func enter() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	list_box = UIKit.vbox(8)
+	list_box = UIKit.grid(1,6)
+	list_box.name = "repair_item_grid"
 	list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list_box)
 	left.add_child(scroll)
@@ -119,6 +121,33 @@ func _candidates() -> Array:
 			if mode != "forge" or _is_forgery_stock(it): out.append(it)
 	return out
 
+func _item_tile(row: Button, it: Dictionary, status: String, selected: bool) -> void:
+	row.custom_minimum_size = Vector2(92,94)
+	row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	row.tooltip_text = Game.def_name(it.defId)+"\n"+status
+	PortraitSkin.button(row,selected,true)
+	var stack := UIKit.vbox(2)
+	stack.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	stack.offset_left = 5
+	stack.offset_right = -5
+	stack.offset_top = 5
+	stack.offset_bottom = -5
+	stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var picture := TextureRect.new()
+	picture.texture = UIKit.physical_icon(it)
+	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	picture.custom_minimum_size.y = 44
+	picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.add_child(picture)
+	for caption in [Game.def_name(it.defId),status]:
+		var label := UIKit.label(caption,11,UIKit.INK if selected else UIKit.TEXT)
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		stack.add_child(label)
+	row.add_child(stack)
+
 func _is_forgery_stock(it) -> bool:
 	if it == null or it.owner != "shop" or it.has("orderId"): return false
 	if not it.sourceVerified or it.sealed or it.location == "isolation" or Model.trade_reserved(Game.state,it): return false
@@ -159,6 +188,8 @@ func _select(uid: String) -> void:
 
 func _fill_list() -> void:
 	_sync_modes()
+	list_landscape = shell.landscape_mode()
+	list_box.columns = maxi(1,floori((shell.content_rect().size.x-16)/100.0)) if list_landscape else 1
 	UIKit.clear(list_box)
 	for it in _candidates():
 		var selected: bool = it.uid == it_uid
@@ -170,12 +201,22 @@ func _fill_list() -> void:
 		if mode == "forge":
 			var forged: int = WatchForgery.treatments(it).size()
 			status = "已加工 %d/%d" % [forged,WatchForgery.available_methods(it).size()] if forged > 0 else "自有库存 · 可加工"
-		row.text = Game.def_name(it.defId) + "\n" + status
-		row.icon = UIKit.physical_icon(it)
-		row.expand_icon = true
-		row.add_theme_constant_override("icon_max_width",48)
-		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		UIKit.decorate_item(row,it,18)
+		row.name = "repair_item_"+it.uid
+		if list_landscape:
+			_item_tile(row,it,status,selected)
+		else:
+			row.text = Game.def_name(it.defId) + "\n" + status
+			row.icon = UIKit.physical_icon(it)
+			row.expand_icon = true
+			row.add_theme_constant_override("icon_max_width",48)
+			row.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UIKit.decorate_item(row,it,12 if list_landscape else 18)
+		if list_landscape:
+			var badge := row.get_node_or_null("item_decoration/modified_badge") as Label
+			if badge != null:
+				badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+				badge.position = Vector2(5,3)
 		var uid: String = it.uid
 		row.pressed.connect(func(): call_deferred("_select",uid))
 		list_box.add_child(row)
@@ -613,6 +654,7 @@ func prepare_close_workspace() -> void:
 func relayout() -> void:
 	if not is_instance_valid(bench) or not is_instance_valid(art): return
 	if shell.mobile_mode() and not can_close_workspace(): return
+	if list_landscape != shell.landscape_mode(): _fill_list()
 	list_panel.get_child(0).get_child(0).visible = not shell.landscape_mode()
 	list_panel.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",8) if shell.landscape_mode() else UIKit.plate_style())
 	mat_rect = layout_workbench(list_panel,detail_panel,bench,260,350)
@@ -647,6 +689,7 @@ func _layout_landscape() -> void:
 	art.visible = operation and not (mode == "service" and task == "dust") and task != ""
 	art.wide_layout = true
 	var area := Rect2(r.position+Vector2(0,40),r.size-Vector2(0,40))
+	list_box.columns = maxi(1,floori((area.size.x-16)/100.0))
 	var sidebar := clampf(area.size.x*.27,180,240)
 	guidance_scroll.custom_minimum_size.y = 0
 	guidance.add_theme_stylebox_override("panel",UIKit.screen_style(6))
