@@ -551,6 +551,7 @@ func _fit() -> void:
 	if page != null and page.has_method("relayout"):
 		page.call("relayout")
 	_place_toasts()
+	_layout_title()
 
 ## Each page names a free spot for notices so they never cover its controls.
 func _place_toasts() -> void:
@@ -1555,21 +1556,27 @@ func _show_title() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title.add_child(center)
 	var panel := UIKit.plate()
+	panel.name = "MobileTitlePanel"
 	panel.custom_minimum_size = Vector2(360 if portrait_mode() else 620, 0)
 	center.add_child(panel)
 	var v := UIKit.vbox(20)
+	v.name = "TitleStack"
 	panel.add_child(v)
 	var station := UIKit.label("回环九号  /  下层旧港", 19, UIKit.MUTED)
+	station.name = "TitleStation"
 	station.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(station)
 	v.add_child(UIKit.rule())
 	var t := UIKit.label("轨道旧货局", 38 if portrait_mode() else 64, UIKit.TEXT)
+	t.name = "TitleHeading"
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
 	var sub := UIKit.label("每件旧物，都有下一程。", 24, UIKit.AMBER)
+	sub.name = "TitleSubtitle"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(sub)
 	var intro := UIKit.label("鉴定旧物 · 商议价格 · 经营你的柜台", 15 if portrait_mode() else 19, UIKit.MUTED)
+	intro.name = "TitleIntro"
 	intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(intro)
 	v.add_child(UIKit.rule())
@@ -1594,7 +1601,28 @@ func _show_title() -> void:
 		button.pressed.connect(spec[1])
 		hb.add_child(button)
 	v.add_child(hb)
+	_layout_title()
 	cont.call_deferred("grab_focus")
+
+func _layout_title() -> void:
+	if not is_instance_valid(title) or not landscape_mode(): return
+	var panel := title.find_child("MobileTitlePanel",true,false) as PanelContainer
+	if panel == null: return
+	panel.custom_minimum_size = Vector2(minf(440,safe_area().size.x-24),0)
+	panel.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",12))
+	var stack := panel.get_child(0) as VBoxContainer
+	stack.add_theme_constant_override("separation",6)
+	for node in stack.get_children():
+		if node.name in ["TitleStation","TitleIntro"]: node.hide()
+		if node is Label: node.add_theme_font_size_override("font_size",28 if node.name=="TitleHeading" else 16)
+		if node is Button:
+			node.custom_minimum_size=Vector2(0,44)
+			node.add_theme_font_size_override("font_size",17 if node==stack.get_child(6) else 15)
+		if node is HBoxContainer:
+			for key in node.get_children():
+				key.custom_minimum_size=Vector2(0,44)
+				key.add_theme_font_size_override("font_size",14)
+	panel.reset_size()
 
 ## Metal shutter that rolls down, shows the day plate, and rolls back up.
 func shutter(day: int) -> void:

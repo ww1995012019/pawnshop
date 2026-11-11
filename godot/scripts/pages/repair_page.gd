@@ -33,6 +33,7 @@ var action_button: Button
 var mode_buttons: Dictionary = {}
 var mode_bar: HBoxContainer
 var guidance: PanelContainer
+var guidance_scroll: ScrollContainer
 var guidance_body: VBoxContainer
 var instruction: Label
 var refresh_pending := false
@@ -87,7 +88,12 @@ func enter() -> void:
 	guidance_body = UIKit.vbox(4)
 	guidance_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	guidance_body.minimum_size_changed.connect(queue_relayout)
-	guidance_stack.add_child(guidance_body)
+	guidance_scroll = ScrollContainer.new()
+	guidance_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	guidance_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	guidance_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	guidance_scroll.add_child(guidance_body)
+	guidance_stack.add_child(guidance_scroll)
 	add_child(guidance)
 	bench = UIKit.plate()
 	add_child(bench)
@@ -615,6 +621,7 @@ func relayout() -> void:
 		return
 	art.wide_layout = false
 	mode_bar.show()
+	guidance_scroll.custom_minimum_size.y = 100
 	guidance_body.show()
 	guidance.visible = not shell.portrait_mode() or portrait_section == 1
 	art.visible = not (mode == "service" and task == "dust") and task != "" and guidance.visible
@@ -641,6 +648,8 @@ func _layout_landscape() -> void:
 	art.wide_layout = true
 	var area := Rect2(r.position+Vector2(0,56),r.size-Vector2(0,56))
 	var sidebar := clampf(area.size.x*.27,180,240)
+	guidance_scroll.custom_minimum_size.y = 0
+	guidance.add_theme_stylebox_override("panel",UIKit.screen_style(6))
 	guidance.position = Vector2(area.end.x-sidebar,area.position.y)
 	guidance.size = Vector2(sidebar,area.size.y-58)
 	mode_bar.visible = false

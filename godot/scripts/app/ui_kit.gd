@@ -83,13 +83,13 @@ static func skin(name: String, size := "lg", pad := -1.0, tint := Color.WHITE) -
 	return surface
 
 static func plate_style() -> StyleBox:
-	return skin("rail", "lg", PAD + 6)
+	return skin("rail", "lg", 10 if phone_landscape() else PAD + 6)
 
 static func inset_style(pad := 14) -> StyleBox:
-	return skin("socket", "xs", pad)
+	return skin("socket", "xs", minf(pad,8) if phone_landscape() else pad)
 
 static func paper_style(pad := 18) -> StyleBox:
-	return skin("paper", "sm", pad)
+	return skin("paper", "sm", minf(pad,10) if phone_landscape() else pad)
 
 static func screen_style(pad := 10) -> StyleBox:
 	return skin("screen", "sm", pad)
@@ -109,8 +109,8 @@ static func key_style(kind: String, state: String, compact := false) -> StyleBox
 		"disabled":
 			tint = Color(0.42, 0.44, 0.46, 0.85)
 	var s := skin(KEY_SKIN.get(kind, "graphite"), "xs" if kind == "chip" or compact else "sm", 0.0, tint)
-	s.content_margin_left = 6 if compact else 16
-	s.content_margin_right = 6 if compact else 16
+	s.content_margin_left = 6 if compact or phone_landscape() else 16
+	s.content_margin_right = 6 if compact or phone_landscape() else 16
 	s.content_margin_top = 6 + (2 if state == "pressed" else 0)
 	s.content_margin_bottom = 6 - (2 if state == "pressed" else 0)
 	return s
@@ -158,11 +158,24 @@ static func build_theme() -> Theme:
 
 # ---------------------------------------------------------------- widgets
 
+static var mobile_frame := -1
+static var mobile_window := Vector2i.ZERO
+static var mobile_landscape := false
+static func phone_landscape() -> bool:
+	if not OS.has_feature("web"): return false
+	var frame := Engine.get_process_frames()
+	var window := DisplayServer.window_get_size()
+	if frame != mobile_frame or window != mobile_window:
+		mobile_frame = frame
+		mobile_window = window
+		mobile_landscape = bool(JavaScriptBridge.eval("!!(window.OrbitalTouch?.phone() && innerWidth>innerHeight)",true))
+	return mobile_landscape
+
 static func label(text: String, size := 22, color := TEXT, is_mono := false, wrap := false) -> Label:
 	ensure()
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", mini(size,18) if phone_landscape() else size)
 	l.add_theme_color_override("font_color", color)
 	if is_mono:
 		l.add_theme_font_override("font", mono)
@@ -175,11 +188,11 @@ static func label(text: String, size := 22, color := TEXT, is_mono := false, wra
 static func button(text: String, kind := "secondary", min_size := Vector2(0, 58), size := 22, icon_name := "") -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = min_size
+	b.custom_minimum_size = Vector2(minf(min_size.x,140),clampf(min_size.y,44,48)) if phone_landscape() and text!="" else min_size
 	b.focus_mode = Control.FOCUS_ALL
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	b.add_theme_font_size_override("font_size", size)
+	b.add_theme_font_size_override("font_size", mini(size,16) if phone_landscape() else size)
 	var compact := text == ""
 	for st in ["normal", "hover", "pressed", "disabled"]:
 		b.add_theme_stylebox_override(st, key_style(kind, st, compact))
