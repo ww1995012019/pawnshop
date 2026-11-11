@@ -1,8 +1,8 @@
 {
-  "source_commit": "6933ed7aed8e49c628c460cea1f525328ef8ab3d",
-  "release_id": "e872667543641c49",
-  "pack": "workbench-0587939ae2b9beca.pck",
-  "html_sha256": "9642e62632c70d0d7dc349eccc870e79b0c4e4bcca4c5697d974a2514685b305",
+  "source_commit": "c3cf026ef2877bdb48bbc7a50badfb21341bb936",
+  "release_id": "294e3e3051a3e9a8",
+  "pack": "workbench-e3761c7515c09172.pck",
+  "html_sha256": "a82b0c13ff6ee1044e28ead259ae800b95875ac3a57a48e9536347cccd985d70",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -51,7 +51,10 @@
     10
   ],
   "teaching_min_daily_visits": 6,
-  "native_regression_groups": 77,
-  "mobile_landscape_sizing_version": 3,
-  "mobile_quote_input_version": 1
+  "mobile_landscape_sizing_version": 4,
+  "mobile_quote_input_version": 1,
+  "mobile_inspection_guide_version": 1,
+  "mobile_dialogue_scroll_version": 1,
+  "mobile_goods_icon_grid_version": 1,
+  "x_only_close_version": 1
 }
