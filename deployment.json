@@ -1,8 +1,8 @@
 {
-  "source_commit": "3ae963255930d066ad23b07ac668f630946a0f42",
-  "release_id": "1fdeb99ef3a3abe0",
-  "pack": "workbench-bf0fce28f2797a96.pck",
-  "html_sha256": "9f0e7015dc7a41e7855f818ad3d4937653aeb965ab6293ff350c7afed3e5153a",
+  "source_commit": "20763f85d2d214f25d6ae3783d27f7b97c97b82e",
+  "release_id": "ab74241164dc2d51",
+  "pack": "workbench-60eeedbb6b598813.pck",
+  "html_sha256": "ad84041cbe031cb4c565570509da05a2102b76b37619fc33957a5b7440a9981b",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -56,5 +56,12 @@
   "mobile_inspection_guide_version": 1,
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
-  "x_only_close_version": 1
+  "x_only_close_version": 1,
+  "native_regression_groups": 80,
+  "contraband_inspection_version": 2,
+  "inspection_attention_percent_per_point": 0.03,
+  "inspection_fixed_fine": 30,
+  "inspection_stolen_only": true,
+  "inspection_isolation_excluded": true,
+  "inspection_player_preparation": true
 }
