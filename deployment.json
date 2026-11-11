@@ -1,8 +1,8 @@
 {
-  "source_commit": "5645f758ff5bb4aef105ccbecca9fe0b941a4517",
-  "release_id": "f2ab5ec7d9d64c46",
-  "pack": "workbench-c95a0b1d06bf3a2f.pck",
-  "html_sha256": "a8979308236406e9074995a18dfa8bea7f38013e1179ca80bc8be007a5d840b6",
+  "source_commit": "bada76b9439126f801134f6b591cd4c3b1bc8a61",
+  "release_id": "22b06bb8eb0280d3",
+  "pack": "workbench-53de22783a94c88d.pck",
+  "html_sha256": "fcfb8e82830a64fa7b14915dfaa5ff3341e0a14de33e0ce096c741abd831dc52",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -40,5 +40,16 @@
   "landscape_ui_version": 1,
   "landscape_live_animation_version": 1,
   "stable_workspace_close_version": 1,
-  "mobile_background_pause_version": 1
+  "mobile_background_pause_version": 1,
+  "material_icon_grid_version": 1,
+  "landlord_rent_version": 1,
+  "daily_visit_schedule_version": 1,
+  "contextual_negotiation_version": 1,
+  "grouped_screw_version": 1,
+  "daily_npc_range": [
+    3,
+    10
+  ],
+  "teaching_min_daily_visits": 6,
+  "native_regression_groups": 75
 }
