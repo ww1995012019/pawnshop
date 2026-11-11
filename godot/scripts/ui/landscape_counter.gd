@@ -72,6 +72,11 @@ func setup(owner_adapter) -> void:
 		var key := _key(spec[0],func():
 			if not desk.busy and not desk._scene_blocked(): adapter._open_instrument(id))
 		key.name = "landscape_"+id
+		key.text = ""
+		key.icon = UIKit.tool_icon(id)
+		key.expand_icon = true
+		key.add_theme_constant_override("icon_max_width",28)
+		key.tooltip_text = spec[0]
 		tool_keys.append(key)
 	for spec in [["柜台","counter"],["仓库","warehouse"],["展开工作台","repair"],["事务","tasks"],["设置","settings"]]:
 		var target: String = spec[1]
@@ -178,9 +183,9 @@ func _layout() -> void:
 	_place(flip,Rect2(mat.end.x-64,mat.position.y+4,58,28))
 	_place(hint,Rect2(mat.position+Vector2(8,33),Vector2(mat.size.x-16,20)))
 	for i in 3:
-		var width := (mat.size.x-24)/3
-		tool_keys[i].add_theme_font_size_override("font_size",13 if width<80 else 14)
-		_place(tool_keys[i],Rect2(mat.position.x+8+i*(width+4),mat.end.y-36,width,30))
+		var width := 42.0
+		var start := mat.get_center().x-(width*3+20)*0.5
+		_place(tool_keys[i],Rect2(start+i*(width+10),mat.end.y-38,width,34))
 	desk.MAT_POS = inset+Vector2(mat.get_center().x,mat.position.y+130)
 	desk.counter_table.presentation_rect = Rect2(inset+mat.position+Vector2(42,96),Vector2(maxf(80,mat.size.x-84),maxf(30,inner_h-150)))
 	desk._sync_table()
