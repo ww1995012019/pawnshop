@@ -1,8 +1,8 @@
 {
-  "source_commit": "1e156f1e48e2da87d280776a2143741495356bf9",
-  "release_id": "edc9900766a44d54",
-  "pack": "workbench-fa91bcf6154e5851.pck",
-  "html_sha256": "65f40bacd8cc7aab95bb601d62af195b0810cf70378c20088c6aabd9aacacd6c",
+  "source_commit": "2e29dd20b2b6f18d47a56d0eefb3263f0e79efde",
+  "release_id": "930cc4a13926ae14",
+  "pack": "workbench-22ae7f817fe5b673.pck",
+  "html_sha256": "8a98eff9c4b9a3ef36c5bed79f28af87346322fee13170fe92f568af86f66a55",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 82,
+  "native_regression_groups": 93,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -74,5 +74,30 @@
   "mobile_header_reflow_version": 1,
   "campaign_ledger_table_version": 1,
   "compact_selector_version": 1,
-  "compact_dropdown_menu_version": 1
+  "compact_dropdown_menu_version": 1,
+  "shop_expansion_version": 1,
+  "campaign_continuation_version": 1,
+  "service_contracts_version": 1,
+  "bulk_salvage_version": 1,
+  "weekly_market_version": 1,
+  "shop_journal_version": 1,
+  "shop_extension_version": 1,
+  "shop_plan_browser_viewports": [
+    [
+      844,
+      390
+    ],
+    [
+      568,
+      320
+    ],
+    [
+      390,
+      844
+    ],
+    [
+      1280,
+      800
+    ]
+  ]
 }
