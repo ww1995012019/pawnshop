@@ -189,18 +189,18 @@ func additional_tests(night) -> void:
 	uid = c.items[0].uid
 	NightCrime.arrest(s,c.culprit)
 	check(Model.find_inventory(s,uid) == null and c.items[0].holder == "police","claim-rejected illegal original remains rightful owner's property on recovery")
-	# Deterministic real external fence, then next-day lenient police inspection.
+	# Deterministic real external fence, then next-day flat-fine police inspection.
 	seed = ""
 	for n in 20000:
 		var candidate := "LENIENT-%d" % n
-		if Model.fnv("%s/fence/external/3" % candidate)%100 < 10 and Model.fnv("%s/police/inspection/3" % candidate)%100 >= 8 and Model.fnv("%s/police/inspection/4" % candidate)%100 < 8 and Model.fnv("%s/police/leniency/4" % candidate)%100 < 80:
+		if Model.fnv("%s/fence/external/3" % candidate)%100 < 10 and Model.fnv("%s/police/inspection/4" % candidate)%10000 < 24:
 			var fixture := fresh(candidate)
 			fixture.risk = 0
 			night.ensure_day(fixture)
 			if fixture.nightCrime.days["3"].fence.get("caseId","").begins_with("EXTERNAL-"):
 				seed = candidate
 				break
-	check(seed != "","lenient external-fence seed fixture found without production force flags")
+	check(seed != "","flat-fine external-fence seed fixture found without production force flags")
 	s = fresh(seed)
 	s.risk = 0
 	s.erase("nightCrime")
@@ -226,10 +226,10 @@ func additional_tests(night) -> void:
 	var saved: Dictionary = JSON.parse_string(JSON.stringify(s))
 	s = act(s,"RESOLVE_INSPECTION",{"tradeId":trade_id})
 	var replay := act(saved,"RESOLVE_INSPECTION",{"tradeId":trade_id})
-	check(s.nightCrime.lastInspection.waived and s.cash == cash and s.risk == risk and s.relations.station == station and Model.find_inventory(s,uid) == null,"earned leniency waives every penalty but confiscates exact external stolen original")
-	check(replay.cash == s.cash and replay.nightCrime.lastInspection.waived == s.nightCrime.lastInspection.waived,"inspection reload preserves leniency draw and payment outcome")
+	check(not s.nightCrime.lastInspection.waived and s.cash == cash-30 and s.risk == risk and s.relations.station == station and Model.find_inventory(s,uid) == null,"cooperation preserves fixed 30 fine and confiscates exact external stolen original")
+	check(replay.cash == s.cash and replay.nightCrime.lastInspection.waived == s.nightCrime.lastInspection.waived,"inspection reload preserves payment outcome")
 	s = act(s,"RESOLVE_INSPECTION",{"tradeId":trade_id})
-	check(s.cash == cash and s.nightCrime.lastInspection.finePaid == 0,"repeat inspection resolution cannot levy another fine")
+	check(s.cash == cash-30 and s.nightCrime.lastInspection.finePaid == 30,"repeat inspection resolution cannot levy another fine")
 func repeat_loss_test(night) -> void:
 	# Seed found by deterministic search: insured theft3, return5, theft18;
 	# no intervening selected police visit takes the original first.
@@ -370,10 +370,10 @@ func run() -> void:
 	check(night.public_report(s).morning.payout == 0 and night.public_report(s).morning.losses[0].claimReason != "","illegal loss rejected with claim evidence")
 	# Inspecting at capacity and zero AP must remain completable.
 	for risk in [0,29,30,59,60,100]:
-		check(night.inspection_chance(risk) == (8 if risk < 30 else 15 if risk < 60 else 25),"inspection risk band %d" % risk)
+		check(is_equal_approx(night.inspection_chance(risk),risk*0.03),"inspection attention percent %d" % risk)
 	for count in [0,1,2,3,4,5,6,10]:
-		check(night.leniency_chance(count) == (0 if count < 2 else 30 if count < 4 else 60 if count < 6 else 80),"leniency threshold %d" % count)
-	for n in 100:
+		check(night.leniency_chance(count) == 0,"current inspections have no waiver %d" % count)
+	for n in 10000:
 		s = fresh("INSPECT-%d" % n)
 		s.risk = 100
 		s.cursor = Model.daily_visit_limit(s)
@@ -389,7 +389,7 @@ func run() -> void:
 	var uid: String = held.uid
 	s = act(s,"RESOLVE_INSPECTION",{"tradeId":s.trade.id})
 	check(s.cash == 0 and s.cursor == Model.daily_visit_limit(s) and s.ap == 0 and Model.find_inventory(s,uid) == null,"inspection confiscates exact original, caps fine and preserves bonus cursor/AP")
-	check(night.public_report(s).lastInspection.fineDue >= 30 and night.public_report(s).lastInspection.finePaid == 7,"receipt reports assessed and paid fine separately")
+	check(night.public_report(s).lastInspection.fineDue == 30 and night.public_report(s).lastInspection.finePaid == 7,"receipt reports assessed and paid fine separately")
 	loop_tests(night)
 	additional_tests(night)
 	repeat_loss_test(night)

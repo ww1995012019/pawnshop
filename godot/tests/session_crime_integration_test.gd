@@ -10,7 +10,7 @@ func checkout(s: Dictionary, id: String) -> Dictionary:
 func return_seed() -> String:
  for n in 100000:
   var seed := "LOOP-%d" % n
-  if Model.fnv("%s/night/theft/3" % seed)%10000<300 and Model.fnv("%s/fence/return/5" % seed)%100<20 and Model.fnv("%s/police/inspection/6" % seed)%100<8:
+  if Model.fnv("%s/night/theft/3" % seed)%10000<300 and Model.fnv("%s/fence/return/5" % seed)%100<20 and Model.fnv("%s/police/inspection/6" % seed)%10000<roundi((12+16)*3):
    return seed
  return ""
 func police_session_stock_test(report_type: String) -> void:
@@ -98,7 +98,7 @@ func run() -> void:
   s=checkout(s,"sale")
   check(Model.find_inventory(s,uid)==null and s.nightCrime.cases[0].items[0].holder=="buyer","batch sale retains historic tracked handling")
  s=batch(s,"TRADE_END")
- # Wait through natural daily schedules until a real inspector resolves past handling.
+ # Wait through natural daily schedules; historical handling is outside the on-site check.
  for _day in 16:
   if NightCrime.inspection_pending(s): break
   s=act(close(s),"NEXT")
@@ -110,7 +110,7 @@ func run() -> void:
   refused=batch(refused,"TRADE_END")
   check(refused.trade!=null and refused.trade.id==inspector_id and TradeSession.session(refused).is_empty(),"batch controls cannot wrap or dismiss inspection")
   s=batch(s,"RESOLVE_INSPECTION")
-  check(s.nightCrime.lastInspection.implicated.has(uid) and s.nightCrime.cases[0].items[0].get("liabilityResolved",false),"inspection finds historical batch handling without second inventory confiscation")
+  check(not s.nightCrime.lastInspection.implicated.has(uid) and s.nightCrime.lastInspection.fineDue==0 and not s.nightCrime.cases[0].items[0].get("liabilityResolved",false),"inspection skips historical batch handling and assesses no fine")
  # End an unpurchased fence session, including JSON save/reload.
  s=find_fence(theft_campaign(false));uid=s.trade.item.uid
  s=batch(s,"TRADE_OPEN")

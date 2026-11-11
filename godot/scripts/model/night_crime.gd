@@ -55,11 +55,12 @@ static func _take_weighted(seed: String, day: int, index: int, candidates: Array
 			return candidates.pop_at(position)
 	return {}
 
-static func inspection_chance(risk: float) -> int:
-	return 8 if risk < 30 else 15 if risk < 60 else 25
+static func inspection_chance(risk: float) -> float:
+	# Percentage points: 12 attention means 0.36%, not 36%.
+	return clampf(risk,0.0,100.0)*0.03
 
 static func leniency_chance(count: int) -> int:
-	return 0 if count < 2 else 30 if count < 4 else 60 if count < 6 else 80
+	return 0 # Kept for legacy callers; current inspections always use the flat fine.
 
 static func unfinished_work(item: Dictionary) -> bool:
 	for group in [item.get("service",{}),item.get("refurbishment",{})]:
@@ -177,7 +178,8 @@ static func ensure_day(s: Dictionary) -> void:
 	var quota := Model.daily_visit_limit(s)
 	if s.phase != "open" or s.nightCrime.days.has(key): return
 	var day := int(s.day)
-	var inspection: bool = day >= 3 and Model.fnv("%s/police/inspection/%d" % [s.seed,day])%100 < inspection_chance(s.risk)
+	var chance := inspection_chance(s.risk)
+	var inspection: bool = day >= 3 and Model.fnv("%s/police/inspection/%d" % [s.seed,day])%10000 < roundi(clampf(s.risk,0.0,100.0)*3.0)
 	var merchant := _merchant_slot(s)
 	var patrol := Wanted.officer_slot(s,merchant)
 	var landlord: int = preload("res://scripts/model/visit_schedule.gd").landlord_slot(s)
@@ -186,7 +188,7 @@ static func ensure_day(s: Dictionary) -> void:
 		if slot == merchant or slot == patrol or slot == landlord or (day <= 3 and slot < 4): continue
 		available.append(slot)
 	var inspector: int = patrol if patrol >= 0 else (int(available.pop_front()) if not available.is_empty() else quota)
-	var d := {"inspection":inspection,"inspectionDone":false,"inspectionSlot":inspector,"inspectionStarted":false,"leniency":false,"fence":{},"fenceDone":false}
+	var d := {"inspection":inspection,"inspectionChancePercent":chance,"inspectionDone":false,"inspectionSlot":inspector,"inspectionStarted":false,"leniency":false,"fence":{},"fenceDone":false}
 	s.nightCrime.days[key] = d
 	if not inspection and inspector != patrol and inspector < quota: available.push_front(inspector)
 	if available.is_empty() or day < 3: return
@@ -237,12 +239,12 @@ static func _start_inspection(s: Dictionary, bonus: bool) -> Dictionary:
 	if not d.inspectionStarted:
 		preload("res://scripts/model/visit_schedule.gd").reserve_inspection(s)
 		d.inspectionStarted = true
-		d.leniency = Model.fnv("%s/police/leniency/%d" % [s.seed,int(s.day)])%100 < leniency_chance(int(s.nightCrime.cooperation.count))
+		d.leniency = false
 	s.trade = Wanted.new_officer_trade(s)
 	s.trade.inspectionVisit = true
 	s.trade.bonusVisit = bonus
-	s.trade.line = "例行查货，核对当前商品来源与尚未处置的经手案件；核对不消耗AP。"
-	return Model.notice(s,"巡警到店查货，请完成核对后再打烊。")
+	s.trade.line = "例行查货，请先整理物品，准备好后再确认检查。只检查隔离箱外的店铺自有赃物，隔离箱不检查；查到一件或多件合计罚30 Cr，不消耗AP。"
+	return Model.notice(s,"巡警到店等候，先整理物品，确认开始检查后才查货。")
 
 static func _finish(s: Dictionary, text: String) -> Dictionary:
 	if s.trade != null and s.trade.get("bonusVisit",false):
@@ -292,47 +294,29 @@ static func arrest(s: Dictionary, target: String) -> void:
 
 static func _inspect(s: Dictionary) -> Dictionary:
 	var d: Dictionary = s.nightCrime.days[str(int(s.day))]
+	if d.get("inspectionDone",false): return s
 	var confiscated := []
-	var implicated := []
-	var total := 0.0
-	var uncertain := []
 	for item in s.inventory.duplicate():
-		if item.owner != "shop" or item.has("orderId"): continue
-		if not item.get("stolen",false):
-			if not item.sourceVerified:
-				uncertain.append(item.uid)
-				if not d.leniency:
-					item.sealed = true
-					item.location = "isolation"
-			continue
+		# Isolation is outside this on-site check, including unsealed originals.
+		if item.owner != "shop" or item.has("orderId") or item.location == "isolation" or not item.get("stolen",false): continue
 		var c := _case(s,String(item.get("crimeCaseId","")))
 		var row := _row(c,item.uid)
-		var voluntary: bool = item.location == "isolation" and item.sealed
-		if not voluntary:
-			total += Model.item_value(item)
-			implicated.append(item.uid)
 		confiscated.append(item.uid)
-		if not row.is_empty(): row.item = item.duplicate(true)
-		Model._remove_item(s,item.uid)
-		if not c.is_empty():
-			c.revealed = true
-			if not row.is_empty(): _recover(s,c,row)
-	for c in s.nightCrime.cases:
-		for row in c.items:
-			if row.get("handled",false) and not row.get("liabilityResolved",false):
-				if not implicated.has(row.uid):
-					total += Model.item_value(row.item)
-					implicated.append(row.uid)
-				row.liabilityResolved = true
-				c.revealed = true
-	var due := maxi(30,ceili(total*.2)) if not implicated.is_empty() else 0
-	var paid := mini(int(s.cash),due) if not d.leniency else 0
-	if due > 0 and not d.leniency:
-		Model.ledger(s,"police-fine-%d" % int(s.day),"fine","查货合并处罚",-paid)
-		s.risk = Model.clampn(s.risk+10)
-		s.relations.station = Model.clampn(s.relations.station-5)
-	var text := "查货完成。追回原物%d件；应罚%d Cr，实缴%d Cr。%s" % [confiscated.size(),due,paid,"你帮过我们不少，这次给你个方便：免罚、免风险与关系扣减；确切赃物仍须归还。" if d.leniency else "来源待核物请补证或隔离。"]
-	s.nightCrime.lastInspection = {"day":int(s.day),"confiscated":confiscated,"implicated":implicated,"uncertain":uncertain,"fineDue":due,"finePaid":paid,"waived":d.leniency,"leniency":d.leniency,"cooperation":s.nightCrime.cooperation.count,"text":text}
+		if not row.is_empty():
+			row.item = item.duplicate(true)
+			row.holder = "police"
+			row.recovery = "查货原物已由警方接收"
+			row.resolved = true
+			row.liabilityResolved = true
+		if not c.is_empty(): c.revealed = true
+		# _recover can return shop-origin originals; confiscation must never do so.
+		_remove_live_original(s,item.uid)
+	var due := 30 if not confiscated.is_empty() else 0
+	var paid := minf(maxf(0.0,float(s.cash)),float(due))
+	if paid > 0:
+		Model.ledger(s,"police-fine-%d" % int(s.day),"fine","查货固定处罚",-paid)
+	var text := "查货完成。没收现场赃物%d件；应罚%d Cr，实缴%s Cr。" % [confiscated.size(),due,Model.jnum(paid)]
+	s.nightCrime.lastInspection = {"day":int(s.day),"confiscated":confiscated,"implicated":confiscated.duplicate(),"uncertain":[],"fineDue":due,"finePaid":paid,"waived":false,"leniency":false,"cooperation":s.nightCrime.cooperation.count,"text":text}
 	d.inspectionDone = true
 	if Model.inspection_ready(s): s.inspection = "cleared"
 	return _finish(s,text)
@@ -366,7 +350,7 @@ static func public_report(s: Dictionary) -> Dictionary:
 		cases.append(entry)
 	var latest: Dictionary = s.nightCrime.mornings.back().duplicate(true) if not s.nightCrime.mornings.is_empty() else {"day":int(s.day),"losses":[],"payout":0,"acknowledged":true}
 	var d: Dictionary = s.nightCrime.days.get(str(int(s.day)),{})
-	return {"cases":cases,"mornings":s.nightCrime.mornings.duplicate(true),"morning":latest,"unread":not latest.acknowledged,"reportOpen":s.nightCrime.reportOpen,"policy":insurance_quote(s),"cooperation":int(s.nightCrime.cooperation.count),"leniencyChance":leniency_chance(int(s.nightCrime.cooperation.count)),"inspection":{"pending":d.get("inspection",false) and not d.get("inspectionDone",false),"active":s.trade != null and s.trade.get("inspectionVisit",false)},"lastInspection":s.nightCrime.lastInspection.duplicate(true)}
+	return {"cases":cases,"mornings":s.nightCrime.mornings.duplicate(true),"morning":latest,"unread":not latest.acknowledged,"reportOpen":s.nightCrime.reportOpen,"policy":insurance_quote(s),"cooperation":int(s.nightCrime.cooperation.count),"inspection":{"pending":d.get("inspection",false) and not d.get("inspectionDone",false),"active":s.trade != null and s.trade.get("inspectionVisit",false),"prepared":s.trade != null and s.trade.get("inspectionPrepared",false),"chancePercent":d.get("inspectionChancePercent",inspection_chance(s.risk)),"fineAmount":30},"lastInspection":s.nightCrime.lastInspection.duplicate(true)}
 
 static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 	var type := String(action.get("type",""))
@@ -398,6 +382,10 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 	var d: Dictionary = s.nightCrime.days[str(int(s.day))]
 	if type == "SETTLE" and inspection_pending(s): return Model.notice(s,"打烊前须接待待到场的查货；0 AP也可呼叫巡警完成核对。")
 	if s.trade != null and s.trade.get("inspectionVisit",false):
+		if type == "PREPARE_INSPECTION":
+			if action.get("tradeId","") != s.trade.id: return previous
+			s.trade.inspectionPrepared = true
+			return s
 		if type == "RESOLVE_INSPECTION" and action.get("tradeId","") == s.trade.id: return _inspect(s)
 		if type in ["REFUSE","TRADE_OPEN","TRADE_END"]: return Model.notice(s,"请先完成本次查货核对。")
 	if type in ["ARRIVE","ARRIVE_INSPECTION"] and s.trade == null and inspection_pending(s):

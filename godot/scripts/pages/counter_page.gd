@@ -676,7 +676,7 @@ func _refresh_desk() -> void:
 	if t == null:
 		idle_label.text = "按左侧服务铃 · 接待下一位来客" if s.phase == "open" and s.cursor < Model.daily_visit_limit(s) else "预约已接待完 · 打开日结账本"
 	else:
-		idle_label.text = ("租金已交 · 收好回执，送房东离开" if Landlord.paid(s) else "房东到店 · 核对本期账单后缴租") if t.kind == "landlord" else "巡警到店 · 领取协查名单，听巡警说明" if t.kind == "police" else "商人到店 · 在报价台查看商品" if t.kind == "merchant" else "请从陈列柜或下方抽屉选货"
+		idle_label.text = ("租金已交 · 收好回执，送房东离开" if Landlord.paid(s) else "房东到店 · 核对本期账单后缴租") if t.kind == "landlord" else "警官等你确认 · 可先去仓储整理，隔离箱不查" if t.kind == "police" and t.get("inspectionVisit",false) else "巡警到店 · 领取协查名单，听巡警说明" if t.kind == "police" else "商人到店 · 在报价台查看商品" if t.kind == "merchant" else "请从陈列柜或下方抽屉选货"
 
 func _stock_clicked(uid: String, picking: bool, why) -> void:
 	if busy or _scene_blocked():
@@ -900,17 +900,25 @@ func _refresh() -> void:
 		scr.line1.text="六张照片 · 留意外貌与交谈细节"
 		scr.line2.text="正确报警有报酬，多次误报会处罚"
 		scr.line3.text="名单在库存中，可随时取出贴放"
-		_act("领取通缉名单" if not WantedCases.has_notice(s) else "展开名单","primary",func():
-			if WantedCases.has_notice(Game.state): shell.toggle_wanted_notice()
-			else: Game.dispatch({"type":"ISSUE_WANTED","tradeId":t.id}))
 		if t.get("inspectionVisit", false):
-			scr.head.text = "巡警到访 · 例行查货"
-			scr.line1.text = "核对来源与追索原物 · 不消耗 AP"
-			scr.line2.text = "有效协警 %d 次 · 宽容概率 %d%%" % [s.nightCrime.cooperation.count, NightCrime.leniency_chance(s.nightCrime.cooperation.count)]
-			_act("配合查货", "good", func(): Game.dispatch({"type":"RESOLVE_INSPECTION", "tradeId":t.id}))
+			scr.head.text = "警官到访 · 赃物抽查"
+			scr.price.text = "等待确认"
+			scr.line1.text = "可先整理 · 隔离箱不检查"
+			scr.line2.text = "仅查赃物 · 本次发现合计罚30 Cr"
+			scr.line3.text = "点击确认检查前，不会没收或扣款"
+			var prepared: bool = t.get("inspectionPrepared",false)
+			if prepared:
+				_act("整理好了，开始检查", "good",func(): Game.dispatch({"type":"RESOLVE_INSPECTION","tradeId":t.id}))
+			_act("继续整理物品" if prepared else "先整理物品", "primary" if not prepared else "secondary", _prepare_inspection)
+			if not prepared:
+				_act("整理好了，开始检查", "good",func(): Game.dispatch({"type":"RESOLVE_INSPECTION","tradeId":t.id}))
+			footer.text="警官会等你确认 · 整理和检查不消耗AP"
 		else:
+			_act("领取通缉名单" if not WantedCases.has_notice(s) else "展开名单","primary",func():
+				if WantedCases.has_notice(Game.state): shell.toggle_wanted_notice()
+				else: Game.dispatch({"type":"ISSUE_WANTED","tradeId":t.id}))
 			_act("送警官离开","secondary",func(): Game.dispatch({"type":"REFUSE"}))
-		footer.text="对照头像，不要只认一顶帽子。"
+			footer.text="对照头像，不要只认一顶帽子。"
 	elif t.kind == "merchant":
 		var npc := GameData.npc(t.npcId)
 		scr.head.text = "流动商人 · " + npc.name
@@ -1018,6 +1026,12 @@ func _refresh() -> void:
 		if l.text.length() > 21:
 			l.text = l.text.left(20) + "…"
 	dial.queue_redraw()
+
+func _prepare_inspection() -> void:
+	var trade = Game.state.trade
+	if trade == null or not trade.get("inspectionVisit",false): return
+	Game.dispatch({"type":"PREPARE_INSPECTION","tradeId":trade.id})
+	shell.go("warehouse")
 
 func _merchant_shop() -> void:
 	if Game.state.trade == null or Game.state.trade.kind != "merchant":

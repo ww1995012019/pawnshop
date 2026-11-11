@@ -20,6 +20,8 @@ func scene_name() -> String:
 
 func hint_text() -> String:
 	var t = Game.state.trade
+	if t != null and t.get("inspectionVisit",false):
+		return "警官正在等你确认。可先整理库存，隔离箱不在本次检查范围；整理完关闭仓储，返回警官。"
 	if t != null and t.kind == "sell" and not t.has("selectedUid"):
 		return "顾客在柜台等货：选中一件合格自有货，点「推荐给顾客」。"
 	if Game.state.day >= 3 and Game.state.inspection == "pending":

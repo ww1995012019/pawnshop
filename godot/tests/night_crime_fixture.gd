@@ -30,17 +30,17 @@ static func build() -> Dictionary:
 		if NightCrime.public_report(opened).morning.losses.size()==2: break
 	if before.is_empty() or opened.is_empty(): return {}
 	var inspection := {}
-	for n in 1000:
+	for n in 10000:
 		var s := fresh("INSPECT-UI-%d" % n)
 		# Cursor and AP are ordinary save resources; scheduling uses the real draw.
-		s.cursor=6; s.ap=0
+		s.cursor=6; s.ap=0; s.risk=100
 		NightCrime.ensure_day(s)
 		if NightCrime.inspection_pending(s): inspection=s; break
 	var q := NightCrime.insurance_quote(before)
 	var morning: Dictionary = NightCrime.public_report(opened).morning
 	var uids := []
 	for loss in morning.losses: uids.append(loss.uid)
-	var meta := {"premium":q.due,"closingFee":closed.report.costs.total+closed.report.rent,"payout":morning.payout,"lossUIDs":uids,"nightDay":3,"openDay":4,"buyButton":"购买今晚保险","ackButton":"确认夜间记录","historyButton":"夜间失窃与查货记录","inspectionButton":"接待查货警察","resolveButton":"配合查货"}
+	var meta := {"premium":q.due,"closingFee":closed.report.costs.total+closed.report.rent,"payout":morning.payout,"lossUIDs":uids,"nightDay":3,"openDay":4,"buyButton":"购买今晚保险","ackButton":"确认夜间记录","historyButton":"夜间失窃与查货记录","inspectionButton":"接待查货警察","resolveButton":"整理好了，开始检查"}
 	var result := {"before_insurance":before,"insured_report":closed,"inspection_pending":inspection,"meta":meta}
 	return result
 func run() -> void:

@@ -103,7 +103,7 @@ func run() -> void:
 	game.state=fixture.inspection_pending.duplicate(true); shell.page._refresh(); await frames()
 	await click(button(shell,"接待查货警察")); await idle(shell.page)
 	check(game.state.trade != null and game.state.trade.get("inspectionVisit",false), "native arrival summons late inspector at 0 AP")
-	await click(button(shell,"配合查货")); await idle(shell.page)
+	await click(button(shell,"整理好了，开始检查")); await idle(shell.page)
 	check(game.state.trade==null and game.state.ap==0 and not game.state.nightCrime.lastInspection.is_empty(), "native inspection completes without AP")
 	check(not shell.modal_open(), "inspection completion does not auto-open night history")
 	shell.open_night_report(); await frames()

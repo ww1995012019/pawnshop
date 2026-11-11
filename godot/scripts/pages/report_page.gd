@@ -299,6 +299,8 @@ func _add_night_controls(s: Dictionary) -> void:
 		var snapshot: Dictionary=s.get("nightCrime",{}).get("nights",{}).get(str(int(s.day)),{})
 		risk_text="今晚已结算，结算时失窃概率 %.2f%%。" % (int(snapshot.get("effectiveChanceBp",snapshot.get("chanceBp",NightCrime.theft_chance_bp(s))))/100.0)
 	section.add_child(UIKit.label(risk_text+" 基础 3% + 每件名贵 0.08% + 每件珍稀 0.10%（最高 100%）；仅计可被盗库存，按可见型号档次计算。",17,UIKit.TEXT,false,true))
+	var inspection: Dictionary = NightCrime.public_report(s).inspection
+	section.add_child(UIKit.label("今日抽查概率 %.2f%% · 关注度×0.03%%。警官到场后可先整理，隔离箱不查；现场查到赃物合计罚30 Cr。" % float(inspection.get("chancePercent",NightCrime.inspection_chance(s.risk))),17,UIKit.TEXT,false,true))
 	var history := UIKit.button("夜间失窃与查货记录", "secondary", Vector2(0, 52), 20)
 	history.pressed.connect(func(): shell.open_night_report())
 	section.add_child(history)

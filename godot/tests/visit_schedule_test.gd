@@ -72,9 +72,10 @@ func run() -> void:
 	check(exhausted,"quota exhaustion blocks new arrivals without advancing the cursor")
 	var early := Model.create("EARLY-INSPECTION")
 	early.day = 4
-	for n in 100:
+	for n in 10000:
 		early = Model.create("EARLY-INSPECTION-%d" % n)
 		early.day = 4
+		early.risk = 100
 		NightCrime.ensure_day(early)
 		if NightCrime.inspection_pending(early): break
 	early = Commerce.reduce(early,{"type":"ARRIVE_INSPECTION"})
@@ -108,8 +109,7 @@ func run() -> void:
 	check(schedule.landlord_slot(swapped_loaded) == 1 and Commerce.merchant_slot(swapped_loaded) == 2,"landlord appointment exchange survives reload without remapping twice")
 	swapped_loaded = Commerce.reduce(swapped_loaded,{"type":"ARRIVE"})
 	check(swapped_loaded.trade != null and swapped_loaded.trade.kind == "merchant","merchant still arrives after early landlord payment and departure")
-	var inspection_swap := Model.create("REVIEW-I-8")
-	inspection_swap.day = 5
+	var inspection_swap := natural_swap_inspection()
 	inspection_swap.cursor = 3
 	NightCrime.ensure_day(inspection_swap)
 	check(schedule.limit(inspection_swap) == 6 and Commerce.merchant_slot(inspection_swap) == 3 and inspection_swap.nightCrime.days["5"].inspectionSlot == 4,"early-inspection regression starts before its merchant appointment")
@@ -154,8 +154,7 @@ func run() -> void:
 	fence_swap = JSON.parse_string(JSON.stringify(fence_swap))
 	schedule.reserve_landlord(fence_swap)
 	check(fence_swap.nightCrime.days["7"].fence.slot == 6,"saved fence appointment survives repeat reservation after reload")
-	var overdue := Model.create("REVIEW-I-8")
-	overdue.day = 5
+	var overdue := natural_swap_inspection()
 	overdue.cursor = 3
 	NightCrime.ensure_day(overdue)
 	overdue.nightCrime.days["5"].inspectionSlot = 1
@@ -179,3 +178,14 @@ func run() -> void:
 	check(Commerce.merchant_slot(patrol_combo) == 4 and WantedCases.officer_slot(patrol_combo,4) == 0 and schedule.landlord_slot(patrol_combo) == 1,"merchant and patrol map their original identities once through composed saved exchanges")
 	print("VISITS failures=",failures)
 	quit(1 if failures else 0)
+
+func natural_swap_inspection() -> Dictionary:
+	# Preserve the merchant-slot regression using an actual 3% daily draw.
+	for n in 100000:
+		var seed := "SWAP-INSPECTION-%d" % n
+		if Model.fnv("%s/police/inspection/5" % seed)%10000 >= 300: continue
+		var s := Model.create(seed)
+		s.day=5; s.risk=100
+		NightCrime.ensure_day(s)
+		if Model.daily_visit_limit(s)==6 and Commerce.merchant_slot(s)==3 and s.nightCrime.days["5"].inspectionSlot==4: return s
+	return {}

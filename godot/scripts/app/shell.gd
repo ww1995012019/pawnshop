@@ -1447,7 +1447,7 @@ func open_help() -> void:
 	var manual := UIKit.button("打开手表检验说明书", "primary", Vector2(0, 56))
 	manual.pressed.connect(func(): open_watch_manual())
 	body.add_child(manual)
-	var text := "• 柜台：按服务铃请下一位来客。每天随机安排3–10位，开店前三天为教学保留必要名额。同一客人看多件货或分批交割只算一次接待。报价只代表对方的认识与预算；检测不会自动改变对方的开价。\n• 检验：只用放大镜、紫外线、称重。对照说明书查看 logo、编号与重量，记录物证；每项缩小估价范围，三项当前检验完成后仍保留估价区间，成交价需自行议定。\n• 多件买卖：就在原来的柜台对话中，从抽屉拿货给来客看，他会当场接受、还价或拒绝。问“你还带了别的货吗”可继续看他带来的旧货；不必进入其他交易界面。每只表各自议价，谈妥的几件会记着，原报价台可以一起交割1 AP；交割后客人仍在，送客才结束接待。\n• 议价：不再限制三次还价。NPC根据已知来源、主动出示的证据、报价差距和实际让步决定继续谈、拒绝本件或离开。可以主动出示物证。维修师、收藏者和普通人理解同一条证据的能力不同，相关专家85%概率独立准确估价，普通客人20%概率接近市价；你的私下检验不会自动更新对方认知。\n• 造假：在修表台选择外形与机芯兼容、目录价更高的目标款，分别仿制标识、换目标外壳、覆印编号和校准配重。编号与配重需先换壳，各项独立操作与结算，内部故障仍保留。相似度越高，未识破的顾客越接近按目标款估价；专家可识破加工痕迹并拒收，关注+10、阵营关系-8。同一轮不重复处罚。\n• 维修：依本件故障安排除尘、开盖、洗件、换件、润滑回装与走时复核；机械表与石英表操作不同。完成对应工序时扣费，进度可保存。材料等流动商人到店购买。独立翻新可自由选择吹灰、擦拭、抛光、换壳或换表带，分别结算；提升品相但不修复机芯，更换件保留可鉴定痕迹。\n• 仓储与订单：保管每一只原表，核验来源，按订单要求交还同一实物。\n• 收租与日结：第7、14、21天房东梁叔上门收取450、495、545 Cr租金，核对后确认付款并保留回执，日结不再重复扣租。现金不足可先筹钱，再从账本请房东过来；收租不消耗AP。账本日结支付设备电费与固定清洁费8 Cr，继续经营21天。电费只在成功记录新读数或提交用电工序时计次；手工清洁、移动镜片和查看旧结果不收费。账本可展开设备状态、台数与作业明细；工作灯一次性 120 Cr，安装后从次日起用电 +1 Cr/日。"
+	var text := "• 柜台：按服务铃请下一位来客。每天随机安排3–10位，开店前三天为教学保留必要名额。同一客人看多件货或分批交割只算一次接待。报价只代表对方的认识与预算；检测不会自动改变对方的开价。\n• 检验：只用放大镜、紫外线、称重。对照说明书查看 logo、编号与重量，记录物证；每项缩小估价范围，三项当前检验完成后仍保留估价区间，成交价需自行议定。\n• 多件买卖：就在原来的柜台对话中，从抽屉拿货给来客看，他会当场接受、还价或拒绝。问“你还带了别的货吗”可继续看他带来的旧货；不必进入其他交易界面。每只表各自议价，谈妥的几件会记着，原报价台可以一起交割1 AP；交割后客人仍在，送客才结束接待。\n• 议价：不再限制三次还价。NPC根据已知来源、主动出示的证据、报价差距和实际让步决定继续谈、拒绝本件或离开。可以主动出示物证。维修师、收藏者和普通人理解同一条证据的能力不同，相关专家85%概率独立准确估价，普通客人20%概率接近市价；你的私下检验不会自动更新对方认知。\n• 造假：在修表台选择外形与机芯兼容、目录价更高的目标款，分别仿制标识、换目标外壳、覆印编号和校准配重。编号与配重需先换壳，各项独立操作与结算，内部故障仍保留。相似度越高，未识破的顾客越接近按目标款估价；专家可识破加工痕迹并拒收，关注+10、阵营关系-8。同一轮不重复处罚。\n• 维修：依本件故障安排除尘、开盖、洗件、换件、润滑回装与走时复核；机械表与石英表操作不同。完成对应工序时扣费，进度可保存。材料等流动商人到店购买。独立翻新可自由选择吹灰、擦拭、抛光、换壳或换表带，分别结算；提升品相但不修复机芯，更换件保留可鉴定痕迹。\n• 仓储与订单：保管每一只原表，核验来源，按订单要求交还同一实物。\n• 警官抽查：当天抽查概率为关注度×0.03%，12点为0.36%，100点为3%。警官到店后可先整理，点击“整理好了，开始检查”后才处理；隔离箱不查，普通仿品和来源待核物不属于本次赃物范围。查到赃物全部没收，本次合计罚30 Cr；没发现就不罚。\n• 收租与日结：第7、14、21天房东梁叔上门收取450、495、545 Cr租金，核对后确认付款并保留回执，日结不再重复扣租。现金不足可先筹钱，再从账本请房东过来；收租不消耗AP。账本日结支付设备电费与固定清洁费8 Cr，继续经营21天。电费只在成功记录新读数或提交用电工序时计次；手工清洁、移动镜片和查看旧结果不收费。账本可展开设备状态、台数与作业明细；工作灯一次性 120 Cr，安装后从次日起用电 +1 Cr/日。"
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.custom_minimum_size.y = clampf(get_viewport().get_visible_rect().size.y - 300, 180, 450)
@@ -1781,7 +1781,9 @@ func open_night_report(manual := true) -> void:
 	var m := modal("夜间失窃与查货记录" if manual else "昨夜失窃记录", 940)
 	var body: VBoxContainer = m[0]
 	var records := night_scroll(body)
-	if manual: records.add_child(UIKit.label("有效协警 %d 次 · 本次查货宽容概率 %d%%" % [report.cooperation, report.leniencyChance], 21, UIKit.TEXT, true, true))
+	if manual:
+		records.add_child(UIKit.label("今日抽查概率 %.2f%% · 关注度×0.03%%" % float(report.inspection.get("chancePercent",NightCrime.inspection_chance(Game.state.risk))),21,UIKit.TEXT,false,true))
+		records.add_child(UIKit.label("可先整理再确认检查。只没收现场赃物，隔离箱不检查；本次查到一件或多件均合计罚30 Cr。",18,UIKit.TEXT,false,true))
 	if report.mornings.is_empty(): records.add_child(UIKit.label("尚无夜间记录。", 19, UIKit.TEXT))
 	var mornings: Array = report.mornings.duplicate() if manual else [NightCrime.pending_morning(Game.state)]
 	mornings.reverse()
@@ -1813,7 +1815,7 @@ func open_night_report(manual := true) -> void:
 		records.add_child(UIKit.label(details, 18, UIKit.TEXT, false, true))
 	if manual and not report.lastInspection.is_empty():
 		var receipt: Dictionary = report.lastInspection
-		records.add_child(UIKit.label("第 %d 天查货回执\n%s\n追回编号：%s\n应罚 %s · 实缴 %s · %s\n有效协警 %d 次" % [receipt.day, receipt.text, "、".join(receipt.confiscated) if not receipt.confiscated.is_empty() else "无", UIKit.money(receipt.fineDue), UIKit.money(receipt.finePaid), "本次宽容免罚" if receipt.waived else "按规定处置", receipt.cooperation], 19, UIKit.TEXT, false, true))
+		records.add_child(UIKit.label("第 %d 天查货回执\n%s\n处置编号：%s\n应罚 %s · 实缴 %s · %s\n有效协警 %d 次" % [receipt.day, receipt.text, "、".join(receipt.confiscated) if not receipt.confiscated.is_empty() else "无", UIKit.money(receipt.fineDue), UIKit.money(receipt.finePaid), "历史回执：当时免罚" if receipt.waived else "按回执处置", receipt.cooperation], 19, UIKit.TEXT, false, true))
 	var ack := UIKit.button("确认夜间记录", "primary", Vector2(0,56), 22)
 	ack.pressed.connect(func():
 		Game.dispatch({"type":"ACK_NIGHT_REPORT"})
