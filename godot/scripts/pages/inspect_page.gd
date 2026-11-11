@@ -306,7 +306,7 @@ func _fill_picker() -> void:
 	if trade != null: list.append(trade)
 	list.append_array(Game.state.inventory)
 	for it in list:
-		picker.add_icon_item(UIKit.physical_icon(it),GameData.def(it.defId).name)
+		picker.add_item(GameData.def(it.defId).name)
 		picker.set_item_metadata(picker.item_count-1,it.uid)
 		if it.uid == it_uid: picker.select(picker.item_count-1)
 
