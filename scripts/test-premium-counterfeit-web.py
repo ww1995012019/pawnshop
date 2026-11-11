@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import sys
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1]
 def module(name,path):
@@ -22,9 +23,9 @@ def main():
  fixture=json.loads((ROOT/'work/premium-counterfeit/fixture.json').read_text())
  with sync_playwright() as p:
   browser=p.chromium.launch(executable_path=shutil.which('chromium'),args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
-  for mobile,width,height in [(False,1440,900),(True,844,390)]:
+  for mobile,width,height in ([(True,844,390)] if '--phone-only' in sys.argv else [(False,1440,900),(True,844,390)]):
    label='phone' if mobile else 'desktop'
-   context=browser.new_context(viewport={'width':width,'height':height},has_touch=mobile,is_mobile=mobile,device_scale_factor=2 if mobile else 1)
+   context=browser.new_context(viewport={'width':width,'height':height},has_touch=mobile,is_mobile=mobile,device_scale_factor=2 if mobile else 1,record_video_dir=str(out/label),record_video_size={'width':width,'height':height})
    page=context.new_page();errors=[]
    page.on('pageerror',lambda e:errors.append(str(e)))
    page.on('console',lambda m:errors.append(m.text) if 'SCRIPT ERROR' in m.text or 'SHADER ERROR' in m.text else None)
@@ -68,11 +69,12 @@ def main():
      click(title);phone.wait(page,f"s.repair_task==='forge_{job}'")
      paid=before_ap-['logo','case','serial','weight'].index(job)-1
      for attempt in range(40):
+      page.wait_for_timeout(500)
       state=status()
       if state['ap']==paid:break
       assert not state['repair_reason'],state
       previous=state['repair_animation']
-      click(state['repair_action'])
+      click('@repair_primary')
       page.wait_for_function("step=>{const a=OrbitalTouch.state.repair_animation;return OrbitalTouch.state.repair_reason || a.complete || a.phase==='idle'&&a.step>step}",arg=previous['step'],timeout=20000)
      assert status()['ap']==paid,(job,status())
      snap(job+'-complete')

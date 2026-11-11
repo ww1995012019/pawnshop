@@ -3,6 +3,15 @@ extends Node2D
 var sprites: Dictionary={}
 var cards: Dictionary={}
 var origins: Dictionary={}
+var presentation_rect := Rect2()
+const MODEL_RECT := Rect2(670,480,640,180)
+func display_point(point: Vector2) -> Vector2:
+ if presentation_rect.size == Vector2.ZERO: return point
+ return presentation_rect.position + (point-MODEL_RECT.position)/MODEL_RECT.size*presentation_rect.size
+func model_point(point: Vector2) -> Vector2:
+ if presentation_rect.size == Vector2.ZERO: return point
+ return MODEL_RECT.position + (point-presentation_rect.position)/presentation_rect.size*MODEL_RECT.size
+
 
 class DeskCard extends Node2D:
  var caption:=""
@@ -45,6 +54,19 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
   var default_position:=Vector2((785.0 if visitor else 720.0)+index*gap,508 if visitor else 610)
   var saved=TradeSession.session(state).get("table_positions",{}).get(uid,[])
   var pos:=Vector2(float(saved[0]),float(saved[1])) if saved is Array and saved.size()==2 else default_position
+  pos=display_point(pos)
+  if presentation_rect.size != Vector2.ZERO and shown.size()==1 and not (saved is Array and saved.size()==2):
+   pos=presentation_rect.get_center()
+
+  var mobile := presentation_rect.size != Vector2.ZERO
+  var height := minf(148.0 if shown.size()==1 else 116.0,presentation_rect.size.y+44.0) if mobile and info.focused else 54.0 if mobile else 64.0
+  var bounds := Rect2(670,500,610,110)
+  if mobile:
+   var half := height*.5
+   var low := presentation_rect.position+Vector2(-36+half,-26+half)
+   var high := presentation_rect.end+Vector2(36-half,22-half)
+   bounds=Rect2(low,Vector2(maxf(1,high.x-low.x),maxf(1,high.y-low.y)))
+   pos=pos.clamp(bounds.position,bounds.end)
   var fresh:=not sprites.has(uid)
   if fresh:
    var card:=DeskCard.new();card.name="desk_card_"+uid;cards[uid]=card;add_child(card)
@@ -65,6 +87,13 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
   var card: DeskCard=cards[uid]
   var sprite: ItemSprite=sprites[uid]
   origins[uid]=info.direction
+  card.visible = not mobile
+  sprite.bounds = bounds
+  if not sprite.busy and sprite.get_meta("display_height",0.0) != height:
+   var next_scale := height/sprite.tex_size().y
+   sprite.body.scale *= next_scale/sprite.display_scale
+   sprite.display_scale = next_scale
+   sprite.set_meta("display_height",height)
   _select_glow(sprite,bool(info.focused))
   if not sprite.dragging and not sprite.get_meta("arriving",false) and sprite.position.distance_to(pos)>0.5:
    if fresh or Game.prefs.reduced_motion: sprite.position=pos
@@ -135,7 +164,7 @@ func hit_test(global_point: Vector2) -> String:
  var order: Array=sprites.keys();order.reverse()
  for uid in order:
   var sprite: ItemSprite=sprites[uid]
-  if sprite.contains(global_point) or cards[uid].area().has_point(to_local(global_point)-sprite.position): return uid
+  if sprite.contains(global_point) or (presentation_rect.size == Vector2.ZERO and cards[uid].area().has_point(to_local(global_point)-sprite.position)): return uid
  return ""
 
 func _process(_delta: float) -> void:

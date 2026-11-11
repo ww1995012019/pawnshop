@@ -40,6 +40,7 @@ var pending_operation := {}
 var pending_task := ""
 var saved_boundary := ""
 var operation_clock := 0.0
+var closing_after_segment := false
 
 func scene_name() -> String: return "workbench"
 
@@ -119,6 +120,7 @@ func _is_forgery_stock(it) -> bool:
 	return not service.get("opened",false) or service.get("forge_task","") != ""
 
 func _select(uid: String) -> void:
+	if shell.landscape_mode(): portrait_section = 1
 	_save_cleaning()
 	_save_operation()
 	it_uid = uid
@@ -154,7 +156,7 @@ func _fill_list() -> void:
 	UIKit.clear(list_box)
 	for it in _candidates():
 		var selected: bool = it.uid == it_uid
-		var row := UIKit.button("", "primary" if selected else "secondary", Vector2(0, 76), 17)
+		var row := UIKit.button("", "primary" if selected else "secondary", Vector2(0,56 if shell.landscape_mode() else 76),16 if shell.landscape_mode() else 17)
 		var service: Dictionary = it.get("service", {})
 		var completed: int = service.get("done", []).size()
 		var count: int = service.get("tasks", []).size()
@@ -310,6 +312,7 @@ func _stage_ui() -> void:
 	guidance_body.add_child(instruction)
 	var row := UIKit.hbox(10)
 	action_button = UIKit.button("","primary",Vector2(0,50),20)
+	action_button.name = "repair_primary"
 	action_button.add_theme_stylebox_override("disabled",UIKit.key_style("secondary","disabled"))
 	action_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	action_button.pressed.connect(_primary_action)
@@ -317,7 +320,8 @@ func _stage_ui() -> void:
 	if dust:
 		dirty = cleaning.remaining()
 		grime_label = UIKit.label("污垢剩余 %d%%" % ceili(dirty*100),18,UIKit.AMBER)
-		row.add_child(grime_label)
+		if shell.landscape_mode(): guidance_body.add_child(grime_label)
+		else: row.add_child(grime_label)
 		_update_cleaning_controls()
 	else:
 		if task != "":
@@ -330,7 +334,11 @@ func _stage_ui() -> void:
 			instruction.text = "已完成的工序保留记录；鉴定读数若受维修影响，请复查。"
 			action_button.text = "完成工单 · 记录交工"
 		action_button.disabled = _current_problem() != ""
-	var inspect := UIKit.button("去鉴定","secondary",Vector2(126,50),19)
+	var inspect := UIKit.button("鉴定" if shell.landscape_mode() else "去鉴定","secondary",Vector2(60 if shell.landscape_mode() else 126,44 if shell.landscape_mode() else 50),16 if shell.landscape_mode() else 19)
+	if shell.landscape_mode():
+		action_button.custom_minimum_size.y = 44
+		action_button.add_theme_font_size_override("font_size",16)
+		action_button.clip_text = true
 	inspect.pressed.connect(func(): call_deferred("_open_inspection"))
 	row.add_child(inspect)
 	bench_body.add_child(row)
@@ -390,6 +398,7 @@ func _resume_case() -> bool:
 	return false
 
 func open_refurb(job := "") -> void:
+	if shell.mobile_mode() and not can_close_workspace(): return
 	_sync_modes()
 	_save_cleaning()
 	_save_operation()
@@ -398,21 +407,25 @@ func open_refurb(job := "") -> void:
 	if current.get("refurbishment",{}).get("active_case",false): job = "case"
 	if job == "": job = "blow"
 	mode = "refurb"
+	if shell.landscape_mode(): portrait_section = 1
 	task = "refurb_"+job
 	_fill_list()
 	_stage_ui()
 	_refresh_info()
 
 func open_service() -> void:
+	if shell.mobile_mode() and not can_close_workspace(): return
 	if _resume_case(): return
 	_save_cleaning()
 	_save_operation()
 	mode = "service"
+	if shell.landscape_mode(): portrait_section = 1
 	_fill_list()
 	_stage_ui()
 	_refresh_info()
 
 func open_forgery(method := "") -> void:
+	if shell.mobile_mode() and not can_close_workspace(): return
 	if _resume_case(): return
 	_sync_modes()
 	_save_cleaning()
@@ -432,6 +445,7 @@ func open_forgery(method := "") -> void:
 		shell.toast("先完成当前机芯回装与封盖，再切换加工。")
 		return
 	mode = "forge"
+	if shell.landscape_mode(): portrait_section = 1
 	if method == "":
 		method = "logo"
 		for candidate in WatchForgery.available_methods(it):
@@ -444,6 +458,7 @@ func open_forgery(method := "") -> void:
 	_stage_ui()
 
 func _primary_action() -> void:
+	if closing_after_segment: return
 	if task == "dust":
 		var current = Game.item(it_uid)
 		var unfinished: String = current.get("service",{}).get("forge_task","") if current != null else ""
@@ -495,6 +510,9 @@ func _save_operation() -> void:
 		Game.dispatch({"type":"SERVICE_PROGRESS","uid":it_uid,"task":pending_task,"progress":progress})
 
 func _art_completed() -> void:
+	if closing_after_segment:
+		_save_operation()
+		return
 	if not art.visible or art.progress_snapshot().get("task", "") != task: return
 	if _current_problem() != "":
 		_update_guidance()
@@ -574,9 +592,30 @@ func _save_cleaning() -> void:
 	cleaning_unsaved = false
 	Game.dispatch({"type":"SERVICE_PROGRESS","uid":it_uid,"task":"dust","progress":cleaning.serialize()})
 
+func request_close_workspace() -> void:
+	closing_after_segment = true
+
+func can_close_workspace() -> bool:
+	return not is_instance_valid(art) or art.progress_snapshot().get("phase","idle") == "idle" or not art.visible
+
+func prepare_close_workspace() -> void:
+	scrubbing = false
+	cloth_uv = Vector2(-1,-1)
+	_save_cleaning()
+	_save_operation()
+
 func relayout() -> void:
 	if not is_instance_valid(bench) or not is_instance_valid(art): return
+	if shell.mobile_mode() and not can_close_workspace(): return
+	list_panel.get_child(0).get_child(0).visible = not shell.landscape_mode()
+	list_panel.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",8) if shell.landscape_mode() else UIKit.plate_style())
 	mat_rect = layout_workbench(list_panel,detail_panel,bench,260,350)
+	if shell.landscape_mode():
+		_layout_landscape()
+		return
+	art.wide_layout = false
+	mode_bar.show()
+	guidance_body.show()
 	guidance.visible = not shell.portrait_mode() or portrait_section == 1
 	art.visible = not (mode == "service" and task == "dust") and task != "" and guidance.visible
 	guidance.position = mat_rect.position
@@ -591,6 +630,47 @@ func relayout() -> void:
 		item.visible = (task == "dust" or task == "") and (not shell.portrait_mode() or portrait_section == 1)
 		item_home = fit_workbench_item(item,working)
 		item.position = item_home
+	queue_redraw()
+
+func _layout_landscape() -> void:
+	var r: Rect2 = shell.content_rect()
+	var operation := portrait_section == 1
+	guidance.visible = operation
+	bench.visible = operation
+	art.visible = operation and not (mode == "service" and task == "dust") and task != ""
+	art.wide_layout = true
+	var area := Rect2(r.position+Vector2(0,56),r.size-Vector2(0,56))
+	var sidebar := clampf(area.size.x*.27,180,240)
+	guidance.position = Vector2(area.end.x-sidebar,area.position.y)
+	guidance.size = Vector2(sidebar,area.size.y-58)
+	mode_bar.visible = false
+	for node in guidance_body.get_children():
+		if node is Label:
+			node.add_theme_font_size_override("font_size",15)
+			node.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			node.custom_minimum_size.y = 0
+	bench.position = Vector2(area.end.x-sidebar,area.end.y-52)
+	bench.size = Vector2(sidebar,52)
+	bench.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",4))
+	# Mode choice stays reachable in the selection view.
+	if not operation:
+		mode_bar.visible = true
+		guidance.visible = portrait_section == 0
+		guidance.position = area.position
+		guidance.size = Vector2(area.size.x,64)
+		guidance_body.hide()
+		list_panel.position.y = area.position.y+62
+		list_panel.size.y = area.size.y-62
+	else: guidance_body.show()
+	var working := Rect2(area.position,Vector2(area.size.x-sidebar-8,area.size.y))
+	mat_rect = working
+	art.position = working.position
+	art.size = working.size
+	if is_instance_valid(item):
+		item.visible = operation and (task == "dust" or task == "")
+		item_home = fit_workbench_item(item,working)
+		item.position = item_home
+	shell.work_surface.set_mat(working)
 	queue_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:

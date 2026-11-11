@@ -92,7 +92,7 @@ func _ready() -> void:
 	hud.hide()
 	nav.hide()
 	if workspace_mode:
-		hint_label.visible = not portrait_mode()
+		hint_label.visible = not mobile_mode()
 		return
 	hint_label.hide()
 	for a in OS.get_cmdline_user_args():
@@ -405,7 +405,7 @@ func _build_nav() -> void:
 	root_ui.add_child(nav)
 
 func counter_offset() -> Vector2:
-	if workspace_mode or portrait_mode():
+	if workspace_mode or mobile_mode():
 		return Vector2.ZERO
 	return ((get_viewport().get_visible_rect().size - Vector2(1920, 1080)) * 0.5).floor() - view_shift
 
@@ -418,14 +418,59 @@ const PHONE_VIEW := Rect2(130, 45, 1755, 990)
 var view_shift := Vector2.ZERO
 const TouchAssist := preload("res://scripts/app/touch_assist.gd")
 
+var workspace_layout_deferred := false
+var presentation_orientation := ""
+var counter_layout_deferred := false
+func _counter_layout_busy() -> bool:
+	return page != null and page_name == "counter" and (page.busy or is_instance_valid(page.mat_item) and page.mat_item.busy)
+
 func portrait_mode() -> bool:
-	if workspace_mode: return workspace_parent.portrait_mode()
+	if workspace_mode:
+		if workspace_parent.workspace_layout_deferred: return presentation_orientation == "portrait"
+		return workspace_parent.portrait_mode()
+	if _counter_layout_busy() and presentation_orientation != "": return presentation_orientation == "portrait"
+	return _physical_portrait()
+
+func _physical_portrait() -> bool:
 	var pixels := Vector2(get_window().size)
 	var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1", true)) if OS.has_feature("web") else 1.0
 	return pixels.y > pixels.x and pixels.x / maxf(ratio,1.0) <= 600
 
+func landscape_mode() -> bool:
+	if workspace_mode:
+		if workspace_parent.workspace_layout_deferred: return presentation_orientation == "landscape"
+		return workspace_parent.landscape_mode()
+	return not portrait_mode() and _landscape_phone()
+
+func safe_area() -> Rect2:
+	var area := get_viewport().get_visible_rect()
+	if not OS.has_feature("web") or not mobile_mode(): return area
+	var inset = JSON.parse_string(str(JavaScriptBridge.eval("JSON.stringify(window.OrbitalTouch?.safeInsets || [0,0,0,0])",true)))
+	if inset is Array and inset.size() == 4:
+		area.position = Vector2(float(inset[0]),float(inset[1]))
+		area.size -= Vector2(float(inset[0])+float(inset[2]),float(inset[1])+float(inset[3]))
+	return area
+
+func mobile_mode() -> bool:
+	return portrait_mode() or landscape_mode()
+
 func _fit_view() -> void:
 	var window := get_window()
+	var physical := "portrait" if _physical_portrait() else "landscape" if _landscape_phone() else "desktop"
+	if _counter_layout_busy() and presentation_orientation != "" and physical != presentation_orientation:
+		counter_layout_deferred = true
+		window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
+		return
+	counter_layout_deferred = false
+	presentation_orientation = physical
+	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+	if landscape_mode():
+		var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1", true)) if OS.has_feature("web") else 1.0
+		var logical := Vector2i(Vector2(window.size) / maxf(ratio,1.0))
+		if window.content_scale_size != logical: window.content_scale_size = logical
+		window.content_scale_factor = 1.0
+		view_shift = Vector2.ZERO
+		return
 	if portrait_mode():
 		var portrait_size := Vector2i(390, roundi(390.0 * window.size.y / maxf(window.size.x,1)))
 		if window.content_scale_size != portrait_size: window.content_scale_size = portrait_size
@@ -519,6 +564,9 @@ func _place_toasts() -> void:
 	if portrait_mode():
 		var visible := get_viewport().get_visible_rect().size
 		r = Rect2(12,80,visible.x-24,120)
+	if landscape_mode():
+		var visible := get_viewport().get_visible_rect().size
+		r = Rect2(visible.x*.28,4,visible.x*.45,36)
 	# Narrow existing notices first: a Control cannot shrink below its
 	# children's minimum size, so resizing the box first kept the old width.
 	for c in toast_box.get_children():
@@ -533,11 +581,18 @@ func _place_toasts() -> void:
 ## Content area between HUD and dock, in UI coordinates.
 func content_rect() -> Rect2:
 	var vis := get_viewport().get_visible_rect().size
+	if workspace_mode and landscape_mode(): return Rect2(8,8,vis.x-16,vis.y-16)
 	return Rect2(16, 16, vis.x - 32, vis.y - 80) if workspace_mode else Rect2(20, 20, vis.x - 40, vis.y - 40)
 
 # ---------------------------------------------------------------- pages
 
 func go(name: String, focus_uid := "") -> void:
+	if workspace_mode and mobile_mode() and page != null:
+		if workspace_parent.workspace_close_pending: return
+		if page.has_method("can_close_workspace") and not page.can_close_workspace():
+			if name == "counter": workspace_parent.close_workspace()
+			else: toast("请等当前动作落稳后切换")
+			return
 	if not PAGES.has(name):
 		return
 	if name == "report":
@@ -613,18 +668,19 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	workspace_overlay.add_child(dim)
-	workspace_frame = UIKit.plate(PortraitSkin.panel("wine",12) if portrait_mode() else UIKit.skin("rail", "lg", 16))
+	workspace_frame = UIKit.plate(PortraitSkin.panel("wine",12) if mobile_mode() else UIKit.skin("rail", "lg", 16))
 	workspace_overlay.add_child(workspace_frame)
-	var body := UIKit.vbox(12)
+	var body := UIKit.vbox(4 if landscape_mode() else 12)
 	workspace_frame.add_child(body)
-	var header_mount := UIKit.plate(UIKit.skin("strip", "sm", 8))
+	var header_mount := UIKit.plate(UIKit.skin("strip", "sm", 0 if landscape_mode() else 8))
 	var header := UIKit.hbox(12)
 	header_mount.add_child(header)
-	workspace_title = UIKit.label("", 20 if portrait_mode() else 27, UIKit.AMBER)
+	workspace_title = UIKit.label("", 20 if mobile_mode() else 27, UIKit.AMBER)
 	workspace_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	workspace_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	header.add_child(workspace_title)
-	if not portrait_mode(): header.add_child(UIKit.label("店内操作  /  ESC 收起", 18, UIKit.MUTED))
-	workspace_close = UIKit.button("关闭" if portrait_mode() else "收起", "secondary", Vector2(108,54 if portrait_mode() else 48),20,"close")
+	if not mobile_mode(): header.add_child(UIKit.label("店内操作  /  ESC 收起", 18, UIKit.MUTED))
+	workspace_close = UIKit.button("关闭" if mobile_mode() else "收起", "secondary", Vector2(108,44 if landscape_mode() else 54 if mobile_mode() else 48),20,"close")
 	workspace_close.tooltip_text = "关闭并返回柜台"
 	workspace_close.pressed.connect(close_workspace)
 	header.add_child(workspace_close)
@@ -651,6 +707,7 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	workspace_shell = load("res://main.tscn").instantiate()
 	workspace_shell.workspace_mode = true
 	workspace_shell.workspace_parent = self
+	workspace_shell.presentation_orientation = "portrait" if portrait_mode() else "landscape" if landscape_mode() else "desktop"
 	workspace_shell.initial_page = name
 	viewport.add_child(workspace_shell)
 	_layout_workspace()
@@ -671,16 +728,24 @@ func _suspend_home_focus() -> void:
 			control.focus_mode = Control.FOCUS_NONE
 
 func _layout_workspace() -> void:
-	var visible := get_viewport().get_visible_rect().size
+	var area := safe_area()
+	var visible := area.size
 	var phone := _landscape_phone()
 	var target := WORKSPACE_SIZE
 	if portrait_mode():
 		target = Vector2(visible.x - 32, visible.y - 130)
+	elif landscape_mode():
+		target = Vector2(visible.x-44,visible.y-96)
 	elif phone:
 		# A phone is much wider than the desktop drawer after the touch bar is
 		# reserved. Use that width instead of shrinking a 16:9 sheet into it.
 		var desired_height := (WORKSPACE_SIZE.x + 32.0) * visible.y / maxf(visible.x, 1.0) - 110.0
 		target.y = clampf(desired_height, 600.0, WORKSPACE_SIZE.y)
+	workspace_layout_deferred = workspace_shell.page != null and workspace_shell.page.has_method("can_close_workspace") and not workspace_shell.page.can_close_workspace()
+	if workspace_layout_deferred:
+		target = workspace_logical_size
+	else:
+		workspace_shell.presentation_orientation = "portrait" if portrait_mode() else "landscape" if landscape_mode() else "desktop"
 	workspace_logical_size = target.round()
 	workspace_host.custom_minimum_size = workspace_logical_size
 	var viewport := workspace_container.get_child(0) as SubViewport
@@ -690,7 +755,7 @@ func _layout_workspace() -> void:
 	workspace_frame.size = frame_size
 	var fit := minf((visible.x - 20.0) / frame_size.x, (visible.y - 20.0) / frame_size.y) if phone or portrait_mode() else 1.0
 	workspace_frame.scale = Vector2.ONE * fit
-	workspace_frame.position = ((visible - frame_size * fit) * 0.5).floor()
+	workspace_frame.position = area.position + ((visible - frame_size * fit) * 0.5).floor()
 	var output_scale := get_viewport().get_final_transform().get_scale()
 	_set_workspace_render_scale(maxf(absf(output_scale.x), absf(output_scale.y)) * fit)
 
@@ -717,9 +782,24 @@ func _workspace_heading(name: String) -> void:
 	if is_instance_valid(workspace_title):
 		workspace_title.text = WORKSPACE_LABELS.get(name, "店内设备")
 
+var workspace_close_pending := false
 func close_workspace() -> void:
-	if not workspace_open():
+	if not workspace_open(): return
+	if mobile_mode() and workspace_shell.page.has_method("can_close_workspace") and not workspace_shell.page.can_close_workspace():
+		workspace_shell.page.request_close_workspace()
+		workspace_close_pending = true
+		workspace_close.text = "稍后关闭"
+		workspace_close.disabled = true
+		workspace_title.text = "当前动作结束后关闭 · 进度会保存"
 		return
+	workspace_close_pending = false
+	workspace_layout_deferred = false
+	# Stop this subtree synchronously: queue_free alone would allow one more
+	# animation tick (and possibly a completion) after the save boundary.
+	workspace_shell.process_mode = Node.PROCESS_MODE_DISABLED
+	# Explicitly save/release before the viewport is queued for deletion.
+	if workspace_shell.page.has_method("prepare_close_workspace"):
+		workspace_shell.page.prepare_close_workspace()
 	# Stop processing before queue_free, so Escape cannot close two layers.
 	workspace_shell.set_process_input(false)
 	workspace_overlay.hide()
@@ -799,18 +879,29 @@ func toast(text: String, tone := "info") -> void:
 		_clear_toasts()
 		active.page.show_status(text, tone)
 		return
+	if landscape_mode() and workspace_open() and is_instance_valid(workspace_title):
+		workspace_title.text = text.left(30)
+		workspace_title.tooltip_text = text
+		workspace_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		var shown := workspace_title.text
+		get_tree().create_timer(3.6).timeout.connect(func():
+			if workspace_open() and not workspace_close_pending and workspace_title.text == shown: _workspace_heading(workspace_shell.page_name))
+		return
+	if workspace_mode and landscape_mode():
+		workspace_parent.toast(text,tone)
+		return
 	# The same notice twice in a row (e.g. arriving and then opening the
 	# workbench) only refreshes the one already shown.
 	if toast_box.get_child_count() > 0:
 		var last := toast_box.get_child(toast_box.get_child_count() - 1)
 		if not last.is_queued_for_deletion() and (last.get_child(0) as Label).text == text:
 			return
-	var p := UIKit.plate(UIKit.paper_style(14))
+	var p := UIKit.plate(UIKit.paper_style(6 if landscape_mode() else 14))
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var l := UIKit.label(text, 18, UIKit.INK if tone == "info" else UIKit.RUST, false, true)
+	var l := UIKit.label(text, 14 if landscape_mode() else 18, UIKit.INK if tone == "info" else UIKit.RUST, false, true)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.max_lines_visible = 2
+	l.max_lines_visible = 1 if landscape_mode() else 2
 	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	l.tooltip_text = text
 	l.custom_minimum_size = Vector2(toast_box.size.x - 36, 0)
@@ -1095,7 +1186,7 @@ func modal(title_text: String, width := 900.0) -> Array:
 		status_line.add_child(segment)
 	v.add_child(status_line)
 	var head := UIKit.hbox()
-	var t := UIKit.label(title_text,24 if portrait_mode() else 30,UIKit.AMBER)
+	var t := UIKit.label(title_text,24 if mobile_mode() else 30,UIKit.AMBER)
 	t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(t)
@@ -1114,7 +1205,7 @@ func modal(title_text: String, width := 900.0) -> Array:
 		tw.tween_property(sheet, "scale", Vector2(0.98, 0.98), 0.14).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		tw.tween_property(dim, "modulate:a", 0.0, 0.14)
 		tw.chain().tween_callback(dim.queue_free)
-	var x := UIKit.button("关闭" if portrait_mode() else "", "secondary", Vector2(100,54) if portrait_mode() else Vector2(52,52),18)
+	var x := UIKit.button("关闭" if mobile_mode() else "", "secondary", Vector2(100,54) if mobile_mode() else Vector2(52,52),18)
 	x.name = "modal_close"
 	x.icon = UIKit.icon("close")
 	x.expand_icon = true
@@ -1126,9 +1217,9 @@ func modal(title_text: String, width := 900.0) -> Array:
 	v.add_child(head)
 	v.add_child(UIKit.rule())
 	var body := UIKit.vbox(14)
-	if portrait_mode():
+	if mobile_mode():
 		var scroll := ScrollContainer.new()
-		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		scroll.add_child(body)
@@ -1440,7 +1531,7 @@ func _close_title() -> void:
 	page_host.show()
 	hud.hide()
 	nav.hide()
-	hint_label.visible = workspace_mode and not portrait_mode()
+	hint_label.visible = workspace_mode and not mobile_mode()
 	call_deferred("_sync_wanted_notice")
 
 func _show_title() -> void:
@@ -1537,6 +1628,11 @@ func shutter(day: int) -> void:
 # ---------------------------------------------------------------- frame
 
 func _process(delta: float) -> void:
+	if counter_layout_deferred and not _counter_layout_busy(): _fit()
+	if workspace_layout_deferred and workspace_open() and workspace_shell.page.can_close_workspace():
+		_layout_workspace()
+		workspace_shell._fit()
+	if workspace_close_pending and workspace_open() and workspace_shell.page.can_close_workspace(): close_workspace()
 	_poll_night_report()
 	_update_cursor()
 	var t := Time.get_ticks_msec() / 1000.0

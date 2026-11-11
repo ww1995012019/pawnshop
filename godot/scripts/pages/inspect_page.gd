@@ -79,7 +79,7 @@ func _build_panels() -> void:
 	add_child(manual)
 	manual.position = Vector2(1260,108)
 	manual.z_index = 4
-	if shell.portrait_mode():
+	if shell.mobile_mode():
 		var records := UIKit.button("检验记录", "secondary", Vector2(130,44),16)
 		records.name = "portrait_records"
 		records.pressed.connect(_portrait_records)
@@ -100,25 +100,45 @@ func _build_panels() -> void:
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.add_child(info)
 	rv.add_child(sc)
-	var row := UIKit.grid(4,10)
+	var row := UIKit.grid(4,6)
+	row.set_meta("home_parent",rv)
+	row.name = "inspection_actions"
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for entry in [["翻面 F",flip_item],["实物归位",_home],["回柜台",func(): shell.go("counter")],["去维修",func(): shell.go("repair",it_uid)]]:
 		var b := UIKit.button(entry[0],"secondary",Vector2(0,54),18)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.set_meta("desktop_caption",entry[0])
 		b.pressed.connect(entry[1])
 		row.add_child(b)
 	rv.add_child(row)
 	bench = UIKit.plate()
 	add_child(bench)
 	bench_body = UIKit.vbox(8)
-	bench.add_child(bench_body)
+	if shell.landscape_mode():
+		var scroll := ScrollContainer.new()
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		bench.add_child(scroll)
+		bench_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(bench_body)
+	else: bench.add_child(bench_body)
 	bench_body.minimum_size_changed.connect(queue_relayout)
 
 func relayout() -> void:
 	if not is_instance_valid(instrument_panel): return
+	var action_grid := find_child("inspection_actions",true,false) as GridContainer
+	if not shell.landscape_mode() and action_grid.get_parent() == self:
+		action_grid.reparent(action_grid.get_meta("home_parent"))
+		for key in action_grid.get_children():
+			key.text = key.get_meta("desktop_caption")
+			key.clip_text = false
+			key.custom_minimum_size.y = 54
+			key.add_theme_font_size_override("font_size",18)
+			for state in ["normal","hover","pressed","disabled"]: key.add_theme_stylebox_override(state,UIKit.key_style("secondary",state))
 	# The dedicated records sheet replaces a cramped duplicate note scroller.
-	info.get_parent().visible = not shell.portrait_mode()
-	if shell.portrait_mode():
+	info.get_parent().visible = not shell.mobile_mode()
+	if shell.landscape_mode():
+		mat_rect = _landscape_layout()
+	elif shell.portrait_mode():
 		mat_rect = _portrait_layout()
 	else:
 		instrument_panel.show()
@@ -130,27 +150,89 @@ func relayout() -> void:
 				var b: Button = tool_buttons[id]
 				if b.get_parent() != instrument_list: b.reparent(instrument_list)
 				b.custom_minimum_size = Vector2(0,72)
+				b.text = GameData.tool(id).name
+				b.clip_text = false
 				b.add_theme_font_size_override("font_size",19)
 				b.add_theme_constant_override("icon_max_width",48)
 				b.icon = UIKit.tool_icon(id)
 				for state in ["normal","hover","pressed","disabled"]:
 					b.add_theme_stylebox_override(state,UIKit.key_style("primary" if tool==id else "secondary",state))
 		mat_rect = layout_workbench(instrument_panel,detail_panel,bench,300)
+	for optic in [lens,wand]:
+		if is_instance_valid(optic): optic.scale = Vector2.ONE*(.5 if shell.landscape_mode() else 1.0)
+	if is_instance_valid(uv_light): uv_light.scale = Vector2(.62,.38)*(.5 if shell.landscape_mode() else 1.0)
 	var guide_button := get_node_or_null("watch_manual") as Button
-	if guide_button != null: guide_button.position = Vector2(mat_rect.end.x-158,mat_rect.position.y+12)
+	if guide_button != null: guide_button.position = Vector2(shell.content_rect().end.x-150,shell.content_rect().position.y) if shell.landscape_mode() else Vector2(mat_rect.end.x-158,mat_rect.position.y+12)
 	var records := get_node_or_null("portrait_records") as Button
 	if records != null:
-		records.visible = shell.portrait_mode()
-		records.position = mat_rect.position+Vector2(12,12)
+		records.visible = shell.mobile_mode()
+		records.position = Vector2(shell.content_rect().end.x-292,shell.content_rect().position.y) if shell.landscape_mode() else mat_rect.position+Vector2(12,12)
 	if is_instance_valid(item):
-		var next_home := fit_workbench_item(item,mat_rect)
+		var fitting := mat_rect
+		if shell.landscape_mode() and tool == "TOL-005": fitting.size.y -= 48
+		var next_home := fit_workbench_item(item,fitting)
 		var offset := next_home-item_home
 		item.position += offset
 		item.target += offset
 		scale_origin += offset
 		scale_target = next_home + Vector2(35,20)
 		item_home = next_home
-		if is_instance_valid(scale_pan): scale_pan.position = scale_target + Vector2(0,90)
+		if is_instance_valid(scale_pan):
+			if shell.landscape_mode():
+				scale_pan.scale = Vector2.ONE*minf(1.0,(mat_rect.size.x-8)/310.0)
+				scale_pan.position = shell.ui_to_world(Vector2(mat_rect.get_center().x,mat_rect.end.y-50))
+				scale_target = scale_pan.position-Vector2(0,item.tex_size().y*item.display_scale*.5-4)
+			else:
+				scale_pan.scale = Vector2.ONE
+				scale_pan.position = scale_target + Vector2(0,90)
+
+func prepare_close_workspace() -> void:
+	optical_dragging = false
+	if is_instance_valid(item) and item.dragging: item.end_drag()
+
+func _landscape_layout() -> Rect2:
+	var r: Rect2 = shell.content_rect()
+	instrument_panel.hide()
+	if not is_instance_valid(portrait_tools):
+		portrait_tools = UIKit.hbox(4)
+		add_child(portrait_tools)
+	portrait_tools.show()
+	portrait_tools.position = r.position
+	portrait_tools.size = Vector2(r.size.x-300,44)
+	for id in TOOL_IDS:
+		var key: Button = tool_buttons[id]
+		if key.get_parent() != portrait_tools: key.reparent(portrait_tools)
+		key.custom_minimum_size = Vector2(0,44)
+		key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		key.add_theme_font_size_override("font_size",14)
+		key.text = {"TOL-001":"放大镜","TOL-002":"紫外灯","TOL-005":"电子秤"}[id]
+		key.clip_text = true
+		PortraitSkin.button(key)
+		key.icon = null
+	var actions := find_child("inspection_actions",true,false) as GridContainer
+	if actions.get_parent() != self: actions.reparent(self)
+	actions.position = Vector2(r.position.x,r.end.y-44)
+	actions.size = Vector2(r.size.x-256,44)
+	for key in actions.get_children():
+		key.custom_minimum_size = Vector2(0,44)
+		key.add_theme_font_size_override("font_size",14)
+		key.text = {"翻面 F":"翻面","实物归位":"归位","回柜台":"回柜台","去维修":"去维修"}.get(key.get_meta("desktop_caption"),key.text)
+		key.clip_text = true
+		PortraitSkin.button(key)
+	var sidebar := 248.0
+	detail_panel.position = Vector2(r.end.x-sidebar,r.position.y+52)
+	detail_panel.size = Vector2(sidebar,52)
+	detail_panel.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",4))
+	bench.position = Vector2(r.end.x-sidebar,r.position.y+110)
+	bench.size = Vector2(sidebar,r.size.y-110)
+	bench.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",8))
+	var mat := Rect2(r.position+Vector2(0,52),Vector2(r.size.x-sidebar-8,r.size.y-102))
+	for node in bench_body.find_children("*","Label",true,false):
+		node.add_theme_font_size_override("font_size",15)
+		node.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		node.custom_minimum_size.x = 0
+	shell.work_surface.set_mat(mat)
+	return mat
 
 func _portrait_records() -> void:
 	var current = Game.item(it_uid)
@@ -179,6 +261,8 @@ func _portrait_layout() -> Rect2:
 		var b: Button = tool_buttons[id]
 		if b.get_parent() != portrait_tools: b.reparent(portrait_tools)
 		b.custom_minimum_size = Vector2(0,54)
+		b.text = GameData.tool(id).name
+		b.clip_text = false
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.add_theme_font_size_override("font_size",14)
 		b.add_theme_constant_override("icon_max_width",24)
@@ -342,7 +426,7 @@ func _set_tool(id: String) -> void:
 	elif id == "TOL-001" or id == "TOL-002":
 		_optical(id)
 	else:
-		bench_body.add_child(UIKit.module_header("工作台待命", "选择工具观察实物；说明书随时可查。", "READY"))
+		bench_body.add_child(UIKit.label("选择工具观察实物；检验记录和说明书随时可查。",15,UIKit.TEXT,false,true) if shell.landscape_mode() else UIKit.module_header("工作台待命", "选择工具观察实物；说明书随时可查。", "READY"))
 	_orient_for_tool()
 	_refresh_info()
 	call_deferred("relayout")
@@ -352,6 +436,7 @@ func _optical(id: String) -> void:
 	node.z_index = 60
 	lens_ring = Ring.new()
 	lens_ring.radius = 128
+	if shell.landscape_mode(): node.scale = Vector2.ONE*.5
 	lens_ring.ultraviolet = id == "TOL-002"
 	node.add_child(lens_ring)
 	if id == "TOL-001":
@@ -557,13 +642,13 @@ func _process(delta: float) -> void:
 			return
 		if tool == "TOL-001":
 			item.mat.set_shader_parameter("lens_pos",at)
-			item.mat.set_shader_parameter("lens_r",125.0)
+			item.mat.set_shader_parameter("lens_r",125.0*node.scale.x)
 		if tool == "TOL-002":
 			uv_light.global_position = at
 			item.mat.set_shader_parameter("uv_pos",at)
-			item.mat.set_shader_parameter("uv_r",150.0)
+			item.mat.set_shader_parameter("uv_r",150.0*node.scale.x)
 			item.reveal.material.set_shader_parameter("uv_pos",at)
-			item.reveal.material.set_shader_parameter("uv_r",150.0)
+			item.reveal.material.set_shader_parameter("uv_r",150.0*node.scale.x)
 		if at.distance_to(_optical_target())<65:
 			progress = minf(1.0,progress+delta/.9)
 			if progress >= 1.0:

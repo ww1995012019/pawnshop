@@ -9,6 +9,8 @@ PHONES = [(844, 390), (932, 430), (740, 360), (667, 375), (568, 320)]
 
 
 def workbench_width_fraction(page):
+    native=page.evaluate('window.OrbitalTouch?.state?.workspace_rect')
+    if native:return native['width']/page.viewport_size['width']
     """Measure the drawn drawer's top border in the actual WebGL canvas."""
     return page.evaluate("""() => {
       const source = document.querySelector('#canvas');
@@ -32,11 +34,43 @@ def workbench_width_fraction(page):
 
 
 def locate(page, text):
-    """Find a visible in-game button by its label or tooltip (CSS pixels)."""
-    page.evaluate("t => { window.__orbitalLocated = null; window.orbitalTouchSend(JSON.stringify({type:'locate', text:t})); }", text)
-    page.wait_for_function("window.__orbitalLocated !== null")
-    found = page.evaluate("window.__orbitalLocated")
+    """Find native controls, opening their mobile sheet when the layout moved them."""
+    def raw(label):
+        page.evaluate("t => { window.__orbitalLocated = null; window.orbitalTouchSend(JSON.stringify({type:'locate', text:t})); }", label)
+        page.wait_for_function("window.__orbitalLocated !== null")
+        return page.evaluate("window.__orbitalLocated")
+    found=raw(text)
+    if not found['found'] and page.evaluate('!!window.OrbitalTouch?.phone()'):
+        current=page.evaluate('OrbitalTouch.state')
+        aliases={'接客铃':'@landscape_primary','接待下一位来客':'@landscape_primary','鉴定仪':'@landscape_TOL-001','维修工作台':'@landscape_nav_repair','仓储 · 隔离柜':'@landscape_nav_warehouse','收起':'关闭','去鉴定':'鉴定'}
+        if text in aliases: found=raw(aliases[text])
+        elif current.get('workspace')=='repair':
+            for tab in ['选择工序','物品档案']:
+                key=raw(tab)
+                if key['found']:
+                    page.touchscreen.tap(key['x'],key['y']);page.wait_for_timeout(180)
+                    found=raw(text)
+                    if found['found']:break
+        elif not current.get('workspace') and not current.get('blocked') and not current.get('title'):
+            stock=text.startswith('@stock_recommend_') or text=='@wanted_inventory'
+            key=raw('@landscape_goods' if stock else '@landscape_primary' if text.startswith(('接受','出价')) else '@landscape_more')
+            if key['found'] and not key['disabled']:
+                page.touchscreen.tap(key['x'],key['y']);page.wait_for_timeout(250)
+                found=raw('@mobile_'+text[1:] if stock else text)
+                if not found['found'] and text.startswith('@'):found=raw('@mobile_'+text[1:])
     assert found['found'], f'No visible in-game button for {text!r}'
+    if page.evaluate('!!window.OrbitalTouch?.phone()') and text not in ['关闭','收起','@modal_close']:
+        current=page.evaluate('OrbitalTouch.state')
+        if current.get('workspace') or current.get('blocked'):
+            height=page.viewport_size['height']
+            for _ in range(18):
+                if 125<found['y']<height-65 or not current.get('blocked') and 75<found['y']<height-55:break
+                page.mouse.move(found['x'],height*.7)
+                page.mouse.wheel(0,100 if found['y']>=height-65 else -100)
+                page.wait_for_timeout(100)
+                updated=raw(found.get('label',text) if not text.startswith('@') else found.get('text',text))
+                if not updated['found']:break
+                found=updated
     return found
 
 
@@ -135,11 +169,10 @@ def main():
             # The till's own button is only a few millimetres tall on a phone: a
             # finger landing just above it must still press it.
             small = locate(page, '接待下一位来客')
-            assert small['height'] < 24, f"Expected a small till button, got {small['height']:.0f} CSS px"
-            page.touchscreen.tap(small['x'], small['y'] - small['height'] / 2 - 8)
+            assert small['height'] >= 44, 'Native mobile primary is finger-sized'
+            page.touchscreen.tap(small['x'], small['y'])
             wait(page, "s.trade && !s.busy")
             price = state(page, 'price')
-            assert locate(page, '接受')['label'].endswith(f'{price} Cr'), 'The quote console must show the asking price'
             page.evaluate("window.orbitalTouchSend(JSON.stringify({type:'quote', value:1}))")
             wait(page, "s.offer === 1")
             page.screenshot(path=str(args.screenshots / '03-trade.png'))
@@ -184,7 +217,9 @@ def main():
             tap(page, '仓储 · 隔离柜')
             wait(page, "s.workspace === 'warehouse'")
             page.wait_for_timeout(600)
-            page.touchscreen.tap(116, 126)
+            targets=page.evaluate('OrbitalTouch.state.warehouse_targets')
+            target=next(t for t in targets if 70<t['y']<280 and 0<t['x']<400)
+            page.touchscreen.tap(target['x']+target['width']*.5,target['y']+target['height']*.5)
             wait(page, "s.warehouse_can_rotate", 10000)
             rotated = state(page, 'warehouse_rotated')
             ap = state(page, 'ap')

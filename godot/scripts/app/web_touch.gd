@@ -8,6 +8,8 @@ var window: JavaScriptObject
 var elapsed := 0.0
 var last_json := ""
 var opening_until := 0
+var visibility_callback: JavaScriptObject
+var background_paused := false
 
 func setup(owner_shell: Node) -> void:
 	shell = owner_shell
@@ -19,11 +21,27 @@ func setup(owner_shell: Node) -> void:
 	window.orbitalTouchSend = callback
 	place_callback = JavaScriptBridge.create_callback(_place)
 	window.orbitalTouchPlace = place_callback
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	visibility_callback = JavaScriptBridge.create_callback(_visibility_changed)
+	window.orbitalVisibility = visibility_callback
+	JavaScriptBridge.eval("if (!window.orbitalVisibilityListener) { window.orbitalVisibilityListener = () => window.orbitalVisibility?.(document.hidden); document.addEventListener('visibilitychange',window.orbitalVisibilityListener); }")
+
+func _visibility_changed(args: Array) -> void:
+	if args.is_empty() or not is_instance_valid(shell): return
+	var hidden := bool(args[0])
+	if hidden and shell.mobile_mode():
+		background_paused = true
+		get_tree().paused = true
+	elif background_paused:
+		background_paused = false
+		get_tree().paused = false
 
 func _exit_tree() -> void:
 	if window != null:
 		window.orbitalTouchSend = null
 		window.orbitalTouchPlace = null
+		window.orbitalVisibility = null
+	if background_paused: get_tree().paused = false
 
 ## A finger went down at this canvas position (CSS pixels). Answer at once
 ## where it should land, so a near miss still presses a small button.
@@ -44,6 +62,7 @@ func _receive(args: Array) -> void:
 		command.call_deferred(data)
 
 func _process(delta: float) -> void:
+	if background_paused: return
 	elapsed += delta
 	if elapsed < 0.15:
 		return
@@ -73,6 +92,9 @@ func snapshot() -> Dictionary:
 		"can_arrive": not title_open and not blocked and not busy and trade == null and
 			NightCrime.can_arrive(state),
 		"offer": shell.page.dial.value, "min": shell.page.dial.min_value, "max": shell.page.dial.max_value}
+	if shell.workspace_open():
+		var frame: Control = shell.workspace_frame
+		result.workspace_rect = _screen_rect(frame)
 	# Only information printed on the owned paper is exposed to the companion.
 	result.notice_owned = WantedCases.has_notice(state)
 	result.notice_visible = bool(WantedCases.case_state(state).paper.visible)
@@ -106,6 +128,12 @@ func snapshot() -> Dictionary:
 			materials.append({"id":material.id,"name":material.name,"quantity":state.materials.get(material.id,0)})
 		result.repair_materials = materials
 	elif active.page_name == "warehouse":
+		result.warehouse_targets = []
+		for uid in active.page.grid.tiles:
+			var tile: Control = active.page.grid.tiles[uid]
+			var target := _screen_rect(tile)
+			target.uid = uid
+			result.warehouse_targets.append(target)
 		result.merge({"warehouse_uid": active.page.selected,
 			"warehouse_rotated": active.page.selected_rotation(),
 			"warehouse_rotation_pending": active.page.grid.prepared_uid == active.page.selected and active.page.selected != "",
@@ -154,6 +182,12 @@ func snapshot() -> Dictionary:
 		result.can_accept=not line.is_empty() and line.status in ["ready","counter"] and not state.trade.locked
 		result.can_deliver=TradeSession.summary(state).sell_count+TradeSession.summary(state).buy_count>0 and TradeSession.checkout_problem(state)==""
 	return result
+
+func _screen_rect(control: Control) -> Dictionary:
+	var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1",true)) if OS.has_feature("web") else 1.0
+	var transform := control.get_viewport().get_screen_transform() * control.get_global_transform_with_canvas()
+	var rect := transform * Rect2(Vector2.ZERO,control.size)
+	return {"x":rect.position.x/ratio,"y":rect.position.y/ratio,"width":rect.size.x/ratio,"height":rect.size.y/ratio}
 
 func command(data: Dictionary) -> void:
 	if not is_instance_valid(shell) or shell.page == null:
