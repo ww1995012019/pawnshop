@@ -1317,6 +1317,10 @@ func open_events() -> void:
 	var event = Game.today_event()
 	var m := modal("每日站内消息 · 第 %d 天" % int(Game.state.day), 1100)
 	var body: VBoxContainer = m[0]
+	var stories:=UIKit.button("跨天事件簿 · %d 件待处理" % ShopStories.pending(Game.state),"secondary",Vector2(0,34),14)
+	stories.name="open_story_book"
+	stories.pressed.connect(func():m[1].call();call_deferred("_open_story_book_after_close"))
+	body.add_child(stories)
 	if event == null:
 		body.add_child(UIKit.label("今天没有站务消息。", 22, UIKit.MUTED))
 		return
@@ -1481,6 +1485,33 @@ func export_legacy_backup() -> void:
 			dialog.queue_free())
 		dialog.canceled.connect(dialog.queue_free)
 		dialog.popup_centered(Vector2i(800, 500))
+
+func open_story_book(initial := "active") -> void:
+	if workspace_mode:
+		workspace_parent.open_story_book(initial)
+		return
+	var m := modal("跨天事件簿",900)
+	var content: VBoxContainer=m[0]
+	var book: VBoxContainer=load("res://scripts/ui/story_book.gd").new()
+	book.name="StoryBook"
+	if mobile_mode(): content.add_child(book)
+	else:
+		var scroll:=ScrollContainer.new()
+		scroll.name="StoryBookScroll"
+		scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.custom_minimum_size.y=clampf(get_viewport().get_visible_rect().size.y-240,220,580)
+		scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		scroll.follow_focus=true
+		content.add_child(scroll)
+		scroll.add_child(book)
+	book.setup(self,m[1],initial)
+
+func _open_story_book_after_close() -> void:
+	while modal_open():
+		for dim in modal_layer.get_children():
+			if not dim.has_meta("closing"):return
+		await get_tree().process_frame
+	open_story_book()
 
 func open_shop_plan(initial := "overview") -> void:
 	if workspace_mode:

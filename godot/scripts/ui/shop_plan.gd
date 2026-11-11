@@ -87,6 +87,10 @@ func _overview() -> void:
 	var market = load("res://scripts/model/weekly_market.gd")
 	var heading := "第 %d 天 · %s" % [int(s.day),"长期经营" if life.is_endless(s) else "21天阶段考核"]
 	var plan := _card(heading)
+	var stories:=UIKit.button("事件簿 · %d 件待处理 / 查看预告" % ShopStories.pending(s),"primary",Vector2(0,34),14)
+	stories.name="open_story_book"
+	stories.pressed.connect(func():dismiss.call();host.call_deferred("_open_story_book_after_close"))
+	plan.add_child(stories)
 	var costs: Dictionary = StoreCosts.quote(s)
 	var remaining := maxi(0,VisitSchedule.limit(s)-int(s.cursor))
 	_text(plan,"剩余 %s AP · 今日尚有 %d 个接待名额" % [Model.jnum(s.ap),remaining])
@@ -150,7 +154,8 @@ func _contracts() -> void:
 			quote.get_line_edit().virtual_keyboard_type=LineEdit.KEYBOARD_TYPE_NUMBER
 			quote.get_line_edit().add_theme_font_size_override("font_size",14)
 			row.add_child(quote)
-			var send := UIKit.button("提交维修报价","primary",Vector2(0,34),14)
+			var send := UIKit.button("提交维修报价","primary",Vector2(120,34),14)
+			send.custom_minimum_size.x=120
 			send.disabled=job.status=="diagnosis" or Model.business_hours_problem(Game.state)!=""
 			send.pressed.connect(func(): quote.apply();Game.dispatch({"type":"QUOTE_SERVICE_CONTRACT","id":id,"price":int(quote.value)}))
 			row.add_child(send)

@@ -27,7 +27,7 @@ static func _archive_original(row: Dictionary, uid: String) -> Dictionary:
  return {"uid":uid,"defId":String(row.get("appearanceId",row.get("publicDefId","")))}
 
 static func _ledger_text(row: Dictionary) -> String:
- var label: String={"purchase":"已购入原物","bulk-purchase":"已购入整箱原物","sale":"原物已售出","clearance":"原物已售出","service":"委修原物已交还","service-job":"委修原物已交还","order":"委托原物已交付","pawn-principal":"已收妥抵押原物并付出本金","pawn-return":"抵押原物已交还","pawn-fee":"抵押服务已结算"}.get(String(row.get("kind","")),"原物已交割")
+ var label: String={"purchase":"已购入原物","bulk-purchase":"已购入整箱原物","sale":"原物已售出","clearance":"原物已售出","service":"委修原物已交还","service-job":"委修原物已交还","service-refund":"已退还服务款项","order":"委托原物已交付","pawn-principal":"已收妥抵押原物并付出本金","pawn-return":"抵押原物已交还","pawn-fee":"抵押服务已结算"}.get(String(row.get("kind","")),"原物已交割")
  return label+"，实收付 %s Cr。" % str(row.get("amount",0))
 
 static func _purchase_rows(row: Dictionary, originals: Dictionary, historical: bool) -> Array:
@@ -145,7 +145,7 @@ static func ensure(s: Dictionary) -> void:
      var event_id: String="ledger/"+id+("/"+uid if row.get("bulkEntry",false) else "")
      _event(j,uid,event_id,int(row.get("day",day)),_ledger_text(row))
      if row.get("kind","")=="purchase": j.recordedCosts[uid].acquisition=absf(float(row.get("amount",0)))
-    if row.get("kind","") in ["sale","purchase","clearance","service","service-job","order","pawn-principal","pawn-return","pawn-fee"]:
+    if row.get("kind","") in ["sale","purchase","clearance","service","service-job","service-refund","order","pawn-principal","pawn-return","pawn-fee"]:
      var batch: String=id.trim_suffix("/"+uid) if uid!="" and id.ends_with("/"+uid) else id
      if row.get("kind","") in ["pawn-return","pawn-fee"] and uid!="": batch="redemption/%s/%s" % [uid,row.get("day",day)]
      if not historical_batches.has(batch): historical_batches[batch]=[]
@@ -163,17 +163,19 @@ static func ensure(s: Dictionary) -> void:
    var cash:=0.0
    var npc_id: String=""
    var recorded_day:=day
+   var successful_settlement:=false
    for archived in historical_batches[batch]:
     var row: Dictionary=archived.row
     var entry:=_receipt_entry(j,row,archived.uid,"历史交割原物")
     entry.complete=false
     entry.note="历史账目导入；此前材料与用电记录不完整。"
     entries.append(entry)
+    successful_settlement=successful_settlement or row.get("kind","")!="service-refund"
     cash+=float(row.get("amount",0))
     recorded_day=int(row.get("day",day))
     if row.get("npcId","")!="": npc_id=String(row.npcId)
    j.receipts.append({"id":"history/"+batch,"day":recorded_day,"npcId":npc_id,"entries":entries,"cashImpact":cash,"complete":false,"note":"历史账目导入；此前材料与用电记录不完整。","historical":true})
-   if npc_id!="":
+   if npc_id!="" and successful_settlement:
     var memory:=_memory(j,npc_id)
     memory.deals+=1
     _note(j,npc_id,recorded_day,"旧账记有%d件原物交割" % entries.size(),1)
@@ -184,6 +186,7 @@ static func ensure(s: Dictionary) -> void:
    var uid:=_uid(row,originals)
    for event in j.histories.get(uid,[]):
     if event.get("id","")=="ledger/"+ledger_id or event.get("id","")=="ledger/"+ledger_id+"/"+uid: event.text=_ledger_text(row)
+ _recover_service_baselines(s,j)
  _rebuild_collection(j)
 
 static func _rebuild_collection(j: Dictionary) -> void:
@@ -197,20 +200,64 @@ static func _rebuild_collection(j: Dictionary) -> void:
   if it.inspected: row.inspected+=1
   if it.repaired: row.repaired+=1
 
-static func _receipt_entry(j: Dictionary, row: Dictionary, uid: String, fallback: String) -> Dictionary:
+static func _receipt_entry(j: Dictionary, row: Dictionary, uid: String, fallback: String, service_window: bool=false) -> Dictionary:
  var original: Dictionary=j.originals.get(uid,{})
  var costs: Dictionary=j.recordedCosts.get(uid,{})
  var amount:=float(row.get("amount",0))
  var kind:=String(row.get("kind",""))
- var direction: String="acquisition" if kind=="purchase" else ("pawn" if kind=="pawn-principal" else ("service" if kind in ["service","service-job","pawn-fee"] else ("return" if kind=="pawn-return" else "sale")))
+ var direction: String="acquisition" if kind=="purchase" else ("pawn" if kind=="pawn-principal" else ("service" if kind in ["service","service-job","pawn-fee"] else ("return" if kind in ["pawn-return","service-refund"] else "sale")))
  var acquisition=costs.get("acquisition",null)
- var materials:=float(costs.get("materials",0))
- var electricity:=float(costs.get("electricity",0))
+ var cumulative_material:=float(costs.get("materials",0))
+ var cumulative_electricity:=float(costs.get("electricity",0))
+ var materials:=cumulative_material
+ var electricity:=cumulative_electricity
+ if service_window and kind in ["service","service-job"]:
+  materials=maxf(0,cumulative_material-float(costs.get("consumedMaterial",0)))
+  electricity=maxf(0,cumulative_electricity-float(costs.get("consumedElectricity",0)))
+ if kind=="service-refund":
+  materials=0
+  electricity=0
  var complete:=bool(costs.get("complete",false)) and uid!="" and (acquisition!=null or direction=="service")
  var margin=null
  if direction in ["sale","service"] and (acquisition!=null or direction=="service"):
   margin=amount-float(acquisition if acquisition!=null else 0)-materials-electricity
- return {"uid":uid,"name":String(original.get("name",fallback)),"direction":direction,"price":absf(amount),"acquisitionCost":acquisition,"materialCost":materials,"electricityCost":electricity,"cashImpact":amount,"recordedMargin":margin,"complete":complete,"note":"已记录原物直接成本；店铺日常分摊未计入。" if complete else "历史成本不完整；未记录的购入、材料或用电费用未知。","ledgerId":String(row.get("id",""))}
+ var entry: Dictionary={"uid":uid,"name":String(original.get("name",fallback)),"direction":direction,"price":absf(amount),"acquisitionCost":acquisition,"materialCost":materials,"electricityCost":electricity,"cashImpact":amount,"recordedMargin":margin,"complete":complete,"note":"已记录原物直接成本；店铺日常分摊未计入。" if complete else "历史成本不完整；未记录的购入、材料或用电费用未知。","ledgerId":String(row.get("id",""))}
+ if service_window and kind in ["service","service-job"]:
+  entry.cumulativeMaterialCost=cumulative_material
+  entry.cumulativeElectricityCost=cumulative_electricity
+ if kind=="service-refund":
+  entry.note="仅记录实际退款；此前服务成本仍保留在原物档案。"+ ("历史成本仍不完整。" if not complete else "")
+ return entry
+
+static func _recover_service_baselines(s: Dictionary, j: Dictionary) -> void:
+ # A journal created before service windows may already contain an observed
+ # paid receipt. Recover its through-costs, never today's potentially newer
+ # work or imported history whose costs cannot be assigned to a settlement.
+ var paid: Dictionary={}
+ for row in s.get("ledger",[]):
+  if row.get("kind","") in ["service","service-job"] and float(row.get("amount",0))>0:
+   paid[String(row.get("id",""))]=row
+ var recovered: Dictionary={}
+ for receipt in j.receipts:
+  if receipt.get("historical",true): continue
+  for entry in receipt.get("entries",[]):
+   var uid:=String(entry.get("uid",""))
+   if not paid.has(String(entry.get("ledgerId",""))) or not j.recordedCosts.has(uid): continue
+   var costs: Dictionary=j.recordedCosts[uid]
+   if costs.has("consumedMaterial") and costs.has("consumedElectricity"): continue
+   recovered[uid]={"materials":float(entry.get("cumulativeMaterialCost",entry.get("materialCost",0))),"electricity":float(entry.get("cumulativeElectricityCost",entry.get("electricityCost",0))),"ledgerId":String(entry.ledgerId)}
+ for uid in recovered:
+  var costs: Dictionary=j.recordedCosts[uid]
+  costs.consumedMaterial=recovered[uid].materials
+  costs.consumedElectricity=recovered[uid].electricity
+  costs.serviceBaselineLedgerId=recovered[uid].ledgerId
+
+static func _consume_service_costs(j: Dictionary, row: Dictionary, uid: String) -> void:
+ if row.get("kind","") not in ["service","service-job"] or float(row.get("amount",0))<=0 or not j.recordedCosts.has(uid): return
+ var costs: Dictionary=j.recordedCosts[uid]
+ costs.consumedMaterial=float(costs.get("materials",0))
+ costs.consumedElectricity=float(costs.get("electricity",0))
+ costs.serviceBaselineLedgerId=String(row.get("id",""))
 
 static func _note(j: Dictionary, npc: String, day: int, text: String, trust: int=0) -> void:
  if npc=="": return
@@ -238,6 +285,7 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
   ensure(bootstrap)
   next.shopJournal=bootstrap.shopJournal.duplicate(true)
  var j: Dictionary=next.shopJournal
+ _recover_service_baselines(previous,j)
  var before:=_originals(previous)
  var after:=_originals(next)
  # A departing original may be absent from the after-state. Refresh its
@@ -312,6 +360,7 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
     break
  var settlement_npc: String=npc if action.get("type","") in ["DELIVER","TRADE_CHECKOUT","BUY_RARE_ITEM","SELL_MERCHANT_ITEM","PAWN","REDEEM","BUY_BULK_CRATE"] else ""
  var rows: Array=[]
+ var successful_settlement:=false
  var prior_ids: Dictionary={}
  for row in previous.get("ledger",[]): prior_ids[String(row.get("id",""))]=true
  var all_originals:=before.duplicate()
@@ -321,7 +370,7 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
   if id=="" or prior_ids.has(id) or j.markers.has("ledger/"+id): continue
   j.markers["ledger/"+id]=true
   for row in _purchase_rows(ledger_row,all_originals,false):
-   if row.get("kind","") not in ["sale","purchase","clearance","service","service-job","order","pawn-principal","pawn-return","pawn-fee"]: continue
+   if row.get("kind","") not in ["sale","purchase","clearance","service","service-job","service-refund","order","pawn-principal","pawn-return","pawn-fee"]: continue
    var uid:=_uid(row,all_originals,previous)
    if uid=="" and action_uid!="" and all_originals.has(action_uid): uid=action_uid
    if uid!="" and not j.originals.has(uid): _remember(j,all_originals.get(uid,_archive_original(row,uid)),day,true)
@@ -333,8 +382,10 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
     j.recordedCosts[uid].acquisition=absf(float(row.get("amount",0)))
     j.originals[uid].npcId=row_npc
     if row.get("recoveredAllocation",false): j.recordedCosts[uid].complete=false
-   var entry:=_receipt_entry(j,row,uid,"已交割原物")
+   var entry:=_receipt_entry(j,row,uid,"已交割原物",true)
    rows.append(entry)
+   successful_settlement=successful_settlement or row.get("kind","")!="service-refund"
+   _consume_service_costs(j,row,uid)
    _event(j,uid,"ledger/"+id+("/"+uid if row.get("bulkEntry",false) else ""),day,_ledger_text(row))
  if not rows.is_empty():
   var ids: Array=[]
@@ -345,7 +396,7 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
    cash+=float(row.cashImpact);complete=complete and row.complete
   var id: String="receipt/"+"+".join(ids)
   j.receipts.append({"id":id,"day":day,"npcId":settlement_npc,"entries":rows,"cashImpact":cash,"complete":complete,"note":"按已记录的直接成本列示，未分摊店铺日常费用。" if complete else "部分历史成本未知；记录差额不代表完整利润。","historical":false})
-  if settlement_npc!="":
+  if settlement_npc!="" and successful_settlement:
    _memory(j,settlement_npc).deals+=1
    _note(j,settlement_npc,day,"上次已完成%d件原物交割" % rows.size(),1)
  # Explicit discoveries only; hidden authenticity never enters memory.

@@ -14,6 +14,7 @@ const Extensions = preload("res://scripts/model/shop_upgrades.gd")
 const Crates = preload("res://scripts/model/bulk_crates.gd")
 const Contracts = preload("res://scripts/model/service_contracts.gd")
 const Journal = preload("res://scripts/model/shop_journal.gd")
+const Stories = preload("res://scripts/model/shop_stories.gd")
 const SAVE_PATH := "user://orbital-watch-save-v4.json"
 const LEGACY_PATH := "user://orbital-save-v3.json"
 const LEGACY_BACKUP_PATH := "user://orbital-save-v3.backup.json"
@@ -107,6 +108,7 @@ func ensure_shop_state(s: Dictionary, include_journal := true) -> void:
 	Extensions.ensure(s)
 	Crates.ensure(s)
 	Contracts.ensure(s)
+	Stories.ensure(s)
 	if include_journal: Journal.ensure(s)
 
 func dispatch(a: Dictionary) -> bool:
@@ -118,13 +120,16 @@ func dispatch(a: Dictionary) -> bool:
 	var next: Variant = Life.reduce(prepared,a)
 	if next == null: next = Extensions.reduce(prepared,a)
 	if next == null: next = Crates.reduce(prepared,a)
+	if next == null: next = Stories.reduce(prepared,a)
 	if next == null: next = Contracts.reduce(prepared,a)
 	if next == null: next = Commerce.reduce(prepared,a)
 	if is_same(next,prepared): return false
 	ensure_shop_state(next,false)
 	Contracts.observe(prepared,next,a)
+	Stories.observe(prepared,next,a)
 	_attach_referral(prepared,next,a)
 	Journal.observe(prepared,next,a)
+	Stories.observe_journal(prepared,next,a)
 	_enrich_shop_feedback(prepared,next,a)
 	state = next
 	save()

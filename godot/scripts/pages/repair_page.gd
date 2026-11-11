@@ -4,6 +4,7 @@ const Service = preload("res://scripts/model/watch_service.gd")
 const Cleaning = preload("res://scripts/model/watch_cleaning.gd")
 const BenchArt = preload("res://scripts/ui/watch_refurb_art.gd")
 const Commerce = preload("res://scripts/model/commerce.gd")
+const Stories = preload("res://scripts/model/shop_stories.gd")
 const Contracts = preload("res://scripts/model/service_contracts.gd")
 var it_uid := ""
 var mode := "service"
@@ -50,8 +51,10 @@ func scene_name() -> String: return "workbench"
 func hint_text() -> String:
 	var current = Game.item(it_uid)
 	if current != null:
+		var story_problem := Stories.work_problem(Game.state,current)
+		if story_problem!="": return story_problem
 		var contract_problem := Contracts.work_problem(Game.state,current)
-		if contract_problem != "": return contract_problem
+		if contract_problem!="": return contract_problem
 	if mode == "forge": return "选高档兼容目标，再逐项加工；相似度影响估价，加工仍会留下可识破的痕迹。"
 	if task == "dust": return "按住手表来回擦拭。查看残留可指出未擦到的污渍，离开后进度保留。"
 	if is_instance_valid(art) and art.visible: return art.hint_text()
@@ -326,6 +329,8 @@ func _power_copy(for_task: String, it: Dictionary) -> String:
 func _current_problem() -> String:
 	var it = Game.item(it_uid)
 	if it == null: return "请选择手表"
+	var story_problem := Stories.work_problem(Game.state,it)
+	if story_problem!="":return story_problem
 	var contract_problem := Contracts.work_problem(Game.state,it)
 	if contract_problem != "": return contract_problem
 	if mode == "refurb": return WatchRefurbishment.problem(Game.state,it,task.trim_prefix("refurb_"))
@@ -600,6 +605,8 @@ func confirm_repair() -> void:
 func _cleaning_problem() -> String:
 	var current = Game.item(it_uid)
 	if current == null: return "请选择手表"
+	var story_problem := Stories.work_problem(Game.state,current)
+	if story_problem!="":return story_problem
 	var contract_problem := Contracts.work_problem(Game.state,current)
 	if contract_problem != "": return contract_problem
 	return Service.progress_problem(Game.state,current,"dust")

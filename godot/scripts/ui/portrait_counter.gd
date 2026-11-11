@@ -511,11 +511,12 @@ func _invoke(ref: WeakRef) -> void:
 
 func _tasks() -> void:
 	var modal: Array = shell.modal("店内事务",360)
-	for spec in [["经营计划","shop_plan"],["成交回执","history"],["委托订单","orders"],["营业账本 / 打烊","report"],["站内消息","events"],["经营手册","help"]]:
+	for spec in [["经营计划","shop_plan"],["事件簿","stories"],["成交回执","history"],["委托订单","orders"],["营业账本 / 打烊","report"],["站内消息","events"],["经营手册","help"]]:
 		var target: String = spec[1]
 		modal[0].add_child(_key(spec[0],func():
 			modal[1].call()
 			if target in ["shop_plan","history"]: _open_shop_plan_after_close.call_deferred("history" if target == "history" else "")
+			elif target == "stories": shell._open_story_book_after_close.call_deferred()
 			elif target == "events": shell.open_events()
 			elif target == "help": shell.open_help()
 			else: shell.go(target)))
