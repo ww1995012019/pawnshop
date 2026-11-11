@@ -60,7 +60,7 @@ def main():
                 page.wait_for_function("window.OrbitalTouch?.state?.ready && OrbitalTouch.state.has_save", timeout=90000)
                 command({"type": "start"})
                 phone.wait(page, "!s.title && !s.busy && !s.trade")
-                tap("接待下一位来客" if label == "portrait" else "接客铃")
+                tap("@landscape_primary" if label == "phone" else "接待下一位来客" if label == "portrait" else "接客铃")
                 phone.wait(page, "s.trade && !s.busy && s.visitor === '梁叔'", timeout=20000)
                 assert phone.state(page, "cash") == 2000
                 page.screenshot(path=str(out / f"{label}-landlord-arrival.png"))
