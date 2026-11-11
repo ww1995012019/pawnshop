@@ -77,6 +77,9 @@ func _exit_tree() -> void:
 
 func _ready() -> void:
 	if not workspace_mode:
+		UIKit.mobile_ui = mobile_mode()
+		UIKit.mobile_wide = landscape_mode()
+	if not workspace_mode:
 		preload("res://scripts/ui/cursor_art.gd").install()
 	UIKit.ensure()
 	_build_world()
@@ -531,6 +534,8 @@ func place_touch(point: Vector2) -> Vector2:
 func _fit() -> void:
 	if not workspace_mode:
 		_fit_view()
+		UIKit.mobile_ui = mobile_mode()
+		UIKit.mobile_wide = landscape_mode()
 	var vis := get_viewport().get_visible_rect().size
 	if workspace_mode:
 		cam.position = vis * 0.5
@@ -583,6 +588,7 @@ func _place_toasts() -> void:
 func content_rect() -> Rect2:
 	var vis := get_viewport().get_visible_rect().size
 	if workspace_mode and landscape_mode(): return Rect2(8,8,vis.x-16,vis.y-16)
+	if workspace_mode and mobile_mode(): return Rect2(6,6,vis.x-12,vis.y-12)
 	return Rect2(16, 16, vis.x - 32, vis.y - 80) if workspace_mode else Rect2(20, 20, vis.x - 40, vis.y - 40)
 
 # ---------------------------------------------------------------- pages
@@ -737,7 +743,7 @@ func _layout_workspace() -> void:
 	if portrait_mode():
 		target = Vector2(visible.x - 32, visible.y - 130)
 	elif landscape_mode():
-		target = Vector2(visible.x-44,visible.y-96)
+		target = Vector2(visible.x-44,visible.y-64)
 	elif phone:
 		# A phone is much wider than the desktop drawer after the touch bar is
 		# reserved. Use that width instead of shrinking a 16:9 sheet into it.
@@ -1177,11 +1183,15 @@ func modal(title_text: String, width := 900.0) -> Array:
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.add_child(center)
-	var compact := landscape_mode()
-	var sheet := UIKit.plate(UIKit.skin("rail","sm",6) if compact else null)
+	var compact := mobile_mode()
+	var sheet := UIKit.plate(UIKit.skin("rail","xs",8) if compact else null)
 	sheet.name = "ModalSheet"
 	sheet.custom_minimum_size = Vector2(minf(width, get_viewport().get_visible_rect().size.x - 48.0), 0)
-	center.add_child(sheet)
+	if compact:
+		center.queue_free()
+		dim.add_child(sheet)
+	else:
+		center.add_child(sheet)
 	var v := UIKit.vbox(6 if compact else 12)
 	sheet.add_child(v)
 	var status_line := HBoxContainer.new()
@@ -1193,7 +1203,8 @@ func modal(title_text: String, width := 900.0) -> Array:
 		segment.custom_minimum_size = Vector2(0, 4)
 		segment.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		status_line.add_child(segment)
-	v.add_child(status_line)
+	if not compact: v.add_child(status_line)
+	else: status_line.free()
 	var head := UIKit.hbox(6 if compact else 12)
 	var t := UIKit.label(title_text,16 if compact else 24 if mobile_mode() else 30,UIKit.AMBER)
 	t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -1228,13 +1239,27 @@ func modal(title_text: String, width := 900.0) -> Array:
 	var body := UIKit.vbox(6 if compact else 14)
 	if mobile_mode():
 		var scroll := ScrollContainer.new()
-		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		scroll.name = "ModalScroll"
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		scroll.follow_focus = true
 		body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		scroll.add_child(body)
 		v.add_child(scroll)
-		body.minimum_size_changed.connect(func():
-			scroll.custom_minimum_size.y = minf(body.get_combined_minimum_size().y,get_viewport().get_visible_rect().size.y-(88 if compact else 180)))
+		var layout := func():
+			if not is_instance_valid(sheet) or sheet.is_queued_for_deletion(): return
+			var area: Rect2 = safe_area().grow(-8)
+			var sheet_width := minf(width,area.size.x)
+			sheet.custom_minimum_size.x = sheet_width
+			var chrome := v.get_combined_minimum_size().y + 16.0
+			var sheet_height := minf(area.size.y,body.get_combined_minimum_size().y+chrome)
+			sheet.size = Vector2(sheet_width,sheet_height)
+			sheet.position = area.position + (area.size-sheet.size)*0.5
+		body.minimum_size_changed.connect(layout.call_deferred)
+		v.minimum_size_changed.connect(layout.call_deferred)
+		dim.resized.connect(layout.call_deferred)
+		layout.call_deferred()
 	else:
 		v.add_child(body)
 	# Esc (see _input) and a click on the dimmed backdrop both dismiss the sheet.
@@ -1281,6 +1306,7 @@ func confirm(title_text: String, message: String, ok_text: String, fn: Callable)
 		fn.call())
 	row.add_child(ok)
 	body.add_child(row)
+	if mobile_mode(): row.reparent(body.get_parent().get_parent())
 	cancel.call_deferred("grab_focus")
 
 func open_events() -> void:
@@ -1341,18 +1367,21 @@ func open_events() -> void:
 func open_people(npc_id := "") -> void:
 	var m := modal("旧港人物档案", 1240)
 	var body: VBoxContainer = m[0]
-	var row := UIKit.hbox(20)
+	var row := BoxContainer.new()
+	row.vertical = mobile_mode()
+	row.add_theme_constant_override("separation",8 if mobile_mode() else 20)
 	body.add_child(row)
 	var roster_scroll := ScrollContainer.new()
-	roster_scroll.custom_minimum_size = Vector2(420, 600)
-	roster_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	roster_scroll.custom_minimum_size = Vector2(0,104) if mobile_mode() else Vector2(420,600)
+	roster_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if mobile_mode() else ScrollContainer.SCROLL_MODE_DISABLED
+	if mobile_mode(): roster_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	row.add_child(roster_scroll)
-	var roster := UIKit.grid(3, 10)
+	var roster := UIKit.grid(GameData.people().size() if mobile_mode() else 3,6 if mobile_mode() else 10)
 	roster.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	roster_scroll.add_child(roster)
 	var file := UIKit.plate(UIKit.inset_style(20))
 	file.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	file.custom_minimum_size = Vector2(0, 600)
+	file.custom_minimum_size = Vector2(0,0 if mobile_mode() else 600)
 	row.add_child(file)
 	var detail := UIKit.hbox(22)
 	file.add_child(detail)
@@ -1364,7 +1393,7 @@ func open_people(npc_id := "") -> void:
 		frame.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		var art := TextureRect.new()
 		art.texture = UIKit.npc_portrait(id)
-		art.custom_minimum_size = Vector2(300, 520)
+		art.custom_minimum_size = Vector2(60,100) if mobile_mode() else Vector2(300,520)
 		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		frame.add_child(art)
@@ -1382,17 +1411,17 @@ func open_people(npc_id := "") -> void:
 
 		v.add_child(UIKit.rule())
 		var bio := UIKit.label(String(n.get("bio", n.line)), 19, UIKit.TEXT, false, true)
-		bio.custom_minimum_size.x = 380
+		bio.custom_minimum_size.x = 0 if mobile_mode() else 380
 		v.add_child(bio)
 		if id != "CHR-001":
 			var need := UIKit.plate(UIKit.paper_style(14))
 			var nl := UIKit.label("来店需求：" + Model.customer_need(id), 17, UIKit.INK, false, true)
-			nl.custom_minimum_size.x = 350
+			nl.custom_minimum_size.x = 0 if mobile_mode() else 350
 			need.add_child(nl)
 			v.add_child(need)
 			if n.has("line"):
 				var quote := UIKit.label("「%s」" % String(n.line), 17, UIKit.MUTED, false, true)
-				quote.custom_minimum_size.x = 380
+				quote.custom_minimum_size.x = 0 if mobile_mode() else 380
 				v.add_child(quote)
 		else:
 			v.add_child(UIKit.label("这是你。", 17, UIKit.MUTED))
@@ -1400,12 +1429,12 @@ func open_people(npc_id := "") -> void:
 		for k in keys:
 			UIKit.compact(keys[k], "primary" if k == id else "secondary")
 	for n in GameData.people():
-		var b := UIKit.button("", "secondary", Vector2(120, 150), 15)
+		var b := UIKit.button("", "secondary", Vector2(76,88) if mobile_mode() else Vector2(120,150), 15)
 		b.icon = UIKit.npc_icon(n.id)
 		b.expand_icon = true
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-		b.add_theme_constant_override("icon_max_width", 96)
+		b.add_theme_constant_override("icon_max_width",40 if mobile_mode() else 96)
 		b.text = n.name
 		b.tooltip_text = "%s · %s" % [n.name, n.title]
 		var id: String = n.id
@@ -1459,17 +1488,20 @@ func open_help() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.custom_minimum_size.y = clampf(get_viewport().get_visible_rect().size.y - 300, 180, 450)
-	body.add_child(scroll)
+	if not mobile_mode(): body.add_child(scroll)
 	var instructions := UIKit.label(text, 21, UIKit.TEXT, false, true)
 	instructions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(instructions)
+	if mobile_mode():
+		body.add_child(instructions)
+		scroll.free()
+	else: scroll.add_child(instructions)
 
 ## One mixer channel: name, slider and percentage; saves when released.
 func _volume_row(text: String, key: String, fallback: float) -> Control:
 	var row := UIKit.hbox(14)
 	row.custom_minimum_size = Vector2(0, 34 if landscape_mode() else 46)
 	var caption := UIKit.label(text, 20, UIKit.TEXT)
-	caption.custom_minimum_size.x = 48 if landscape_mode() else 110
+	caption.custom_minimum_size.x = 48 if landscape_mode() else 56 if mobile_mode() else 110
 	row.add_child(caption)
 	var slider := HSlider.new()
 	slider.min_value = 0
@@ -1482,7 +1514,7 @@ func _volume_row(text: String, key: String, fallback: float) -> Control:
 	slider.focus_mode = Control.FOCUS_ALL
 	row.add_child(slider)
 	var pct := UIKit.label("%d%%" % int(slider.value), 18, UIKit.AMBER, true)
-	pct.custom_minimum_size.x = 42 if landscape_mode() else 64
+	pct.custom_minimum_size.x = 42 if mobile_mode() else 64
 	pct.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(pct)
 	slider.value_changed.connect(func(v: float):
@@ -1763,6 +1795,7 @@ func _poll_night_report() -> void:
 
 ## Scroll only the records; confirmation always remains on screen.
 func night_scroll(body: VBoxContainer, height := 430.0) -> VBoxContainer:
+	if mobile_mode(): return body
 	var sc := ScrollContainer.new()
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	sc.custom_minimum_size.y = minf(height, maxf(140, get_viewport().get_visible_rect().size.y - 310))

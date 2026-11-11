@@ -5,6 +5,7 @@ var fill := Color("2c3031")
 var edge := Color("81705b")
 var tint := Color.WHITE
 var compact := false
+var thin := false
 
 func block(canvas: RID, rect: Rect2, color: Color) -> void:
 	if rect.size.x > 0 and rect.size.y > 0:
@@ -25,6 +26,11 @@ func _draw(canvas: RID, rect: Rect2) -> void:
 	shadow.a = .66
 	block(canvas,Rect2(rect.position+Vector2(2,4),rect.size),shadow)
 	block(canvas,rect,Color("171b1c")*tint)
+	if thin:
+		block(canvas,rect.grow(-1),fill*tint)
+		frame(canvas,rect.grow(-1),1,edge*tint)
+		block(canvas,Rect2(rect.position+Vector2(2,2),Vector2(rect.size.x-4,1)),edge.lightened(.15)*tint)
+		return
 	frame(canvas,rect.grow(-1),1,edge.darkened(.38)*tint)
 	frame(canvas,rect.grow(-2),1,edge*tint)
 	var rim := 3.0 if compact or paper else 5.0

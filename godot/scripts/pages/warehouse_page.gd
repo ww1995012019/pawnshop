@@ -70,7 +70,7 @@ func enter() -> void:
 	# Keep printed edges and right-aligned serials clear of the scroll rail.
 	var scroll_gutter := MarginContainer.new()
 	scroll_gutter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll_gutter.add_theme_constant_override("margin_right", 14)
+	scroll_gutter.add_theme_constant_override("margin_right", 4 if shell.mobile_mode() else 14)
 	scroll_gutter.add_child(detail)
 	sc.add_child(scroll_gutter)
 	detail_panel.add_child(sc)
@@ -276,11 +276,11 @@ func _detail() -> void:
 	var record := UIKit.vbox(8)
 	docket.add_child(record)
 	record.add_child(UIKit.label("保管凭单 / " + String(it.uid), 15, UIKit.RUST, true))
-	var head := UIKit.hbox(14)
+	var head := UIKit.hbox(8 if shell.mobile_mode() else 14)
 	var pic := TextureRect.new()
 	pic.texture = UIKit.physical_icon(it)
 	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	pic.custom_minimum_size = Vector2(70, 90) if shell.portrait_mode() else Vector2(120,120)
+	pic.custom_minimum_size = Vector2(48,64) if shell.mobile_mode() else Vector2(120,120)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	UIKit.decorate_item(pic, it, 22.0)
@@ -288,15 +288,17 @@ func _detail() -> void:
 	var hv := UIKit.vbox(4)
 	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hv.add_child(UIKit.label(def.name, 26, UIKit.INK, false, true))
-	hv.add_child(UIKit.label("型号档次：%s" % GameData.tier_label(it.defId), 17, UIKit.RUST))
+	hv.add_child(UIKit.label("型号档次：%s" % GameData.tier_label(it.defId), 17, UIKit.RUST,false,true))
 	if UIKit.presentation_id(it) != String(it.defId):
-		hv.add_child(UIKit.label("外观档次：%s · 改装外壳" % GameData.tier_label(UIKit.presentation_id(it)), 17, UIKit.RUST))
+		hv.add_child(UIKit.label("外观档次：%s · 改装外壳" % GameData.tier_label(UIKit.presentation_id(it)), 17, UIKit.RUST,false,true))
 	if UIKit.is_modified(it):
 		hv.add_child(UIKit.label("改 · 已加工", 17, UIKit.RUST))
 	if UIKit.presentation_tier(it) in ["luxury","ultra"]:
 		var distinction := UIKit.hbox(8)
 		distinction.add_child(UIKit.tier_badge(UIKit.presentation_id(it)))
-		distinction.add_child(UIKit.label("珍稀型号 · 穹铸工艺" if UIKit.presentation_tier(it)=="ultra" else "名贵型号 · 金饰徽章", 16, UIKit.RUST))
+		var distinction_text := UIKit.label("珍稀型号 · 穹铸工艺" if UIKit.presentation_tier(it)=="ultra" else "名贵型号 · 金饰徽章", 16, UIKit.RUST,false,true)
+		distinction_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		distinction.add_child(distinction_text)
 		hv.add_child(distinction)
 	var owner: String = {"shop": "店铺自有", "customer": "顾客委修", "pawn": "抵押保管"}[it.owner]
 	var loc: String = {"warehouse": "后仓", "display": "陈列架", "isolation": "隔离柜", "pawn": "抵押柜"}[it.location]
@@ -314,8 +316,18 @@ func _detail() -> void:
 		record.add_child(UIKit.label(WatchForgery.summary(it), 17, UIKit.RUST, false, true))
 	if it.owner == "pawn":
 		record.add_child(UIKit.label("本金 %s · 第 %s 天抵押，赎期至第 %s 天（含宽限）" % [UIKit.money(it.pawnPrincipal), Model.jnum(it.pawnDay), Model.jnum(it.pawnDay + 4)], 16, UIKit.INK, false, true))
+	var preview: Button
+	if shell.mobile_mode():
+		preview = UIKit.button("%s\n品相 %s · 展开物品档案" % [def.name,UIKit.pct(it.condition)],"secondary",Vector2(0,52),16)
+		preview.toggle_mode = true
+		detail.add_child(preview)
+		docket.hide()
+		preview.toggled.connect(func(open: bool):
+			docket.visible = open
+			detail.move_child(docket,preview.get_index()+(1 if open else 2))
+			preview.text = "%s\n品相 %s · %s物品档案" % [def.name,UIKit.pct(it.condition),"收起" if open else "展开"])
 	detail.add_child(docket)
-	detail.add_child(UIKit.module_header("出入库操作", "按保管权属办理", "CONTROL"))
+	if not shell.mobile_mode(): detail.add_child(UIKit.module_header("出入库操作", "按保管权属办理", "CONTROL"))
 	var g := UIKit.grid(2, 10)
 	if t != null and (t.kind == "sell" or CounterDialogue.active(s)) and it.owner == "shop":
 		if not TradeSession.session(s).is_empty():
@@ -400,6 +412,7 @@ func _detail() -> void:
 			shell.confirm("主动归还原主", "「%s」：%s" % [item_name, return_text], "确认归还", func():
 				Game.dispatch({"type": "RETURN_ITEM", "uid": uid})), it.owner != "pawn" and not reserved, "正在柜台交易中" if reserved else "")
 	detail.add_child(g)
+	if shell.mobile_mode(): detail.move_child(g,preview.get_index()+1)
 	if shelf_why != "" and it.owner == "shop":
 		detail.add_child(UIKit.label("上架条件：" + shelf_why, 16, UIKit.DANGER, false, true))
 	elif reg_why != "" and not it.sourceVerified:

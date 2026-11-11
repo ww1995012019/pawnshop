@@ -19,7 +19,9 @@ static func texture(kind: String) -> Texture2D:
 	textures[kind] = result
 	return result
 
-static func panel(kind := "wine", pad := 12.0, tint := Color.WHITE) -> StyleBoxTexture:
+static func panel(kind := "wine", pad := 12.0, tint := Color.WHITE) -> StyleBox:
+	if UIKit.mobile_ui:
+		return UIKit.skin("amber" if kind == "amber" else "glass" if kind == "felt" else "graphite","xs",minf(pad,8),tint)
 	var style := StyleBoxTexture.new()
 	style.texture = texture(kind)
 	style.set_texture_margin_all(11 if kind == "amber" else 12)

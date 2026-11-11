@@ -14,10 +14,14 @@ static func open(shell: Node) -> void:
 	scroll.custom_minimum_size = Vector2(0,500)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	body.add_child(scroll)
+	var content_host: Container = body if shell.mobile_mode() else scroll
+	if not shell.mobile_mode(): body.add_child(scroll)
+	else:
+		scroll.free()
+		scroll = body.get_parent()
 	var index := UIKit.vbox(16)
 	index.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(index)
+	content_host.add_child(index)
 	var detail := UIKit.vbox(12)
 	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var back := UIKit.button("← 返回全部手表", "secondary",Vector2(0,48),19)
@@ -28,13 +32,14 @@ static func open(shell: Node) -> void:
 	detail.add_child(reference)
 	var saved_scroll := [0]
 	back.pressed.connect(func():
-		scroll.remove_child(detail)
+		content_host.remove_child(detail)
 		navigation.show()
-		scroll.add_child(index)
+		content_host.add_child(index)
 		scroll.set_deferred("scroll_vertical",saved_scroll[0]))
 	for group in ["all","low","mid","luxury","star","ultra"]:
 		var title: String = {"all":"全部 · %d款" % GameData.item_list.size(),"low":"低等手表","mid":"中等手表","luxury":"名贵手表","star":"超名贵 · 星冕","ultra":"珍稀手表"}[group]
 		var tab := UIKit.button(title,"secondary",Vector2(120,46),18)
+		if shell.mobile_mode(): tab.custom_minimum_size.x = 96
 		tab.name="catalogue_group_"+group
 		tab.toggle_mode=true
 		tab.add_theme_stylebox_override("pressed",UIKit.key_style("primary","pressed"))
@@ -57,24 +62,25 @@ static func open(shell: Node) -> void:
 		grid.add_theme_constant_override("v_separation",10)
 		grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		section.add_child(grid)
-		grid.resized.connect(func(): grid.columns = maxi(1,mini(4,int(grid.size.x/180))))
+		grid.resized.connect(func(): grid.columns = maxi(1,mini(4,int(grid.size.x/(140 if shell.mobile_mode() else 180)))))
 		for definition in GameData.item_list:
 			var category: String = "star" if definition.get("watch",{}).get("brand","")=="星冕" else String(definition.get("tier",""))
 			if category != tier: continue
 			var id: String = definition.id
-			var card := UIKit.button("%s\n参考价 %s Cr" % [definition.name, str(int(definition.value))],"secondary",Vector2(170,178),19)
+			var card := UIKit.button("%s\n参考价 %s Cr" % [definition.name, str(int(definition.value))],"secondary",Vector2(0,100) if shell.mobile_mode() else Vector2(170,178),19)
+			if shell.mobile_mode(): card.custom_minimum_size.y = 88
 			card.name = "catalogue_model_"+id
 			card.icon = UIKit.item_icon(id)
 			card.expand_icon = true
 			card.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
 			card.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			card.add_theme_constant_override("icon_max_width",100)
+			card.add_theme_constant_override("icon_max_width",32 if shell.mobile_mode() else 100)
 			card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			card.pressed.connect(func():
 				saved_scroll[0] = scroll.scroll_vertical
-				scroll.remove_child(index)
+				content_host.remove_child(index)
 				navigation.hide()
-				scroll.add_child(detail)
+				content_host.add_child(detail)
 				UIKit.clear(reference)
 				load("res://scripts/ui/watch_manual.gd").populate_reference(reference,id)
 				scroll.scroll_vertical = 0)

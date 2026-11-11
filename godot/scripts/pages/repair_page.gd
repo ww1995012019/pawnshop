@@ -859,10 +859,13 @@ func _target_dialog() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size=Vector2(0,minf(440,get_viewport_rect().size.y*0.5))
 	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
-	col.add_child(scroll)
+	if not shell.mobile_mode(): col.add_child(scroll)
 	var list := UIKit.vbox(8)
 	list.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-	scroll.add_child(list)
+	if shell.mobile_mode():
+		col.add_child(list)
+		scroll.free()
+	else: scroll.add_child(list)
 	var targets := WatchForgery.compatible_targets(it)
 	if targets.is_empty(): list.add_child(UIKit.label("本件暂无兼容且更贵的目标款。",20,UIKit.AMBER,false,true))
 	for target in targets:

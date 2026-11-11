@@ -27,6 +27,9 @@ const HUD_ICONS := ["credits", "energy", "day", "settings", "handbook", "alert",
 static var font: Font
 static var mono: Font
 static var _cache := {}
+## Root shell publishes presentation metrics; workspace viewports share them.
+static var mobile_ui := false
+static var mobile_wide := false
 
 static func ensure() -> void:
 	if font == null:
@@ -79,20 +82,22 @@ static func skin(name: String, size := "lg", pad := -1.0, tint := Color.WHITE) -
 	surface.edge = edges.get(name,PLATE_EDGE)
 	surface.tint = tint
 	surface.compact = size == "xs"
+	surface.thin = mobile_ui
+	if mobile_ui: surface.compact = true
 	surface.set_content_margin_all((18.0 if size == "lg" else 12.0 if size == "sm" else 8.0) if pad < 0 else pad)
 	return surface
 
 static func plate_style() -> StyleBox:
-	return skin("rail", "lg", 6 if phone_landscape() else PAD + 6)
+	return skin("rail", "xs" if mobile_ui else "lg", 8 if mobile_ui else PAD + 6)
 
 static func inset_style(pad := 14) -> StyleBox:
-	return skin("socket", "xs", minf(pad,4) if phone_landscape() else pad)
+	return skin("socket", "xs", minf(pad,6) if mobile_ui else pad)
 
 static func paper_style(pad := 18) -> StyleBox:
-	return skin("paper", "sm", minf(pad,6) if phone_landscape() else pad)
+	return skin("paper", "sm", minf(pad,8) if mobile_ui else pad)
 
 static func screen_style(pad := 10) -> StyleBox:
-	return skin("screen", "sm", minf(pad,6) if phone_landscape() else pad)
+	return skin("screen", "sm", minf(pad,6) if mobile_ui else pad)
 
 const KEY_SKIN := {"primary": "amber", "secondary": "graphite", "danger": "graphite", "good": "glass", "chip": "socket"}
 const KEY_TINT := {"primary": Color(1, 1, 1), "secondary": Color(0.92, 0.95, 1.0), "danger": Color(1.25, 0.72, 0.66), "good": Color(0.8, 1.2, 0.95), "chip": Color(1, 1, 1)}
@@ -108,9 +113,9 @@ static func key_style(kind: String, state: String, compact := false) -> StyleBox
 			tint = tint * Color(0.78, 0.78, 0.78)
 		"disabled":
 			tint = Color(0.42, 0.44, 0.46, 0.85)
-	var s := skin(KEY_SKIN.get(kind, "graphite"), "xs" if kind == "chip" or compact else "sm", 0.0, tint)
-	s.content_margin_left = 6 if compact or phone_landscape() else 16
-	s.content_margin_right = 6 if compact or phone_landscape() else 16
+	var s := skin(KEY_SKIN.get(kind, "graphite"), "xs" if mobile_ui or kind == "chip" or compact else "sm", 0.0, tint)
+	s.content_margin_left = 6 if compact or mobile_ui else 16
+	s.content_margin_right = 6 if compact or mobile_ui else 16
 	s.content_margin_top = (4 if phone_landscape() else 6) + (2 if state == "pressed" else 0)
 	s.content_margin_bottom = (4 if phone_landscape() else 6) - (2 if state == "pressed" else 0)
 	return s
@@ -167,7 +172,7 @@ static var mobile_frame := -1
 static var mobile_window := Vector2i.ZERO
 static var mobile_landscape := false
 static func phone_landscape() -> bool:
-	if not OS.has_feature("web"): return false
+	if not OS.has_feature("web"): return mobile_ui and mobile_wide
 	var frame := Engine.get_process_frames()
 	var window := DisplayServer.window_get_size()
 	if frame != mobile_frame or window != mobile_window:
@@ -180,7 +185,7 @@ static func label(text: String, size := 22, color := TEXT, is_mono := false, wra
 	ensure()
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", mini(size,14) if phone_landscape() else size)
+	l.add_theme_font_size_override("font_size", mini(size,14) if phone_landscape() else mini(size,17) if mobile_ui else size)
 	l.add_theme_color_override("font_color", color)
 	if is_mono:
 		l.add_theme_font_override("font", mono)
@@ -193,11 +198,14 @@ static func label(text: String, size := 22, color := TEXT, is_mono := false, wra
 static func button(text: String, kind := "secondary", min_size := Vector2(0, 58), size := 22, icon_name := "") -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(minf(min_size.x,140),clampf(min_size.y,28,32)) if phone_landscape() and text!="" else min_size
+	b.custom_minimum_size = Vector2(0,minf(min_size.y,36 if phone_landscape() else 44)) if mobile_ui and text!="" else min_size
+	if mobile_ui and text != "":
+		b.clip_text = true
+		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	b.focus_mode = Control.FOCUS_ALL
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	b.add_theme_font_size_override("font_size", mini(size,14) if phone_landscape() else size)
+	b.add_theme_font_size_override("font_size", mini(size,14) if phone_landscape() else mini(size,17) if mobile_ui else size)
 	var compact := text == ""
 	for st in ["normal", "hover", "pressed", "disabled"]:
 		b.add_theme_stylebox_override(st, key_style(kind, st, compact))
@@ -250,16 +258,16 @@ static func switch_row(text: String, on: bool, fn: Callable) -> Button:
 	b.button_pressed = on
 	b.text = text
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	b.custom_minimum_size = Vector2(0, 34 if phone_landscape() else 62)
+	b.custom_minimum_size = Vector2(0, 36 if phone_landscape() else 44 if mobile_ui else 62)
 	b.focus_mode = Control.FOCUS_ALL
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	b.add_theme_font_size_override("font_size", 14 if phone_landscape() else 21)
+	b.add_theme_font_size_override("font_size", 14 if phone_landscape() else 16 if mobile_ui else 21)
 	for st in ["normal", "hover", "pressed", "disabled", "hover_pressed"]:
 		var base := "hover" if st == "hover" or st == "hover_pressed" else "normal"
 		var sb := key_style("chip", base)
-		sb.content_margin_left = 8 if phone_landscape() else 20
-		sb.content_margin_right = 76 if phone_landscape() else 100
+		sb.content_margin_left = 8 if mobile_ui else 20
+		sb.content_margin_right = 76 if mobile_ui else 100
 		b.add_theme_stylebox_override(st, sb)
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
 		b.add_theme_color_override(c, TEXT)

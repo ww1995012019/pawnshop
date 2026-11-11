@@ -74,12 +74,12 @@ func relayout() -> void:
 	if is_instance_valid(upgrades_row): upgrades_row.vertical = narrow
 	if is_instance_valid(totals_panel): totals_panel.custom_minimum_size.x = 0 if narrow else 390
 	var receipt_scroll := find_child("ledger_receipt_scroll", true, false) as ScrollContainer
-	if receipt_scroll != null: receipt_scroll.custom_minimum_size.y = 400 if r.size.y >= 750 and r.size.x >= 880 else 250
+	if receipt_scroll != null: receipt_scroll.custom_minimum_size.y = 0 if shell.mobile_mode() else 400 if r.size.y >= 750 and r.size.x >= 880 else 250
 	sheet.size = r.size
 
 func _row(g: GridContainer, k: String, v: String, color := UIKit.INK) -> void:
 	var caption := UIKit.label(k, 18, Color("6b5a40"), false, true)
-	caption.custom_minimum_size.x = 160
+	caption.custom_minimum_size.x = 110 if shell.mobile_mode() else 160
 	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	g.add_child(caption)
 	var l := UIKit.label(v, 22, color, true)
@@ -118,7 +118,7 @@ func _refresh() -> void:
 		return
 	body.add_child(UIKit.module_header("第 %d 天 · %s" % [day, "日结报告" if s.phase == "report" else "营业中"], "营业账目", "LEDGER / %02d" % day))
 	_add_status()
-	_add_night_controls(s)
+	if not shell.mobile_mode(): _add_night_controls(s)
 	var today := []
 	for r in s.ledger:
 		if r.day == s.day:
@@ -191,6 +191,18 @@ func _refresh() -> void:
 	right.add_child(g)
 	_add_cost_details(right, costs)
 	cols.add_child(totals)
+	if shell.mobile_mode():
+		cols.move_child(totals,0)
+		receipt.visible = false
+		sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		sc.custom_minimum_size.y = 0
+		var receipt_toggle := UIKit.button("展开今日流水 · %d笔" % today.size(),"secondary",Vector2(0,44),16)
+		receipt_toggle.toggle_mode = true
+		receipt_toggle.toggled.connect(func(open: bool):
+			receipt.visible = open
+			receipt_toggle.text = ("收起" if open else "展开") + "今日流水 · %d笔" % today.size())
+		cols.add_child(receipt_toggle)
+		cols.move_child(receipt_toggle,1)
 	body.add_child(cols)
 	body.add_child(UIKit.rule())
 	if s.phase == "open":
@@ -208,6 +220,7 @@ func _refresh() -> void:
 			else:
 				Game.dispatch({"type":"SETTLE"}))
 		body.add_child(b)
+		if shell.mobile_mode(): body.move_child(b,2)
 	elif s.phase == "report":
 		if day >= 3 and not s.report.upgraded:
 			var up := BoxContainer.new()
@@ -231,6 +244,8 @@ func _refresh() -> void:
 			if Game.dispatch({"type": "NEXT"}) and Game.state.phase == "open":
 				shell.go("counter"))
 		body.add_child(next)
+		if shell.mobile_mode(): body.move_child(next,2)
+	if shell.mobile_mode(): _add_night_controls(s)
 
 func _add_cost_details(parent: VBoxContainer, costs: Dictionary) -> void:
 	if costs.legacy:

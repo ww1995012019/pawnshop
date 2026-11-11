@@ -49,7 +49,7 @@ func run():
  page._sync_table()
  shell.open_people("CHR-004")
  await frames(14)
- var dossier = shell.modal_layer.get_child(0).get_child(0).get_child(0)
+ var dossier = shell.modal_layer.find_child("ModalSheet",true,false)
  check(shell.get_viewport().get_visible_rect().encloses(dossier.get_global_rect()),"large legacy dossiers keep their close header inside the mobile screen")
  shell.close_top_modal()
  await create_timer(.4).timeout

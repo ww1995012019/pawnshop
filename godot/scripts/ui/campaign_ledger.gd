@@ -55,11 +55,15 @@ static func open(shell: Node) -> void:
 	scroll.custom_minimum_size = Vector2(0, clampf(shell.get_viewport().get_visible_rect().size.y - 260.0, 140.0, 640.0))
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.follow_focus = true
-	body.add_child(scroll)
+	if shell.mobile_mode():
+		scroll.free()
+		scroll = body.get_parent()
+	else: body.add_child(scroll)
 	var gutter := MarginContainer.new()
 	gutter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	gutter.add_theme_constant_override("margin_right", 18)
-	scroll.add_child(gutter)
+	if shell.mobile_mode(): body.add_child(gutter)
+	else: scroll.add_child(gutter)
 	var content := UIKit.vbox(12)
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	gutter.add_child(content)
@@ -103,7 +107,7 @@ static func open(shell: Node) -> void:
 		kind_picker.set_item_metadata(kind_picker.item_count - 1, kind)
 	filters.add_child(day_picker)
 	filters.add_child(kind_picker)
-	var count_label := UIKit.label("", 17, UIKit.MUTED)
+	var count_label := UIKit.label("", 17, UIKit.MUTED,false,true)
 	content.add_child(count_label)
 	var paper := UIKit.plate(UIKit.paper_style(14))
 	paper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -119,6 +123,18 @@ static func open(shell: Node) -> void:
 		if rows.is_empty():
 			entries.add_child(UIKit.label("还没有流水记录。" if state.get("ledger", []).is_empty() else "没有符合筛选条件的流水。", 20, UIKit.INK, false, true))
 		for entry in rows:
+			if shell.mobile_mode():
+				var compact_row := UIKit.vbox(3)
+				var heading := UIKit.hbox(6)
+				var caption := UIKit.label("第 %02d 天 · %s" % [int(entry.get("day",0)),_kind_label(String(entry.get("kind","")))],14,UIKit.INK,false,true)
+				caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				heading.add_child(caption)
+				var amount := float(entry.get("amount",0))
+				heading.add_child(UIKit.label(("+" if amount > 0 else "") + UIKit.money(amount),14,Color("2f6b3a") if amount > 0 else UIKit.RUST,true))
+				compact_row.add_child(heading)
+				compact_row.add_child(UIKit.label(String(entry.get("label","")),16,UIKit.INK,false,true))
+				entries.add_child(compact_row)
+				continue
 			var row := UIKit.hbox(10)
 			row.add_child(_cell("第 %02d 天" % int(entry.get("day", 0)), 80))
 			row.add_child(_cell(_kind_label(String(entry.get("kind", ""))), 140))

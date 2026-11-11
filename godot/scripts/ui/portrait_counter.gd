@@ -120,7 +120,6 @@ func _build() -> void:
 	conversation.add_child(speech)
 	conversation.add_child(UIKit.label("点此查看完整对话",13,UIKit.AMBER))
 	var expand := Button.new()
-	expand.tooltip_text = "查看完整对话"
 	for state in ["normal","hover","pressed","disabled"]: expand.add_theme_stylebox_override(state,StyleBoxEmpty.new())
 	expand.pressed.connect(_dialogue_popup)
 	window_frame.add_child(expand)

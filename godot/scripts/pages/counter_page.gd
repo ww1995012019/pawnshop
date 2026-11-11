@@ -1041,11 +1041,14 @@ func _merchant_shop() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(0, minf(620, get_viewport_rect().size.y - 230))
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	body.add_child(scroll)
+	if not shell.mobile_mode(): body.add_child(scroll)
 	var contents := UIKit.vbox(10)
 	contents.name = "merchant_contents"
 	contents.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(contents)
+	if shell.mobile_mode():
+		body.add_child(contents)
+		scroll.free()
+	else: scroll.add_child(contents)
 	_populate_merchant(contents)
 
 func _merchant_transaction(action: Dictionary, contents: VBoxContainer) -> void:
@@ -1148,13 +1151,13 @@ func _pick_goods() -> void:
 	var m: Array = shell.modal("为 %s 挑选货物" % GameData.npc(t.npcId).name, 1180)
 	var body: VBoxContainer = m[0]
 	body.add_child(UIKit.label("需求：" + Model.customer_need(t.npcId), 20, UIKit.CYAN, false, true))
-	var g := UIKit.grid(1 if shell.portrait_mode() else 4, 12)
+	var g := UIKit.grid(1 if shell.mobile_mode() else 4, 8 if shell.mobile_mode() else 12)
 	for it in Game.state.inventory:
 		if it.owner != "shop":
 			continue
 		var why = Model.sale_eligibility(it, t.npcId)
 		var card := UIKit.plate(UIKit.inset_style(10))
-		card.custom_minimum_size = Vector2(0 if shell.portrait_mode() else 266, 0)
+		card.custom_minimum_size = Vector2(0 if shell.mobile_mode() else 266, 0)
 		var cv := UIKit.vbox(6)
 		card.add_child(cv)
 		var pic := TextureRect.new()

@@ -9,6 +9,7 @@ var scrollers := {}
 var selected_status := "open"
 var board: PanelContainer
 var status_note: Label
+var expanded_orders := {}
 const STATUS_LABELS := {"open": "可接订单", "active": "进行中", "closed": "已结束"}
 
 func scene_name() -> String:
@@ -23,15 +24,18 @@ func enter() -> void:
 	board = UIKit.plate()
 	board.minimum_size_changed.connect(queue_relayout)
 	add_child(board)
-	var surface := UIKit.vbox(16)
+	var surface := UIKit.vbox(6 if shell.mobile_mode() else 16)
 	board.add_child(surface)
-	surface.add_child(UIKit.module_header("委托终端", "接单 · 备货 · 交付", "ORDERS / 登记簿"))
+	if not shell.mobile_mode(): surface.add_child(UIKit.module_header("委托终端", "接单 · 备货 · 交付", "ORDERS / 登记簿"))
 	var tab_row := UIKit.hbox(10)
 	surface.add_child(tab_row)
 	for status in ["open", "active", "closed"]:
 		var key: String = status
 		var tab := UIKit.button("", "secondary", Vector2(0 if shell.portrait_mode() else 210, 50 if shell.portrait_mode() else 56), 15 if shell.portrait_mode() else 22)
 		tab.pressed.connect(func(): _select_status(key))
+		if shell.mobile_mode():
+			tab.custom_minimum_size = Vector2(0,36 if shell.landscape_mode() else 44)
+			tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tab_row.add_child(tab)
 		tabs[key] = tab
 	surface.add_child(UIKit.rule())
@@ -42,7 +46,7 @@ func enter() -> void:
 		sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		sc.follow_focus = true
-		var list := UIKit.grid(2, 16)
+		var list := UIKit.grid(2, 6 if shell.mobile_mode() else 16)
 		list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		sc.add_child(list)
 		surface.add_child(sc)
@@ -66,6 +70,14 @@ func relayout() -> void:
 	board.size = Vector2(width, r.size.y)
 	for key in cols:
 		cols[key].columns = 2 if width >= 1200.0 and counts.get(key, 0) > 0 else 1
+		if shell.mobile_mode():
+			tabs[key].custom_minimum_size.y = 36 if shell.landscape_mode() else 44
+			for card in cols[key].get_children():
+				var summary: Button = card.find_child("OrderSummary",true,false)
+				if summary == null: continue
+				summary.custom_minimum_size.y = 42 if shell.landscape_mode() else 58
+				var title: Label = summary.get_child(0).get_child(0)
+				title.add_theme_font_size_override("font_size",14 if shell.landscape_mode() else 16)
 
 func _select_status(key: String) -> void:
 	var status_changed := selected_status != key
@@ -85,6 +97,7 @@ func _select_status(key: String) -> void:
 	var closed := Model.business_hours_problem(Game.state)
 	if closed != "": status_note.text = "已打烊 · 不能接单或交付。请收起终端，先开始下一营业日。" if Game.state.phase != "ending" else closed
 	status_note.add_theme_color_override("font_color",UIKit.AMBER if closed != "" else UIKit.MUTED)
+	status_note.visible = not shell.mobile_mode() or terminal_problem != "" or closed != ""
 	if status_changed:
 		tabs[key].call_deferred("grab_focus")
 
@@ -110,6 +123,7 @@ const INK_SOFT := Color("6b5a40")
 
 ## Each commission is a pinned paper work ticket in dark ink.
 func _card(def: Dictionary) -> VBoxContainer:
+	if shell.mobile_mode(): return _mobile_card(def)
 	var card := UIKit.plate(UIKit.paper_style(22))
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# A slight, stable tilt per ticket so the board reads as pinned paper.
@@ -159,6 +173,51 @@ func _card(def: Dictionary) -> VBoxContainer:
 	card.set_meta("v", v)
 	return v
 
+## Keep the actual order actions intact; only their presentation is folded.
+func _mobile_card(def: Dictionary) -> VBoxContainer:
+	var card := UIKit.plate(UIKit.paper_style(6))
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var stack := UIKit.vbox(4)
+	card.add_child(stack)
+	var summary := UIKit.button("", "secondary", Vector2(0,42 if shell.landscape_mode() else 58),16)
+	summary.name = "OrderSummary"
+	summary.toggle_mode = true
+	summary.button_pressed = expanded_orders.get(def.id,false)
+	# A flat summary avoids another metal frame inside the paper ticket.
+	for state in ["normal","hover","pressed","disabled"]:
+		summary.add_theme_stylebox_override(state,UIKit.box(Color(0.3,0.2,0.1,0.08) if state=="pressed" else Color.TRANSPARENT,Color.TRANSPARENT,0,0,3,0))
+	stack.add_child(summary)
+	var caption := UIKit.vbox(2)
+	caption.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	caption.offset_left = 4
+	caption.offset_right = -4
+	caption.offset_top = 3
+	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var title := UIKit.label(def.name,16,UIKit.INK)
+	title.clip_text = true
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	caption.add_child(title)
+	var order = Model._order_state(Game.state,def.id)
+	var status: String = "可接" if order == null else {"active":"进行中","done":"已交付","failed":"已失效"}.get(order.status,"可接")
+	var meta := UIKit.label("%s · %s · 第%d天前    %s" % [status,UIKit.money(def.reward),int(def.dueDay),"收起" if summary.button_pressed else "展开"],13,UIKit.RUST)
+	meta.clip_text = true
+	meta.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	caption.add_child(meta)
+	summary.add_child(caption)
+	var details := UIKit.vbox(6)
+	details.visible = summary.button_pressed
+	stack.add_child(details)
+	details.add_child(UIKit.label(_readable(String(def.description)),16,UIKit.INK,false,true))
+	details.add_child(UIKit.label("需要：%s · 品相≥%s%s%s" % [GameData.def(def.itemId).name,UIKit.pct(def.minCondition)," · 须修复" if def.needsRepair else ""," · 顾客原物" if def.get("customerOwned",false) else ""],14,INK_SOFT,false,true))
+	summary.toggled.connect(func(open: bool):
+		expanded_orders[def.id] = open
+		details.visible = open
+		meta.text = "%s · %s · 第%d天前    %s" % [status,UIKit.money(def.reward),int(def.dueDay),"收起" if open else "展开"])
+	# _refresh adds action controls here, then moves them into folded details.
+	card.set_meta("mobile_details",details)
+	return stack
+
 func _dashes() -> Label:
 	var l := UIKit.label("- ".repeat(90), 13, Color("b3a283"))
 	l.clip_text = true
@@ -192,6 +251,7 @@ func _hours_blocked() -> bool:
 
 func _take_order(id: String) -> void:
 	if _hours_blocked(): return
+	expanded_orders[id] = true
 	Game.dispatch({"type":"TAKE_ORDER","id":id})
 	var order = Model._order_state(Game.state,id)
 	if order != null and order.status == "active": _select_status("active")
@@ -216,7 +276,10 @@ func _refresh() -> void:
 			var v := _card(def)
 			var opt := OptionButton.new()
 			opt.custom_minimum_size = Vector2(0, 46)
-			opt.add_theme_font_size_override("font_size", 20)
+			if shell.mobile_mode():
+				opt.fit_to_longest_item = false
+				opt.clip_text = true
+			opt.add_theme_font_size_override("font_size", 16 if shell.mobile_mode() else 20)
 			var cands := []
 			for it in s.inventory:
 				if it.defId == def.itemId:
@@ -284,6 +347,13 @@ func _refresh() -> void:
 			v.add_child(stamp)
 			cols.closed.add_child(v.get_parent())
 	for k in cols:
+		if shell.mobile_mode():
+			for card in cols[k].get_children():
+				var content: VBoxContainer = card.get_child(0)
+				var details: VBoxContainer = card.get_meta("mobile_details")
+				for action in content.get_children().slice(2):
+					content.remove_child(action)
+					details.add_child(action)
 		counts[k] = cols[k].get_child_count()
 		tabs[k].text = "%s %d" % [{"open":"可接","active":"进行","closed":"记录"}[k],counts[k]] if shell.portrait_mode() else "%s  %02d" % [STATUS_LABELS[k], counts[k]]
 		if counts[k] == 0:
