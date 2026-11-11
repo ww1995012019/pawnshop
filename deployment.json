@@ -1,8 +1,8 @@
 {
-  "source_commit": "e1e83c8b53263cf758b17209c9b13a4a21f1da88",
-  "release_id": "bba57a75f3c9ae7a",
-  "pack": "workbench-5dfe1739d6827328.pck",
-  "html_sha256": "43d425c1073154db80a6e5f63ecdacb03677f18f9c33ee7b111b62a17b704943",
+  "source_commit": "f67e7b7697bc710b0b28596b0734018441db5847",
+  "release_id": "b06d6ffcceb76429",
+  "pack": "workbench-6e35f035d6a12030.pck",
+  "html_sha256": "83dc021388991d986d7cffff31cc29ac5dd7dc3ba6450c103e2585b38035e672",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -34,5 +34,7 @@
   "optical_windows_version": 2,
   "bench_contour_version": 1,
   "portrait_ui_version": 1,
-  "portrait_art_version": 1
+  "portrait_art_version": 1,
+  "portrait_fixed_screen_version": 1,
+  "portrait_modal_close_version": 1
 }
