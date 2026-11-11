@@ -1,8 +1,8 @@
 {
-  "source_commit": "0dcf04b6ea2e3884d353f4aadc55139d69a8fbde",
-  "release_id": "a1fb3c205a60a5e7",
-  "pack": "workbench-2d64cdb9e269bf85.pck",
-  "html_sha256": "7d5ee96f6185ef99377c5b835c2c0be1f89d5d68897522ea0d101643a6d3dcf0",
+  "source_commit": "1e156f1e48e2da87d280776a2143741495356bf9",
+  "release_id": "edc9900766a44d54",
+  "pack": "workbench-fa91bcf6154e5851.pck",
+  "html_sha256": "65f40bacd8cc7aab95bb601d62af195b0810cf70378c20088c6aabd9aacacd6c",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -72,5 +72,7 @@
   "mobile_warehouse_actions_version": 1,
   "mobile_goods_four_columns_version": 1,
   "mobile_header_reflow_version": 1,
-  "campaign_ledger_table_version": 1
+  "campaign_ledger_table_version": 1,
+  "compact_selector_version": 1,
+  "compact_dropdown_menu_version": 1
 }
