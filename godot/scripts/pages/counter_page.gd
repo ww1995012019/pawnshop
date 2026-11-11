@@ -72,6 +72,8 @@ var back_root: Node2D
 var resident_window: Control
 var mat_rect := Rect2(600, 490, 710, 175)
 var drag_rect := Rect2(660, 545, 600, 67)
+var mobile_cash := Vector2.ZERO
+var mobile_goods := Vector2.ZERO
 var bubble_rect := Rect2(1032, 180, 283, 270)
 
 ## Extra counter depth in the room's original sage palette. The extension is
@@ -237,6 +239,7 @@ func workspace_state_changed(opened: bool) -> void:
 
 
 func _crate_point() -> Vector2:
+	if shell.landscape_mode(): return shell.ui_to_world(mobile_goods)
 	return get_viewport().get_canvas_transform().affine_inverse() * crate.get_global_rect().get_center() if is_instance_valid(crate) else Vector2(940, 860)
 
 func _sync_world() -> void:
@@ -254,11 +257,11 @@ func _spawn_customer(npc_id: String, walk: bool) -> void:
 		customer.queue_free()
 	customer = Customer.new()
 	customer.setup(npc_id)
-	customer.scale = Vector2.ONE * (CUSTOMER_HEIGHT / customer.size.y)
+	customer.scale = Vector2.ONE * ((minf(180.0,resident_window.size.y) if shell.landscape_mode() else CUSTOMER_HEIGHT) / customer.size.y)
 	customer.position = STAND - resident_window.position
 	resident_window.add_child(customer)
 	if walk:
-		customer.walk_in(920.0)
+		customer.walk_in(resident_window.size.x+140 if shell.landscape_mode() else 920.0)
 
 func _sync_table(animate:=false,from:=Vector2.ZERO) -> void:
 	if not is_instance_valid(counter_table): return
@@ -277,7 +280,8 @@ func _finish_table_drag() -> void:
 	var was_dragging:=mat_item.dragging
 	mat_item.end_drag()
 	if was_dragging and CounterDialogue.active(Game.state) and counter_table.sprites.has(mat_item.uid):
-		Game.dispatch({"type":"COUNTER_MOVE","tradeId":Game.state.trade.id,"uid":mat_item.uid,"position":[mat_item.position.x,mat_item.position.y]})
+		var model_pos: Vector2 = counter_table.model_point(mat_item.position)
+		Game.dispatch({"type":"COUNTER_MOVE","tradeId":Game.state.trade.id,"uid":mat_item.uid,"position":[model_pos.x,model_pos.y]})
 
 func _spawn_mat_item(it: Dictionary, animate: bool, from := Vector2.ZERO) -> void:
 	if CounterDialogue.active(Game.state):
@@ -532,6 +536,8 @@ func _open_instrument(which: String) -> void:
 	shell.go(which, it.uid if it != null else "")
 
 func relayout() -> void:
+	if is_instance_valid(mat_item) and mat_item.dragging: _finish_table_drag()
+	if is_instance_valid(dial): dial.cancel_drag()
 	if not is_instance_valid(terminal) or not is_instance_valid(crate):
 		return
 	_align_stage()
@@ -1394,6 +1400,7 @@ func _leave_with_goods(t: Dictionary, mood: String) -> void:
 	_refresh()
 
 func _cash_point() -> Vector2:
+	if shell.landscape_mode(): return mobile_cash
 	return cash_tray.note_center()
 
 func _deal(t: Dictionary, pawn: bool, item_name: String, stay := false) -> void:
@@ -1464,6 +1471,13 @@ func _handover(original, direction: String) -> void:
 	if not Game.prefs.reduced_motion:
 		var start:=moving.global_position
 		var dest: Vector2=_crate_point() if direction=="buy" else customer.hands()
+		if shell.landscape_mode():
+			# Move the very same UID/sprite into the UI canvas for the handoff;
+			# speech cards and the dock must not mask its path across columns.
+			start = shell.world_to_ui(start)
+			dest = shell.world_to_ui(dest)
+			moving.reparent(self,false)
+			moving.position = start
 		var tw:=moving.create_tween()
 		tw.tween_method(func(p: float):
 			moving.global_position=start.lerp(dest,p)+Vector2(0,-sin(p*PI)*80)
@@ -1500,10 +1514,11 @@ func _bill(from: Vector2, to: Vector2, i: int, landing_cash: float) -> Tween:
 ## off. It belongs to this page, so leaving the counter takes it away too.
 func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> void:
 	var kind := "双方钱货回执" if t.has("batch_income") else "抵押凭据" if pawn else ("收购凭据" if t.kind == "buy" else "销售凭据")
-	var paper := UIKit.plate(UIKit.paper_style(20))
+	var paper := UIKit.plate(UIKit.paper_style(12 if shell.landscape_mode() else 20))
+	paper.name = "trade_receipt"
 	paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var v := UIKit.vbox(6)
-	v.custom_minimum_size.x = 300
+	v.custom_minimum_size.x = 240 if shell.landscape_mode() else 300
 	paper.add_child(v)
 	var head := UIKit.hbox(8)
 	head.add_child(UIKit.label("轨道旧货局", 20, UIKit.INK))
@@ -1514,7 +1529,7 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 	v.add_child(_dashes())
 	var item_label := UIKit.label(item_name, 22, UIKit.INK, false, true)
 	item_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	item_label.custom_minimum_size.x = 300
+	item_label.custom_minimum_size.x = 240 if shell.landscape_mode() else 300
 	v.add_child(item_label)
 	var row := UIKit.hbox(8)
 	row.add_child(UIKit.label("本金" if pawn else "成交", 18, Color("6b5a40")))
@@ -1535,6 +1550,7 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 	paper.reset_size()
 	# Prints below the till, clear of the visitor's speech.
 	var final_pos := Vector2(1030, 700)
+	if shell.landscape_mode(): final_pos = Vector2((get_viewport_rect().size.x-paper.size.x)*0.5,maxf(6,(get_viewport_rect().size.y-paper.size.y)*0.5))
 	paper.pivot_offset = Vector2(paper.size.x * 0.5, 0)
 	if Game.prefs.reduced_motion:
 		paper.position = final_pos
@@ -1744,10 +1760,17 @@ func _police_response(previous_trade: Dictionary) -> void:
 	var result: Dictionary=WantedCases.case_state(Game.state).lastResult
 	var patrol:=Customer.new()
 	patrol.setup(WantedCases.OFFICER_ID)
+	patrol.name="counter_patrol"
 	patrol.scale=Vector2.ONE*(CUSTOMER_HEIGHT/patrol.size.y)
 	patrol.position=Vector2(530,STAND.y-resident_window.position.y)
+	if shell.landscape_mode():
+		patrol.scale=Vector2.ONE*minf(resident_window.size.y/patrol.size.y,resident_window.size.x*.46/patrol.size.x)
+		patrol.position.x=resident_window.size.x*.75
+		if is_instance_valid(customer):
+			customer.scale=Vector2.ONE*minf(resident_window.size.y/customer.size.y,resident_window.size.x*.46/customer.size.x)
+			customer.position.x=resident_window.size.x*.25
 	resident_window.add_child(patrol)
-	patrol.walk_in(920)
+	patrol.walk_in(resident_window.size.x+80 if shell.landscape_mode() else 920)
 	await patrol.arrived
 	if is_instance_valid(customer):
 		customer.set_mood("focused")
@@ -1769,6 +1792,11 @@ func _police_response(previous_trade: Dictionary) -> void:
 		if not Game.prefs.reduced_motion:
 			var from:=goods.global_position
 			var to: Vector2=_crate_point() if original.return_shop else patrol.hands() if result.get("arrested",false) else customer.hands() if is_instance_valid(customer) else _crate_point()
+			if shell.landscape_mode():
+				from=shell.world_to_ui(from)
+				to=shell.world_to_ui(to)
+				goods.reparent(self,false)
+				goods.position=from
 			var transfer:=goods.create_tween()
 			transfer.tween_method(func(p:float):
 				goods.global_position=from.lerp(to,p)+Vector2(0,-sin(p*PI)*50)

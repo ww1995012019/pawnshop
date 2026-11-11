@@ -43,14 +43,17 @@ func _settle_layout() -> void:
 ## takes only the height its current instrument controls require.
 func layout_workbench(left: Control, right: Control, bench: Control, left_width: float, right_width := 470.0) -> Rect2:
 	var r: Rect2 = shell.content_rect()
-	if shell.portrait_mode():
+	if shell.mobile_mode():
 		if not is_instance_valid(portrait_tabs):
+			if shell.landscape_mode(): portrait_section = 1
 			portrait_tabs = UIKit.hbox(4)
 			add_child(portrait_tabs)
 			for i in 3:
 				var key := UIKit.button(["选择工序","操作实物","物品档案"][i],"secondary",Vector2(0,48),16)
 				key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				key.pressed.connect(func(): portrait_section=i;relayout())
+				key.pressed.connect(func():
+					if has_method("can_close_workspace") and not call("can_close_workspace"): return
+					portrait_section=i;relayout())
 				portrait_tabs.add_child(key)
 		portrait_tabs.show()
 		portrait_tabs.position = r.position
@@ -66,7 +69,7 @@ func layout_workbench(left: Control, right: Control, bench: Control, left_width:
 			if is_instance_valid(node) and node is CanvasItem: node.visible = portrait_section == 1
 		for i in 3:
 			portrait_tabs.get_child(i).add_theme_stylebox_override("normal",UIKit.key_style("primary" if i==portrait_section else "secondary","normal"))
-		var height := maxf(100,bench.get_combined_minimum_size().y)
+		var height := maxf(52 if shell.landscape_mode() else 100,bench.get_combined_minimum_size().y)
 		bench.position = Vector2(area.position.x,area.end.y-height)
 		bench.size = Vector2(area.size.x,height)
 		var mat := Rect2(area.position,Vector2(area.size.x,area.size.y-height-8))
@@ -96,7 +99,8 @@ func layout_workbench(left: Control, right: Control, bench: Control, left_width:
 ## Fit the complete sprite, including unusually wide goods, inside the mat.
 func fit_workbench_item(item: ItemSprite, mat: Rect2) -> Vector2:
 	var footprint := item.tex_size()
-	var height := minf(360.0, minf(mat.size.y - 100.0, (mat.size.x - 144.0) * footprint.y / footprint.x))
+	var margin := 28.0 if shell.landscape_mode() else 100.0
+	var height := maxf(20,minf(360.0, minf(mat.size.y - margin, (mat.size.x - 80.0 if shell.landscape_mode() else mat.size.x - 144.0) * footprint.y / footprint.x)))
 	var scale := height / footprint.y
 	if not is_equal_approx(item.display_scale, scale):
 		# A landing tween captures its original scale. Stop it before fitting a

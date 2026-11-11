@@ -81,11 +81,9 @@ func run() -> void:
 	shell._fit()
 	await frame()
 	var visible := root.get_visible_rect().size
-	check(visible.x < 1800.0 and visible.x >= shell.PHONE_VIEW.size.x - 1.0, "a phone enlarges the shop beyond the full 1920 wide picture")
-	var left: float = shell.CENTER.x + shell.view_shift.x - visible.x * 0.5
-	var top: float = shell.CENTER.y + shell.view_shift.y - visible.y * 0.5
-	var shown := Rect2(left, top, visible.x, visible.y).grow(1.0)
-	check(shown.encloses(shell.PHONE_VIEW), "every fixture and readout stays on the phone screen")
+	check(visible.x <= 800 and visible.y <= 500,"phone uses readable native logical pixels")
+	var native = shell.page.find_child("LandscapeCounter",true,false)
+	check(native != null and native.is_visible_in_tree(),"phone shows its dedicated native counter")
 	var offset: Vector2 = shell.counter_offset()
 	for control in shell.root_ui.find_children("*", "BaseButton", true, false):
 		var b := control as BaseButton
@@ -93,5 +91,5 @@ func run() -> void:
 			var where := b.get_global_rect()
 			if not Rect2(Vector2.ZERO, visible).grow(1.0).encloses(where):
 				check(false, "counter control is cut off on a phone: %s %s %s" % [b.get("text"), b.tooltip_text, where])
-	check(offset.x < 0.0, "the counter controls follow the enlarged picture")
+	check(offset == Vector2.ZERO, "mobile controls use the visible native viewport")
 	quit(1 if failures else 0)

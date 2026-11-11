@@ -7,6 +7,9 @@
   const canvas = document.getElementById('canvas');
   let turned = false;
   let state = {ready: false};
+  const safeProbe = document.createElement('div');
+  safeProbe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+  document.body.appendChild(safeProbe);
 
   // The engine reads clientX/clientY against the canvas box. Hand it positions
   // in the canvas's own landscape space while the canvas is turned, and move a
@@ -78,6 +81,8 @@
   // Size the render buffer as well as the CSS box so the canvas stays sharp.
   function render() {
     turned = false;
+    const safe = getComputedStyle(safeProbe);
+    window.OrbitalTouch.safeInsets = [safe.paddingLeft,safe.paddingTop,safe.paddingRight,safe.paddingBottom].map(value => parseFloat(value) || 0);
     const ratio = devicePixelRatio || 1;
     const long = turned ? innerHeight : innerWidth, short = turned ? innerWidth : innerHeight;
     const width = Math.round(long * ratio), height = Math.round(short * ratio);

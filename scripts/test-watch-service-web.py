@@ -48,6 +48,7 @@ def main():
     parser.add_argument('--square-no-ap',action='store_true')
     parser.add_argument('--permissions-only',action='store_true')
     parser.add_argument('--forgery-only',action='store_true')
+    parser.add_argument('--forgery-method',choices=['logo','serial','weight'])
     parser.add_argument('--mechanical-only',action='store_true')
     args=parser.parse_args()
     fixture=prepare_fixture(args.square_no_ap,args.permissions_only)
@@ -65,10 +66,21 @@ def main():
             def snap(name): page.screenshot(path=str(args.output/f'{label}-{name}.png'))
             def status(): return page.evaluate('OrbitalTouch.state')
             def click(text):
-                found=phone.locate(page,text)
+                switched = False
+                if mobile and text == '收起': text = '关闭'
+                try:
+                    found=phone.locate(page,text)
+                except AssertionError:
+                    if not mobile or status().get('workspace') != 'repair': raise
+                    for tab in ['选择工序','物品档案']:
+                        t=phone.locate(page,tab);page.touchscreen.tap(t['x'],t['y']);page.wait_for_timeout(180)
+                        try:
+                            found=phone.locate(page,text);switched=True;break
+                        except AssertionError:pass
+                    else:raise
                 for _ in range(8):
                     if height*.16 < found['y'] < height*.86:break
-                    x=min(width*.91,max(width*.72,found['x']))
+                    x=max(12,min(width-12,found['x'])) if mobile else min(width*.91,max(width*.72,found['x']))
                     page.mouse.move(x,height*.58)
                     page.mouse.wheel(0,350 if found['y']>=height*.86 else -350)
                     page.wait_for_timeout(150)
@@ -77,6 +89,9 @@ def main():
                 print(label,'click',text,round(found['x']),round(found['y']),flush=True)
                 if mobile:page.touchscreen.tap(found['x'],found['y'])
                 else:page.mouse.click(found['x'],found['y'])
+                if switched:
+                    page.wait_for_timeout(220)
+                    t=phone.locate(page,'操作实物');page.touchscreen.tap(t['x'],t['y']);page.wait_for_timeout(180)
             def saved(predicate,timeout=15):
                 deadline=time.monotonic()+timeout
                 while time.monotonic()<deadline:
@@ -99,6 +114,8 @@ def main():
                 page.wait_for_timeout(450)
             def run_task_job(name):
                 for attempt in range(100):
+                    page.wait_for_function("""()=>{const s=OrbitalTouch.state,a=s.repair_animation;return !s.repair_task||s.repair_task==='dust'||a?.task===s.repair_task&&a.phase==='idle'}""",timeout=15000)
+                    if args.mechanical_only: page.wait_for_timeout(500)
                     s=status();task=s.get('repair_task','')
                     if not task:
                         print(label,name,'completed',flush=True)
@@ -109,7 +126,7 @@ def main():
                     assert s.get('repair_targets'),s
                     target=s['repair_targets'][0]
                     # Every other action uses the real part contact target.
-                    if attempt%2==0:
+                    if attempt%2==0 and not args.mechanical_only:
                         transfer=abs(target['drop_x']-target['x'])+abs(target['drop_y']-target['y'])>4
                         if transfer:
                             points=[(target['x']+(target['drop_x']-target['x'])*i/8,target['y']+(target['drop_y']-target['y'])*i/8) for i in range(9)]
@@ -120,10 +137,10 @@ def main():
                                 page.mouse.up()
                         elif mobile:page.touchscreen.tap(target['x'],target['y'])
                         else:page.mouse.click(target['x'],target['y'])
-                    else:click(s['repair_action'])
+                    else:click('@repair_primary' if args.mechanical_only else s['repair_action'])
                     page.wait_for_timeout(220)
                     if attempt<2:snap(f'{name}-{task}-contact-{attempt}')
-                    page.wait_for_function("""old=>{const s=OrbitalTouch.state,a=s.repair_animation;return s.repair_task!==old.task || a?.complete || a?.phase==='idle'&&a.step>old.step}""",arg={'task':task,'step':prior['step']},timeout=12000)
+                    page.wait_for_function("""old=>{const s=OrbitalTouch.state,a=s.repair_animation;return s.repair_task!==old.task || a?.task!==old.animation_task || a?.complete || a?.phase==='idle'&&a.step>old.step}""",arg={'task':task,'animation_task':prior.get('task',task),'step':prior['step']},timeout=12000)
                     if status().get('repair_animation',{}).get('complete'):
                         page.wait_for_function('task=>OrbitalTouch.state.repair_task!==task',arg=task,timeout=5000)
                 raise AssertionError(('unbounded work order',status()))
@@ -193,9 +210,9 @@ def main():
                         touch.send('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[{'x':x,'y':y}]})
                     else:
                         page.mouse.move(x,y);page.mouse.down()
-                    page.wait_for_timeout(200)
+                    page.wait_for_function('before=>OrbitalTouch.state.repair_grime<before',arg=before,timeout=5000)
                     contact=status()['repair_grime']
-                    page.wait_for_timeout(700)
+                    page.wait_for_function('contact=>OrbitalTouch.state.repair_grime<contact',arg=contact,timeout=5000)
                     polished=status()['repair_grime']
                     assert polished < contact < before,('held cloth stopped fading grime',before,contact,polished)
                     snap('cloth-contact-fade')
@@ -248,7 +265,9 @@ def main():
                 click(forged_name)
                 click('伪装加工');phone.wait(page,"s.repair_mode==='forge'")
                 truth=forged['watch'];ap_before=status()['ap']
-                for method,title in [('logo','重描标识'),('serial','伪造紫外编号'),('weight','配重掩盖缺件')]:
+                methods=[('logo','重描标识'),('serial','伪造紫外编号'),('weight','配重校准')]
+                if args.forgery_method: methods=[entry for entry in methods if entry[0]==args.forgery_method]
+                for method,title in methods:
                     click(title);phone.wait(page,f"s.repair_task==='forge_{method}'")
                     # completed forgery remains on its last frame and is blocked from a repeat.
                     for attempt in range(30):
@@ -261,17 +280,17 @@ def main():
                         page.wait_for_function("""step=>{const a=OrbitalTouch.state.repair_animation;return a?.complete||a?.phase==='idle'&&a.step>step}""",arg=prior['step'],timeout=12000)
                     else:raise AssertionError(('forgery did not finish',method,status()))
                     snap(f'forge-{method}-finished')
-                final=saved(lambda s:len(next(it for it in s['inventory'] if it['uid']==forged['uid']).get('forgery',{}).get('methods',{}))==3)['state']
+                final=saved(lambda s:len(next(it for it in s['inventory'] if it['uid']==forged['uid']).get('forgery',{}).get('methods',{}))==len(methods))['state']
                 result=next(it for it in final['inventory'] if it['uid']==forged['uid'])
                 assert result['watch']==truth and not result['working'] and not result['authentic'],'forgery changed physical truth'
-                assert status()['ap']==ap_before-3,'forgery charged more than once'
+                assert status()['ap']==ap_before-len(methods),'forgery charged more than once'
                 if mobile:
                     page.set_viewport_size({'width':667,'height':375});page.wait_for_timeout(500);snap('small-phone-forgery')
                     page.set_viewport_size({'width':390,'height':844});page.wait_for_timeout(250)
                     page.set_viewport_size({'width':844,'height':390});page.wait_for_timeout(500)
                     assert status()['repair_uid']==forged['uid'],'rotation changed physical identity'
                 assert not errors,errors
-                scope='all three physical forgeries' if args.forgery_only else 'cleaning partial/page/reload, real quartz'+('/mechanical' if not mobile else '')+' repair, all three physical forgeries'
+                scope=('physical forgery '+args.forgery_method if args.forgery_method else 'all three physical forgeries') if args.forgery_only else 'cleaning partial/page/reload, real quartz'+('/mechanical' if not mobile else '')+' repair, all three physical forgeries'
                 print(label,scope,'PASS',flush=True)
             except Exception:
                 snap('failure');print(label,'FAIL status:',status(),flush=True)

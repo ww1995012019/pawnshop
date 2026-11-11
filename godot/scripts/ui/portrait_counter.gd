@@ -23,6 +23,8 @@ var flipped := false
 var last_item := ""
 var desktop_ui: Control
 var active := false
+var landscape: Control
+var backdrop: TextureRect
 var refresh_time := 0.0
 
 func setup(controller) -> void:
@@ -37,7 +39,11 @@ func setup(controller) -> void:
 	desk.add_child(desktop_ui)
 	for child in desk.get_children():
 		if child != self and child != desktop_ui and child is Control: child.reparent(desktop_ui)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build()
+	landscape = preload("res://scripts/ui/landscape_counter.gd").new()
+	add_child(landscape)
+	landscape.setup(self)
 	_sync_layout()
 
 func _picture(texture: Texture2D, height: float) -> TextureRect:
@@ -57,7 +63,7 @@ func _key(text: String, action: Callable, kind := "secondary", icon := "") -> Bu
 	return key
 
 func _build() -> void:
-	var backdrop := TextureRect.new()
+	backdrop = TextureRect.new()
 	backdrop.texture = UIKit.tex("res://assets/scene/shop_pixel.png")
 	backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -199,11 +205,15 @@ func _decorate_key(key: Button, icon: Texture2D, caption: String, height: float,
 
 func _sync_layout() -> void:
 	var next: bool = shell.portrait_mode()
-	visible = next
-	desktop_ui.visible = not next
+	var wide: bool = shell.landscape_mode()
+	visible = next or wide
+	layout.visible = next
+	backdrop.visible = next
+	desktop_ui.visible = not (next or wide)
 	desk.back_root.visible = not next
 	desk.stage_root.visible = not next
-	active = next
+	landscape.set_active(wide)
+	active = next or wide
 	if next:
 		# Only the illustration flexes; text and touch controls retain their size.
 		window_frame.custom_minimum_size.y = clampf(get_viewport_rect().size.y*0.18,110,154)
@@ -298,14 +308,12 @@ func _tools_popup() -> void:
 		row.add_child(key)
 
 func _open_instrument(id: String) -> void:
-	await get_tree().create_timer(0.18).timeout
-	if shell.modal_open() or desk.busy: return
-	shell.go("inspect")
+	if not await _wait_for_sheet_close() or desk.busy: return
+	desk._open_instrument("inspect")
 	if shell.workspace_open(): shell.workspace_shell.page._set_tool(id)
 
 func _goods_popup() -> void:
-	if not CounterDialogue.active(Game.state): return
-	var modal: Array = shell.modal("选择柜台货物",360)
+	var modal: Array = shell.modal("柜台货物 / 店内库存",360)
 	for good in CounterDialogue.table_items(Game.state):
 		var uid: String = good.uid
 		var item = TradeSession.item(Game.state,uid)
@@ -316,6 +324,20 @@ func _goods_popup() -> void:
 		key.icon = UIKit.physical_icon(item)
 		key.expand_icon = true
 		key.add_theme_constant_override("icon_max_width",40)
+		modal[0].add_child(key)
+
+	modal[0].add_child(UIKit.label("店内库存 · 点击推荐 / 查看",16,UIKit.AMBER))
+	for original in desk.stock_grid.get_children():
+		if not original is Button or not (String(original.name).begins_with("stock_recommend_") or original.name == "wanted_inventory"): continue
+		var ref: WeakRef = weakref(original)
+		var key := _key(original.tooltip_text.get_slice("\n",0),func():
+			modal[1].call()
+			_invoke.call_deferred(ref))
+		key.name = "mobile_"+String(original.name)
+		key.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		key.icon = original.icon
+		key.expand_icon = true
+		key.add_theme_constant_override("icon_max_width",36)
 		modal[0].add_child(key)
 
 func _quote_popup() -> void:
@@ -355,11 +377,34 @@ func _actions() -> void:
 		b.disabled = original.disabled
 		modal[0].add_child(b)
 
+	if is_instance_valid(desk.alarm_button):
+		var alarm_ref: WeakRef = weakref(desk.alarm_button)
+		var alarm := _key(desk.alarm_button.text,func():
+			modal[1].call()
+			_invoke.call_deferred(alarm_ref))
+		alarm.name = "mobile_alarm_button"
+		alarm.disabled = desk.alarm_button.disabled
+		modal[0].add_child(alarm)
+	modal[0].add_child(_key("选择货物 / 推荐库存",func():
+		modal[1].call()
+		_open_goods_after_close.call_deferred()))
+
+func _open_goods_after_close() -> void:
+	if await _wait_for_sheet_close(): _goods_popup()
+
+func _wait_for_sheet_close() -> bool:
+	# Queue the chosen action behind the real close boundary, including slow
+	# rendering frames. A different, newly opened sheet cancels this choice.
+	while shell.modal_open():
+		for dim in shell.modal_layer.get_children():
+			if not dim.get_meta("closing",false): return false
+		await get_tree().process_frame
+	return true
+
 func _invoke(ref: WeakRef) -> void:
-	# Closing tweens keep the modal alive briefly. Wait for its input boundary.
-	await get_tree().create_timer(0.18).timeout
+	if not await _wait_for_sheet_close(): return
 	var original = ref.get_ref()
-	if is_instance_valid(original) and not original.disabled and not shell.modal_open(): original.pressed.emit()
+	if is_instance_valid(original) and not original.disabled: original.pressed.emit()
 
 func _tasks() -> void:
 	var modal: Array = shell.modal("店内事务",360)

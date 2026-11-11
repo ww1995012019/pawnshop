@@ -40,8 +40,8 @@ func enter() -> void:
 	var holder_scroll := ScrollContainer.new()
 	holder_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	holder_scroll.follow_focus = true
-	holder_scroll.custom_minimum_size.x = 0 if shell.portrait_mode() else CELL * 10
-	if shell.portrait_mode(): holder_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	holder_scroll.custom_minimum_size.x = 0 if shell.mobile_mode() else CELL * 10
+	if shell.mobile_mode(): holder_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	holder.add_child(holder_scroll)
 	var v := UIKit.vbox(10)
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -88,6 +88,11 @@ func relayout() -> void:
 	if not is_instance_valid(holder) or not is_instance_valid(detail_panel):
 		return
 	var r: Rect2 = shell.content_rect()
+	if shell.landscape_mode():
+		holder.position = r.position
+		detail_panel.position = Vector2(r.position.x+r.size.x*.54+8,r.position.y)
+		_resize_panels()
+		return
 	if shell.portrait_mode():
 		holder.position = r.position
 		detail_panel.position = r.position + Vector2(0,r.size.y*0.43+8)
@@ -106,6 +111,11 @@ func _resize_panels() -> void:
 	if not is_instance_valid(holder) or not is_instance_valid(detail_panel):
 		return
 	var available: float = shell.content_rect().size.y
+	if shell.landscape_mode():
+		var r: Rect2 = shell.content_rect()
+		holder.size = Vector2(r.size.x*.54,r.size.y)
+		detail_panel.size = Vector2(r.size.x*.46-8,r.size.y)
+		return
 	if shell.portrait_mode():
 		var r: Rect2 = shell.content_rect()
 		holder.size = Vector2(r.size.x,r.size.y*0.43)

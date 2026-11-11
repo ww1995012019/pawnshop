@@ -127,7 +127,11 @@ func action_plan_signature() -> String:
 		ids.append(a.id)
 	return "/".join(ids)
 
+var wide_layout := false
 func stage_working_rect() -> Rect2:
+	if wide_layout:
+		var unit := minf(size.x/780.0,size.y/340.0)
+		return Rect2(Vector2((size.x-780*unit)*.5+130*unit,(size.y-340*unit)*.5-60*unit),SURFACE*unit)
 	var scale_factor := minf(size.x / SURFACE.x, size.y / SURFACE.y)
 	return Rect2((size - SURFACE * scale_factor) * 0.5, SURFACE * scale_factor)
 
@@ -495,7 +499,7 @@ func _close_actions() -> void:
 		_: _action("tighten_cover", "顺时针旋紧后盖", "双爪卡住槽口，顺时针旋至盖缘齐平", "opener", CENTER, "turn", 1.15)
 
 func _rack(_tool: String) -> Vector2:
-	return Vector2(91, 430)
+	return Vector2(-54,188) if wide_layout else Vector2(91,430)
 
 func _screw_pos(index: int) -> Vector2:
 	return CENTER + Vector2.from_angle(-PI * 0.75 + index * PI * 0.5) * 91.0
@@ -553,6 +557,9 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO)
 
 func _draw_mat() -> void:
+	if wide_layout:
+		_panel(Rect2(-125,60,775,340),Color("203332"),Color("53635c"),9)
+		return
 	_panel(Rect2(3, 3, 634, 454), Color("142326"), Color("53635c"), 13)
 	_panel(Rect2(11, 11, 618, 438), Color("203332"), Color("304541"), 9)
 	for x in range(24, 630, 13):
@@ -966,6 +973,12 @@ func _draw_instrument() -> void:
 		draw_polyline(PackedVector2Array([Vector2(445, 364), Vector2(420, 364), Vector2(412, 301), Vector2(360, 227)]), Color("d1b16d"), 2, true)
 
 func _draw_rack() -> void:
+	if wide_layout:
+		_panel(Rect2(-114,96,116,212),Color("132320"),Color("52665c"),5)
+		if not _plan.is_empty() and not _state.complete:
+			var a: Dictionary = _plan[mini(int(_state.step),_plan.size()-1)]
+			if _state.phase == "idle": _draw_implement(String(a.tool),_rack(a.tool),0.0,.65,false)
+		return
 	_panel(Rect2(31, 398, 578, 47), Color("132320"), Color("52665c"), 5)
 	if not interaction_allowed:
 		_text(Vector2(49, 427), "暂不能操作 · 条件满足后可继续", 16, MUTED)
@@ -1122,6 +1135,7 @@ func _draw_implement(tool: String, tip: Vector2, angle: float, ratio: float, wor
 	draw_set_transform(rect.position, 0.0, Vector2.ONE * unit)
 
 func _draw_labels() -> void:
+	if wide_layout: return
 	var names := {"open":"开盖拆检", "wash":"金属件清洗 / 干燥", "replace":"故障件更换", "assemble":"定点润滑 / 回装", "test":"走时校验 / 封盖", "forge_logo":"重描标识", "forge_serial":"紫外编号覆印", "forge_weight":"后盖配重加工", "forge_case":"改装目标外壳"}
 	_text(Vector2(29, 34), String(names.get(_task, "维修工位")), 19, INK)
 	var movement := "机械机芯" if _profile.get("movement", "quartz") == "mechanical" else "石英机芯"

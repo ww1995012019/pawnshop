@@ -147,6 +147,7 @@ func _draw_finish() -> void:
   draw_arc(CENTER,115,-2.9,-2.9+progress*1.7,40,Color(0.99,0.95,0.77,progress*0.75),2.2,true)
 
 func _draw_labels() -> void:
+ if wide_layout: return
  if not _task.begins_with("refurb_") and _task!="forge_case":
   super._draw_labels()
   return
@@ -161,6 +162,9 @@ func _result_text() -> String:
  return super._result_text()
 
 func _draw_rack() -> void:
+ if wide_layout:
+  super._draw_rack()
+  return
  if _task.begins_with("refurb_") and not _state.is_empty() and _state.complete:
   _panel(Rect2(31,398,578,47),Color("132320"),Color("52665c"),5)
   _text(Vector2(49,426),"本项翻新已完成 · 工具已收妥",14,CYAN)

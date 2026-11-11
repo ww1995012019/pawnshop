@@ -21,6 +21,13 @@ func check_workbench(page, label: String) -> void:
 	var left: Control = page.instrument_panel if active.page_name == "inspect" else page.get("list_panel")
 	var right: Control = page.detail_panel if active.page_name == "inspect" else page.get("detail_panel")
 	var bench: Control = page.bench if active.page_name == "inspect" else page.get("bench")
+	if active.landscape_mode():
+		check(r.encloses(bench.get_rect()),label+" mobile action controls stay inside the drawer")
+		var surface: Rect2 = page.mat_rect
+		check(r.encloses(surface),label+" mobile live surface stays inside the drawer")
+		check(not surface.intersects(bench.get_rect()),label+" mobile controls do not cover the live surface")
+		if active.page_name == "repair": check(page.art.wide_layout,label+" uses the wide physical work surface")
+		return
 	check(left != null and right != null and bench != null, label + " exposes all three columns")
 	if left == null or right == null or bench == null:
 		return

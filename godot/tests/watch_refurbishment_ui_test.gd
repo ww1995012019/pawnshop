@@ -46,9 +46,13 @@ func run() -> void:
  shell.close_workspace()
  await settle()
  shell.go("repair",uid)
+ # Inspect restored state before wall-clock frames resume the saved segment.
+ # Under load eight frames can finish a reduced-motion action legitimately.
+ shell.active_shell().page.art.set_process(false)
  await settle()
  page = shell.active_shell().page
  check(page.mode == "refurb" and page.task == "refurb_case" and page.art.progress_snapshot().step == saved.step,"returning resumes the independently saved case job")
+ page.art.set_process(true)
  for count in 35:
   if game.item(uid).refurbishment.done.has("case"): break
   page.art.advance()
