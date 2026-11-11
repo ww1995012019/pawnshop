@@ -157,8 +157,9 @@ static func build_theme() -> Theme:
 	t.set_stylebox("normal", "OptionButton", key_style("secondary", "normal"))
 	t.set_stylebox("hover", "OptionButton", key_style("secondary", "hover"))
 	t.set_stylebox("pressed", "OptionButton", key_style("secondary", "pressed"))
+	t.set_font_size("font_size","OptionButton",14 if mobile_ui else 16)
 	t.set_stylebox("panel", "PopupMenu", box(Color("121a1d"), PLATE_EDGE, 6, 1, 6, 8))
-	t.set_font_size("font_size", "PopupMenu", 20)
+	t.set_font_size("font_size", "PopupMenu", 14 if mobile_ui else 16)
 	t.set_constant("separation", "VBoxContainer", GAP)
 	t.set_constant("separation", "HBoxContainer", GAP)
 	t.set_constant("h_separation", "GridContainer", GAP)
@@ -194,6 +195,42 @@ static func label(text: String, size := 22, color := TEXT, is_mono := false, wra
 		# and numbers like "9–90" in one piece.
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return l
+
+## Selectors share the same compact metrics, including the opened menu.
+## Refresh on resize/open so a control created before rotation cannot retain
+## desktop font sizes or force its contents wider than the phone.
+static func option_button(min_width := 0.0) -> OptionButton:
+	var picker := OptionButton.new()
+	picker.set_meta("option_min_width",min_width)
+	_configure_option(picker,min_width)
+	picker.resized.connect(func(): _configure_option(picker,min_width))
+	picker.get_popup().about_to_popup.connect(func(): _configure_option(picker,min_width))
+	return picker
+
+static func refresh_option(picker: OptionButton) -> void:
+	_configure_option(picker,float(picker.get_meta("option_min_width",0.0)))
+
+static func _configure_option(picker: OptionButton, min_width: float) -> void:
+	var wide := phone_landscape()
+	var size := 14 if wide else 15 if mobile_ui else 16
+	picker.custom_minimum_size = Vector2(minf(min_width,160) if mobile_ui else min_width,30 if wide else 36)
+	picker.fit_to_longest_item = false
+	picker.clip_text = true
+	picker.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	picker.add_theme_font_size_override("font_size",size)
+	picker.add_theme_constant_override("arrow_margin",4)
+	for state in ["normal","hover","pressed","disabled"]:
+		var style := key_style("secondary",state,true)
+		style.content_margin_top = 2
+		style.content_margin_bottom = 2
+		picker.add_theme_stylebox_override(state,style)
+	var menu := picker.get_popup()
+	menu.add_theme_font_size_override("font_size",size)
+	menu.add_theme_stylebox_override("panel",box(Color("121a1d"),PLATE_EDGE,0,1,4,0))
+	menu.add_theme_constant_override("v_separation",8)
+	if picker.is_inside_tree():
+		var area := picker.get_viewport_rect().size
+		menu.max_size = Vector2i(maxi(160,int(area.x)-16),maxi(120,int(area.y*.75)))
 
 static func button(text: String, kind := "secondary", min_size := Vector2(0, 58), size := 22, icon_name := "") -> Button:
 	var b := Button.new()

@@ -274,12 +274,7 @@ func _refresh() -> void:
 		var def := GameData.order(o.id)
 		if o.status == "active":
 			var v := _card(def)
-			var opt := OptionButton.new()
-			opt.custom_minimum_size = Vector2(0, 46)
-			if shell.mobile_mode():
-				opt.fit_to_longest_item = false
-				opt.clip_text = true
-			opt.add_theme_font_size_override("font_size", 16 if shell.mobile_mode() else 20)
+			var opt := UIKit.option_button()
 			var cands := []
 			for it in s.inventory:
 				if it.defId == def.itemId:

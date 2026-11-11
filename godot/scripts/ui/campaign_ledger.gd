@@ -84,7 +84,7 @@ static func open(shell: Node) -> void:
 		stats.add_child(card)
 	content.add_child(UIKit.label("净现金流 = 累计收入 − 累计支出；含抵押本金，不代表利润。期初余额 + 净现金流 = 当前现金。", 17, UIKit.MUTED, false, true))
 	var filters := HFlowContainer.new()
-	filters.add_theme_constant_override("h_separation", 12)
+	filters.add_theme_constant_override("h_separation", 8)
 	filters.add_theme_constant_override("v_separation", 8)
 	content.add_child(filters)
 	var day_picker := _picker("ledger_day", "日期：全部营业日", -1)
@@ -146,10 +146,8 @@ static func _kind_label(kind: String) -> String:
 	return String(KIND_LABELS.get(kind, kind if kind != "" else "其他记录"))
 
 static func _picker(node_name: String, caption: String, metadata: Variant) -> OptionButton:
-	var picker := OptionButton.new()
+	var picker := UIKit.option_button(160 if UIKit.mobile_ui else 200)
 	picker.name = node_name
-	picker.custom_minimum_size = Vector2(230, 48)
-	picker.add_theme_font_size_override("font_size", 19)
 	picker.add_item(caption)
 	picker.set_item_metadata(0, metadata)
 	picker.select(0)

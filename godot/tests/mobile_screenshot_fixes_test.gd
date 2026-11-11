@@ -22,7 +22,16 @@ func run() -> void:
 	root.add_child(shell)
 	await frames()
 	shell._close_title()
+	load("res://scripts/ui/campaign_ledger.gd").open(shell)
+	await frames()
+	var initial_filter: OptionButton = shell.modal_layer.find_child("ledger_day",true,false)
 	shell.phone_override = true
+	root.size = Vector2i(945,514)
+	shell._fit()
+	await frames()
+	check(initial_filter.size.x<=180 and initial_filter.size.y<=32 and initial_filter.get_theme_font_size("font_size")<=14,"an already-open desktop filter compacts when switching to phone landscape")
+	shell.close_top_modal()
+	await frames()
 	for dimensions in [Vector2i(945,514),Vector2i(844,390),Vector2i(568,320),Vector2i(390,844)]:
 		root.size = dimensions
 		shell._fit()
@@ -54,6 +63,15 @@ func run() -> void:
 		await frames()
 		var header: HBoxContainer = shell.modal_layer.find_child("ledger_table_header",true,false)
 		var entries: VBoxContainer = shell.modal_layer.find_child("ledger_entries",true,false)
+		var filter_keys: Array[OptionButton] = []
+		for key_name in ["ledger_day","ledger_kind"]:
+			var filter: OptionButton = shell.modal_layer.find_child(key_name,true,false)
+			filter_keys.append(filter)
+			check(filter.size.y <= (32 if shell.landscape_mode() else 36),"ledger filter height follows compact phone metrics")
+			check(filter.size.x <= 180,"ledger filters do not reserve oversized desktop widths")
+			check(filter.get_theme_font_size("font_size") <= (14 if shell.landscape_mode() else 15),"ledger filter text matches nearby controls")
+			check(filter.get_popup().get_theme_font_size("font_size") <= (14 if shell.landscape_mode() else 15),"opened dropdown menu also uses compact readable type")
+		check(absf(filter_keys[0].get_global_rect().position.y-filter_keys[1].get_global_rect().position.y)<1,"date and type filters fit on one row")
 		check(header != null and header.get_child_count()==4,"ledger has Date / Type / Description / Amount column headers")
 		if header != null:
 			for row in entries.get_children():
@@ -64,6 +82,13 @@ func run() -> void:
 			var sheet: Control = shell.modal_layer.find_child("ModalSheet",true,false)
 			check(shell.safe_area().grow(1).encloses(sheet.get_global_rect()),"ledger table fits the phone width")
 		shell.close_top_modal()
+		await frames()
+		shell.go("inspect",game.state.inventory[0].uid)
+		await frames()
+		var inspection_picker: OptionButton = shell.active_shell().page.picker
+		check(inspection_picker.get_combined_minimum_size().y <= (32 if shell.landscape_mode() else 36),"inspection uses the same compact dropdown sizing")
+		check(inspection_picker.get_popup().get_theme_font_size("font_size") <= (14 if shell.landscape_mode() else 15),"inspection popup menu matches the phone controls")
+		shell.close_workspace()
 		await frames()
 	shell.queue_free()
 	await frames()

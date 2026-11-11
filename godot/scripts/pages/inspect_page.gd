@@ -87,8 +87,7 @@ func _build_panels() -> void:
 	detail_panel = side_panel(470)
 	var rv := UIKit.vbox(10)
 	detail_panel.add_child(rv)
-	picker = OptionButton.new()
-	picker.custom_minimum_size = Vector2(0,52)
+	picker = UIKit.option_button()
 	picker.item_selected.connect(func(i):
 		Game.focus_uid = picker.get_item_metadata(i)
 		_load_item())
@@ -226,18 +225,8 @@ func _landscape_layout() -> Rect2:
 	detail_panel.position = Vector2(r.end.x-sidebar,r.position.y+36)
 	detail_panel.size = Vector2(sidebar,30)
 	detail_panel.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",4))
-	picker.custom_minimum_size = Vector2(0,30)
-	picker.add_theme_font_size_override("font_size",14)
-	picker.get_popup().add_theme_font_size_override("font_size",14)
 	picker.expand_icon = true
 	picker.add_theme_constant_override("icon_max_width",18)
-	for state in ["normal","hover","pressed"]:
-		var style := UIKit.key_style("secondary",state,true)
-		style.content_margin_top = 2
-		style.content_margin_bottom = 2
-		picker.add_theme_stylebox_override(state,style)
-	picker.fit_to_longest_item = false
-	picker.clip_text = true
 	bench.position = Vector2(r.end.x-sidebar,r.position.y+72)
 	bench.size = Vector2(sidebar,r.size.y-72)
 	bench.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",8))

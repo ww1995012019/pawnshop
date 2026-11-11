@@ -555,6 +555,10 @@ func _fit() -> void:
 		_layout_workspace()
 	if page != null and page.has_method("relayout"):
 		page.call("relayout")
+	# A FlowContainer can keep a selector's own size unchanged on rotation;
+	# refresh metrics even when that control emits no resized signal.
+	for picker in root_ui.find_children("*","OptionButton",true,false):
+		UIKit.refresh_option(picker)
 	_place_toasts()
 	_layout_title()
 
