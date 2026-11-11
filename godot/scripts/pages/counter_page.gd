@@ -1150,28 +1150,34 @@ func _pick_goods() -> void:
 	var t = Game.state.trade
 	var m: Array = shell.modal("为 %s 挑选货物" % GameData.npc(t.npcId).name, 1180)
 	var body: VBoxContainer = m[0]
-	body.add_child(UIKit.label("需求：" + Model.customer_need(t.npcId), 20, UIKit.CYAN, false, true))
-	var g := UIKit.grid(1 if shell.mobile_mode() else 4, 8 if shell.mobile_mode() else 12)
+	body.add_child(UIKit.label("需求：" + Model.customer_need(t.npcId) + (" · 金额单位 Cr" if shell.mobile_mode() else ""), 20, UIKit.CYAN, false, true))
+	var g := UIKit.grid(4, 8 if shell.mobile_mode() else 12)
+	g.name = "PickGoodsGrid"
 	for it in Game.state.inventory:
 		if it.owner != "shop":
 			continue
 		var why = Model.sale_eligibility(it, t.npcId)
 		var card := UIKit.plate(UIKit.inset_style(10))
 		card.custom_minimum_size = Vector2(0 if shell.mobile_mode() else 266, 0)
-		var cv := UIKit.vbox(6)
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var cv := UIKit.vbox(4 if shell.mobile_mode() else 6)
 		card.add_child(cv)
 		var pic := TextureRect.new()
 		pic.texture = UIKit.physical_icon(it)
 		pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		pic.custom_minimum_size = Vector2(0, 120)
+		pic.custom_minimum_size = Vector2(0,(48 if get_viewport_rect().size.y<=390 else 64) if shell.mobile_mode() else 120)
 		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		cv.add_child(pic)
-		cv.add_child(UIKit.label(WatchForgery.sale_name(it), 19, UIKit.TEXT))
-		cv.add_child(UIKit.label("品相 %s · %s · 物证 %d" % [UIKit.pct(it.condition), "本店维护" if it.repaired else "状态待对照", Model.evidence_count(it)], 15, UIKit.MUTED))
+		var title := UIKit.label(WatchForgery.sale_name(it),16 if shell.mobile_mode() else 19, UIKit.TEXT,false,true)
+		title.max_lines_visible = 2
+		title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		cv.add_child(title)
+		var condition_text := "品相 %s · 物证 %d%s" % [UIKit.pct(it.condition),Model.evidence_count(it)," · 已维护" if it.repaired else ""] if shell.mobile_mode() else "品相 %s · %s · 物证 %d" % [UIKit.pct(it.condition), "本店维护" if it.repaired else "状态待对照", Model.evidence_count(it)]
+		cv.add_child(UIKit.label(condition_text, 13 if shell.mobile_mode() else 15, UIKit.MUTED,false,true))
 		var est := Model.estimate(it)
-		cv.add_child(UIKit.label("挂牌 %s · 成本 %s" % [UIKit.money(it.listPrice), UIKit.money(it.cost)], 15, UIKit.AMBER))
-		cv.add_child(UIKit.label("估值 %s" % ("%s–%s Cr" % [Model.jnum(est.low), Model.jnum(est.high)]), 15, UIKit.CYAN))
+		cv.add_child(UIKit.label("挂牌 %s · 成本 %s" % [Model.jnum(it.listPrice) if shell.mobile_mode() else UIKit.money(it.listPrice), Model.jnum(it.cost) if shell.mobile_mode() else UIKit.money(it.cost)], 13 if shell.mobile_mode() else 15, UIKit.AMBER,false,true))
+		cv.add_child(UIKit.label("估值 %s–%s%s" % [Model.jnum(est.low),Model.jnum(est.high),"" if shell.mobile_mode() else " Cr"], 13 if shell.mobile_mode() else 15, UIKit.CYAN,false,true))
 		var b := UIKit.button("推荐这件" if why == null else "不符合", "primary" if why == null else "chip", Vector2(0, 44), 17)
 		b.disabled = why != null
 		if why != null:
@@ -1183,12 +1189,15 @@ func _pick_goods() -> void:
 			Game.dispatch({"type": "SELECT_TRADE", "uid": uid}))
 		cv.add_child(b)
 		g.add_child(card)
-	var sc := ScrollContainer.new()
-	sc.custom_minimum_size = Vector2(0,minf(480,get_viewport_rect().size.y-250) if shell.portrait_mode() else 620)
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sc.add_child(g)
-	body.add_child(sc)
+	if shell.mobile_mode():
+		body.add_child(g)
+	else:
+		var sc := ScrollContainer.new()
+		sc.custom_minimum_size = Vector2(0,620)
+		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		sc.add_child(g)
+		body.add_child(sc)
 
 # ---------------------------------------------------------------- bubble
 

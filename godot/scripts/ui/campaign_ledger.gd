@@ -112,41 +112,32 @@ static func open(shell: Node) -> void:
 	var paper := UIKit.plate(UIKit.paper_style(14))
 	paper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_child(paper)
-	var entries := UIKit.vbox(10)
+	var table := UIKit.vbox(0)
+	table.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	paper.add_child(table)
+	var header := _table_row(["日期","类型","摘要","金额（Cr）"],shell.mobile_mode(),false,true)
+	header.name = "ledger_table_header"
+	table.add_child(header)
+	var entries := UIKit.vbox(0)
 	entries.name = "ledger_entries"
 	entries.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	paper.add_child(entries)
+	table.add_child(entries)
 	var refresh := func(_index: int = 0) -> void:
 		UIKit.clear(entries)
 		var rows := filtered_entries(state, int(day_picker.get_item_metadata(day_picker.selected)), String(kind_picker.get_item_metadata(kind_picker.selected)))
-		count_label.text = "显示 %d / %d 笔 · 日期 / 类型 / 摘要 / 金额（Cr）" % [rows.size(), state.get("ledger", []).size()]
+		count_label.text = "显示 %d / %d 笔" % [rows.size(), state.get("ledger", []).size()]
 		if rows.is_empty():
 			entries.add_child(UIKit.label("还没有流水记录。" if state.get("ledger", []).is_empty() else "没有符合筛选条件的流水。", 20, UIKit.INK, false, true))
-		for entry in rows:
-			if shell.mobile_mode():
-				var compact_row := UIKit.vbox(3)
-				var heading := UIKit.hbox(6)
-				var caption := UIKit.label("第 %02d 天 · %s" % [int(entry.get("day",0)),_kind_label(String(entry.get("kind","")))],14,UIKit.INK,false,true)
-				caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				heading.add_child(caption)
-				var amount := float(entry.get("amount",0))
-				heading.add_child(UIKit.label(("+" if amount > 0 else "") + UIKit.money(amount),14,Color("2f6b3a") if amount > 0 else UIKit.RUST,true))
-				compact_row.add_child(heading)
-				compact_row.add_child(UIKit.label(String(entry.get("label","")),16,UIKit.INK,false,true))
-				entries.add_child(compact_row)
-				continue
-			var row := UIKit.hbox(10)
-			row.add_child(_cell("第 %02d 天" % int(entry.get("day", 0)), 80))
-			row.add_child(_cell(_kind_label(String(entry.get("kind", ""))), 140))
-			var description := UIKit.label(String(entry.get("label", "")), 18, UIKit.INK, false, true)
-			description.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			row.add_child(description)
-			var amount := float(entry.get("amount", 0.0))
-			var value := _cell(("+" if amount > 0 else "") + UIKit.money(amount), 110)
-			value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			value.add_theme_color_override("font_color", Color("2f6b3a") if amount > 0 else UIKit.RUST if amount < 0 else UIKit.INK)
-			row.add_child(value)
-			entries.add_child(row)
+		for index in rows.size():
+			var entry: Dictionary = rows[index]
+			var amount := float(entry.get("amount",0))
+			entries.add_child(_table_row([
+				"第%d天" % int(entry.get("day",0)),
+				_kind_label(String(entry.get("kind",""))),
+				String(entry.get("label","")),
+				("+" if amount > 0 else "") + Model.jnum(amount)
+			],shell.mobile_mode(),index%2==1))
+
 	day_picker.item_selected.connect(refresh)
 	kind_picker.item_selected.connect(refresh)
 	refresh.call()
@@ -164,7 +155,27 @@ static func _picker(node_name: String, caption: String, metadata: Variant) -> Op
 	picker.select(0)
 	return picker
 
-static func _cell(text: String, width: float) -> Label:
-	var cell := UIKit.label(text, 18, UIKit.INK, false, true)
-	cell.custom_minimum_size.x = width
-	return cell
+## Identical cell padding and stretch ratios keep every row aligned, while
+## wrapping descriptions and large amounts instead of widening the dialog.
+static func _table_row(values: Array, mobile: bool, stripe := false, header := false) -> HBoxContainer:
+	var row := UIKit.hbox(0)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var ratios := [0.12,0.18,0.48,0.22]
+	for i in 4:
+		var cell := PanelContainer.new()
+		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		cell.size_flags_stretch_ratio = ratios[i]
+		cell.mouse_filter = Control.MOUSE_FILTER_PASS
+		var fill := Color("534c3b") if header else Color("e7daba") if stripe else Color("f0e5cc")
+		cell.add_theme_stylebox_override("panel",UIKit.box(fill,Color("c2b18c"),0,1,4,0))
+		var color := Color("fff0d3") if header else UIKit.INK
+		if i==3 and not header:
+			color = Color("2f6b3a") if String(values[i]).begins_with("+") else UIKit.RUST if String(values[i]).begins_with("-") else UIKit.INK
+		var label := UIKit.label(str(values[i]),14 if mobile else 17,color,i==3 and not header,true)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.mouse_filter = Control.MOUSE_FILTER_PASS
+		if i==3: label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		cell.add_child(label)
+		row.add_child(cell)
+	return row

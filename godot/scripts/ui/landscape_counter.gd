@@ -151,6 +151,15 @@ func _layout() -> void:
 	if screen == last_size and inset == area.position: return
 	inset = area.position
 	last_size = screen
+	# This view may have been constructed before the browser acquired phone
+	# dimensions. Apply its header metrics when it actually becomes visible.
+	var header_style := UIKit.skin("graphite","xs",0)
+	header_style.thin = true
+	panels[0].add_theme_stylebox_override("panel",header_style)
+	for label in [heading,balance]:
+		label.add_theme_font_size_override("font_size",14)
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.clip_text = true
 	var left := clampf(screen.x*.22,145,200)
 	var right := clampf(screen.x*.22,150,200)
 	var top := 36.0
@@ -162,8 +171,8 @@ func _layout() -> void:
 	_place(panels[2],mat)
 	_place(panels[3],Rect2(screen.x-right-4,top,right,inner_h))
 	_place(panels[4],Rect2(0,bottom,screen.x,40))
-	_place(heading,Rect2(12,2,240,28))
-	_place(balance,Rect2(screen.x-350,2,338,28))
+	_place(heading,Rect2(12,2,screen.x*.52-20,28))
+	_place(balance,Rect2(screen.x*.52,2,screen.x*.48-12,28))
 	balance.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_place(visitor_name,Rect2(18,top+8,left-24,24))
 	var customer_h := clampf(inner_h-108,80,180)
