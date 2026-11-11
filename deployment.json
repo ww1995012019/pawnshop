@@ -1,8 +1,8 @@
 {
-  "source_commit": "3f6a6aefb34c79b22cfc4c568770f862aac5b203",
-  "release_id": "f9f78559cd1361ac",
-  "pack": "workbench-76060df1e414d165.pck",
-  "html_sha256": "1f2be195150007bda4f283a61c9cafc40d855b78263995d4585ed77f1f87b633",
+  "source_commit": "ec3ddffb31176aafeb039d400aa3a6a549e47555",
+  "release_id": "f5ad962f184e42f7",
+  "pack": "workbench-62148ca6516c350d.pck",
+  "html_sha256": "13ac82518a1dc78650c9b7013a937423b327a4889a140737a9445fa40143feae",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 80,
+  "native_regression_groups": 81,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -65,5 +65,9 @@
   "inspection_isolation_excluded": true,
   "inspection_player_preparation": true,
   "mobile_counter_tool_icons_version": 1,
-  "mobile_repair_item_grid_version": 1
+  "mobile_repair_item_grid_version": 1,
+  "mobile_ui_density_version": 1,
+  "mobile_dialog_bounds_version": 1,
+  "mobile_order_summary_version": 1,
+  "mobile_warehouse_actions_version": 1
 }
