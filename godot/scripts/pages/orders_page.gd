@@ -30,7 +30,7 @@ func enter() -> void:
 	surface.add_child(tab_row)
 	for status in ["open", "active", "closed"]:
 		var key: String = status
-		var tab := UIKit.button("", "secondary", Vector2(210, 56), 22)
+		var tab := UIKit.button("", "secondary", Vector2(0 if shell.portrait_mode() else 210, 50 if shell.portrait_mode() else 56), 15 if shell.portrait_mode() else 22)
 		tab.pressed.connect(func(): _select_status(key))
 		tab_row.add_child(tab)
 		tabs[key] = tab
@@ -134,7 +134,7 @@ func _card(def: Dictionary) -> VBoxContainer:
 	var pic := TextureRect.new()
 	pic.texture = UIKit.item_icon(def.itemId)
 	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	pic.custom_minimum_size = Vector2(84, 84)
+	pic.custom_minimum_size = Vector2(54,64) if shell.portrait_mode() else Vector2(84,84)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	frame.add_child(pic)
@@ -142,7 +142,7 @@ func _card(def: Dictionary) -> VBoxContainer:
 	var hv := UIKit.vbox(4)
 	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hv.add_child(UIKit.label(def.name, 26, UIKit.INK, false, true))
-	var meta := UIKit.hbox(14)
+	var meta: BoxContainer = UIKit.vbox(4) if shell.portrait_mode() else UIKit.hbox(14)
 	meta.add_child(UIKit.label("报酬 " + UIKit.money(def.reward), 22, UIKit.RUST, true))
 	meta.add_child(UIKit.label("第 %s 天前交付" % Model.jnum(def.dueDay), 18, INK_SOFT))
 	hv.add_child(meta)
@@ -285,7 +285,7 @@ func _refresh() -> void:
 			cols.closed.add_child(v.get_parent())
 	for k in cols:
 		counts[k] = cols[k].get_child_count()
-		tabs[k].text = "%s  %02d" % [STATUS_LABELS[k], counts[k]]
+		tabs[k].text = "%s %d" % [{"open":"可接","active":"进行","closed":"记录"}[k],counts[k]] if shell.portrait_mode() else "%s  %02d" % [STATUS_LABELS[k], counts[k]]
 		if counts[k] == 0:
 			_empty_state(k)
 	_select_status(selected_status)

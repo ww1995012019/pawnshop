@@ -104,23 +104,22 @@ def main():
                     'browser metadata to extension' not in message.text else None)
             page.on("request", lambda request: downloads.append(request.url) if ".wasm" in request.url or ".pck" in request.url else None)
             page.goto(args.url)
-            # A phone held upright starts straight away: no rotate prompt, the same
-            # landscape shop turned a quarter turn, and taps land on its buttons.
+            # Upright phones use native portrait UI and unrotated touch coordinates.
             page.wait_for_function("window.OrbitalTouch?.state?.ready", timeout=90000)
             assert downloads, "Portrait entry must start loading the game at once"
             assert page.locator('#phone-guide').count() == 0, 'Phones must not show a rotate prompt'
-            assert page.evaluate("window.OrbitalTouch.turned()"), 'An upright phone must show the turned landscape game'
+            assert not page.evaluate("window.OrbitalTouch.turned()"), 'Portrait UI must remain upright'
             pixels = page.evaluate('({width:canvas.width,height:canvas.height,ratio:devicePixelRatio})')
-            assert pixels['width'] == 844 * pixels['ratio'] and pixels['height'] == 390 * pixels['ratio'], 'Upright phones render the landscape picture'
+            assert pixels['width'] == 390 * pixels['ratio'] and pixels['height'] == 844 * pixels['ratio'], 'Upright phones render a portrait canvas'
             box = page.locator('#canvas').bounding_box()
-            assert abs(box['width'] - 390) <= 1 and abs(box['height'] - 844) <= 1, 'The turned game must fill the upright screen'
+            assert abs(box['width'] - 390) <= 1 and abs(box['height'] - 844) <= 1, 'The portrait game must fill the upright screen'
             page.wait_for_timeout(800)
-            page.screenshot(path=str(args.screenshots / '01-portrait-turned.png'))
+            page.screenshot(path=str(args.screenshots / '01-portrait-counter.png'))
             target = locate(page, '营业')
-            page.touchscreen.tap(390 - target['y'], target['x'])
+            page.touchscreen.tap(target['x'], target['y'])
             wait(page, "!s.title && !s.busy")
             if args.portrait_only:
-                print("PHONE upright start plays the turned landscape game without a prompt")
+                print("PHONE native portrait start and direct touch coordinates pass")
                 return
             page.reload()
             page.wait_for_function("window.OrbitalTouch?.state?.ready", timeout=90000)
@@ -161,7 +160,7 @@ def main():
             page.wait_for_timeout(350)
             uid = state(page, 'inspection_uid')
             page.set_viewport_size({'width': 390, 'height': 844})
-            page.wait_for_function("window.OrbitalTouch.turned()")
+            page.wait_for_function("!window.OrbitalTouch.turned() && canvas.width < canvas.height")
             page.set_viewport_size({'width': 844, 'height': 390})
             page.wait_for_function("!window.OrbitalTouch.turned()")
             wait(page, f"s.workspace === 'inspect' && s.inspection_uid === {uid!r}")

@@ -1,7 +1,5 @@
-/* Phone shell around the Godot canvas: the game always plays in landscape.
-   A phone held upright shows the same landscape picture turned a quarter turn,
-   with touch positions turned back for the engine. All shop controls live in
-   the game itself. */
+/* Phone shell around the Godot canvas: portrait has a dedicated native UI.
+   All shop controls live in the game itself; the canvas follows the device. */
 (() => {
   'use strict';
   const coarse = matchMedia('(any-pointer: coarse)');
@@ -68,18 +66,18 @@
   async function fullscreen() {
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
-      if (screen.orientation?.lock) await screen.orientation.lock('landscape');
+      // Orientation follows the device; portrait owns a separate native layout.
     } catch { /* Not every browser allows it; the turned canvas still plays. */ }
   }
-  // Phones always play fullscreen and landscape where the browser allows it.
+  // Landscape phones may enter fullscreen; portrait keeps browser navigation.
   // Browsers only allow this from a user gesture, so every tap re-enters it
   // (e.g. after a back gesture).
   addEventListener('pointerup', event => {
-    if (event.pointerType !== 'mouse' && phone() && !document.fullscreenElement) fullscreen();
+    if (event.pointerType !== 'mouse' && phone() && innerWidth > innerHeight && !document.fullscreenElement) fullscreen();
   }, true);
   // Size the render buffer as well as the CSS box so the canvas stays sharp.
   function render() {
-    turned = phone() && innerHeight > innerWidth;
+    turned = false;
     const ratio = devicePixelRatio || 1;
     const long = turned ? innerHeight : innerWidth, short = turned ? innerWidth : innerHeight;
     const width = Math.round(long * ratio), height = Math.round(short * ratio);

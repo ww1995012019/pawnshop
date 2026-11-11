@@ -40,7 +40,8 @@ func enter() -> void:
 	var holder_scroll := ScrollContainer.new()
 	holder_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	holder_scroll.follow_focus = true
-	holder_scroll.custom_minimum_size.x = CELL * 10
+	holder_scroll.custom_minimum_size.x = 0 if shell.portrait_mode() else CELL * 10
+	if shell.portrait_mode(): holder_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	holder.add_child(holder_scroll)
 	var v := UIKit.vbox(10)
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -87,6 +88,11 @@ func relayout() -> void:
 	if not is_instance_valid(holder) or not is_instance_valid(detail_panel):
 		return
 	var r: Rect2 = shell.content_rect()
+	if shell.portrait_mode():
+		holder.position = r.position
+		detail_panel.position = r.position + Vector2(0,r.size.y*0.43+8)
+		_resize_panels()
+		return
 	var holder_w := holder.get_combined_minimum_size().x
 	var group_width := holder_w + PANEL_GAP + DETAIL_WIDTH
 	var left := r.position.x + maxf(0.0, (r.size.x - group_width) * 0.5)
@@ -100,6 +106,11 @@ func _resize_panels() -> void:
 	if not is_instance_valid(holder) or not is_instance_valid(detail_panel):
 		return
 	var available: float = shell.content_rect().size.y
+	if shell.portrait_mode():
+		var r: Rect2 = shell.content_rect()
+		holder.size = Vector2(r.size.x,r.size.y*0.43)
+		detail_panel.size = Vector2(r.size.x,r.size.y*0.57-8)
+		return
 	# On a short landscape screen the grid and location lists must scroll
 	# together rather than extend under the drawer's bottom edge.
 	var holder_style: StyleBox = holder.get_theme_stylebox("panel")
@@ -257,7 +268,7 @@ func _detail() -> void:
 	var pic := TextureRect.new()
 	pic.texture = UIKit.physical_icon(it)
 	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	pic.custom_minimum_size = Vector2(120, 120)
+	pic.custom_minimum_size = Vector2(70, 90) if shell.portrait_mode() else Vector2(120,120)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	UIKit.decorate_item(pic, it, 22.0)

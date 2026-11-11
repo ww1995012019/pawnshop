@@ -203,6 +203,10 @@ func enter() -> void:
 	relayout()
 	_sync_world()
 	_refresh()
+	if not shell.workspace_mode:
+		var portrait := preload("res://scripts/ui/portrait_counter.gd").new()
+		add_child(portrait)
+		portrait.setup(self)
 
 func _align_stage() -> void:
 	var inv := get_viewport().get_canvas_transform().affine_inverse() * Transform2D(0.0, shell.counter_offset())
@@ -1119,13 +1123,13 @@ func _pick_goods() -> void:
 	var m: Array = shell.modal("为 %s 挑选货物" % GameData.npc(t.npcId).name, 1180)
 	var body: VBoxContainer = m[0]
 	body.add_child(UIKit.label("需求：" + Model.customer_need(t.npcId), 20, UIKit.CYAN, false, true))
-	var g := UIKit.grid(4, 12)
+	var g := UIKit.grid(1 if shell.portrait_mode() else 4, 12)
 	for it in Game.state.inventory:
 		if it.owner != "shop":
 			continue
 		var why = Model.sale_eligibility(it, t.npcId)
 		var card := UIKit.plate(UIKit.inset_style(10))
-		card.custom_minimum_size = Vector2(266, 0)
+		card.custom_minimum_size = Vector2(0 if shell.portrait_mode() else 266, 0)
 		var cv := UIKit.vbox(6)
 		card.add_child(cv)
 		var pic := TextureRect.new()
@@ -1152,7 +1156,9 @@ func _pick_goods() -> void:
 		cv.add_child(b)
 		g.add_child(card)
 	var sc := ScrollContainer.new()
-	sc.custom_minimum_size = Vector2(0, 620)
+	sc.custom_minimum_size = Vector2(0,minf(480,get_viewport_rect().size.y-250) if shell.portrait_mode() else 620)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.add_child(g)
 	body.add_child(sc)
 

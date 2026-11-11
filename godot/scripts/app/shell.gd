@@ -92,7 +92,7 @@ func _ready() -> void:
 	hud.hide()
 	nav.hide()
 	if workspace_mode:
-		hint_label.show()
+		hint_label.visible = not portrait_mode()
 		return
 	hint_label.hide()
 	for a in OS.get_cmdline_user_args():
@@ -405,7 +405,7 @@ func _build_nav() -> void:
 	root_ui.add_child(nav)
 
 func counter_offset() -> Vector2:
-	if workspace_mode:
+	if workspace_mode or portrait_mode():
 		return Vector2.ZERO
 	return ((get_viewport().get_visible_rect().size - Vector2(1920, 1080)) * 0.5).floor() - view_shift
 
@@ -418,8 +418,21 @@ const PHONE_VIEW := Rect2(130, 45, 1755, 990)
 var view_shift := Vector2.ZERO
 const TouchAssist := preload("res://scripts/app/touch_assist.gd")
 
+func portrait_mode() -> bool:
+	if workspace_mode: return workspace_parent.portrait_mode()
+	var pixels := Vector2(get_window().size)
+	var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1", true)) if OS.has_feature("web") else 1.0
+	return pixels.y > pixels.x and pixels.x / maxf(ratio,1.0) <= 600
+
 func _fit_view() -> void:
 	var window := get_window()
+	if portrait_mode():
+		var portrait_size := Vector2i(390, roundi(390.0 * window.size.y / maxf(window.size.x,1)))
+		if window.content_scale_size != portrait_size: window.content_scale_size = portrait_size
+		if window.content_scale_factor != 1.0: window.content_scale_factor = 1.0
+		view_shift = Vector2.ZERO
+		return
+	if window.content_scale_size != Vector2i(1920,1080): window.content_scale_size = Vector2i(1920,1080)
 	var pixels := Vector2(window.size)
 	if pixels.x <= 0.0 or pixels.y <= 0.0:
 		return
@@ -503,6 +516,9 @@ func _place_toasts() -> void:
 		# Default: a strip under the HUD, over the room's back wall.
 		var vis := get_viewport().get_visible_rect().size
 		r = Rect2(vis.x * 0.5 - 330, 96, 660, 200)
+	if portrait_mode():
+		var visible := get_viewport().get_visible_rect().size
+		r = Rect2(12,80,visible.x-24,120)
 	# Narrow existing notices first: a Control cannot shrink below its
 	# children's minimum size, so resizing the box first kept the old width.
 	for c in toast_box.get_children():
@@ -597,17 +613,17 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	workspace_overlay.add_child(dim)
-	workspace_frame = UIKit.plate(UIKit.skin("rail", "lg", 16))
+	workspace_frame = UIKit.plate(PortraitSkin.panel("wine",12) if portrait_mode() else UIKit.skin("rail", "lg", 16))
 	workspace_overlay.add_child(workspace_frame)
 	var body := UIKit.vbox(12)
 	workspace_frame.add_child(body)
 	var header_mount := UIKit.plate(UIKit.skin("strip", "sm", 8))
 	var header := UIKit.hbox(12)
 	header_mount.add_child(header)
-	workspace_title = UIKit.label("", 27, UIKit.AMBER)
+	workspace_title = UIKit.label("", 20 if portrait_mode() else 27, UIKit.AMBER)
 	workspace_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(workspace_title)
-	header.add_child(UIKit.label("店内操作  /  ESC 收起", 18, UIKit.MUTED))
+	if not portrait_mode(): header.add_child(UIKit.label("店内操作  /  ESC 收起", 18, UIKit.MUTED))
 	workspace_close = UIKit.button("收起", "secondary", Vector2(108, 48), 20, "close")
 	workspace_close.pressed.connect(close_workspace)
 	header.add_child(workspace_close)
@@ -657,7 +673,9 @@ func _layout_workspace() -> void:
 	var visible := get_viewport().get_visible_rect().size
 	var phone := _landscape_phone()
 	var target := WORKSPACE_SIZE
-	if phone:
+	if portrait_mode():
+		target = Vector2(visible.x - 32, visible.y - 130)
+	elif phone:
 		# A phone is much wider than the desktop drawer after the touch bar is
 		# reserved. Use that width instead of shrinking a 16:9 sheet into it.
 		var desired_height := (WORKSPACE_SIZE.x + 32.0) * visible.y / maxf(visible.x, 1.0) - 110.0
@@ -669,7 +687,7 @@ func _layout_workspace() -> void:
 	workspace_frame.reset_size()
 	var frame_size := workspace_frame.get_combined_minimum_size()
 	workspace_frame.size = frame_size
-	var fit := minf((visible.x - 20.0) / frame_size.x, (visible.y - 20.0) / frame_size.y) if phone else 1.0
+	var fit := minf((visible.x - 20.0) / frame_size.x, (visible.y - 20.0) / frame_size.y) if phone or portrait_mode() else 1.0
 	workspace_frame.scale = Vector2.ONE * fit
 	workspace_frame.position = ((visible - frame_size * fit) * 0.5).floor()
 	var output_scale := get_viewport().get_final_transform().get_scale()
@@ -1104,7 +1122,17 @@ func modal(title_text: String, width := 900.0) -> Array:
 	v.add_child(head)
 	v.add_child(UIKit.rule())
 	var body := UIKit.vbox(14)
-	v.add_child(body)
+	if portrait_mode():
+		var scroll := ScrollContainer.new()
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(body)
+		v.add_child(scroll)
+		body.minimum_size_changed.connect(func():
+			scroll.custom_minimum_size.y = minf(body.get_combined_minimum_size().y,get_viewport().get_visible_rect().size.y-180))
+	else:
+		v.add_child(body)
 	# Esc (see _input) and a click on the dimmed backdrop both dismiss the sheet.
 	dim.set_meta("close", close)
 	dim.gui_input.connect(func(ev: InputEvent):
@@ -1408,7 +1436,7 @@ func _close_title() -> void:
 	page_host.show()
 	hud.hide()
 	nav.hide()
-	hint_label.visible = workspace_mode
+	hint_label.visible = workspace_mode and not portrait_mode()
 	call_deferred("_sync_wanted_notice")
 
 func _show_title() -> void:
@@ -1432,7 +1460,7 @@ func _show_title() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title.add_child(center)
 	var panel := UIKit.plate()
-	panel.custom_minimum_size = Vector2(620, 0)
+	panel.custom_minimum_size = Vector2(360 if portrait_mode() else 620, 0)
 	center.add_child(panel)
 	var v := UIKit.vbox(20)
 	panel.add_child(v)
@@ -1440,13 +1468,13 @@ func _show_title() -> void:
 	station.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(station)
 	v.add_child(UIKit.rule())
-	var t := UIKit.label("轨道旧货局", 64, UIKit.TEXT)
+	var t := UIKit.label("轨道旧货局", 38 if portrait_mode() else 64, UIKit.TEXT)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
 	var sub := UIKit.label("每件旧物，都有下一程。", 24, UIKit.AMBER)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(sub)
-	var intro := UIKit.label("鉴定旧物 · 商议价格 · 经营你的柜台", 19, UIKit.MUTED)
+	var intro := UIKit.label("鉴定旧物 · 商议价格 · 经营你的柜台", 15 if portrait_mode() else 19, UIKit.MUTED)
 	intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(intro)
 	v.add_child(UIKit.rule())
@@ -1466,7 +1494,7 @@ func _show_title() -> void:
 		v.add_child(fresh)
 	var hb := UIKit.hbox(12)
 	for spec in [["检验说明书", open_watch_manual], ["玩法说明", open_help], ["设置", open_settings]]:
-		var button := UIKit.button(spec[0], "secondary", Vector2(0, 50), 20)
+		var button := UIKit.button(spec[0], "secondary", Vector2(0, 50), 14 if portrait_mode() else 20)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.pressed.connect(spec[1])
 		hb.add_child(button)

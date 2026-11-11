@@ -6,6 +6,8 @@ extends Control
 var shell
 var world_nodes: Array[Node] = []
 var _layout_pending := false
+var portrait_tabs: HBoxContainer
+var portrait_section := 0
 
 func _init() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -41,6 +43,42 @@ func _settle_layout() -> void:
 ## takes only the height its current instrument controls require.
 func layout_workbench(left: Control, right: Control, bench: Control, left_width: float, right_width := 470.0) -> Rect2:
 	var r: Rect2 = shell.content_rect()
+	if shell.portrait_mode():
+		if not is_instance_valid(portrait_tabs):
+			portrait_tabs = UIKit.hbox(4)
+			add_child(portrait_tabs)
+			for i in 3:
+				var key := UIKit.button(["选择工序","操作实物","物品档案"][i],"secondary",Vector2(0,48),16)
+				key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				key.pressed.connect(func(): portrait_section=i;relayout())
+				portrait_tabs.add_child(key)
+		portrait_tabs.show()
+		portrait_tabs.position = r.position
+		portrait_tabs.size = Vector2(r.size.x,48)
+		var area := Rect2(r.position+Vector2(0,56),r.size-Vector2(0,56))
+		for panel in [left,right]:
+			panel.position = area.position
+			panel.size = area.size
+		left.visible = portrait_section == 0
+		right.visible = portrait_section == 2
+		bench.visible = portrait_section == 1
+		for node in world_nodes:
+			if is_instance_valid(node) and node is CanvasItem: node.visible = portrait_section == 1
+		for i in 3:
+			portrait_tabs.get_child(i).add_theme_stylebox_override("normal",UIKit.key_style("primary" if i==portrait_section else "secondary","normal"))
+		var height := maxf(100,bench.get_combined_minimum_size().y)
+		bench.position = Vector2(area.position.x,area.end.y-height)
+		bench.size = Vector2(area.size.x,height)
+		var mat := Rect2(area.position,Vector2(area.size.x,area.size.y-height-8))
+		shell.work_surface.set_mat(mat)
+		return mat
+	if is_instance_valid(portrait_tabs):
+		portrait_tabs.hide()
+		left.show()
+		right.show()
+		bench.show()
+		for node in world_nodes:
+			if is_instance_valid(node) and node is CanvasItem: node.show()
 	var gap := 20.0
 	left.position = r.position
 	left.size = Vector2(left_width, r.size.y)

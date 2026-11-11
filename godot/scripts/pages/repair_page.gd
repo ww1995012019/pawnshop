@@ -577,6 +577,8 @@ func _save_cleaning() -> void:
 func relayout() -> void:
 	if not is_instance_valid(bench) or not is_instance_valid(art): return
 	mat_rect = layout_workbench(list_panel,detail_panel,bench,260,350)
+	guidance.visible = not shell.portrait_mode() or portrait_section == 1
+	art.visible = not (mode == "service" and task == "dust") and task != "" and guidance.visible
 	guidance.position = mat_rect.position
 	guidance.size.x = mat_rect.size.x
 	guidance.size.y = maxf(132.0, guidance.get_combined_minimum_size().y)
@@ -586,6 +588,7 @@ func relayout() -> void:
 	art.position = working.position
 	art.size = working.size
 	if is_instance_valid(item):
+		item.visible = (task == "dust" or task == "") and (not shell.portrait_mode() or portrait_section == 1)
 		item_home = fit_workbench_item(item,working)
 		item.position = item_home
 	queue_redraw()

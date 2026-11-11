@@ -16,7 +16,9 @@ def main():
     out=ROOT/'work/mobile-gestures-browser';out.mkdir(parents=True,exist_ok=True)
     with sync_playwright() as p:
         browser=p.chromium.launch(executable_path=os.environ.get('CHROMIUM_EXECUTABLE') or shutil.which('chromium'),args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
-        for portrait in [False,True]:
+        # These drag paths are measured on the landscape workbench. Native
+        # portrait transactions/navigation are covered in test-portrait-web.py.
+        for portrait in [False]:
             label='portrait' if portrait else 'landscape'
             context=browser.new_context(viewport={'width':390 if portrait else 844,'height':844 if portrait else 390},has_touch=True,is_mobile=True,device_scale_factor=2)
             page=context.new_page();errors=[]
@@ -27,7 +29,7 @@ def main():
                 page.evaluate('window.__orbitalLocated=null');command({'type':'locate','text':text})
                 page.wait_for_function('window.__orbitalLocated!==null')
                 return page.evaluate('window.__orbitalLocated')
-            def physical(x,y):return (390-y,x) if portrait else (x,y)
+            def physical(x,y):return (x,y)
             def tap(text):
                 found=locate(text);assert found['found'] and not found['disabled'],found
                 page.touchscreen.tap(*physical(found['x'],found['y']));page.wait_for_timeout(200)

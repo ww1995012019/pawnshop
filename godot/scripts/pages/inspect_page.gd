@@ -42,6 +42,7 @@ var optical_pinned := false
 var optical_pin_button: Button
 var optical_attempt_revision := ""
 var pending_tool := ""
+var portrait_tools: HBoxContainer
 
 func scene_name() -> String:
 	return "workbench"
@@ -78,6 +79,11 @@ func _build_panels() -> void:
 	add_child(manual)
 	manual.position = Vector2(1260,108)
 	manual.z_index = 4
+	if shell.portrait_mode():
+		var records := UIKit.button("检验记录", "secondary", Vector2(130,44),16)
+		records.name = "portrait_records"
+		records.pressed.connect(_portrait_records)
+		add_child(records)
 	detail_panel = side_panel(470)
 	var rv := UIKit.vbox(10)
 	detail_panel.add_child(rv)
@@ -110,9 +116,32 @@ func _build_panels() -> void:
 
 func relayout() -> void:
 	if not is_instance_valid(instrument_panel): return
-	mat_rect = layout_workbench(instrument_panel,detail_panel,bench,300)
+	# The dedicated records sheet replaces a cramped duplicate note scroller.
+	info.get_parent().visible = not shell.portrait_mode()
+	if shell.portrait_mode():
+		mat_rect = _portrait_layout()
+	else:
+		instrument_panel.show()
+		if is_instance_valid(portrait_tools):
+			detail_panel.add_theme_stylebox_override("panel",UIKit.plate_style())
+			bench.add_theme_stylebox_override("panel",UIKit.plate_style())
+			portrait_tools.hide()
+			for id in TOOL_IDS:
+				var b: Button = tool_buttons[id]
+				if b.get_parent() != instrument_list: b.reparent(instrument_list)
+				b.custom_minimum_size = Vector2(0,72)
+				b.add_theme_font_size_override("font_size",19)
+				b.add_theme_constant_override("icon_max_width",48)
+				b.icon = UIKit.tool_icon(id)
+				for state in ["normal","hover","pressed","disabled"]:
+					b.add_theme_stylebox_override(state,UIKit.key_style("primary" if tool==id else "secondary",state))
+		mat_rect = layout_workbench(instrument_panel,detail_panel,bench,300)
 	var guide_button := get_node_or_null("watch_manual") as Button
 	if guide_button != null: guide_button.position = Vector2(mat_rect.end.x-158,mat_rect.position.y+12)
+	var records := get_node_or_null("portrait_records") as Button
+	if records != null:
+		records.visible = shell.portrait_mode()
+		records.position = mat_rect.position+Vector2(12,12)
 	if is_instance_valid(item):
 		var next_home := fit_workbench_item(item,mat_rect)
 		var offset := next_home-item_home
@@ -122,6 +151,51 @@ func relayout() -> void:
 		scale_target = next_home + Vector2(35,20)
 		item_home = next_home
 		if is_instance_valid(scale_pan): scale_pan.position = scale_target + Vector2(0,90)
+
+func _portrait_records() -> void:
+	var current = Game.item(it_uid)
+	var modal: Array = shell.modal("检验记录",350)
+	if current == null:
+		modal[0].add_child(UIKit.label("请先选择一件物品。",17))
+		return
+	modal[0].add_child(UIKit.label(GameData.def(current.defId).name,22,UIKit.AMBER,false,true))
+	modal[0].add_child(UIKit.label(Model.appraisal_text(current),17,UIKit.TEXT,false,true))
+	for evidence in current.evidence:
+		modal[0].add_child(UIKit.label(Model.evidence_caption(current,evidence),18,UIKit.AMBER,false,true))
+		modal[0].add_child(UIKit.label(Model.displayed_clue(current,evidence),17,UIKit.TEXT,false,true))
+	if current.evidence.is_empty():
+		modal[0].add_child(UIKit.label("尚无检验记录。使用工具观察实物，对照说明书判断。",17,UIKit.MUTED,false,true))
+
+func _portrait_layout() -> Rect2:
+	var r: Rect2 = shell.content_rect()
+	instrument_panel.hide()
+	detail_panel.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",12))
+	bench.add_theme_stylebox_override("panel",PortraitSkin.panel("felt",12))
+	if not is_instance_valid(portrait_tools):
+		portrait_tools = UIKit.hbox(4)
+		add_child(portrait_tools)
+	portrait_tools.show()
+	for id in TOOL_IDS:
+		var b: Button = tool_buttons[id]
+		if b.get_parent() != portrait_tools: b.reparent(portrait_tools)
+		b.custom_minimum_size = Vector2(0,54)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_font_size_override("font_size",14)
+		b.add_theme_constant_override("icon_max_width",24)
+		b.icon = PortraitSkin.tool(id)
+		PortraitSkin.button(b)
+	portrait_tools.position = r.position
+	portrait_tools.size = Vector2(r.size.x,54)
+	var bottom_height := maxf(100.0,bench.get_combined_minimum_size().y)
+	var mat := Rect2(r.position+Vector2(0,62),Vector2(r.size.x,220))
+	bench.position = Vector2(r.position.x,mat.end.y+8)
+	bench.size = Vector2(r.size.x,bottom_height)
+	detail_panel.position = Vector2(r.position.x,bench.position.y+bottom_height+8)
+	detail_panel.size = Vector2(r.size.x,maxf(110,r.end.y-detail_panel.position.y))
+	# Controls below the notes use two rows on a phone.
+	for child in detail_panel.find_children("*","GridContainer",true,false): child.columns = 2
+	shell.work_surface.set_mat(mat)
+	return mat
 
 func _fill_picker() -> void:
 	picker.clear()
