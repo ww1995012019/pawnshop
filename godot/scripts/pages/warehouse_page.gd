@@ -1,5 +1,5 @@
 extends Page
-## Back room: a 10×6 storage grid you drag goods around (right-click rotates),
+## Back room: an expandable storage grid you drag goods around (right-click rotates),
 ## the display shelf, the isolation locker and pawn safe, and item actions.
 
 const CELL := 72.0
@@ -13,6 +13,7 @@ var detail: VBoxContainer
 var selected := ""
 var holder: PanelContainer
 var holder_contents: VBoxContainer
+var storage_header: VBoxContainer
 var detail_panel: PanelContainer
 
 func scene_name() -> String:
@@ -49,14 +50,14 @@ func enter() -> void:
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	holder_contents = v
 	holder_scroll.add_child(v)
-	var grid_hint := "10 × 6  /  拖动换位 · 点选后旋转" if shell._landscape_phone() else "10 × 6  /  拖动换位 · 右键旋转"
-	v.add_child(UIKit.module_header("货物保管区", grid_hint, "STORAGE / 60"))
+	storage_header = UIKit.vbox(0)
+	v.add_child(storage_header)
 	grid = StorageGrid.new()
 	grid.page = self
 	# Empty cells must let touch drags reach the enclosing scroll container;
 	# dragging an occupied cell is still handled by the grid itself.
 	grid.mouse_filter = Control.MOUSE_FILTER_PASS
-	grid.custom_minimum_size = Vector2(CELL * 10, CELL * 6)
+	grid.custom_minimum_size = Vector2(CELL * 10, CELL * ShopUpgrades.storage_rows(Game.state))
 	v.add_child(grid)
 	lists = UIKit.vbox(7)
 	v.add_child(lists)
@@ -80,6 +81,10 @@ func enter() -> void:
 	relayout()
 
 func _refresh() -> void:
+	var rows := ShopUpgrades.storage_rows(Game.state)
+	var grid_hint := "10 × %d  /  %s" % [rows,"拖动换位 · 点选后旋转" if shell._landscape_phone() else "拖动换位 · 右键旋转"]
+	UIKit.clear(storage_header)
+	storage_header.add_child(UIKit.module_header("货物保管区", grid_hint, "STORAGE / %d" % [rows * 10]))
 	grid.rebuild()
 	_lists()
 	_detail()
@@ -208,7 +213,7 @@ func can_rotate_selected() -> bool:
 	var next := not selected_rotation()
 	if Model.can_place(Game.state, it.uid, it.x, it.y, next):
 		return true
-	for y in 6:
+	for y in ShopUpgrades.storage_rows(Game.state):
 		for x in 10:
 			if Model.can_place(Game.state, it.uid, x, y, next):
 				return true
@@ -469,6 +474,7 @@ class StorageGrid extends Control:
 		return Input.CURSOR_CAN_DROP if _uid_at(at_position) != "" else Input.CURSOR_ARROW
 
 	func rebuild() -> void:
+		custom_minimum_size = Vector2(page.CELL * 10, page.CELL * ShopUpgrades.storage_rows(Game.state))
 		for c in get_children():
 			c.queue_free()
 		tiles.clear()
@@ -601,7 +607,7 @@ class StorageGrid extends Control:
 	func _draw() -> void:
 		var cs: float = page.CELL
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.03, 0.05, 0.06, 0.88))
-		for y in 6:
+		for y in ShopUpgrades.storage_rows(Game.state):
 			for x in 10:
 				draw_rect(Rect2(Vector2(x, y) * cs + Vector2(2, 2), Vector2(cs, cs) - Vector2(4, 4)), Color(0.09, 0.13, 0.14, 0.9))
 		for it in Game.state.inventory:

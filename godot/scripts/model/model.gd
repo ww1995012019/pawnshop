@@ -6,6 +6,9 @@ extends Node
 const MASK := 0xFFFFFFFF
 const FACTIONS := ["station", "salvage", "merchant"]
 const Negotiation = preload("res://scripts/model/negotiation.gd")
+const Market = preload("res://scripts/model/weekly_market.gd")
+const Extensions = preload("res://scripts/model/shop_upgrades.gd")
+const Journal = preload("res://scripts/model/shop_journal.gd")
 const FIXED_EVENT_DAYS := {1: "EVT-001", 7: "EVT-007", 14: "EVT-014", 20: "EVT-020", 21: "EVT-021"}
 
 # Only actual business commands produce a closed-hours notice; unknown input stays a no-op.
@@ -125,13 +128,13 @@ static func can_place(s: Dictionary, uid: String, x, y, rotated = null) -> bool:
 	if float(x) != floor(float(x)) or float(y) != floor(float(y)):
 		return false
 	var d := dimensions(it, it.rotated if rotated == null else rotated)
-	if x < 0 or y < 0 or x + d[0] > 10 or y + d[1] > 6:
+	if x < 0 or y < 0 or x + d[0] > 10 or y + d[1] > Extensions.storage_rows(s):
 		return false
 	return not _overlaps(s, uid, int(x), int(y), d[0], d[1])
 
 static func empty_cell(s: Dictionary, it: Dictionary):
 	var d := dimensions(it)
-	for y in range(0, 6 - d[1] + 1):
+	for y in range(0, Extensions.storage_rows(s) - d[1] + 1):
 		for x in range(0, 10 - d[0] + 1):
 			if not _overlaps(s, it.uid, x, y, d[0], d[1]):
 				return {"x": x, "y": y}
@@ -237,7 +240,9 @@ static func inspection_ready(s: Dictionary) -> bool:
 	return true
 
 static func rent_due(day: float) -> float:
-	return jround(450 * pow(1.1, floor((day - 1) / 7.0))) if int(day) % 7 == 0 else 0.0
+	# The original three rents are unchanged; continued weeks stop at 900 Cr.
+	# Bound the exponent too, so very long-running saves never overflow.
+	return minf(900,jround(450 * pow(1.1, minf(8,floor((day - 1) / 7.0))))) if int(day) % 7 == 0 else 0.0
 
 # ------------------------------------------------------------ negotiation
 
@@ -398,12 +403,32 @@ static func sale_eligibility(it: Dictionary, npc_id: String):
 			return "品相未达到这位顾客的采购要求。"
 	return null
 
+static func _shop_price_factors(s: Dictionary, t: Dictionary, it: Dictionary) -> Dictionary:
+	var neutral := {"market":1.0,"sale":1.0}
+	if t.get("shopPriceFactors",{}).has(it.uid): return t.shopPriceFactors[it.uid]
+	# Old locked promises predate these systems. Enabling a namespace on load
+	# must never invalidate an already agreed single-item or batch-line price.
+	if t.get("locked",false): return neutral
+	if s.get("trade") is Dictionary:
+		for line in s.trade.get("session",{}).get("lines",[]):
+			if line.get("uid","") == it.uid and line.get("status","") == "confirmed" and line.get("context",{}).get("id","") == t.get("id",""): return neutral
+	if not s.get("weeklyMarket") is Dictionary and not s.get("shopUpgrades") is Dictionary and not s.get("shopJournal") is Dictionary: return neutral
+	var factors := {"market":Market.multiplier(s,it),"sale":1.0}
+	if t.get("kind","") == "sell":
+		factors.sale = Extensions.sale_multiplier(s,it)
+		if s.get("shopJournal") is Dictionary: factors.sale *= Journal.price_multiplier(s,String(t.npcId))
+	if not t.get("shopPriceFactors") is Dictionary: t.shopPriceFactors = {}
+	t.shopPriceFactors[it.uid] = factors
+	return factors
+
 static func trade_terms(s: Dictionary, t: Dictionary, it: Dictionary) -> Dictionary:
 	var def := D(it.defId)
 	var priced := npc_knowledge(t, it)
 	var value := maxf(1, jround(WatchForgery.perceived_base(it) * clampf(float(priced.condition), 0.35, 1.0) * (1.0 if priced.working else 0.65) * (1.0 if priced.authentic else 0.75) * float(priced.marketFactor) * (1.0 - float(priced.risk))))
 	if priced.has("appraisedValue"):
 		value = float(priced.appraisedValue)
+	var shop_factors := _shop_price_factors(s,t,it)
+	value *= float(shop_factors.market)
 	var proof: int = priced.evidence.size()
 	var faction: String = GameData.npc(t.npcId).faction
 	var relation := maxf(0, minf(100, s.relations[faction]))
@@ -417,6 +442,9 @@ static func trade_terms(s: Dictionary, t: Dictionary, it: Dictionary) -> Diction
 	ceiling = maxf(1, floor(ceiling + value * source_adjustment))
 	floor_p = maxf(1, ceil(floor_p + value * minf(0, source_adjustment)))
 	opening = minf(opening, ceiling)
+	if float(shop_factors.sale) != 1.0:
+		ceiling = maxf(1,floor(ceiling * float(shop_factors.sale)))
+		opening = minf(ceiling,maxf(1,floor(opening * float(shop_factors.sale))))
 	return {"value": value, "floor": floor_p, "ceiling": ceiling, "opening": opening, "marketCap": market_cap, "proof": proof, "provenance": provenance}
 
 static func offer_bounds(s: Dictionary, t: Dictionary, it: Dictionary) -> Dictionary:
@@ -481,7 +509,12 @@ static func market_npc_id(s: Dictionary, day = null, slot = null) -> String:
 	for n in GameData.npcs:
 		if n.id != "CHR-001":
 			visitors.append(n)
-	return visitors[fnv("%s/%d/%d/visitor" % [s.seed, dd, sl]) % visitors.size()].id
+	var fallback: String = visitors[fnv("%s/%d/%d/visitor" % [s.seed, dd, sl]) % visitors.size()].id
+	if not s.get("shopJournal") is Dictionary: return fallback
+	var preview := s.duplicate(false)
+	preview.day = dd
+	preview.cursor = sl
+	return Journal.preferred_npc(preview,fallback)
 
 static func stock_item_options(stock: Dictionary) -> Dictionary:
 	var o := stock.duplicate(true)
@@ -553,12 +586,24 @@ static func event_for_day(seed: String, day) -> Variant:
 			index += 1
 	return deck[index] if index < deck.size() else null
 
+## The state-free lookup above deliberately retains its 21-day contract.
+## Continued campaigns reuse ordinary station situations, never the finale.
+static func event_for_state(s: Dictionary) -> Variant:
+	var day := int(s.day)
+	if day <= 21 or not s.get("campaignLife",{}).get("endless",false):
+		return event_for_day(s.seed,s.day)
+	var deck := []
+	for event in GameData.events:
+		if not FIXED_EVENT_DAYS.values().has(event.id): deck.append(event)
+	if deck.is_empty(): return null
+	return deck[(fnv(String(s.seed)+"/recurring-station-events")+day-22)%deck.size()]
+
 static func event_availability(s: Dictionary, choice: Dictionary):
 	if s.phase != "open":
 		return "每日事件只在营业期间处理。"
 	if s.trade != null:
 		return "先完成当前交易或送客，再处理每日事件。"
-	var event = event_for_day(s.seed, s.day)
+	var event = event_for_state(s)
 	var option = null
 	if event != null:
 		for c in event.choices:
@@ -674,11 +719,11 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 	if type == "NEXT":
 		if s.phase != "report":
 			return previous
-		if s.day >= 21 or s.has("outcome"):
+		if not s.get("campaignLife",{}).get("endless",false) and (s.day >= 21 or s.has("outcome")):
 			s.phase = "ending"
 			return s
 		s.day += 1
-		s.ap = 12
+		s.ap = Extensions.daily_ap(s)
 		s.phase = "open"
 		s.cursor = 0
 		s.trade = null
@@ -734,7 +779,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 		if problem != "": return notice(s,problem)
 	match type:
 		"CHOOSE_EVENT":
-			var event = event_for_day(s.seed, s.day)
+			var event = event_for_state(s)
 			var choice = null
 			if event != null:
 				for c in event.choices:
@@ -753,7 +798,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			var c_cash: float = eff.get("cash", 0)
 			if not ledger(s, "station-event-day-%s" % jnum(s.day), "station-event", "%s · %s" % [event.title, choice.label], c_cash, -c_cash if c_cash < 0 else 0.0):
 				return previous
-			s.ap = clampn(s.ap + eff.get("ap", 0), 0, 12)
+			s.ap = clampn(s.ap + eff.get("ap", 0), 0, Extensions.daily_ap(s))
 			s.risk = clampn(s.risk + eff.get("risk", 0))
 			var mats: Dictionary = eff.get("materials", {})
 			for id in mats:

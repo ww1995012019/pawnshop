@@ -55,7 +55,13 @@ func run() -> void:
 	lot.evidence = GameData.def(lot.defId).tools.duplicate()
 	shell.page._refresh()
 	await audit("evidence")
-	check(shell.page.chips.get_child_count() == 3, "three recorded watch tools are offered as negotiation evidence")
+	var offered_tools: Array=[]
+	for control in shell.page.chips.get_children():
+		if control is Button: offered_tools.append(control.get_meta("evidence_tool",""))
+	var expected_tools: Array=GameData.def(lot.defId).tools.duplicate()
+	offered_tools.sort()
+	expected_tools.sort()
+	check(offered_tools==expected_tools and offered_tools.size()==3,"three recorded watch tools are offered as negotiation evidence")
 	game.state = Model.reduce(game.state,{"type":"ACCEPT"})
 	shell.go("counter")
 	await audit("locked")

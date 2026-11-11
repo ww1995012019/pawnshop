@@ -23,8 +23,11 @@ static func credit(s: Dictionary, case_id: String, target := "") -> void:
 	if target != "" and not c.targets.has(target): c.targets.append(target)
 	if not duplicate and (case_id != "" or target != ""): c.count += 1
 
-static func theft_draw(seed: String, day: int, threshold := 300) -> bool:
-	return day >= 3 and day <= 20 and Model.fnv("%s/night/theft/%d" % [seed,day]) % 10000 < threshold
+static func theft_draw(seed: String, day: int, threshold := 300, extended := false) -> bool:
+	return day >= 3 and (day <= 20 or extended) and Model.fnv("%s/night/theft/%d" % [seed,day]) % 10000 < threshold
+
+static func _extended(s: Dictionary) -> bool:
+	return bool(s.get("campaignLife",{}).get("endless",false))
 
 static func theft_chance_bp(s: Dictionary) -> int:
 	var chance := 300
@@ -96,7 +99,7 @@ static func insurance_quote(s: Dictionary) -> Dictionary:
 
 static func insurance_problem(s: Dictionary) -> String:
 	if s.phase != "open": return "打烊后不能补买或更新保险。"
-	if int(s.day) < 3 or int(s.day) > 20: return "第3至20天营业期间可投保今晚失窃。"
+	if int(s.day) < 3 or (int(s.day) > 20 and not _extended(s)): return "第3至20天营业期间可投保今晚失窃。"
 	var q := insurance_quote(s)
 	if q.items.is_empty(): return "没有来源已核验、可承保的店铺自有手表。"
 	if s.cash < q.due: return "现金不足，今晚保障尚未变动。"
@@ -113,7 +116,7 @@ static func settle(s: Dictionary) -> void:
 	ensure(s)
 	var day := int(s.day)
 	var key := str(day)
-	if day < 3 or day > 20 or s.nightCrime.nights.has(key): return
+	if day < 3 or (day > 20 and not _extended(s)) or s.nightCrime.nights.has(key): return
 	var candidates := []
 	for item in s.inventory:
 		if stealable(s,item): candidates.append(item.duplicate(true))
@@ -122,7 +125,7 @@ static func settle(s: Dictionary) -> void:
 	s.nightCrime.nights[key] = n
 	var active := thieves(s)
 	n.effectiveChanceBp = chance if not candidates.is_empty() and not active.is_empty() else 0
-	if not theft_draw(s.seed,day,chance) or candidates.is_empty() or active.is_empty(): return
+	if not theft_draw(s.seed,day,chance,_extended(s)) or candidates.is_empty() or active.is_empty(): return
 	var culprit: String = active[Model.fnv("%s/night/culprit/%d" % [s.seed,day]) % active.size()]
 	var count := 2 if candidates.size() >= 2 and Model.fnv("%s/night/count/%d" % [s.seed,day]) % 100 < 10 else 1
 	for index in count:

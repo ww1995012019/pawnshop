@@ -8,6 +8,12 @@ signal prefs_changed
 const Commerce = preload("res://scripts/model/commerce.gd")
 const Wanted = preload("res://scripts/model/wanted_cases.gd")
 const CrimeEvents = preload("res://scripts/model/crime_events.gd")
+const Life = preload("res://scripts/model/campaign_life.gd")
+const Market = preload("res://scripts/model/weekly_market.gd")
+const Extensions = preload("res://scripts/model/shop_upgrades.gd")
+const Crates = preload("res://scripts/model/bulk_crates.gd")
+const Contracts = preload("res://scripts/model/service_contracts.gd")
+const Journal = preload("res://scripts/model/shop_journal.gd")
 const SAVE_PATH := "user://orbital-watch-save-v4.json"
 const LEGACY_PATH := "user://orbital-save-v3.json"
 const LEGACY_BACKUP_PATH := "user://orbital-save-v3.backup.json"
@@ -40,6 +46,7 @@ func _ready() -> void:
 	Wanted.ensure(state)
 	NightCrime.ensure(state)
 	NightCrime.ensure_day(state)
+	ensure_shop_state(state)
 	if has_save:
 		if state.get("trade") is Dictionary and state.trade.get("kind","") in ["buy","sell"]: state=CounterDialogue.begin(state)
 		save()
@@ -88,22 +95,74 @@ func new_game(seed := "") -> void:
 	Landlord.ensure(state)
 	Wanted.ensure(state)
 	NightCrime.ensure(state)
+	ensure_shop_state(state)
 	focus_uid = ""
 	save()
 	changed.emit(prev, state, {"type": "NEW_GAME"})
 
 ## Apply an action. Returns true when the state actually changed.
+func ensure_shop_state(s: Dictionary, include_journal := true) -> void:
+	Life.ensure(s)
+	Market.ensure(s)
+	Extensions.ensure(s)
+	Crates.ensure(s)
+	Contracts.ensure(s)
+	if include_journal: Journal.ensure(s)
+
 func dispatch(a: Dictionary) -> bool:
 	var prev := state
-	var next := Commerce.reduce(state, a)
-	if is_same(next, prev):
-		return false
+	# Bootstrap legacy states before the action, never import fresh settlement
+	# ledgers as historical receipts. A rejected action keeps the original state.
+	var prepared: Dictionary = prev.duplicate(true)
+	ensure_shop_state(prepared)
+	var next: Variant = Life.reduce(prepared,a)
+	if next == null: next = Extensions.reduce(prepared,a)
+	if next == null: next = Crates.reduce(prepared,a)
+	if next == null: next = Contracts.reduce(prepared,a)
+	if next == null: next = Commerce.reduce(prepared,a)
+	if is_same(next,prepared): return false
+	ensure_shop_state(next,false)
+	Contracts.observe(prepared,next,a)
+	_attach_referral(prepared,next,a)
+	Journal.observe(prepared,next,a)
+	_enrich_shop_feedback(prepared,next,a)
 	state = next
 	save()
 	changed.emit(prev, next, a)
 	return true
 
+func _attach_referral(previous: Dictionary, next: Dictionary, action: Dictionary) -> void:
+	if action.get("type","")!="ARRIVE" or previous.get("trade")!=null: return
+	var trade=next.get("trade")
+	if not trade is Dictionary or not trade.get("kind","") in ["buy","sell"]: return
+	if trade.get("crimeCaseId","")!="" or trade.get("inspectionVisit",false): return
+	var key := "%s/%d/%d/referral-v1" % [next.seed,int(next.day),int(previous.cursor)]
+	if Model.fnv(key)%12!=0: return
+	var candidates: Array[String]=[]
+	for id in previous.get("shopJournal",{}).get("customers",{}):
+		var memory: Dictionary=Journal.customer(previous,String(id))
+		if id!=trade.npcId and int(memory.get("deals",0))>=2 and int(memory.get("trust",0))>=2: candidates.append(String(id))
+	if candidates.is_empty(): return
+	candidates.sort()
+	var referrer: String=candidates[Model.fnv(key+"/person")%candidates.size()]
+	trade.referrerId=referrer
+	trade.line="%s介绍我来看看。\n%s" % [GameData.npc(referrer).name,String(trade.get("line",""))]
+
+func _enrich_shop_feedback(previous: Dictionary, next: Dictionary, action: Dictionary) -> void:
+	var trade = next.get("trade")
+	if not trade is Dictionary: return
+	if action.get("type","") == "ARRIVE" and previous.get("trade") == null:
+		var greeting: String = Journal.greeting(previous,String(trade.get("npcId","")))
+		if greeting != "": trade.line = greeting+"\n"+String(trade.get("line",""))
+	if action.get("type","") == "OFFER" and action.get("evidence") != null and previous.get("trade") is Dictionary:
+		if int(trade.get("rounds",0)) <= int(previous.trade.get("rounds",0)): return
+		var evidence := String(action.evidence)
+		if not trade.get("evidenceUsed",[]).has(evidence): return
+		var label: String = {"TOL-001":"标识","TOL-002":"编号","TOL-005":"称量"}.get(evidence,"鉴定")
+		trade.line = "已向对方出示%s记录，对方按已知依据回应。\n%s" % [label,String(trade.get("line",""))]
+
 func save() -> void:
+	ensure_shop_state(state)
 	NightCrime.ensure(state)
 	Landlord.ensure(state)
 	StoreCosts.ensure(state)

@@ -4,6 +4,10 @@ extends RefCounted
 ## four teaching customers and separate merchant/patrol slots. Later days use
 ## every integer from 3–10 with equal hash probability, independently of AP.
 
+static func is_rent_day(s: Dictionary) -> bool:
+	var day := int(s.day)
+	return day > 0 and day%7 == 0 and (day <= 21 or s.get("campaignLife",{}).get("endless",false))
+
 static func _day(s: Dictionary) -> Dictionary:
 	if not s.get("visitSchedule") is Dictionary: s.visitSchedule = {"version":1,"days":{}}
 	if not s.visitSchedule.get("days") is Dictionary: s.visitSchedule.days = {}
@@ -14,7 +18,7 @@ static func _day(s: Dictionary) -> Dictionary:
 		var legacy: bool = s.get("nightCrime",{}).get("days",{}).has(key)
 		var quota := 3 + Model.fnv("%s/visits/%s" % [s.seed,key]) % 8
 		if int(s.day) <= 3: quota = maxi(6,quota)
-		if legacy: quota = 7 if int(s.day) in [7,14,21] else 6
+		if legacy: quota = 7 if is_rent_day(s) else 6
 		quota = maxi(quota,mini(10,int(s.get("cursor",0)) + (1 if s.get("trade") is Dictionary else 0)))
 		s.visitSchedule.days[key] = {"limit":quota,"legacy":legacy}
 	return s.visitSchedule.days[key]
@@ -24,7 +28,7 @@ static func limit(s: Dictionary) -> int:
 	return int(_day(s).limit)
 
 static func landlord_slot(s: Dictionary) -> int:
-	if int(s.day) not in [7,14,21]: return -1
+	if not is_rent_day(s): return -1
 	var record: Dictionary = s.get("rent",{}).get("days",{}).get(str(int(s.day)),{})
 	return int(record.get("slot",remap_slot(s,limit(s)-1)))
 
@@ -36,7 +40,7 @@ static func merchant_slot(s: Dictionary) -> int:
 	var draw := Model.fnv("%s/merchant/%d" % [s.seed,cycle])
 	if day != 2+cycle*2+draw%2: return -1
 	var slot := 4+int((draw>>3)%2) if day <= 3 else int((draw>>3) % (6 if _day(s).legacy else quota))
-	var final_slot := quota-1 if int(s.day) in [7,14,21] else -1
+	var final_slot := quota-1 if is_rent_day(s) else -1
 	return remap_slot(s,available_slot(s,slot,[final_slot]))
 
 static func available_slot(s: Dictionary, preferred: int, reserved: Array) -> int:
@@ -86,7 +90,7 @@ static func _exchange(s: Dictionary, current: int, scheduled: int) -> void:
 ## Called at the first actual landlord arrival, before creating its trade.
 ## The displaced visitor takes the landlord's remaining scheduled appointment.
 static func reserve_landlord(s: Dictionary) -> int:
-	if int(s.day) not in [7,14,21]: return -1
+	if not is_rent_day(s): return -1
 	var quota := limit(s)
 	if not s.get("rent") is Dictionary: s.rent = {"version":1,"days":{}}
 	if not s.rent.get("days") is Dictionary: s.rent.days = {}

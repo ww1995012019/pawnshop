@@ -2,6 +2,7 @@ extends RefCounted
 ## A read-only cash book. Ledger amounts are postings; cost is not another cash movement.
 
 const KIND_LABELS := {
+	"bulk-purchase":"整箱收购", "service-job":"委修收入", "shop-extension":"店铺扩建",
 	"purchase": "收购支出", "sale": "售货收入", "pawn-principal": "抵押本金支出",
 	"pawn-return": "抵押本金收回", "pawn-fee": "抵押服务费", "registration": "来源登记费",
 	"order": "订单收入", "service": "服务收入", "materials": "材料采购",
