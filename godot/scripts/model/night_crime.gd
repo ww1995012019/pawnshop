@@ -267,6 +267,7 @@ static func _recover(s: Dictionary, c: Dictionary, row: Dictionary) -> void:
 		var item: Dictionary = row.item.duplicate(true)
 		item.erase("stolen")
 		item.erase("crimeCaseId")
+		item.erase("robberyCaseId")
 		item.erase("grayAuthorized")
 		item.sourceVerified = true
 		item.source = "警方核实归还本店失物 / "+c.id
@@ -294,6 +295,7 @@ static func arrest(s: Dictionary, target: String) -> void:
 		for row in c.items:
 			if row.holder in ["case","trade","inventory"]: _recover(s,c,row)
 	if not associated: credit(s,"",target)
+	load("res://scripts/model/robbery.gd").after_arrest(s,target)
 
 static func _inspect(s: Dictionary) -> Dictionary:
 	var d: Dictionary = s.nightCrime.days[str(int(s.day))]
@@ -327,6 +329,9 @@ static func _inspect(s: Dictionary) -> Dictionary:
 static func lost_item_problem(s: Dictionary) -> String:
 	if s.phase != "open" or s.trade == null: return "柜台没有可核对的本店失物。"
 	var physical = Model.trade_item(s)
+	if physical!=null and load("res://scripts/model/robbery.gd").marked(s,physical):
+		var culprit := _case(s,physical.crimeCaseId)
+		if s.trade.get("npcId","")==Wanted.profile(culprit.culprit).npcId: return ""
 	if physical==null or not physical.get("crimeCaseId","").begins_with("NIGHT-"): return "柜台没有可核对的本店失物。"
 	var c := _case(s,physical.crimeCaseId)
 	if c.is_empty() or c.arrested: return "该案已经处置。"

@@ -216,7 +216,7 @@ static func available_orders(s: Dictionary) -> Array:
 	var out := []
 	for d in GameData.orders:
 		var o = _order_state(s, d.id)
-		if float(GameData.order_earliest.get(d.id, 1)) <= s.day and d.dueDay >= s.day and o != null and o.status == "available":
+		if float(GameData.order_earliest.get(d.id, 1)) <= s.day and order_due(s,d.id) >= s.day and o != null and o.status == "available":
 			out.append(d)
 	return out
 
@@ -730,8 +730,9 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 		s.report = null
 		s.scanned = []
 		s.inspection = "pending" if s.day >= 3 else "announced"
+		load("res://scripts/model/robbery.gd").extend_deadlines(s)
 		for o in s.orders:
-			if (o.status == "available" or o.status == "active") and GameData.order(o.id).dueDay < s.day:
+			if (o.status == "available" or o.status == "active") and order_due(s,o.id) < s.day:
 				o.status = "failed"
 		for it in s.inventory:
 			if it.owner == "pawn" and it.has("pawnDay") and s.day > it.pawnDay + 4:
@@ -752,7 +753,9 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			text = "第2天：阿篁与澄九带来委修预约。到订单页接单，再到维修台换件复测。"
 		elif s.day == 3:
 			text = "第3天：饶静预约核验。先扫描来源不明货物，再登记或隔离，日结可选择首个升级。"
-		return notice(s, text)
+		notice(s,text)
+		load("res://scripts/model/robbery.gd").open_day(s)
+		return s
 	if type == "UPGRADE":
 		if s.phase != "report" or s.report == null:
 			return notice(s, "店铺升级在日结后安排。")
@@ -1237,7 +1240,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			var o = _order_state(s, a.id)
 			if def.is_empty() or o == null or o.status != "available":
 				return previous
-			if s.day < float(GameData.order_earliest.get(def.id, 1)) or s.day > def.dueDay:
+			if s.day < float(GameData.order_earliest.get(def.id, 1)) or s.day > order_due(s,def.id):
 				return notice(s, "这张预约尚未开始或已经到期。")
 			if def.get("customerOwned", false):
 				var it := new_item(s, def.itemId, {"owner": "customer", "orderId": def.id, "condition": 0.55 if def.needsRepair else 0.8, "working": not def.needsRepair, "sourceVerified": true, "source": "%s 顾客委修登记 / 禁止销售" % def.id, "cost": 0})
@@ -1337,3 +1340,9 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				s.outcome = "高风险转运站" if s.risk >= 60 else ("稀有收藏行" if s.relations.merchant > s.relations.salvage else "可信赖维修店")
 			return notice(s, "日结完成：旧版能源维护 %s Cr，租金 %s Cr；本次支付 %s Cr。" % [jnum(maintenance),jnum(due),jnum(payment)] if costs.legacy else "日结完成：电费 %s Cr，清洁费 %s Cr，租金 %s Cr；本次支付 %s Cr。" % [jnum(costs.electricity),jnum(costs.cleaning),jnum(due),jnum(payment)])
 	return previous
+
+static func order_due(s: Dictionary, id: String) -> int:
+	var extension:=0
+	for o in s.orders:
+		if o.id==id: extension=int(o.get("closureExtension",0));break
+	return int(GameData.order(id).dueDay)+extension

@@ -27,7 +27,7 @@ class DeskCard extends Node2D:
    item_marks=Control.new();item_marks.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(item_marks)
   item_marks.position=Vector2(-width/2,-35)
   item_marks.size=Vector2(width,64)
-  UIKit.decorate_item(item_marks,it,18.0)
+  UIKit.decorate_item(item_marks,it,18.0,false)
  func area() -> Rect2: return Rect2(Vector2(-width/2,-35),Vector2(width,98))
  func _draw() -> void:
   var edge:=Color("f2c27b") if focused else Color("83b7a0") if agreed else Color("b77e65") if refused else Color("65765d")

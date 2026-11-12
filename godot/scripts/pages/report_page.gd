@@ -25,6 +25,8 @@ func hint_text() -> String:
 	var week := int(Life.summary(s).week)
 	if s.phase == "open":
 		return ("持续经营 · 第 %d 周。" % week if Life.is_endless(s) else "") + "处理完今天的客人与订单后，打烊结算电费与清洁费，租金由房东上门收取。"
+	if s.phase == "report" and s.get("report",{}).get("closed",false):
+		return "打砸维修，今日整日歇业。费用已记账，余额可为负；进入次日恢复营业。"
 	if s.phase == "report":
 		if Life.is_endless(s): return "持续经营 · 第 %d 周日结完成，迎接第 %d 天。" % [week,int(s.day)+1]
 		return "日结完成：选择升级（第 3 天起），然后迎接明天。"
@@ -186,6 +188,8 @@ func _refresh() -> void:
 	# Historic reports preserve the old single charge; never recalculate them.
 	var costs: Dictionary = s.report.get("costs", {"legacy":true,"maintenance":s.report.get("maintenance",20),"electricity":0,"cleaning":0,"total":s.report.get("maintenance",20),"details":{}}) if paid else StoreCosts.quote(s)
 	if paid:
+		if s.report.get("closed",false):
+			_row(g,"歇业一天 · 打砸维修费",UIKit.money(s.report.get("robberyRepair",0)),UIKit.RUST)
 		_row(g, "收入", UIKit.money(s.report.income), Color("2f6b3a"))
 		_row(g, "营业支出\n不含本次日结费用", UIKit.money(s.report.expenses), UIKit.RUST)
 	else:

@@ -1,7 +1,7 @@
 class_name ShopStories
 extends RefCounted
 ## Independent cross-day cases share an entry point, not the daily event slot.
-const MODULES := ["res://scripts/model/ownership_claims.gd","res://scripts/model/warranty_cases.gd","res://scripts/model/auction_nights.gd"]
+const MODULES := ["res://scripts/model/ownership_claims.gd","res://scripts/model/warranty_cases.gd","res://scripts/model/auction_nights.gd","res://scripts/model/robbery.gd"]
 const TERMINAL := ["resolved","completed","complete","settled","passed","declined","refunded","returned","cancelled","rejected","expired"]
 static func ensure(s: Dictionary) -> void:
 	for path in MODULES:
@@ -46,7 +46,7 @@ static func _outcome(s: Dictionary,event: Dictionary) -> String:
 	return JSON.stringify([event.get("status",""),event.get("statusText",""),event.get("resolution",""),held])
 static func observe_journal(previous: Dictionary,next: Dictionary,_action: Dictionary) -> void:
 	var changed:=false
-	for key in ["ownershipClaims","warrantyCases","auctionNights"]:
+	for key in ["ownershipClaims","warrantyCases","auctionNights","robbery"]:
 		if previous.get(key,{})!=next.get(key,{}):changed=true;break
 	if not changed:return
 	var journal=load("res://scripts/model/shop_journal.gd")

@@ -1031,6 +1031,7 @@ func _refresh() -> void:
 				scr.line3.text=current.reason
 				scr.line3.tooltip_text=current.reason
 	var alarm_reason := WantedCases.report_reason(s)
+	if NightCrime.lost_item_problem(s)=="": alarm_reason=""
 	alarm_button.disabled = busy or alarm_reason != ""
 	alarm_button.tooltip_text = alarm_reason if alarm_reason != "" else "核对当前来客后呼叫巡警；错误报警会记录次数"
 	if dial_on and quote_problem != "":
@@ -1763,6 +1764,9 @@ func _build_police_controls() -> void:
 	add_child(alarm_button)
 
 func _confirm_alarm() -> void:
+	if NightCrime.lost_item_problem(Game.state)=="":
+		_report_lost_original()
+		return
 	var reason:=WantedCases.report_reason(Game.state)
 	if reason!="": shell.toast(reason);return
 	var trade_id: String=Game.state.trade.id
@@ -1909,4 +1913,7 @@ func _with_source_risk(action: Dictionary) -> void:
 func _report_lost_original() -> void:
 	var t = Game.state.trade
 	if t == null or NightCrime.lost_item_problem(Game.state) != "": return
+	if load("res://scripts/model/robbery.gd").marked(Game.state,Model.trade_item(Game.state)):
+		shell.confirm("本店被抢物品", "本件原表带有本店抢劫案标记。无需购买或编号鉴定，可直接报警抓捕并追回该犯持有的本案原物。", "报警并追回", func(): Game.dispatch({"type":"REPORT_LOST_ITEM","tradeId":t.id}))
+		return
 	shell.confirm("这是本店失物，报警核对", "已取得本件原物编号证据，警方将与失窃记录核对。无需先付款购买。未赔付原物归还店铺；已赔付原物移交保险方。", "核对原编号并报警", func(): Game.dispatch({"type":"REPORT_LOST_ITEM", "tradeId":t.id}))

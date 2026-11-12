@@ -601,10 +601,11 @@ static func is_modified(it: Dictionary) -> bool:
 
 ## Small corner marks leave the physical silhouette and selection glow untouched.
 ## Safe to call again when an item changes; the decoration never consumes input.
-static func decorate_item(control: Control, it: Dictionary, side := 18.0) -> void:
+static func decorate_item(control: Control, it: Dictionary, side := 18.0, include_robbery := true) -> void:
 	var id := presentation_id(it)
 	var modified := is_modified(it)
-	var signature := "%s:%s:%s" % [id, modified, side]
+	var robbed: bool=include_robbery and load("res://scripts/model/robbery.gd").marked(Game.state,it)
+	var signature := "%s:%s:%s:%s" % [id, modified, side, robbed]
 	if control.get_meta("item_decoration_signature", "") == signature: return
 	control.set_meta("item_decoration_signature", signature)
 	var previous := control.get_node_or_null("item_decoration")
@@ -625,6 +626,15 @@ static func decorate_item(control: Control, it: Dictionary, side := 18.0) -> voi
 		crest.offset_top = 2
 		crest.offset_right = -2
 		crest.offset_bottom = side + 2
+	if robbed:
+		var mark := label("本店被抢物品",12,DANGER)
+		mark.name="robbery_mark"
+		mark.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		mark.add_theme_color_override("font_outline_color",Color("101618"))
+		mark.add_theme_constant_override("outline_size",4)
+		marks.add_child(mark)
+		mark.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		mark.grow_vertical=Control.GROW_DIRECTION_BEGIN
 	if modified:
 		var badge := label("改", roundi(side), AMBER)
 		badge.name = "modified_badge"

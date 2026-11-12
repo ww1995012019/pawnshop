@@ -158,7 +158,7 @@ func _card(def: Dictionary) -> VBoxContainer:
 	hv.add_child(UIKit.label(def.name, 26, UIKit.INK, false, true))
 	var meta: BoxContainer = UIKit.vbox(4) if shell.portrait_mode() else UIKit.hbox(14)
 	meta.add_child(UIKit.label("报酬 " + UIKit.money(def.reward), 22, UIKit.RUST, true))
-	meta.add_child(UIKit.label("第 %s 天前交付" % Model.jnum(def.dueDay), 18, INK_SOFT))
+	meta.add_child(UIKit.label("第 %s 天前交付" % Model.jnum(Model.order_due(Game.state,def.id)), 18, INK_SOFT))
 	hv.add_child(meta)
 	head.add_child(hv)
 	v.add_child(head)
@@ -200,7 +200,7 @@ func _mobile_card(def: Dictionary) -> VBoxContainer:
 	caption.add_child(title)
 	var order = Model._order_state(Game.state,def.id)
 	var status: String = "可接" if order == null else {"active":"进行中","done":"已交付","failed":"已失效"}.get(order.status,"可接")
-	var meta := UIKit.label("%s · %s · 第%d天前    %s" % [status,UIKit.money(def.reward),int(def.dueDay),"收起" if summary.button_pressed else "展开"],13,UIKit.RUST)
+	var meta := UIKit.label("%s · %s · 第%d天前    %s" % [status,UIKit.money(def.reward),int(Model.order_due(Game.state,def.id)),"收起" if summary.button_pressed else "展开"],13,UIKit.RUST)
 	meta.clip_text = true
 	meta.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	caption.add_child(meta)
@@ -213,7 +213,7 @@ func _mobile_card(def: Dictionary) -> VBoxContainer:
 	summary.toggled.connect(func(open: bool):
 		expanded_orders[def.id] = open
 		details.visible = open
-		meta.text = "%s · %s · 第%d天前    %s" % [status,UIKit.money(def.reward),int(def.dueDay),"收起" if open else "展开"])
+		meta.text = "%s · %s · 第%d天前    %s" % [status,UIKit.money(def.reward),int(Model.order_due(Game.state,def.id)),"收起" if open else "展开"])
 	# _refresh adds action controls here, then moves them into folded details.
 	card.set_meta("mobile_details",details)
 	return stack

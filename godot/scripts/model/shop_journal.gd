@@ -440,7 +440,13 @@ static func greeting(s: Dictionary, npc_id: String) -> String:
 static func preferred_npc(s: Dictionary, fallback_id: String) -> String:
  ensure(s)
  var eligible: Array=[]
+ var arrested:Dictionary={}
+ var wanted=load("res://scripts/model/wanted_cases.gd")
+ for id in s.get("police",{}).get("caught",[]):
+  var npc:String=wanted.profile(id).get("npcId","")
+  if npc!="":arrested[npc]=true
  for id in s.shopJournal.customers:
+  if arrested.has(id):continue
   var memory: Dictionary=s.shopJournal.customers[id]
   if int(memory.deals)>0 and int(memory.trust)>0: eligible.append(String(id))
  eligible.sort()

@@ -249,6 +249,9 @@ func _refresh() -> void:
 	speech.text = line if t != null and line != "" else "柜台已经准备好了。\n按响服务铃，接待下一位来客。"
 	item_name.text = GameData.def(item.defId).name if item != null else "等候查验的旧物" if t == null else "请先挑选货物"
 	item_hint.text = "点实物查看详情 · 已有 %d 条物证" % Model.evidence_count(item) if item != null else "鉴定旧物 · 商议价格 · 经营柜台"
+	var robbed:bool=item!=null and load("res://scripts/model/robbery.gd").marked(s,item)
+	if robbed:item_hint.text="本店被抢物品 · 可直接报警追回"
+	item_hint.add_theme_color_override("font_color",UIKit.DANGER if robbed else UIKit.MUTED)
 	tools.get_child(0).disabled = item == null or desk.busy
 	if is_instance_valid(quote):
 		quote.set_block_signals(true)

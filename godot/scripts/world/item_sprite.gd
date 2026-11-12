@@ -32,6 +32,7 @@ var logo_variant := 0
 var finish_signature := ""
 var physical_signature := ""
 var rare_time := 0.0
+var robbery_mark: Label
 var last_visual_item = null
 var last_visual_back := false
 var last_rare_effect := -1
@@ -229,6 +230,7 @@ func _process(delta: float) -> void:
 			_apply_face()
 		else:
 			_sync_logo_observation()
+		_sync_robbery_mark(it)
 		last_visual_item = it
 		last_visual_back = back
 	if dragging:
@@ -246,3 +248,16 @@ func _process(delta: float) -> void:
 	shadow.scale = Vector2(foot.x / 256.0 * (1.05 + h * 0.25), foot.x / 256.0 * 0.2 * (1.0 + h * 0.2))
 	shadow.modulate.a = 0.6 * (1.0 - h * 0.55)
 	mat.set_shader_parameter("hover", hover)
+
+func _sync_robbery_mark(it) -> void:
+	var marked:bool=it!=null and load("res://scripts/model/robbery.gd").marked(Game.state,it)
+	if marked and not is_instance_valid(robbery_mark):
+		robbery_mark=UIKit.label("本店被抢物品",18,UIKit.DANGER)
+		robbery_mark.name="robbery_mark"
+		robbery_mark.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		robbery_mark.add_theme_color_override("font_outline_color",Color("101618"))
+		robbery_mark.add_theme_constant_override("outline_size",4)
+		add_child(robbery_mark)
+	if is_instance_valid(robbery_mark):
+		robbery_mark.visible=marked
+		robbery_mark.position=Vector2(-54,-tex_size().y*display_scale*.5-28)
