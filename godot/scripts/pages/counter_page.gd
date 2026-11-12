@@ -23,7 +23,6 @@ var fixture_buttons: Dictionary = {}
 var customer: Customer
 var mat_item: ItemSprite
 var counter_table: Node2D
-var focus_inspect: Button
 var bell: ServiceBell
 var bubble: Panel
 var bubble_name: Label
@@ -184,13 +183,6 @@ func enter() -> void:
 	counter_table=preload("res://scripts/world/counter_table.gd").new()
 	counter_table.name="counter_table"
 	stage_root.add_child(counter_table)
-	focus_inspect = UIKit.button("拿起鉴定", "primary", Vector2(180, 44), 21, "inspect")
-	focus_inspect.name = "focus_inspect"
-	focus_inspect.position = Vector2(900, 704)
-	focus_inspect.tooltip_text = "把当前这件原物拿到鉴定台"
-	focus_inspect.pressed.connect(func():
-		if not busy and not _scene_blocked(): _open_instrument("inspect"))
-	stage_root.add_child(focus_inspect)
 	_align_stage()
 	# The importer lifts the original painted bell out of the background.
 	# This is its sole visible copy, at the exact source coordinates.
@@ -288,7 +280,7 @@ func _finish_table_drag() -> void:
 	var was_dragging:=mat_item.dragging
 	mat_item.end_drag()
 	if was_dragging and CounterDialogue.active(Game.state) and counter_table.sprites.has(mat_item.uid):
-		var model_pos: Vector2 = counter_table.model_point_for(mat_item.uid,mat_item.position)
+		var model_pos: Vector2 = counter_table.model_point(mat_item.position)
 		Game.dispatch({"type":"COUNTER_MOVE","tradeId":Game.state.trade.id,"uid":mat_item.uid,"position":[model_pos.x,model_pos.y]})
 
 func _spawn_mat_item(it: Dictionary, animate: bool, from := Vector2.ZERO) -> void:
@@ -677,8 +669,6 @@ func _refresh_desk() -> void:
 	if busy and t == null:
 		return
 	var it = Model.trade_item(s) if t != null else null
-	focus_inspect.visible = it != null and CounterDialogue.active(s) and not shell.mobile_mode() and not busy
-	focus_inspect.disabled = _scene_blocked()
 	tag.visible = it != null and not CounterDialogue.active(s)
 	if it != null:
 		tag_name.text = WatchForgery.sale_name(it)
@@ -1727,12 +1717,8 @@ func _unhandled_input(e: InputEvent) -> void:
 			if CounterDialogue.active(Game.state):
 				var hit: String=counter_table.hit_test(p)
 				if hit!="":
-					var already_focused: bool = TradeSession.session(Game.state).focus == hit
 					_focus_table(hit)
-					if mb.double_click:
-						_open_instrument("inspect")
-						return
-					if already_focused and is_instance_valid(mat_item): mat_item.begin_drag(p)
+					if is_instance_valid(mat_item): mat_item.begin_drag(p)
 					shell.sound("click",-10,0.8)
 					return
 			if mat_item != null and is_instance_valid(mat_item) and mat_item.contains(p):
@@ -1777,7 +1763,7 @@ func _process(delta: float) -> void:
 func _build_police_controls() -> void:
 	alarm_button=UIKit.button("报警 · 呼叫巡警","danger",Vector2(280,44),18,"alert")
 	alarm_button.name="alarm_button"
-	alarm_button.position=Vector2(600,704)
+	alarm_button.position=Vector2(650,673)
 	alarm_button.pressed.connect(func():
 		if not busy and not _scene_blocked(): _confirm_alarm())
 	add_child(alarm_button)

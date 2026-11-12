@@ -25,14 +25,8 @@ func run() -> void:
  var second_back: bool=table.sprites[second].back
  await point(table.sprites[second].global_position,MOUSE_BUTTON_RIGHT)
  check(table.sprites[second].back!=second_back and table.sprites[first].back==first_back,"right-click flips the pointed original without changing the other one")
- check(table.sprites[second].get_meta("display_height",0.0)>=140,"focused original is large enough to inspect on the desk")
- check(table.sprites[second].position.distance_to(Vector2(990,585))<1,"focused original occupies central work mat")
- check(is_instance_valid(page.focus_inspect) and page.focus_inspect.is_visible_in_tree(),"central original has a direct instrument key")
  check(page.find_child("dialogue_next_goods",true,false)==null,"normal table needs no next-item dialogue button")
- page._focus_table(first);await frames()
- page.focus_inspect.pressed.emit();await frames()
- check(shell.workspace_open() and shell.active_shell().page.it_uid==first,"instrument key inspects the selected original")
- shell.close_workspace();await frames()
+ shell.go("inspect",first);await frames();shell.close_workspace();await frames()
  table=page.get("counter_table")
  check(table.sprites.size()==5 and table.sprites.has(first) and table.sprites.has(second),"inspection return retains the full tabletop")
  # Six player lots and three NPC lots have independent usable hit regions.

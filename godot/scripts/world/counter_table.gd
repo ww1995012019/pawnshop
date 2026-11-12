@@ -4,26 +4,6 @@ var sprites: Dictionary={}
 var cards: Dictionary={}
 var origins: Dictionary={}
 var presentation_rect := Rect2()
-var desktop_origins: Dictionary = {}
-var focus_visible := false
-const FOCUS_POINT := Vector2(990,585)
-
-func model_point_for(uid: String, point: Vector2) -> Vector2:
- if presentation_rect.size != Vector2.ZERO: return model_point(point)
- var origin: Dictionary = desktop_origins.get(uid,{})
- return origin.get("model",point) + point - origin.get("display",point)
-
-func _draw() -> void:
- if not focus_visible or presentation_rect.size != Vector2.ZERO: return
- var mat := StyleBoxFlat.new()
- mat.bg_color=Color("354f46");mat.border_color=Color("b49b6b")
- mat.set_border_width_all(2);mat.set_corner_radius_all(8)
- mat.shadow_color=Color(0,0,0,.22);mat.shadow_size=7
- draw_style_box(mat,Rect2(900,495,180,198))
- for x in [910,1060]:
-  draw_line(Vector2(x,505),Vector2(x+10,505),Color("c9b68c"),2)
-  draw_line(Vector2(x,682),Vector2(x+10,682),Color("c9b68c"),2)
-
 const MODEL_RECT := Rect2(670,480,640,180)
 func display_point(point: Vector2) -> Vector2:
  if presentation_rect.size == Vector2.ZERO: return point
@@ -41,28 +21,24 @@ class DeskCard extends Node2D:
  var refused:=false
  var visitor:=false
  var width:=102.0
- var item_height:=64.0
  var item_marks: Control
  func show_item_marks(it: Dictionary) -> void:
   if item_marks==null:
    item_marks=Control.new();item_marks.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(item_marks)
-  item_marks.position=Vector2(-width/2,-item_height/2-3)
-  item_marks.size=Vector2(width,item_height)
+  item_marks.position=Vector2(-width/2,-35)
+  item_marks.size=Vector2(width,64)
   UIKit.decorate_item(item_marks,it,18.0,false)
- func area() -> Rect2: return Rect2(Vector2(-width/2,-item_height/2-3),Vector2(width,item_height+34))
+ func area() -> Rect2: return Rect2(Vector2(-width/2,-35),Vector2(width,98))
  func _draw() -> void:
   var edge:=Color("f2c27b") if focused else Color("83b7a0") if agreed else Color("b77e65") if refused else Color("65765d")
-  var bottom := item_height/2+3
-  draw_style_box(_paper(edge),Rect2(-width/2,bottom,width,30))
-  draw_string(UIKit.font,Vector2(-width/2+5,bottom+13),caption,HORIZONTAL_ALIGNMENT_LEFT,width-10,16,Color("302c27"))
-  draw_string(UIKit.font,Vector2(-width/2+5,bottom+27),note,HORIZONTAL_ALIGNMENT_LEFT,width-10,13,Color("8c482d") if refused else Color("315547"))
+  draw_style_box(_paper(edge),Rect2(-width/2,33,width,30))
+  draw_string(UIKit.font,Vector2(-width/2+5,46),caption,HORIZONTAL_ALIGNMENT_LEFT,width-10,16,Color("302c27"))
+  draw_string(UIKit.font,Vector2(-width/2+5,60),note,HORIZONTAL_ALIGNMENT_LEFT,width-10,13,Color("8c482d") if refused else Color("315547"))
  func _paper(edge: Color) -> StyleBoxFlat:
   var style:=StyleBoxFlat.new();style.bg_color=Color("dfcfaa");style.border_color=edge;style.set_border_width_all(1);return style
 
 func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
  var shown:=CounterDialogue.table_items(state)
- focus_visible=not shown.is_empty()
- queue_redraw()
  var keep: Array=[]
  var vi:=0;var pi:=0
  var visitor_count: int=shown.filter(func(entry):return entry.direction=="buy").size()
@@ -81,20 +57,13 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
   var default_position: Vector2=slots[mini(index,slots.size()-1)]
   var saved=TradeSession.session(state).get("table_positions",{}).get(uid,[])
   var pos:=Vector2(float(saved[0]),float(saved[1])) if saved is Array and saved.size()==2 else default_position
-  var logical_pos := pos
-  var mobile := presentation_rect.size != Vector2.ZERO
-  if mobile:
-   pos=display_point(pos)
-  else:
-   var slot_index := slots.find(logical_pos)
-   if slot_index<0: slot_index=index
-   pos=FOCUS_POINT if info.focused else Vector2((625 if visitor else 1120)+(slot_index%4)*80,508+(slot_index/4)*100)
-   desktop_origins[uid]={"model":logical_pos,"display":pos}
+  pos=display_point(pos)
   if presentation_rect.size != Vector2.ZERO and shown.size()==1 and not (saved is Array and saved.size()==2):
    pos=presentation_rect.get_center()
 
-  var height := minf(148.0 if shown.size()==1 else 116.0,presentation_rect.size.y+44.0) if mobile and info.focused else 54.0 if mobile else 144.0 if info.focused else 64.0
-  var bounds := Rect2(920,550,140,90) if info.focused else Rect2(650,480,700,200)
+  var mobile := presentation_rect.size != Vector2.ZERO
+  var height := minf(148.0 if shown.size()==1 else 116.0,presentation_rect.size.y+44.0) if mobile and info.focused else 54.0 if mobile else 64.0
+  var bounds := Rect2(670,500,610,110)
   if mobile:
    var half := height*.5
    var low := presentation_rect.position+Vector2(-36+half,-26+half)
@@ -122,9 +91,6 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
   var sprite: ItemSprite=sprites[uid]
   origins[uid]=info.direction
   card.visible = not mobile
-  card.item_height=height
-  sprite.z_index=2 if info.focused else 0
-  card.z_index=3 if info.focused else 1
   sprite.bounds = bounds
   if not sprite.busy and sprite.get_meta("display_height",0.0) != height:
    var next_scale := height/sprite.tex_size().y
@@ -141,11 +107,11 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
     var settle:=sprite.create_tween();sprite.set_meta("layout_tween",settle)
     settle.tween_property(sprite,"position",pos,.18).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
     settle.tween_callback(func(): if is_instance_valid(sprite): sprite.remove_meta("layout_destination"))
-  card.width=180.0 if info.focused and not mobile else 78.0
+  card.width=70.0 if side_count>(3 if visitor else 6) else 178.0 if visitor else 102.0
   card.show_item_marks(original)
   card.visitor=visitor;card.focused=info.focused;card.agreed=info.selected;card.refused=info.status in ["rejected","blocked"]
   sprite.set_meta("hit_size",Vector2(card.width,98))
-  card.caption=WatchForgery.sale_name(original).left(10 if info.focused else 4)
+  card.caption=("来客 · " if visitor else "店·")+WatchForgery.sale_name(original).left(8 if visitor else 5)
   card.note=("已谈妥 " if info.selected else "不收 " if card.refused else "开价 " if visitor else "报价 ")+Model.jnum(info.price)
   card.position=sprite.position;card.queue_redraw()
   if fresh and animate and not Game.prefs.reduced_motion:
@@ -190,14 +156,12 @@ func discard(uid: String) -> void:
 
 func take(uid: String):
  var sprite=sprites.get(uid,null)
- sprites.erase(uid);origins.erase(uid);desktop_origins.erase(uid)
+ sprites.erase(uid);origins.erase(uid)
  if cards.has(uid): cards[uid].queue_free();cards.erase(uid)
  return sprite
 
 func clear() -> void:
  for uid in sprites.keys(): discard(uid)
- focus_visible=false
- queue_redraw()
 
 func hit_test(global_point: Vector2) -> String:
  var order: Array=sprites.keys();order.reverse()

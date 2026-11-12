@@ -71,27 +71,6 @@ func run() -> void:
  for uid in table.sprites:
   var sprite=table.sprites[uid]
   check(table.hit_test(sprite.body.global_position)==uid,"compact table selects tapped original instead of overlapping neighbor")
- TradeSession.session(display).focus=TradeSession.session(display).goods[0].uid
- table.presentation_rect=Rect2()
- table.sync(display)
- for uid in table.sprites:
-  check(table.hit_test(table.sprites[uid].global_position)==uid,"desktop tray keeps all eight originals selectable")
- var focus: String=TradeSession.session(display).focus
- check(table.sprites[focus].get_meta("display_height",0)>=140,"desktop focus uses a larger original")
- var initial_cash: float=display.cash
- var canonical=TradeSession.session(display).table_positions.duplicate(true)
- table.sync(display)
- check(display.cash==initial_cash and TradeSession.session(display).table_positions==canonical,"focus presentation does not mutate cash or saved placement")
- TradeSession.session(display).want_count=8
- for index in 8:
-  var lot=Model.new_item(display,"WCH-002",{"sourceVerified":true,"working":true,"authentic":true,"condition":0.9})
-  Model.put_in(display,lot)
-  display=load("res://scripts/model/commerce.gd").reduce(display,{"type":"SELECT_TRADE","uid":lot.uid})
- root.get_node("Game").state=display
- table.sync(display)
- check(table.sprites.size()==16,"eight visitor and eight shop originals share the focus desk")
- for uid in table.sprites:
-  check(table.hit_test(table.sprites[uid].global_position)==uid,"full desk keeps each original selectable")
  table.free()
  print("NPC COUNT bins=",bins," empty=",empty," failures=",failures)
  quit(1 if failures else 0)
