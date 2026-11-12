@@ -1,8 +1,8 @@
 {
-  "source_commit": "94173aaea0ca387b6f2903f921468cc80ca303f6",
-  "release_id": "7f598bfdd573b8ad",
-  "pack": "workbench-2a46e4099aedbcbf.pck",
-  "html_sha256": "4a2d555207babf13f51d6b098d89535b07ae6b7719ccf8c5728c6dce82965223",
+  "source_commit": "9312159ee6c13faebc02820b6537aca2bcd1caf6",
+  "release_id": "f54d7f45360fe349",
+  "pack": "workbench-3449b2df6a840bf2.pck",
+  "html_sha256": "f1b37fba04f3cb029a81bd45ffd06ee04d36930e3d461f47d2e452292dcfa066",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 107,
+  "native_regression_groups": 110,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -159,5 +159,11 @@
     8
   ],
   "robbery_closure_days": 1,
-  "debug_values_version": 1
+  "debug_values_version": 1,
+  "warehouse_expansion_version": 1,
+  "warehouse_max_columns": 50,
+  "warehouse_rows": 6,
+  "display_capacity_max": 130,
+  "pawn_slot_cash": 5,
+  "pawn_slots_permanent": true
 }
