@@ -1,8 +1,8 @@
 {
-  "source_commit": "09a6e0260d802b321c17642ed9c80542cc7a331a",
-  "release_id": "af6628a8deadd570",
-  "pack": "workbench-f7d8721c25d0bbb9.pck",
-  "html_sha256": "2c7eeba3582cb6490a708ecf9ad55c84d510cdb6ea46659a3de335b15002ba24",
+  "source_commit": "ec86377e542bc7ab329bca79969b5ae34327490a",
+  "release_id": "af2b96915c9a9c91",
+  "pack": "workbench-a13c780494372e48.pck",
+  "html_sha256": "0dfa5b7c25bb99510fe2f0879178a685420c2eb6f941c045363afcad0398ab7c",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 101,
+  "native_regression_groups": 104,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -141,5 +141,22 @@
   ],
   "npc_empty_visit_percent": 25,
   "npc_purchase_max": 8,
-  "npc_trade_batch_limit": 8
+  "npc_trade_batch_limit": 8,
+  "robbery_version": 1,
+  "robbery_luxury_chance_bp": 3,
+  "robbery_higher_chance_bp": 9,
+  "robbery_asset_target_percent": 5,
+  "robbery_max_items": 3,
+  "robbery_station_threshold": 60,
+  "robbery_onsite_arrest_percent": 5,
+  "robbery_retaliation_percent": 5,
+  "robbery_retaliation_days": [
+    2,
+    7
+  ],
+  "robbery_repair_percent": [
+    5,
+    8
+  ],
+  "robbery_closure_days": 1
 }
