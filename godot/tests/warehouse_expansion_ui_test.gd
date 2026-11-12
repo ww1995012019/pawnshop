@@ -34,6 +34,7 @@ func run():
   for kind in ["materials","isolation","pawn","warehouse"]:
    page.cabinet_buttons[kind].pressed.emit();await frames()
    check(page.cabinet_mode==kind,"right-side cabinet button switches to "+kind)
+   if kind=="isolation":check(page.storage_header.get_child(1).text.contains("0 / 20"),"isolation cabinet prints used and total capacity")
   entry.pressed.emit();await frames()
   var panel=shell.modal_layer.find_child("WarehouseExpansionPanel",true,false)
   check(panel!=null,"expansion entry opens the requirements selector")
@@ -41,7 +42,14 @@ func run():
    var sheet=shell.modal_layer.find_child("ModalSheet",true,false)
    check(sheet.size.x<=shell.safe_area().size.x+1 and sheet.size.y<=shell.safe_area().size.y+1,"expansion conditions fit the screen")
    check(panel.apply_button.disabled,"unselected watches cannot be consumed")
-  shell.close_top_modal();shell.close_workspace();await frames()
+  shell.close_top_modal();await frames()
+  var original_capacity:Dictionary=game.state.storageExpansion.duplicate(true)
+  game.state.storageExpansion=WarehouseExpansion.default_state(5);page._refresh();await frames()
+  page.grid_scroll.scroll_horizontal=100000;await frames()
+  var final_cell:Vector2=page.grid.get_global_transform_with_canvas()*Vector2(page.CELL*49.5,page.CELL*0.5)
+  check(page.grid_scroll.scroll_horizontal>0 and page.warehouse_drop_rect().has_point(final_cell),"horizontal scrolling reaches the50th column at "+str(dimensions))
+  game.state.storageExpansion=original_capacity;page._refresh();await frames()
+  shell.close_workspace();await frames()
  root.size=Vector2i(1440,900);shell.phone_override=false;await frames()
  game.state.inventory=[]
  var selected:Array=[]
@@ -75,6 +83,8 @@ func run():
  var original_uid:String=original_slot.uid
  await drag_original(page,original_slot.get_global_rect().get_center(),page.grid.get_global_rect().position+Vector2(page.CELL*2.5,page.CELL*0.5))
  check(game.item(original_uid).location=="warehouse" and game.item(original_uid).x==2,"pointer drag moves a displayed original to the requested warehouse cell")
+ await drag_original(page,page.grid.get_global_rect().position+Vector2(page.CELL*2.5,page.CELL*0.5),page.cabinet_buttons.pawn.get_global_rect().get_center())
+ check(game.item(original_uid).x==2 and game.item(original_uid).y==0,"dropping over cabinet controls cannot move an original into invisible warehouse columns")
  shell.close_workspace();await frames()
  shell.go("report");await frames()
  var purchase=shell.active_shell().page.find_child("PawnSlotPurchase",true,false)

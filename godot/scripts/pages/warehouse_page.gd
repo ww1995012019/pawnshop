@@ -100,6 +100,9 @@ func _refresh() -> void:
 	var title:String={"warehouse":"手表后仓","materials":"工具材料","isolation":"隔离保管","pawn":"抵押保管"}[cabinet_mode]
 	UIKit.clear(storage_header)
 	var caption: String="%d × %d · 拖动换位"%[WarehouseExpansion.columns(Game.state),WarehouseExpansion.rows(Game.state)] if cabinet_mode=="warehouse" else "独立仓位 · 点击查看原物"
+	if cabinet_mode in ["isolation","pawn"]:
+		var used:int=Game.state.inventory.filter(func(it):return it.location==cabinet_mode).size()
+		caption="%d / %d 位 · 剩余 %d"%[used,WarehouseExpansion.capacity(Game.state,cabinet_mode),maxi(0,WarehouseExpansion.capacity(Game.state,cabinet_mode)-used)]
 	storage_header.add_child(UIKit.label(title,18,UIKit.AMBER,true,true));storage_header.add_child(UIKit.label(caption,13,UIKit.MUTED,false,true))
 	grid.rebuild();_lists();_detail();call_deferred("_resize_panels")
 
@@ -194,11 +197,20 @@ func update_cabinet_drag(point: Vector2) -> void:
 func finish_cabinet_drag(uid: String,point: Vector2) -> void:
 	cabinet_drag_uid=""
 	if is_instance_valid(cabinet_drag_preview):cabinet_drag_preview.queue_free()
-	if grid_scroll.visible and grid_scroll.get_global_rect().has_point(point):
+	if grid_scroll.visible and warehouse_drop_rect().has_point(point):
 		var local:Vector2=grid.get_global_transform_with_canvas().affine_inverse()*point
 		store_original(uid,"warehouse",grid._cell(local))
-	elif display_panel.get_global_rect().has_point(point):store_original(uid,"display")
-	elif cabinet_scroll.visible and cabinet_mode=="isolation" and cabinet_scroll.get_global_rect().has_point(point):store_original(uid,"isolation")
+	elif cabinet_content_rect(display_scroll,display_grid).has_point(point):store_original(uid,"display")
+	elif cabinet_scroll.visible and cabinet_mode=="isolation" and cabinet_content_rect(cabinet_scroll,cabinet_grid).has_point(point):store_original(uid,"isolation")
+
+func cabinet_content_rect(scroller: ScrollContainer,contents: Control) -> Rect2:
+	var box:=scroller.get_global_rect()
+	if scroller.get_v_scroll_bar().visible:box.size.x-=scroller.get_v_scroll_bar().size.x
+	if scroller.get_h_scroll_bar().visible:box.size.y-=scroller.get_h_scroll_bar().size.y
+	return box.intersection(contents.get_global_rect())
+
+func warehouse_drop_rect() -> Rect2:
+	return cabinet_content_rect(grid_scroll,grid)
 
 func _process(delta: float) -> void:
 	if grid==null:return
@@ -604,8 +616,10 @@ class StorageGrid extends Control:
 					tiles[uid].modulate.a = 1.0
 				if not moved:
 					page.select(uid)
-				elif page.display_panel.get_global_rect().has_point(get_global_transform_with_canvas()*mb.position):
+				elif page.cabinet_content_rect(page.display_scroll,page.display_grid).has_point(get_global_transform_with_canvas()*mb.position):
 					page.store_original(uid,"display")
+				elif not page.warehouse_drop_rect().has_point(get_global_transform_with_canvas()*mb.position):
+					page.shell.toast("未放入可见仓格，原物已保留原位。")
 				else:
 					var tl: Vector2 = ((mb.position - drag_offset) / page.CELL).round()
 					var it = Game.item(uid)
