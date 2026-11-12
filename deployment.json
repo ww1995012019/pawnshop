@@ -1,8 +1,8 @@
 {
-  "source_commit": "128c1464accc3c5491b24b2d8f573f4fb5671049",
-  "release_id": "a06370208e4712ff",
-  "pack": "workbench-ff7eb6be8982efed.pck",
-  "html_sha256": "30ebcb92a610a449b15a89ef45d23a0e7fd21869ea2ff895d181e3dc86c65fab",
+  "source_commit": "09a6e0260d802b321c17642ed9c80542cc7a331a",
+  "release_id": "af6628a8deadd570",
+  "pack": "workbench-f7d8721c25d0bbb9.pck",
+  "html_sha256": "2c7eeba3582cb6490a708ecf9ad55c84d510cdb6ea46659a3de335b15002ba24",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 100,
+  "native_regression_groups": 101,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -126,5 +126,20 @@
   "animation_assets_optimization_version": 1,
   "watch_base_rgba_bytes": 10485764,
   "watch_atlas_logical_cell": 128,
-  "physical_texture_cache_limit": 64
+  "physical_texture_cache_limit": 64,
+  "npc_goods_quantity_version": 1,
+  "npc_goods_max": 8,
+  "npc_goods_positive_weights": [
+    40,
+    24,
+    14,
+    9,
+    6,
+    4,
+    2,
+    1
+  ],
+  "npc_empty_visit_percent": 25,
+  "npc_purchase_max": 8,
+  "npc_trade_batch_limit": 8
 }
