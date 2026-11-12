@@ -19,7 +19,7 @@ func setup(shell: Node, close: Callable, initial := "overview") -> void:
 	add_child(nav)
 	for spec in [["overview","总览"],["contracts","委托"],["bulk","回收箱"],["customers","熟客"],["history","履历"],["upgrades","扩建"]]:
 		var key: String = spec[0]
-		var tab := UIKit.button(spec[1],"secondary",Vector2(0,32),14)
+		var tab := UIKit.button(spec[1],"secondary",Vector2(0,38),16)
 		tab.name = "shop_plan_"+key
 		tab.custom_minimum_size.x = 62
 		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -52,7 +52,7 @@ func _render() -> void:
 		"history": _history()
 		"upgrades": _upgrades()
 
-func _text(parent: Node, text: String, color := UIKit.TEXT, size := 15) -> Label:
+func _text(parent: Node, text: String, color := UIKit.TEXT, size := 17) -> Label:
 	var label := UIKit.label(text,size,color,false,true)
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	parent.add_child(label)
@@ -86,16 +86,28 @@ func _overview() -> void:
 	var life = load("res://scripts/model/campaign_life.gd")
 	var market = load("res://scripts/model/weekly_market.gd")
 	var heading := "第 %d 天 · %s" % [int(s.day),"长期经营" if life.is_endless(s) else "21天阶段考核"]
-	var plan := _card(heading)
-	var stories:=UIKit.button("事件簿 · %d 件待处理 / 查看预告" % ShopStories.pending(s),"primary",Vector2(0,34),14)
+	_text(body,heading,UIKit.AMBER,19)
+	var summary := UIKit.grid(1 if host.mobile_mode() else 3,8)
+	summary.name = "OverviewSummary"
+	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(summary)
+	var plan := _card("今日待办",summary)
+	plan.get_parent().name = "TodayCard"
+	var stories:=UIKit.button("事件簿 · %d 件待处理" % ShopStories.pending(s),"primary",Vector2(0,40),16)
 	stories.name="open_story_book"
 	stories.pressed.connect(func():dismiss.call();host.call_deferred("_open_story_book_after_close"))
 	plan.add_child(stories)
 	var costs: Dictionary = StoreCosts.quote(s)
 	var remaining := maxi(0,VisitSchedule.limit(s)-int(s.cursor))
-	_text(plan,"剩余 %s AP · 今日尚有 %d 个接待名额" % [Model.jnum(s.ap),remaining])
-	_text(plan,"预计店铺费用 %s · 本期未付租金 %s" % [UIKit.money(costs.total),UIKit.money(Landlord.outstanding(s))])
-	_text(plan,"先核对到期委托和资金，再安排鉴定、维修与采购。",UIKit.MUTED,13)
+	var resources := _card("今日资源",summary)
+	resources.get_parent().name = "ResourcesCard"
+	_text(resources,"剩余 %s AP" % Model.jnum(s.ap),UIKit.CYAN,18)
+	_text(resources,"可接待 %d 位来客" % remaining,UIKit.TEXT,15)
+	var expenses := _card("费用与租金",summary)
+	expenses.get_parent().name = "CostsCard"
+	_text(expenses,"预计费用 %s" % UIKit.money(costs.total),UIKit.TEXT,15)
+	_text(expenses,"未付租金 %s" % UIKit.money(Landlord.outstanding(s)),UIKit.AMBER,15)
+	_text(body,"先核对到期委托和资金，再安排鉴定、维修与采购。",UIKit.MUTED,15)
 	if int(s.day)>=21 and s.phase in ["report","ending"] and not life.is_endless(s):
 		var problem: String = life.continue_problem(s)
 		_text(plan,"阶段成绩与旧物都将保留；继续经营从下一天开始，不会重扣本次结算。",UIKit.CYAN,14)
@@ -110,8 +122,9 @@ func _overview() -> void:
 	_text(prices,"下周："+String(future.get("title","行情预告")),UIKit.AMBER)
 	_text(prices,String(future.get("explanation","")),UIKit.MUTED,14)
 	_text(prices,"行情影响来客的交易判断；已经谈妥的价格保留。",UIKit.MUTED,13)
-	_navigate(plan,"查看账本与阶段成绩","report")
-	_navigate(plan,"处理库存与来源","warehouse")
+	var shortcuts := _card("快捷操作")
+	_navigate(shortcuts,"查看账本与阶段成绩","report")
+	_navigate(shortcuts,"处理库存与来源","warehouse")
 
 func _contracts() -> void:
 	var jobs = load("res://scripts/model/service_contracts.gd")

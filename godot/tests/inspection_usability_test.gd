@@ -26,6 +26,15 @@ func run() -> void:
 	shell.go("inspect")
 	await settle()
 	var page = shell.active_shell().page
+	var rules = page.find_child("inspection_rules_toggle", true, false)
+	check(rules != null and page.find_child("inspection_rules", true, false) == null, "inspection rules start collapsed")
+	if rules != null:
+		rules.pressed.emit()
+		await settle()
+		check(page.find_child("inspection_rules", true, false) != null, "inspection rules can be expanded")
+		page.find_child("inspection_rules_toggle", true, false).pressed.emit()
+		await settle()
+		check(page.find_child("inspection_rules", true, false) == null, "inspection rules can be collapsed again")
 	page._set_tool("TOL-005")
 	await settle()
 	check_row([page.tare_button, page.place_button], "scale")

@@ -542,9 +542,9 @@ func relayout() -> void:
 	if not is_instance_valid(terminal) or not is_instance_valid(crate):
 		return
 	_align_stage()
-	terminal.position = Vector2(1385, 420)
+	terminal.position = Vector2(1390, 420)
 	terminal.size = Vector2(580, 336)
-	terminal.scale = Vector2(0.84, 0.84)
+	terminal.scale = Vector2(0.9, 0.9)
 	crate.position = Vector2(604, 759)
 	crate.size = Vector2(672, 224)
 	actions.position = Vector2(54, 245)
@@ -1022,7 +1022,12 @@ func _refresh() -> void:
 			else:
 				_act("换一件", "secondary", _pick_goods)
 			_act("送客", "danger", func(): Game.dispatch({"type": "REFUSE"}))
-		footer.text = ("谈妥%d件 · 可继续选货" % pending_count) if dialogue else Model.customer_need(t.npcId)
+		if t.locked:
+			footer.text = "价格已谈妥 · 确认交割"
+		elif it == null:
+			footer.text = "① 选货 → ② 鉴定 → ③ 出价"
+		else:
+			footer.text = "② 鉴定 → ③ 出价" + (" · 已谈妥%d件" % pending_count if dialogue and pending_count > 0 else "")
 		if dialogue:
 			var current := CounterDialogue.current(s)
 			if not current.is_empty() and current.status in ["blocked","rejected"]:

@@ -440,10 +440,11 @@ func _shelf_block(it: Dictionary, reserved: bool) -> String:
 
 func _stock_summary() -> void:
 	detail.add_child(UIKit.rule())
-	var mats := []
+	detail.add_child(UIKit.module_header("工具柜存料", "完成维修时扣除", "SUPPLIES"))
+	var mats := UIKit.grid(2 if not shell.mobile_mode() else 1, 4)
+	detail.add_child(mats)
 	for m in GameData.materials:
-		mats.append("%s ×%s" % [m.name, Model.jnum(Game.state.materials.get(m.id, 0))])
-	detail.add_child(UIKit.note_card("工具柜存料", "、".join(mats)))
+		mats.add_child(UIKit.label("%s  ×%s" % [m.name, Model.jnum(Game.state.materials.get(m.id, 0))], 16, UIKit.TEXT, false, true))
 
 func on_changed(_p: Dictionary, _n: Dictionary, _a: Dictionary) -> void:
 	if Game.item(selected) == null:

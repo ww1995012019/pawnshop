@@ -43,6 +43,7 @@ var optical_pin_button: Button
 var optical_attempt_revision := ""
 var pending_tool := ""
 var portrait_tools: HBoxContainer
+var rules_expanded := false
 
 func scene_name() -> String:
 	return "workbench"
@@ -334,7 +335,17 @@ func _refresh_info() -> void:
 			pending.append("%02d %s" % [index + 1, GameData.tool(id).name])
 	if not pending.is_empty():
 		info.add_child(UIKit.label("待检：" + " / ".join(pending), 16, UIKit.MUTED, false, true))
-	info.add_child(UIKit.note_card("检验须知", "单项物证不能证明原装、走时或防水。三项当前记录齐全后缩小估价范围，仍需自行议价。重描、覆印和配重会留下对应加工痕迹。\n首次记录本件消耗 1 AP；后续取证不耗 AP。紫外与称重各按新的有效读数计电费，重复查看旧结果不收费。"))
+	info.add_child(UIKit.note_card("当前消耗", "首次记录消耗 1 AP；后续取证不耗 AP。紫外与称重按新的有效读数计电费。"))
+	var rules := UIKit.button("收起检验须知" if rules_expanded else "查看检验须知", "secondary", Vector2(0, 40), 16)
+	rules.name = "inspection_rules_toggle"
+	rules.pressed.connect(func():
+		rules_expanded = not rules_expanded
+		_refresh_info())
+	info.add_child(rules)
+	if rules_expanded:
+		var note := UIKit.note_card("检验须知", "三项记录齐全可缩小估价范围，仍需自行议价；单项物证不能证明原装、走时或防水。重描、覆印和配重会留下痕迹。重复查看旧结果不收费。")
+		note.name = "inspection_rules"
+		info.add_child(note)
 
 func _load_item() -> void:
 	_set_tool("")

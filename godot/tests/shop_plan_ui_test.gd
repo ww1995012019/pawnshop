@@ -27,6 +27,11 @@ func run() -> void:
 		var plan=shell.modal_layer.find_child("ShopPlan",true,false)
 		check(plan!=null,"plan opens at %s" % str(dimensions))
 		if plan==null: continue
+		var summary = plan.find_child("OverviewSummary",true,false)
+		check(summary != null,"overview shows separate status cards")
+		if summary != null:
+			for card in ["TodayCard","ResourcesCard","CostsCard"]:
+				check(summary.find_child(card,true,false)!=null,"overview includes "+card)
 		for section in ["overview","contracts","bulk","customers","history","upgrades"]:
 			plan.tabs[section].pressed.emit()
 			await frames()

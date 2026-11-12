@@ -18,6 +18,7 @@ func run():
  var page=shell.page
  check(not shell.modal_open() and page.find_child("multi_trade_open",true,false)==null,"arrival has no list gateway or trade modal")
  check(page.offer_panel.visible and page.offer_button!=null,"original quotation console is immediately interactive")
+ check(page.footer.text.contains("鉴定") and page.footer.text.contains("出价"),"trade guidance explains inspection and offer steps")
  check(page.find_child("dialogue_next_goods",true,false)==null and page.get("counter_table")!=null,"all NPC offers are physical goods, with no next-item response")
  TradeSession.session(game.state).cash=5000;TradeSession.session(game.state).want_count=6
  var uid: String=game.state.inventory[0].uid

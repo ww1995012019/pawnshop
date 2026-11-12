@@ -291,9 +291,11 @@ func _refresh_info() -> void:
 				visible_faults.append(("✓ " if fault.get("resolved",false) else "· ") + String(fault.get("label",fault.get("id",""))))
 		if not visible_faults.is_empty(): info.add_child(UIKit.label("\n".join(visible_faults),17,UIKit.TEXT,false,true))
 		var work: Array = Service.tasks(it)
-		for step in work:
+		for index in work.size():
+			var step = work[index]
 			var done: bool = service.get("done",[]).has(step)
-			info.add_child(UIKit.label(("✓ " if done else ("▶ " if step == task else "· ")) + Service.label(step,it),18,UIKit.GOOD if done else (UIKit.AMBER if step == task else UIKit.MUTED),false,true))
+			var state := "已完成" if done else ("当前" if step == task else "待处理")
+			info.add_child(UIKit.label("%02d  %s · %s" % [index + 1, Service.label(step,it), state],18,UIKit.GOOD if done else (UIKit.AMBER if step == task else UIKit.TEXT),false,true))
 		if work.is_empty(): info.add_child(UIKit.label("本件暂无必须维修的故障。",18,UIKit.GOOD,false,true))
 		if service.get("opened",false): info.add_child(UIKit.label("后盖已打开 · 需回装封盖后才能出售",17,UIKit.AMBER,false,true))
 		if task != "": info.add_child(UIKit.label("本工序：" + _cost_text(Service.step_cost(task,it)),17,UIKit.CYAN,false,true))

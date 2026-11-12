@@ -1518,7 +1518,7 @@ func open_shop_plan(initial := "overview") -> void:
 	if workspace_mode:
 		workspace_parent.open_shop_plan(initial)
 		return
-	var m := modal("经营计划",920)
+	var m := modal("经营计划",1100)
 	var content: VBoxContainer = m[0]
 	var plan: VBoxContainer = load("res://scripts/ui/shop_plan.gd").new()
 	plan.name = "ShopPlan"
