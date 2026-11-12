@@ -1,8 +1,8 @@
 {
-  "source_commit": "f79d0d508d20baf84aa87dc695d542da0e2cb475",
-  "release_id": "a9d6ec98c271f93a",
-  "pack": "workbench-4e9ac613ec065a21.pck",
-  "html_sha256": "c259a3e451ac0e704b13482de1c7e0c5a6dac0cbb75a5004d850f754953b2b48",
+  "source_commit": "94173aaea0ca387b6f2903f921468cc80ca303f6",
+  "release_id": "7f598bfdd573b8ad",
+  "pack": "workbench-2a46e4099aedbcbf.pck",
+  "html_sha256": "4a2d555207babf13f51d6b098d89535b07ae6b7719ccf8c5728c6dce82965223",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 105,
+  "native_regression_groups": 107,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -158,5 +158,6 @@
     5,
     8
   ],
-  "robbery_closure_days": 1
+  "robbery_closure_days": 1,
+  "debug_values_version": 1
 }
