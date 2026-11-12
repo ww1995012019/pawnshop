@@ -22,7 +22,7 @@ func click_control(control:Control):
  var hover:=InputEventMouseMotion.new();hover.position=point;hover.global_position=point
  viewport.push_input(hover,true);await frames(3)
  var down:=InputEventMouseButton.new();down.button_index=MOUSE_BUTTON_LEFT;down.button_mask=MOUSE_BUTTON_MASK_LEFT;down.pressed=true;down.position=point;down.global_position=point
- viewport.push_input(down,true);await frames(3)
+ viewport.push_input(down,true);await create_timer(0.25).timeout
  var up:=InputEventMouseButton.new();up.button_index=MOUSE_BUTTON_LEFT;up.pressed=false;up.position=point;up.global_position=point
  viewport.push_input(up,true);await frames()
 func run():
@@ -36,13 +36,20 @@ func run():
   var entry=page.find_child("warehouse_expand",true,false)
   check(entry!=null,"fixed expansion entry is available at "+str(dimensions))
   if entry==null:shell.queue_free();await frames();quit(1);return
+  check(entry.size.x>=56,"expansion icon and caption retain visible width")
+  for key in page.cabinet_buttons.values():check(key.size.x>=40,"cabinet captions retain readable touch width")
   check(page.display_panel.get_global_rect().end.x<=page.holder.get_global_rect().position.x+2,"display stands to the left of the warehouse")
   for box in [page.display_panel,page.holder,page.detail_panel]:
-   check(shell.active_shell().content_rect().grow(2).encloses(box.get_global_rect()),"drawer module stays within the workspace")
+   check(shell.active_shell().content_rect().grow(2).encloses(box.get_global_rect()),"drawer module stays within the workspace: "+str(dimensions)+" "+String(box.name)+" "+str(box.get_global_rect()))
   for kind in ["materials","isolation","pawn","warehouse"]:
    page.cabinet_buttons[kind].pressed.emit();await frames()
    check(page.cabinet_mode==kind,"right-side cabinet button switches to "+kind)
+   check(shell.active_shell().content_rect().grow(2).encloses(page.holder.get_global_rect()),"switched cabinet stays within workspace: "+kind)
+   if not shell.portrait_mode():check(page.holder.get_global_rect().end.x<=page.detail_panel.get_global_rect().position.x+2,"cabinet never overlaps item details: "+kind)
    if kind=="isolation":check(page.storage_header.get_child(1).text.contains("0 / 20"),"isolation cabinet prints used and total capacity")
+   if kind=="pawn":
+    var purchase=page.find_child("buy_pawn_slots",true,false)
+    check(purchase!=null and page.cabinet_scroll.get_global_rect().has_point(purchase.get_global_rect().get_center()),"pawn slot purchase starts inside the visible cabinet")
   entry.pressed.emit();await frames()
   var panel=shell.modal_layer.find_child("WarehouseExpansionPanel",true,false)
   check(panel!=null,"expansion entry opens the requirements selector")
@@ -70,7 +77,9 @@ func run():
  var panel=shell.modal_layer.find_child("WarehouseExpansionPanel",true,false)
  panel.set_selection(0,selected[0]);panel.set_selection(1,selected[1]);await frames()
  check(not panel.apply_button.disabled,"two distinct qualifying originals enable confirmation")
+ game.prefs.reduced_motion=false
  await click_control(panel.apply_button)
+ game.prefs.reduced_motion=true
  var confirm:Button
  for key in shell.modal_layer.find_children("*","Button",true,false):
   if key.text=="确认交付并扩仓":confirm=key

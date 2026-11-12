@@ -16,6 +16,7 @@
     "test:watch-service:web": "python3 scripts/test-watch-service-web.py",
     "test:watch-refurbishment:web": "python3 scripts/test-watch-refurbishment-web.py",
     "test:trading:web": "python3 scripts/test-multi-item-trade-web.py",
-    "test:counterfeit:web": "python3 scripts/test-premium-counterfeit-web.py"
+    "test:counterfeit:web": "python3 scripts/test-premium-counterfeit-web.py",
+    "test:warehouse:web": "python3 scripts/test-warehouse-expansion-web.py"
   }
 }

@@ -68,6 +68,7 @@ func enter() -> void:
 	var title_row:=UIKit.hbox(4);body.add_child(title_row)
 	storage_header=UIKit.vbox(0);storage_header.size_flags_horizontal=Control.SIZE_EXPAND_FILL;title_row.add_child(storage_header)
 	expand_button=UIKit.button("扩仓","primary",Vector2(58,34),15)
+	expand_button.custom_minimum_size.x=58
 	expand_button.icon=load("res://assets/ui/warehouse-expand.svg");expand_button.expand_icon=true
 	expand_button.add_theme_constant_override("icon_max_width",20)
 	expand_button.name="warehouse_expand";expand_button.tooltip_text="扩仓条件与所需交付原表"
@@ -82,10 +83,13 @@ func enter() -> void:
 	var cabinet_body:=UIKit.vbox(6);cabinet_body.size_flags_horizontal=Control.SIZE_EXPAND_FILL;cabinet_scroll.add_child(cabinet_body)
 	cabinet_grid=load("res://scripts/ui/warehouse_location_grid.gd").new();cabinet_grid.setup(self,"isolation");cabinet_body.add_child(cabinet_grid)
 	materials_view=UIKit.vbox(5);materials_view.size_flags_horizontal=Control.SIZE_EXPAND_FILL;cabinet_body.add_child(materials_view)
+	# Purchases belong above the pawn slots, so small screens expose them first.
+	cabinet_body.move_child(materials_view,0)
 	var rail:=UIKit.vbox(4);surfaces.add_child(rail)
 	for spec in [["warehouse","后仓"],["materials","材料"],["isolation","隔离"],["pawn","抵押"]]:
 		var mode:String=spec[0]
 		var key:=UIKit.button(spec[1],"secondary",Vector2(42,36),14);key.name="cabinet_"+mode
+		key.custom_minimum_size.x=44
 		key.pressed.connect(func():switch_cabinet(mode));rail.add_child(key);cabinet_buttons[mode]=key
 	lists=UIKit.vbox(3);body.add_child(lists)
 	detail_panel=UIKit.plate();detail_panel.name="WarehouseDetails";add_child(detail_panel)
@@ -103,7 +107,13 @@ func _refresh() -> void:
 	if cabinet_mode in ["isolation","pawn"]:
 		var used:int=Game.state.inventory.filter(func(it):return it.location==cabinet_mode).size()
 		caption="%d / %d 位 · 剩余 %d"%[used,WarehouseExpansion.capacity(Game.state,cabinet_mode),maxi(0,WarehouseExpansion.capacity(Game.state,cabinet_mode)-used)]
-	storage_header.add_child(UIKit.label(title,18,UIKit.AMBER,true,true));storage_header.add_child(UIKit.label(caption,13,UIKit.MUTED,false,true))
+	if shell.mobile_mode():
+		title={"warehouse":"后仓","materials":"材料柜","isolation":"隔离柜","pawn":"抵押柜"}[cabinet_mode]
+		caption="%d × %d"%[WarehouseExpansion.columns(Game.state),WarehouseExpansion.rows(Game.state)] if cabinet_mode=="warehouse" else "种类仓位"
+		if cabinet_mode in ["isolation","pawn"]:
+			var count:int=Game.state.inventory.filter(func(it):return it.location==cabinet_mode).size()
+			caption="%d / %d 位"%[count,WarehouseExpansion.capacity(Game.state,cabinet_mode)]
+	storage_header.add_child(UIKit.label(title,16 if shell.mobile_mode() else 18,UIKit.AMBER,true,true));storage_header.add_child(UIKit.label(caption,13,UIKit.MUTED,false,true))
 	grid.rebuild();_lists();_detail();call_deferred("_resize_panels")
 
 func switch_cabinet(mode: String) -> void:
