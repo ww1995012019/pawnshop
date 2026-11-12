@@ -336,8 +336,8 @@ def main():
     definitions=json.loads((ROOT/'godot/data/game_data.json').read_text())['itemDefs']
     count=len(definitions); rows=math.ceil(count/5)
     for side in ['front','back']:
-        atlas=Image.new('RGBA',(1280,rows*256))
-        for i in range(count): atlas.paste(watch(i,side=='back',definitions[i].get('tier') in ['luxury','ultra']),(i%5*256,i//5*256))
+        atlas=Image.new('RGBA',(640,rows*128))
+        for i in range(count): atlas.paste(watch(i,side=='back',definitions[i].get('tier') in ['luxury','ultra']).resize((128,128),Image.Resampling.NEAREST),(i%5*128,i//5*128))
         atlas.save(OUT/f'watches-{side}.png')
         normal=Image.new('RGBA',atlas.size,(128,128,255,0)); normal.putalpha(atlas.getchannel('A'));normal.save(OUT/f'watches-{side}_n.png')
     payload={}

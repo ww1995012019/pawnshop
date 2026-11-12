@@ -13,6 +13,8 @@ class BellArtTest(unittest.TestCase):
         source = Image.open(ROOT/'art-source/shop-v3/shop-master.png').convert('RGB')
         source = source.resize((480,270), Image.Resampling.BOX).resize((1920,1080), Image.Resampling.NEAREST).convert('RGBA')
         scene = Image.open(ROOT/'godot/assets/scene/shop_pixel.png').convert('RGBA')
+        self.assertEqual(scene.size, (480,270))
+        scene = scene.resize((1920,1080), Image.Resampling.NEAREST)
         bell = Image.open(path).convert('RGBA')
         self.assertIsNotNone(bell.getbbox())
         self.assertNotEqual(scene.crop((488,576,600,660)).tobytes(), source.crop((488,576,600,660)).tobytes(), 'stationary painted bell is removed')

@@ -17,7 +17,7 @@ class WatchExpansionArt(unittest.TestCase):
    for i,d in enumerate(data['itemDefs'][:33]):
     with self.subTest(side=side,id=d['id']):
      expected=fixture['faces'][side][i]
-     cell=atlas.crop((i%5*256,i//5*256,i%5*256+256,i//5*256+256))
+     cell=atlas.crop((i%5*128,i//5*128,i%5*128+128,i//5*128+128)).resize((256,256),Image.Resampling.NEAREST)
      self.assertEqual(hashlib.sha256(cell.tobytes()).hexdigest(),expected)
      self.assertEqual(hashlib.sha256(art.watch(i,side=='back',d['tier']=='luxury').tobytes()).hexdigest(),expected)
  def test_all_new_models_render_with_safe_evidence_fields(self):
@@ -33,7 +33,7 @@ class WatchExpansionArt(unittest.TestCase):
      x,y,r,b=image.getbbox();self.assertTrue(x>3 and y>3 and r<253 and b<253)
   for side in ['front','back']:
    im=Image.open(ROOT/f'godot/assets/atlas/watches-{side}.png')
-   self.assertEqual(im.size,(1280,4096))
+   self.assertEqual(im.size,(640,2048))
    normal=Image.open(ROOT/f'godot/assets/atlas/watches-{side}_n.png')
    self.assertEqual(im.getchannel('A').tobytes(),normal.getchannel('A').tobytes())
 if __name__=='__main__':unittest.main()

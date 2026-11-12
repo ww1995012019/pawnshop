@@ -42,8 +42,8 @@ func run_check() -> void:
 			var cell: Dictionary = kit.item_cell(id, is_back)
 			check(cell.key == ("watches-back" if is_back else "watches-front"), id + " atlas key")
 			var texture: Texture2D = kit.tex("res://assets/atlas/%s.png" % cell.key)
-			check(texture.get_size() == Vector2(1280, 4096), "5 × 16 cells of 256px")
-			var face := texture.get_image().get_region(Rect2i(cell.region))
+			check(texture.get_size() == Vector2(640, 2048), "5 × 16 cells of 128 logical pixels")
+			var face: Image = kit.watch_cell_image(id,is_back).get_region(Rect2i(8,8,238,238))
 			var used := face.get_used_rect()
 			check(used.size.y > 200 and used.size.x > 100, id + " recognizable silhouette")
 			check(used.position.x >= 3 and used.position.y >= 3 and used.end.x < face.get_width() - 3 and used.end.y < face.get_height() - 3, id + " transparent sampling margin")
@@ -56,9 +56,9 @@ func run_check() -> void:
 				prior = face
 			var normal: Image = kit.tex("res://assets/atlas/%s_n.png" % cell.key).get_image()
 			var alpha := texture.get_image()
-			var offset := Vector2i(i % 5 * 256, i / 5 * 256)
-			for y in range(0, 256, 5):
-				for x in range(0, 256, 5):
+			var offset := Vector2i(i % 5 * 128, i / 5 * 128)
+			for y in range(0, 128, 5):
+				for x in range(0, 128, 5):
 					var p := offset + Vector2i(x, y)
 					var n := normal.get_pixelv(p)
 					check(is_equal_approx(n.a, alpha.get_pixelv(p).a), id + " normal cutout matches")
@@ -72,15 +72,15 @@ func run_check() -> void:
 		get_root().add_child(sprite)
 		sprite.setup(id, "", 300.0)
 		check(sprite.body.texture is CanvasTexture, id + " physical logo is part of lit body texture")
-		check(sprite.logo_world_position().distance_to(sprite.body.to_global(Vector2(0, -24))) < 0.01, id + " loupe targets actual logo")
+		check(sprite.logo_world_position().distance_to(sprite.body.to_global(Vector2(0, -24) * sprite.tex_size().x / 238.08)) < 0.01, id + " loupe targets actual logo")
 		sprite.back = true
 		sprite._apply_face()
 		check(sprite.body.texture == kit.lit_atlas("watches-back"), id + " back has no front logo overlay")
 		sprite.free()
 		var variant: CanvasTexture = kit.watch_variant_texture(id)
 		var baked := variant.diffuse_texture.get_image()
-		var cell_offset := Vector2i(i % 5 * 256, i / 5 * 256)
-		var original: Image = kit.tex("res://assets/atlas/watches-front.png").get_image().get_region(Rect2i(cell_offset, Vector2i(256, 256)))
+		var cell_offset := Vector2i(i % 5 * 128, i / 5 * 128)
+		var original: Image = kit.watch_cell_image(id)
 		var difference := 0
 		for y in range(256):
 			for x in range(256):

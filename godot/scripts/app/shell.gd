@@ -166,6 +166,7 @@ func set_scene(name: String) -> void:
 	# behind the counter front (fg), fixtures sit on the walls and counter.
 	if name == "counter" and not workspace_mode:
 		bg.texture = UIKit.tex("res://assets/scene/shop_pixel.png")
+		bg.scale = Vector2(1920,1080) / bg.texture.get_size()
 		bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		bg.material = Util.unshaded()
 		bg.self_modulate = Color.WHITE

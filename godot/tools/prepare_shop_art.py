@@ -62,7 +62,7 @@ def main():
     shop = Image.open(SOURCE / 'shop-master.png').convert('RGB')
     shop = shop.resize((480, 270), Image.Resampling.BOX).resize((1920, 1080), Image.Resampling.NEAREST)
     shop = extract_service_bell(shop)
-    shop.save(ASSETS / 'scene/shop_pixel.png')
+    shop.resize((480,270),Image.Resampling.NEAREST).save(ASSETS / 'scene/shop_pixel.png')
     source = Image.open(SOURCE / 'residents-master.png').convert('RGBA')
     atlas = Image.new('RGBA', (768, 768))
     manifest = []
@@ -94,9 +94,9 @@ def main():
     console = Image.open(SOURCE / 'quotation-master.png').convert('RGBA')
     console = console.resize((290,168),Image.Resampling.BOX)
     console.putalpha(console.getchannel('A').point(lambda a: 255 if a >= 128 else 0))
-    console.resize((580,336),Image.Resampling.NEAREST).save(ASSETS / 'ui/quotation-console.png')
+    console.save(ASSETS / 'ui/quotation-console.png')
     wall = Image.open(SOURCE / 'wall-extension-master.png').convert('RGB')
-    wall.resize((270,270),Image.Resampling.BOX).resize((1080,1080),Image.Resampling.NEAREST).save(ASSETS / 'scene/shop_side_wall.png')
+    wall.resize((270,270),Image.Resampling.BOX).save(ASSETS / 'scene/shop_side_wall.png')
     print('Imported pixel shop, residents, interface art, countertop machine and side walls')
 
 if __name__ == '__main__':

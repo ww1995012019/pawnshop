@@ -17,7 +17,7 @@ var look := 0.0
 var walking := false
 var gesture := {"nod": 0.0, "turn": 0.0, "tilt": 0.0, "lean": 0.0, "shrug": 0.0, "flash": 0.0}
 var mood := "neutral"
-var _mesh_cache := {}
+static var _mesh_cache := {}
 
 func setup(id: String, start_mood := "neutral") -> void:
 	npc_id = id
@@ -37,7 +37,8 @@ func _mesh_for(cell: Dictionary) -> ArrayMesh:
 	var asz := atlas.get_size()
 	var uv0 := r.position / asz
 	var uv1 := r.end / asz
-	var key := "%s:%s" % [cell.key, r]
+	var key := "%s:%s:%s" % [cell.key, r, size]
+	mat.set_shader_parameter("region", Vector4(uv0.x, uv0.y, uv1.x - uv0.x, uv1.y - uv0.y))
 	if _mesh_cache.has(key):
 		return _mesh_cache[key]
 	var cols := 10
@@ -62,7 +63,6 @@ func _mesh_for(cell: Dictionary) -> ArrayMesh:
 	var m := ArrayMesh.new()
 	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	_mesh_cache[key] = m
-	mat.set_shader_parameter("region", Vector4(uv0.x, uv0.y, uv1.x - uv0.x, uv1.y - uv0.y))
 	return m
 
 func _part(cell: Dictionary) -> MeshInstance2D:

@@ -137,7 +137,8 @@ void fragment() {
 		vec3 mosaic = paper * (0.55 + 0.35 * hash(tile + vec2(17.0, 31.0)));
 		base.rgb = mix(mosaic, base.rgb, in_lens);
 	}
-	float sc = scratches(luv * 1.6) * in_lens;
+	float sc = 0.0;
+	if (in_lens > 0.0) sc = scratches(luv * 1.6) * in_lens;
 	float seam_line = 1.0 - smoothstep(0.0, 0.006, abs((luv.x - seam_uv.x) * 0.8 + (luv.y - seam_uv.y) * 0.6));
 	float seam_zone = 1.0 - smoothstep(0.05, 0.16, distance(luv, seam_uv));
 	float seam = seam_line * seam_zone * max(in_lens, found_seam * 0.55) * (1.0 - back_face);

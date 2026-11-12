@@ -13,7 +13,7 @@ func _ready() -> void:
 func _slice(dest: Rect2, src: Rect2, flip_x: bool, flip_y: bool) -> void:
 	var origin := dest.position + Vector2(dest.size.x if flip_x else 0, dest.size.y if flip_y else 0)
 	draw_set_transform(origin, 0.0, Vector2(-1 if flip_x else 1, -1 if flip_y else 1))
-	draw_texture_rect_region(texture, Rect2(Vector2.ZERO, dest.size), src)
+	draw_texture_rect_region(texture, Rect2(Vector2.ZERO, dest.size), Rect2(src.position / 4.0,src.size / 4.0))
 
 func _draw() -> void:
 	if texture == null:
@@ -30,8 +30,8 @@ func _draw() -> void:
 	# density and extend the original floor at the bottom of each side.
 	var wall_width := minf(dx, 1080.0)
 	draw_set_transform(Vector2.ZERO)
-	draw_texture_rect_region(side_wall, Rect2(-dx, 0, dx, 1030), Rect2(1080-wall_width, 0, wall_width, 1030))
-	draw_texture_rect_region(side_wall, Rect2(1920, 0, dx, 1030), Rect2(0, 0, wall_width, 1030))
+	draw_texture_rect_region(side_wall, Rect2(-dx, 0, dx, 1030), Rect2((1080-wall_width)/4.0, 0, wall_width/4.0, 1030/4.0))
+	draw_texture_rect_region(side_wall, Rect2(1920, 0, dx, 1030), Rect2(0, 0, wall_width/4.0, 1030/4.0))
 	_slice(Rect2(-dx, 1030, dx, 50), Rect2(0, 1030, sx, 50), true, false)
 	_slice(Rect2(1920, 1030, dx, 50), Rect2(1920-sx, 1030, sx, 50), true, false)
 	_slice(Rect2(0, -dy, 1920, dy), Rect2(0, 0, 1920, sy), false, true)

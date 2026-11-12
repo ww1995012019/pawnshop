@@ -1,14 +1,17 @@
 extends Control
 ## Refit the shop's painted wall unit; its worn bezel is part of the room art.
 
+static var bezel_texture: Texture2D
+
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	var bezel := NinePatchRect.new()
-	var crop := AtlasTexture.new()
-	crop.atlas = UIKit.tex("res://assets/scene/shop_pixel.png")
-	crop.region = Rect2(1648, 48, 224, 112)
-	bezel.texture = crop
+	if bezel_texture == null:
+		var image := UIKit.tex("res://assets/scene/shop_pixel.png").get_image().get_region(Rect2i(412,12,56,28))
+		image.resize(224,112,Image.INTERPOLATE_NEAREST)
+		bezel_texture = ImageTexture.create_from_image(image)
+	bezel.texture = bezel_texture
 	bezel.draw_center = false
 	for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
 		bezel.set_patch_margin(side, 24)

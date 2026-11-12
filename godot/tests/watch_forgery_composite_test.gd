@@ -18,12 +18,12 @@ func run() -> void:
 			var composite: Image=kit.physical_texture(it,back).diffuse_texture.get_image()
 			var cell: Dictionary = kit.item_cell(id,back)
 			var start := Vector2i(cell.region.position-Vector2.ONE*8.96)
-			var target: Image=kit.tex("res://assets/atlas/%s.png" % cell.key).get_image().get_region(Rect2i(start,Vector2i(256,256)))
+			var target: Image=kit.watch_cell_image(id,back)
 			if id=="WCH-075":
 				check(composite.get_region(Rect2i(0,54,256,11)).get_data()==target.get_region(Rect2i(0,54,256,11)).get_data(),"restoring original strap preserves new oval case/lugs at y54..64")
 			var source_cell: Dictionary = kit.item_cell("WCH-023",back)
 			var source_start := Vector2i(source_cell.region.position-Vector2.ONE*8.96)
-			var source: Image=kit.tex("res://assets/atlas/%s.png" % cell.key).get_image().get_region(Rect2i(source_start,Vector2i(256,256)))
+			var source: Image=kit.watch_cell_image("WCH-023",back)
 			var restored_height := 65 if id=="WCH-033" else 54
 			check(composite.get_region(Rect2i(0,0,256,restored_height)).get_data()==source.get_region(Rect2i(0,0,256,restored_height)).get_data(),"restored top strap uses actual source; original33 band stays unchanged")
 	for player in root.find_children("*","AudioStreamPlayer",true,false):

@@ -32,6 +32,9 @@ var logo_variant := 0
 var finish_signature := ""
 var physical_signature := ""
 var rare_time := 0.0
+var last_visual_item = null
+var last_visual_back := false
+var last_rare_effect := -1
 
 ## height: on-screen height in px for the front face.
 func setup(id: String, item_uid := "", height := 300.0, start_back := false) -> void:
@@ -66,10 +69,12 @@ func setup(id: String, item_uid := "", height := 300.0, start_back := false) -> 
 	rm.shader = load("res://shaders/reveal.gdshader")
 	reveal.material = rm
 	reveal.rotation = 0.0
+	reveal.scale = Vector2.ONE * tex_size().x / 238.08
 	reveal.visible = false
 	body.add_child(reveal)
 
 func _apply_face() -> void:
+	var previous_size := body.region_rect.size
 	var cell := UIKit.item_cell(def_id, back)
 	body.texture = UIKit.lit_atlas(cell.key)
 	body.region_rect = cell.region
@@ -84,12 +89,18 @@ func _apply_face() -> void:
 		body.texture=UIKit.physical_texture(it,back)
 		body.region_rect=Rect2(8.96,8.96,238.08,238.08)
 		asz=Vector2(256,256)
+	if previous_size.x > 0.0 and previous_size != body.region_rect.size:
+		var ratio := previous_size.x / body.region_rect.size.x
+		display_scale *= ratio
+		body.scale *= ratio
+		if is_instance_valid(reveal): reveal.position /= ratio
+	if is_instance_valid(reveal): reveal.scale = Vector2.ONE * body.region_rect.size.x / 238.08
 	physical_signature=WatchForgery.signature(it) if it!=null else ""
 	var r: Rect2 = body.region_rect
 	mat.set_shader_parameter("region", Vector4(r.position.x / asz.x, r.position.y / asz.y, r.size.x / asz.x, r.size.y / asz.y))
 	mat.set_shader_parameter("back_face", 1.0 if back else 0.0)
 	# The mark occupies the same 48 × 32 pixel field in every authored watch.
-	mat.set_shader_parameter("logo_rect", Vector4(0.5 - 24.0 / r.size.x, 0.5 - 40.0 / r.size.y, 48.0 / r.size.x, 32.0 / r.size.y))
+	mat.set_shader_parameter("logo_rect", Vector4(0.5 - 24.0 / 238.08, 0.5 - 40.0 / 238.08, 48.0 / 238.08, 32.0 / 238.08))
 	_sync_logo_observation()
 	_sync_rare_effect(0.0)
 
@@ -98,8 +109,10 @@ func _sync_rare_effect(delta: float) -> void:
 	var appearance: String = WatchForgery.appearance_id(it) if it != null else def_id
 	var effect := int(WatchLogo.art(appearance).get("animation",0)) if not back and not Game.prefs.reduced_motion else 0
 	if effect > 0: rare_time += delta
-	mat.set_shader_parameter("rare_effect",effect)
-	mat.set_shader_parameter("rare_time",rare_time)
+	if effect != last_rare_effect:
+		mat.set_shader_parameter("rare_effect",effect)
+		last_rare_effect = effect
+	if effect > 0: mat.set_shader_parameter("rare_time",rare_time)
 
 func _sync_logo_observation() -> void:
 	var it = Game.item(uid) if not uid.is_empty() else null
@@ -123,12 +136,12 @@ func _sync_logo_observation() -> void:
 	mat.set_shader_parameter("logo_hidden", 1.0 if def_id.begins_with("WCH-") and not observed else 0.0)
 
 func logo_world_position() -> Vector2:
-	return body.to_global(Vector2(0, -24))
+	return body.to_global(Vector2(0, -24) * tex_size().x / 238.08)
 
 func set_reveal(text: String, at_uv: Vector2) -> void:
 	reveal.text = text
 	reveal.reset_size()
-	reveal.position = (at_uv - Vector2(0.5, 0.5)) * tex_size() - reveal.size * 0.5
+	reveal.position = (at_uv - Vector2(0.5, 0.5)) * tex_size() - reveal.size * reveal.scale * 0.5
 	reveal.visible = true
 
 func tex_size() -> Vector2:
@@ -202,7 +215,7 @@ func flip() -> void:
 		back = not back
 		_apply_face()
 		flipped.emit(back))
-	tw.tween_property(body, "scale:x", display_scale, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_method(func(value: float): body.scale.x = display_scale * value, 0.0, 1.0, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(func():
 		busy = false
 		land()
@@ -211,10 +224,13 @@ func flip() -> void:
 func _process(delta: float) -> void:
 	_sync_rare_effect(delta)
 	var it = Game.item(uid) if not uid.is_empty() else null
-	if it != null and (logo_variant != WatchRules.logo_variant(it) or physical_signature!=WatchForgery.signature(it)):
-		_apply_face()
-	else:
-		_sync_logo_observation()
+	if not is_same(it, last_visual_item) or last_visual_back != back:
+		if it != null and (logo_variant != WatchRules.logo_variant(it) or physical_signature!=WatchForgery.signature(it)):
+			_apply_face()
+		else:
+			_sync_logo_observation()
+		last_visual_item = it
+		last_visual_back = back
 	if dragging:
 		var prev := position
 		position = position.lerp(target, 1.0 - exp(-delta * 16.0))

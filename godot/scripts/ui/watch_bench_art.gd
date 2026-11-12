@@ -1381,13 +1381,21 @@ func _draw_screw(p: Vector2, radius: float, angle: float, color: Color) -> void:
 	var direction := Vector2.from_angle(angle) * radius * 0.70
 	draw_line(p - direction, p + direction, Color("304a39"), 1.2, true)
 
-func _panel(rect: Rect2, fill: Color, border: Color, radius := 4) -> void:
+var _panel_styles: Dictionary = {}
+
+func panel_style(fill: Color, border: Color, radius: int) -> StyleBoxFlat:
+	var key := [fill,border,radius]
+	if _panel_styles.has(key): return _panel_styles[key]
 	var box := StyleBoxFlat.new()
 	box.bg_color = fill
 	box.border_color = border
 	box.set_border_width_all(1)
 	box.set_corner_radius_all(radius)
-	draw_style_box(box, rect)
+	_panel_styles[key] = box
+	return box
+
+func _panel(rect: Rect2, fill: Color, border: Color, radius := 4) -> void:
+	draw_style_box(panel_style(fill,border,radius), rect)
 
 func _text(at: Vector2, text: String, font_size: int, color: Color, mono := false) -> void:
 	if font_size <= 0: return

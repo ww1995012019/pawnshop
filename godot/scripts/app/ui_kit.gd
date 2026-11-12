@@ -27,6 +27,8 @@ const HUD_ICONS := ["credits", "energy", "day", "settings", "handbook", "alert",
 static var font: Font
 static var mono: Font
 static var _cache := {}
+const PHYSICAL_CACHE_LIMIT := 64
+static var _physical_cache_order: Array[String] = []
 ## Root shell publishes presentation metrics; workspace viewports share them.
 static var mobile_ui := false
 static var mobile_wide := false
@@ -484,13 +486,36 @@ static func lit_atlas(key: String) -> CanvasTexture:
 		return _cache[k]
 	var c := CanvasTexture.new()
 	c.diffuse_texture = tex("res://assets/atlas/%s.png" % key)
-	if ResourceLoader.exists("res://assets/atlas/%s_n.png" % key):
+	if key.begins_with("watches-"):
+		c.normal_texture = flat_watch_normal()
+	elif ResourceLoader.exists("res://assets/atlas/%s_n.png" % key):
 		c.normal_texture = tex("res://assets/atlas/%s_n.png" % key)
 	var pixel_item := key.begins_with("watches-") or key.begins_with("shop-residents") or key.begins_with("orbital-items-") or key.begins_with("orbital-expansion-") or key.begins_with("orbital-annex-")
 	c.specular_color = Color(0.05, 0.05, 0.05) if pixel_item else Color(0.45, 0.45, 0.45)
 	c.specular_shininess = 0.1 if pixel_item else 0.6
 	_cache[k] = c
 	return c
+
+## The watch normals contain uniform RGB; diffuse alpha owns the silhouette.
+static func flat_watch_normal() -> ImageTexture:
+	var key := "watch-flat-normal"
+	if not _cache.has(key):
+		var image := Image.create(1,1,false,Image.FORMAT_RGBA8)
+		image.fill(Color(128.0/255.0,128.0/255.0,1.0,1.0))
+		_cache[key] = ImageTexture.create_from_image(image)
+	return _cache[key]
+
+## Return an authored cell in the canonical 256px composition coordinate space.
+## Only the selected cell is expanded; the shared atlas stays at logical resolution.
+static func watch_cell_image(def_id: String, back := false, normal := false) -> Image:
+	var art: Dictionary = GameData.art[def_id]
+	var key: String = art.back if back else art.front
+	var source := tex("res://assets/atlas/%s%s.png" % [key,"_n" if normal else ""]).get_image()
+	var cell := Vector2i(source.get_width()/int(art.columns),source.get_height()/int(art.rows))
+	var index := int(art.index)
+	var image := source.get_region(Rect2i(Vector2i(index%int(art.columns),index/int(art.columns))*cell,cell))
+	image.resize(256,256,Image.INTERPOLATE_NEAREST)
+	return image
 
 ## Instance logo variants are baked into the same lit body texture, so the mark
 ## receives identical light, normal mapping and instrument shader effects.
@@ -499,12 +524,7 @@ static func watch_variant_texture(def_id: String) -> CanvasTexture:
 	if _cache.has(key):
 		return _cache[key]
 	GameData.ensure()
-	var art: Dictionary = GameData.art.get(def_id, GameData.art["WCH-001"])
-	var atlas: Image = tex("res://assets/atlas/%s.png" % art.front).get_image()
-	var cell_size := Vector2i(atlas.get_width() / int(art.columns), atlas.get_height() / int(art.rows))
-	var index := int(art.index)
-	var source_rect := Rect2i(Vector2i(index % int(art.columns), index / int(art.columns)) * cell_size, cell_size)
-	var image := atlas.get_region(source_rect)
+	var image := watch_cell_image(def_id)
 	var background := image.get_pixel(104, 88)
 	var first: Array = WatchLogo.pixels(def_id, 0)[0]
 	var ink := image.get_pixel(104 + int(first[0]) * 2, 88 + int(first[1]) * 2)
@@ -513,8 +533,7 @@ static func watch_variant_texture(def_id: String) -> CanvasTexture:
 		image.fill_rect(Rect2i(104 + int(pixel[0]) * 2, 88 + int(pixel[1]) * 2, 2, 2), ink)
 	var canvas := CanvasTexture.new()
 	canvas.diffuse_texture = ImageTexture.create_from_image(image)
-	var normal := tex("res://assets/atlas/%s_n.png" % art.front).get_image().get_region(source_rect)
-	canvas.normal_texture = ImageTexture.create_from_image(normal)
+	canvas.normal_texture = flat_watch_normal()
 	canvas.specular_color = Color(0.05, 0.05, 0.05)
 	canvas.specular_shininess = 0.1
 	_cache[key] = canvas
@@ -644,14 +663,10 @@ static func physical_texture(it: Dictionary, back := false) -> CanvasTexture:
 		strap_id=String(it.defId) if WatchForgery.treatments(it).case.get("strap_removed",false) else WatchForgery.target_id(it)
 	var key := "physical:"+JSON.stringify([shell_id,strap_id,logo_id,variant,back])
 	if _cache.has(key): return _cache[key]
-	var cell := item_cell(shell_id,back)
-	var atlas: Image=tex("res://assets/atlas/%s.png" % cell.key).get_image()
-	var start := Vector2i(cell.region.position-Vector2.ONE*8.96)
-	var image := atlas.get_region(Rect2i(start,Vector2i(256,256)))
+	var image := watch_cell_image(shell_id,back)
 	if strap_id!=shell_id:
-		var strap_cell := item_cell(strap_id,back)
-		var strap_atlas: Image=tex("res://assets/atlas/%s.png" % strap_cell.key).get_image()
-		var strap_start := Vector2i(strap_cell.region.position-Vector2.ONE*8.96)
+		var strap_atlas := watch_cell_image(strap_id,back)
+		var strap_start := Vector2i.ZERO
 		# Authored new cases/lugs begin at y54; preserve the shipped33 blend contract.
 		var strap_top := 54 if int(GameData.def(shell_id).sprite)>=33 else 65
 		for band in [Rect2i(0,0,256,strap_top),Rect2i(0,206,256,50)]:
@@ -665,11 +680,13 @@ static func physical_texture(it: Dictionary, back := false) -> CanvasTexture:
 		for pixel in WatchLogo.pixels(logo_id,variant): image.fill_rect(Rect2i(104+int(pixel[0])*2,88+int(pixel[1])*2,2,2),ink)
 	var result := CanvasTexture.new()
 	result.diffuse_texture=ImageTexture.create_from_image(image)
-	var normal: Image=tex("res://assets/atlas/%s_n.png" % cell.key).get_image().get_region(Rect2i(start,Vector2i(256,256)))
-	result.normal_texture=ImageTexture.create_from_image(normal)
+	result.normal_texture=flat_watch_normal()
 	result.specular_color=Color(0.05,0.05,0.05)
 	result.specular_shininess=0.1
 	_cache[key]=result
+	_physical_cache_order.append(key)
+	while _physical_cache_order.size() > PHYSICAL_CACHE_LIMIT:
+		_cache.erase(_physical_cache_order.pop_front())
 	return result
 
 static func physical_icon(it: Dictionary, back := false) -> Texture2D:

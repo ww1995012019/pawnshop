@@ -21,7 +21,7 @@ func run_check() -> void:
 			var tex: Texture2D = kit.tex("res://assets/atlas/%s.png" % cell.key)
 			var rect: Rect2i = cell.region
 			check(Rect2i(Vector2i.ZERO, tex.get_size()).encloses(rect), "%s art extends outside its atlas" % id)
-			var face := tex.get_image().get_region(rect)
+			var face: Image = kit.watch_cell_image(id,back).get_region(Rect2i(8,8,238,238))
 			var bounds := face.get_used_rect()
 			check(bounds.size.x > 40 and bounds.size.y > 30, "%s has missing or tiny artwork" % id)
 			check(bounds.position.x >= 3 and bounds.position.y >= 3 and bounds.end.x <= face.get_width() - 3 and bounds.end.y <= face.get_height() - 3, "%s has a clipped sprite or neighboring cell fragment" % id)
