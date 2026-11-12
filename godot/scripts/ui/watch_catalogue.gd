@@ -1,8 +1,28 @@
 extends RefCounted
 ## All standard watch references, never the truth of a player's physical lot.
+const Journal = preload("res://scripts/model/shop_journal.gd")
 static func open(shell: Node) -> void:
 	var modal: Array = shell.modal("全图鉴 · 全部手表",1080)
 	var body: VBoxContainer = modal[0]
+	var handled := 0
+	var inspected := 0
+	var repaired := 0
+	var collection := {}
+	for definition in GameData.item_list:
+		var record := Journal.collection(Game.state,String(definition.id))
+		collection[definition.id] = record
+		if int(record.handled) > 0: handled += 1
+		if int(record.inspected) > 0: inspected += 1
+		if int(record.repaired) > 0: repaired += 1
+	var progress := UIKit.label("收藏履历 · 经手 %d / %d款 · 检验 %d款 · 修复 %d款" % [handled,GameData.item_list.size(),inspected,repaired],16,UIKit.CYAN,false,true)
+	progress.name = "catalogue_collection_progress"
+	body.add_child(progress)
+	var history := UIKit.button("经营计划 / 收藏履历","secondary",Vector2(0,44),17)
+	history.name = "catalogue_shop_history"
+	history.pressed.connect(func():
+		(modal[1] as Callable).call()
+		shell.open_shop_plan("history"))
+	body.add_child(history)
 	var navigation := HFlowContainer.new()
 	navigation.add_theme_constant_override("h_separation",8)
 	navigation.add_theme_constant_override("v_separation",8)
@@ -67,7 +87,10 @@ static func open(shell: Node) -> void:
 			var category: String = "star" if definition.get("watch",{}).get("brand","")=="星冕" else String(definition.get("tier",""))
 			if category != tier: continue
 			var id: String = definition.id
-			var card := UIKit.button("%s\n参考价 %s Cr" % [definition.name, str(int(definition.value))],"secondary",Vector2(0,100) if shell.mobile_mode() else Vector2(170,178),19)
+			var record: Dictionary = collection[id]
+			var collection_text := "经手%d · 检验%d · 修复%d" % [int(record.handled),int(record.inspected),int(record.repaired)]
+			var card := UIKit.button("%s\n参考价 %s Cr\n%s" % [definition.name, str(int(definition.value)),collection_text],"secondary",Vector2(0,100) if shell.mobile_mode() else Vector2(170,178),19)
+			card.tooltip_text = "已记录原物：" + collection_text
 			if shell.mobile_mode(): card.custom_minimum_size.y = 88
 			card.name = "catalogue_model_"+id
 			card.icon = UIKit.item_icon(id)
@@ -82,6 +105,7 @@ static func open(shell: Node) -> void:
 				navigation.hide()
 				content_host.add_child(detail)
 				UIKit.clear(reference)
+				reference.add_child(UIKit.label("已记录原物 · " + collection_text,17,UIKit.CYAN,false,true))
 				load("res://scripts/ui/watch_manual.gd").populate_reference(reference,id)
 				scroll.scroll_vertical = 0)
 			grid.add_child(card)

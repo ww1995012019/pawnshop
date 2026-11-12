@@ -465,16 +465,16 @@ func _build_status() -> void:
 		value.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		stats.add_child(value)
 		status_values[key] = value
-	var utilities := UIKit.hbox(16)
+	var utilities := UIKit.hbox(8)
 	utilities.position = Vector2(28, 64)
 	utilities.size = Vector2(376, 32)
 	utilities.alignment = BoxContainer.ALIGNMENT_CENTER
 	status_panel.add_child(utilities)
-	for spec in [["help", "手册", "help"], ["sound", "声音", "soundOn"], ["settings", "设置", "settings"]]:
+	for spec in [["help", "手册", "help"], ["plan", "经营", "goal"], ["sound", "声音", "soundOn"], ["settings", "设置", "settings"]]:
 		var key: String = spec[0]
 		var b := Button.new()
 		b.text = spec[1]
-		b.custom_minimum_size = Vector2(112, 32)
+		b.custom_minimum_size = Vector2(88, 32)
 		b.add_theme_font_size_override("font_size", 16)
 		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -524,6 +524,7 @@ func _utility_clicked(key: String, _button: Button) -> void:
 		return
 	match key:
 		"help": shell.open_help()
+		"plan": shell.open_shop_plan()
 		"settings": shell.open_settings()
 		"sound":
 			Game.prefs.sound = not Game.prefs.sound
@@ -572,7 +573,8 @@ func _refresh_board() -> void:
 	var s := Game.state
 	var day := int(s.day)
 	board_day.text = "第 %02d 天 · %s" % [day, "营业" if s.phase == "open" else "休息"]
-	var rent_day := mini(int(ceil(day / 7.0)) * 7, 21)
+	var rent_day := int(ceil(day / 7.0)) * 7
+	if not CampaignLife.is_endless(s): rent_day=mini(rent_day,21)
 	board_rent.text = ("房东待收租" if Landlord.outstanding(s)>0 else "本期租金已交") if rent_day == day else "租期余 %d 天 · 事件" % (rent_day - day)
 	fixture_buttons.events.tooltip_text = "今日事件 · " + ("已处理" if Game.event_done() else "待查看")
 	status_values.cash.text = "%s Cr" % Model.jnum(s.cash)
@@ -783,6 +785,21 @@ func _build_terminal() -> void:
 	add_child(footer)
 
 ## Restrained physical keycaps only for this worn metal device.
+func _sync_evidence_selection() -> void:
+	# Update the evidence strip in place: mobile quote sheets hold WeakRefs to
+	# the current action buttons, so selecting evidence must not rebuild them.
+	var caption := ""
+	for child in chips.get_children():
+		if not child is Button or not child.has_meta("evidence_tool"): continue
+		var selected: bool = String(child.get_meta("evidence_tool")) == chosen_evidence
+		child.set_pressed_no_signal(selected)
+		_till_key(child,"primary" if selected else "secondary")
+		child.tooltip_text = "已选 · 证据随下一次出价提交" if selected else "选择这条证据，随下一次出价提交"
+		if selected: caption = String(child.get_meta("evidence_caption"))
+	var hint := chips.find_child("EvidenceSelectionHint",false,false) as Label
+	if hint != null:
+		hint.text = "下次出价提交 · " + caption if caption != "" else "选证据随下次出价提交"
+
 func _till_key(button: Button, kind: String) -> void:
 	var fills := {"primary": Color("8d6e43"), "good": Color("496b5a"), "danger": Color("6a4c46"), "secondary": Color("565e53")}
 	for state in ["normal", "hover", "pressed", "disabled"]:
@@ -971,15 +988,27 @@ func _refresh() -> void:
 					continue
 				var chip := UIKit.button(GameData.evidence_short(it.defId, e), "primary" if chosen_evidence == e else "chip", Vector2(0, 26), 17)
 				var eid: String = e
+				chip.set_meta("evidence_tool",eid)
+				chip.set_meta("evidence_caption",GameData.evidence_short(it.defId,eid))
+				chip.toggle_mode = true
 				_till_key(chip, "primary" if chosen_evidence == e else "secondary")
 				chip.pressed.connect(func():
 					if _scene_blocked():
 						return
 					chosen_evidence = "" if chosen_evidence == eid else eid
-					_refresh())
+					chosen_evidence_uid = it.uid
+					_sync_evidence_selection())
 				chips.add_child(chip)
 			if chips.get_child_count() == 0:
 				chips.add_child(UIKit.label("物证插槽 · 先在鉴定仪取证", 13, Color("36463e")))
+			else:
+				var evidence_hint := UIKit.label("",12,Color("36463e"))
+				evidence_hint.name = "EvidenceSelectionHint"
+				evidence_hint.custom_minimum_size.y = 26
+				evidence_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+				evidence_hint.tooltip_text = "证据随下一次出价提交；再次点击可取消。"
+				chips.add_child(evidence_hint)
+				_sync_evidence_selection()
 			offer_button = _act("出价 " + UIKit.money(dial.value), "primary", func(): _offer(it.uid if dialogue else "",int(pending.version) if dialogue else -1), quote_problem == "", false, quote_problem)
 			_act("接受 " + UIKit.money(t.price), "good", func(): _with_source_risk(CounterDialogue.action_for(s,"ACCEPT") if dialogue else {"type":"ACCEPT"}), s.ap >= 1 and (dialogue or not buy or s.cash >= t.price) and quote_problem == "", false, quote_problem)
 			_act("拿去鉴定", "secondary", func(): shell.go("inspect", it.uid))

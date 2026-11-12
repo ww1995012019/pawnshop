@@ -398,6 +398,41 @@ func _quote_popup() -> void:
 		nudge.custom_minimum_size = Vector2(36,34)
 		nudge.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		quote_row.add_child(nudge)
+	var original_item = Model.trade_item(Game.state)
+	if original_item != null:
+		var evidence_row := HFlowContainer.new()
+		evidence_row.name = "MobileEvidenceChoices"
+		evidence_row.add_theme_constant_override("h_separation",4)
+		evidence_row.add_theme_constant_override("v_separation",4)
+		var evidence_hint := UIKit.label("证据随下一次出价提交",12,UIKit.MUTED)
+		evidence_hint.name = "MobileEvidenceSelectionHint"
+		var evidence_uid: String = original_item.uid
+		for tool in original_item.evidence:
+			if not GameData.relevant_tool(original_item.defId,tool): continue
+			var tool_id: String = tool
+			var caption: String = GameData.evidence_short(original_item.defId,tool_id)
+			var evidence_key := UIKit.button(caption,"chip",Vector2(0,30 if shell.landscape_mode() else 36),14)
+			evidence_key.name = "mobile_evidence_" + tool_id
+			evidence_key.set_meta("evidence_tool",tool_id)
+			evidence_key.set_meta("evidence_caption",caption)
+			evidence_key.toggle_mode = true
+			evidence_key.pressed.connect(func():
+				var current = Model.trade_item(Game.state)
+				if current == null or current.uid != evidence_uid: return
+				desk.chosen_evidence = "" if desk.chosen_evidence == tool_id else tool_id
+				desk.chosen_evidence_uid = evidence_uid
+				desk._sync_evidence_selection()
+				_sync_quote_evidence(evidence_row,evidence_hint))
+			evidence_row.add_child(evidence_key)
+		if evidence_row.get_child_count() > 0:
+			modal[0].add_child(evidence_row)
+			modal[0].add_child(evidence_hint)
+			_sync_quote_evidence(evidence_row,evidence_hint)
+		else:
+			# Empty evidence controls never enter the tree and therefore do not
+			# inherit the modal's cleanup when a new arrival has no readings.
+			evidence_row.free()
+			evidence_hint.free()
 	var buttons: Array = desk.actions.get_children()
 	for original in buttons:
 		if original != desk.offer_button and not String(original.text).begins_with("接受 "): continue
@@ -414,6 +449,18 @@ func _quote_popup() -> void:
 				desk.dial.set_value(int(value),false)
 				desk._update_offer_value(desk.dial.value)
 				if is_instance_valid(preview.get_ref()): preview.get_ref().text = "出价 " + UIKit.money(value))
+
+func _sync_quote_evidence(row: HFlowContainer, hint: Label) -> void:
+	var selected_caption := ""
+	for child in row.get_children():
+		if not child is Button: continue
+		var selected: bool = String(child.get_meta("evidence_tool","")) == desk.chosen_evidence
+		var caption: String = child.get_meta("evidence_caption","")
+		child.set_pressed_no_signal(selected)
+		child.text = ("✓ " if selected else "") + caption
+		child.tooltip_text = "已选 · 证据随下一次出价提交" if selected else "随下一次出价提交；再次点击可取消"
+		if selected: selected_caption = caption
+	hint.text = "证据随下一次出价提交" + (" · 已选" + selected_caption if selected_caption != "" else "")
 
 func _actions() -> void:
 	var modal: Array = shell.modal("交易操作" if Game.state.trade != null else "柜台事务",360)
@@ -436,6 +483,14 @@ func _actions() -> void:
 	modal[0].add_child(_key("选择货物 / 推荐库存",func():
 		modal[1].call()
 		_open_goods_after_close.call_deferred()))
+	modal[0].add_child(_key("成交回执",func():
+		modal[1].call()
+		_open_shop_plan_after_close.call_deferred("history")))
+
+func _open_shop_plan_after_close(tab: String = "") -> void:
+	if await _wait_for_sheet_close():
+		if tab == "": shell.open_shop_plan()
+		else: shell.open_shop_plan(tab)
 
 func _open_goods_after_close() -> void:
 	if await _wait_for_sheet_close(): _goods_popup()
@@ -456,10 +511,12 @@ func _invoke(ref: WeakRef) -> void:
 
 func _tasks() -> void:
 	var modal: Array = shell.modal("店内事务",360)
-	for spec in [["委托订单","orders"],["营业账本 / 打烊","report"],["站内消息","events"],["经营手册","help"]]:
+	for spec in [["经营计划","shop_plan"],["事件簿","stories"],["成交回执","history"],["委托订单","orders"],["营业账本 / 打烊","report"],["站内消息","events"],["经营手册","help"]]:
 		var target: String = spec[1]
 		modal[0].add_child(_key(spec[0],func():
 			modal[1].call()
-			if target == "events": shell.open_events()
+			if target in ["shop_plan","history"]: _open_shop_plan_after_close.call_deferred("history" if target == "history" else "")
+			elif target == "stories": shell._open_story_book_after_close.call_deferred()
+			elif target == "events": shell.open_events()
 			elif target == "help": shell.open_help()
 			else: shell.go(target)))

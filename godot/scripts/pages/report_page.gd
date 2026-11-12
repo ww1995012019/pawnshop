@@ -2,6 +2,8 @@ extends Page
 ## Day end: today's ledger, electricity/cleaning receipts, the first equipment
 ## upgrade from day 3, the next day, and the 21-day outcome.
 
+const Life = preload("res://scripts/model/campaign_life.gd")
+
 var body: VBoxContainer
 var sheet: PanelContainer
 var status_label: Label
@@ -18,9 +20,13 @@ func scene_name() -> String:
 
 func hint_text() -> String:
 	var s := Game.state
+	if Life.continue_problem(s) == "":
+		return "经营评估已完成：可以保留店铺继续经营，或查看本轮结局。" if s.phase == "report" else "经营评估已完成。可以保留店铺继续经营，或新开一家店。"
+	var week := int(Life.summary(s).week)
 	if s.phase == "open":
-		return "处理完今天的客人与订单后，打烊结算电费与清洁费，租金由房东上门收取。"
+		return ("持续经营 · 第 %d 周。" % week if Life.is_endless(s) else "") + "处理完今天的客人与订单后，打烊结算电费与清洁费，租金由房东上门收取。"
 	if s.phase == "report":
+		if Life.is_endless(s): return "持续经营 · 第 %d 周日结完成，迎接第 %d 天。" % [week,int(s.day)+1]
 		return "日结完成：选择升级（第 3 天起），然后迎接明天。"
 	return "经营结束。可以回看账目，或新开一家店。"
 
@@ -95,7 +101,7 @@ func _refresh() -> void:
 	var s := Game.state
 	var day := int(s.day)
 	if s.phase == "ending":
-		body.add_child(UIKit.module_header("经营结束 · 第 %d 天" % day, "最终经营账目", "CLOSE / 21"))
+		body.add_child(UIKit.module_header("经营结束 · 第 %d 天" % day, "最终经营账目", "CLOSE / %02d" % day))
 		_add_status()
 		body.add_child(UIKit.record_card("结业记录", String(s.get("outcome", "旧货局的灯熄了。")), "FINAL"))
 		var final_sheet := UIKit.plate(UIKit.paper_style(18))
@@ -110,13 +116,20 @@ func _refresh() -> void:
 		_row(g, "站务关注", "%d / 100" % int(s.risk))
 		final_sheet.add_child(g)
 		body.add_child(final_sheet)
-		var again := UIKit.button("新开一家店", "primary", Vector2(0, 64), 24)
+		var continuation := _add_continuation(s)
+		var again := UIKit.button("新开一家店", "secondary" if continuation != null else "primary", Vector2(0, 64), 24)
 		again.pressed.connect(func():
 			Game.new_game()
 			shell.shutter(1))
 		body.add_child(again)
 		return
-	body.add_child(UIKit.module_header("第 %d 天 · %s" % [day, "日结报告" if s.phase == "report" else "营业中"], "营业账目", "LEDGER / %02d" % day))
+	if Life.is_endless(s):
+		var summary := Life.summary(s)
+		var subtitle := "第 %d 周 · %s" % [int(summary.week),"日结报告" if s.phase == "report" else "营业账目"]
+		if summary.firstAssessment is Dictionary: subtitle += " · 首次评估：" + String(summary.firstAssessment.outcome)
+		body.add_child(UIKit.module_header("持续经营 · 第 %d 天" % day, subtitle, "ENDLESS / %02d" % day))
+	else:
+		body.add_child(UIKit.module_header("第 %d 天 · %s" % [day, "日结报告" if s.phase == "report" else "营业中"], "营业账目", "LEDGER / %02d" % day))
 	_add_status()
 	if not shell.mobile_mode(): _add_night_controls(s)
 	var today := []
@@ -239,13 +252,30 @@ func _refresh() -> void:
 				cv.add_child(b)
 				up.add_child(card)
 			body.add_child(up)
-		var next := UIKit.button("迎接第 %d 天" % (day + 1) if day < 21 else "查看结局", "primary", Vector2(0, 64), 24)
+		var continuation := _add_continuation(s)
+		var next := UIKit.button("迎接第 %d 天" % (day + 1) if day < 21 or Life.is_endless(s) else "查看结局", "secondary" if continuation != null else "primary", Vector2(0, 64), 24)
 		next.pressed.connect(func():
 			if Game.dispatch({"type": "NEXT"}) and Game.state.phase == "open":
 				shell.go("counter"))
 		body.add_child(next)
-		if shell.mobile_mode(): body.move_child(next,2)
+		if shell.mobile_mode():
+			body.move_child(next,2)
+			if continuation != null: body.move_child(continuation,2)
 	if shell.mobile_mode(): _add_night_controls(s)
+
+func _add_continuation(s: Dictionary) -> VBoxContainer:
+	if Life.continue_problem(s) != "": return null
+	var choice := UIKit.vbox(8)
+	choice.name = "campaign_continuation"
+	choice.add_child(UIKit.label("继续后保留现金、库存、耗材、关系与账本，未完成委托照常履行。",18,UIKit.TEXT,false,true))
+	var resume := UIKit.button("保留店铺，继续经营","primary",Vector2(0,64),24)
+	resume.name = "continue_campaign"
+	resume.pressed.connect(func():
+		if Game.dispatch({"type":"CONTINUE_CAMPAIGN"}) and Game.state.phase == "open":
+			shell.go("counter"))
+	choice.add_child(resume)
+	body.add_child(choice)
+	return choice
 
 func _add_cost_details(parent: VBoxContainer, costs: Dictionary) -> void:
 	if costs.legacy:
@@ -304,7 +334,7 @@ func _add_night_controls(s: Dictionary) -> void:
 	var risk_text := "当前失窃概率 %.2f%%。" % (NightCrime.theft_chance_bp(s)/100.0)
 	if int(s.day)<3:
 		risk_text="前两晚享受保护，今晚不会发生夜间失窃。"
-	elif int(s.day)>20:
+	elif int(s.day)>20 and not Life.is_endless(s):
 		risk_text="夜间失窃时段已结束。"
 	elif not s.inventory.any(func(item):return NightCrime.stealable(s,item)):
 		risk_text="暂无可被盗的店铺自有库存，今晚无失窃损失。"

@@ -854,14 +854,14 @@ func _on_changed(prev: Dictionary, next: Dictionary, action: Dictionary) -> void
 		_suspend_home_focus()
 	_refresh_hud()
 	hint(page.hint_text() if page else "")
-	if action.type == "NEXT" and next.phase == "open" and not workspace_mode:
+	if action.type in ["NEXT","CONTINUE_CAMPAIGN"] and next.phase == "open" and not workspace_mode:
 		close_workspace()
 		shutter(next.day)
 
 func _refresh_hud() -> void:
 	var s := Game.state
-	gauges.day.text = "%02d/21" % int(s.day)
-	gauges.ap.text = "%d/12" % int(s.ap)
+	gauges.day.text = "第%d天" % int(s.day) if CampaignLife.is_endless(s) else "%02d/21" % int(s.day)
+	gauges.ap.text = "%d/%d" % [int(s.ap),ShopUpgrades.daily_ap(s)]
 	gauges.risk.text = "%d" % int(s.risk)
 	gauges.risk.add_theme_color_override("font_color", UIKit.DANGER if s.risk >= 60 else UIKit.AMBER)
 	var panel: Control = event_badge.get_meta("panel")
@@ -1318,6 +1318,10 @@ func open_events() -> void:
 	var event = Game.today_event()
 	var m := modal("每日站内消息 · 第 %d 天" % int(Game.state.day), 1100)
 	var body: VBoxContainer = m[0]
+	var stories:=UIKit.button("跨天事件簿 · %d 件待处理" % ShopStories.pending(Game.state),"secondary",Vector2(0,34),14)
+	stories.name="open_story_book"
+	stories.pressed.connect(func():m[1].call();call_deferred("_open_story_book_after_close"))
+	body.add_child(stories)
 	if event == null:
 		body.add_child(UIKit.label("今天没有站务消息。", 22, UIKit.MUTED))
 		return
@@ -1483,13 +1487,75 @@ func export_legacy_backup() -> void:
 		dialog.canceled.connect(dialog.queue_free)
 		dialog.popup_centered(Vector2i(800, 500))
 
+func open_story_book(initial := "active") -> void:
+	if workspace_mode:
+		workspace_parent.open_story_book(initial)
+		return
+	var m := modal("跨天事件簿",900)
+	var content: VBoxContainer=m[0]
+	var book: VBoxContainer=load("res://scripts/ui/story_book.gd").new()
+	book.name="StoryBook"
+	if mobile_mode(): content.add_child(book)
+	else:
+		var scroll:=ScrollContainer.new()
+		scroll.name="StoryBookScroll"
+		scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.custom_minimum_size.y=clampf(get_viewport().get_visible_rect().size.y-240,220,580)
+		scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		scroll.follow_focus=true
+		content.add_child(scroll)
+		scroll.add_child(book)
+	book.setup(self,m[1],initial)
+
+func _open_story_book_after_close() -> void:
+	while modal_open():
+		for dim in modal_layer.get_children():
+			if not dim.has_meta("closing"):return
+		await get_tree().process_frame
+	open_story_book()
+
+func open_shop_plan(initial := "overview") -> void:
+	if workspace_mode:
+		workspace_parent.open_shop_plan(initial)
+		return
+	var m := modal("经营计划",920)
+	var content: VBoxContainer = m[0]
+	var plan: VBoxContainer = load("res://scripts/ui/shop_plan.gd").new()
+	plan.name = "ShopPlan"
+	if mobile_mode():
+		content.add_child(plan)
+	else:
+		var scroll := ScrollContainer.new()
+		scroll.name = "ShopPlanScroll"
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.custom_minimum_size.y = clampf(get_viewport().get_visible_rect().size.y-240,220,580)
+		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.follow_focus = true
+		content.add_child(scroll)
+		scroll.add_child(plan)
+	plan.setup(self,m[1],initial)
+
+func _plan_navigate(destination: String, uid := "") -> void:
+	# Let the sheet finish closing before restoring workspace keyboard/pointers.
+	for frame in 30:
+		var closing := false
+		for dim in modal_layer.get_children():
+			if dim.has_meta("closing"): closing = true
+		if not closing: break
+		await get_tree().process_frame
+	if modal_open(): return
+	go(destination,uid)
+
 func open_help() -> void:
 	var m := modal("经营手册", 1000)
 	var body: VBoxContainer = m[0]
+	var plan := UIKit.button("经营计划 · 委修 / 行情 / 扩建 / 成交回执","primary",Vector2(0,36),15)
+	plan.pressed.connect(func(): m[1].call();call_deferred("_open_plan_after_help"))
+	body.add_child(plan)
 	var manual := UIKit.button("打开手表检验说明书", "primary", Vector2(0, 56))
 	manual.pressed.connect(func(): open_watch_manual())
 	body.add_child(manual)
-	var text := "• 柜台：按服务铃请下一位来客。每天随机安排3–10位，开店前三天为教学保留必要名额。同一客人看多件货或分批交割只算一次接待。报价只代表对方的认识与预算；检测不会自动改变对方的开价。\n• 检验：只用放大镜、紫外线、称重。对照说明书查看 logo、编号与重量，记录物证；每项缩小估价范围，三项当前检验完成后仍保留估价区间，成交价需自行议定。\n• 多件买卖：就在原来的柜台对话中，从抽屉拿货给来客看，他会当场接受、还价或拒绝。问“你还带了别的货吗”可继续看他带来的旧货；不必进入其他交易界面。每只表各自议价，谈妥的几件会记着，原报价台可以一起交割1 AP；交割后客人仍在，送客才结束接待。\n• 议价：不再限制三次还价。NPC根据已知来源、主动出示的证据、报价差距和实际让步决定继续谈、拒绝本件或离开。可以主动出示物证。维修师、收藏者和普通人理解同一条证据的能力不同，相关专家85%概率独立准确估价，普通客人20%概率接近市价；你的私下检验不会自动更新对方认知。\n• 造假：在修表台选择外形与机芯兼容、目录价更高的目标款，分别仿制标识、换目标外壳、覆印编号和校准配重。编号与配重需先换壳，各项独立操作与结算，内部故障仍保留。相似度越高，未识破的顾客越接近按目标款估价；专家可识破加工痕迹并拒收，关注+10、阵营关系-8。同一轮不重复处罚。\n• 维修：依本件故障安排除尘、开盖、洗件、换件、润滑回装与走时复核；机械表与石英表操作不同。完成对应工序时扣费，进度可保存。材料等流动商人到店购买。独立翻新可自由选择吹灰、擦拭、抛光、换壳或换表带，分别结算；提升品相但不修复机芯，更换件保留可鉴定痕迹。\n• 仓储与订单：保管每一只原表，核验来源，按订单要求交还同一实物。\n• 警官抽查：当天抽查概率为关注度×0.03%，12点为0.36%，100点为3%。警官到店后可先整理，点击“整理好了，开始检查”后才处理；隔离箱不查，普通仿品和来源待核物不属于本次赃物范围。查到赃物全部没收，本次合计罚30 Cr；没发现就不罚。\n• 收租与日结：第7、14、21天房东梁叔上门收取450、495、545 Cr租金，核对后确认付款并保留回执，日结不再重复扣租。现金不足可先筹钱，再从账本请房东过来；收租不消耗AP。账本日结支付设备电费与固定清洁费8 Cr，继续经营21天。电费只在成功记录新读数或提交用电工序时计次；手工清洁、移动镜片和查看旧结果不收费。账本可展开设备状态、台数与作业明细；工作灯一次性 120 Cr，安装后从次日起用电 +1 Cr/日。"
+	var text := "• 柜台：按服务铃请下一位来客。每天随机安排3–10位，开店前三天为教学保留必要名额。同一客人看多件货或分批交割只算一次接待。报价只代表对方的认识与预算；检测不会自动改变对方的开价。\n• 检验：只用放大镜、紫外线、称重。对照说明书查看 logo、编号与重量，记录物证；每项缩小估价范围，三项当前检验完成后仍保留估价区间，成交价需自行议定。\n• 多件买卖：就在原来的柜台对话中，从抽屉拿货给来客看，他会当场接受、还价或拒绝。问“你还带了别的货吗”可继续看他带来的旧货；不必进入其他交易界面。每只表各自议价，谈妥的几件会记着，原报价台可以一起交割1 AP；交割后客人仍在，送客才结束接待。\n• 议价：不再限制三次还价。NPC根据已知来源、主动出示的证据、报价差距和实际让步决定继续谈、拒绝本件或离开。可以主动出示物证。维修师、收藏者和普通人理解同一条证据的能力不同，相关专家85%概率独立准确估价，普通客人20%概率接近市价；你的私下检验不会自动更新对方认知。\n• 造假：在修表台选择外形与机芯兼容、目录价更高的目标款，分别仿制标识、换目标外壳、覆印编号和校准配重。编号与配重需先换壳，各项独立操作与结算，内部故障仍保留。相似度越高，未识破的顾客越接近按目标款估价；专家可识破加工痕迹并拒收，关注+10、阵营关系-8。同一轮不重复处罚。\n• 维修：依本件故障安排除尘、开盖、洗件、换件、润滑回装与走时复核；机械表与石英表操作不同。完成对应工序时扣费，进度可保存。材料等流动商人到店购买。独立翻新可自由选择吹灰、擦拭、抛光、换壳或换表带，分别结算；提升品相但不修复机芯，更换件保留可鉴定痕迹。\n• 仓储与订单：保管每一只原表，核验来源，按订单要求交还同一实物。\n• 警官抽查：当天抽查概率为关注度×0.03%，12点为0.36%，100点为3%。警官到店后可先整理，点击“整理好了，开始检查”后才处理；隔离箱不查，普通仿品和来源待核物不属于本次赃物范围。查到赃物全部没收，本次合计罚30 Cr；没发现就不罚。\n• 收租与日结：第7、14、21天房东梁叔上门收取450、495、545 Cr租金，核对后确认付款并保留回执，日结不再重复扣租。现金不足可先筹钱，再从账本请房东过来；收租不消耗AP。账本日结支付设备电费与固定清洁费8 Cr，第21天评估后可保留原店继续经营，后续每7天收租。电费只在成功记录新读数或提交用电工序时计次；手工清洁、移动镜片和查看旧结果不收费。账本可展开设备状态、台数与作业明细；工作灯一次性 120 Cr，安装后从次日起用电 +1 Cr/日。"
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.custom_minimum_size.y = clampf(get_viewport().get_visible_rect().size.y - 300, 180, 450)
@@ -1867,3 +1933,9 @@ func open_night_report(manual := true) -> void:
 		Game.dispatch({"type":"ACK_NIGHT_REPORT"})
 		m[1].call())
 	body.add_child(ack)
+
+func _open_plan_after_help() -> void:
+	for frame in 30:
+		if not modal_open(): break
+		await get_tree().process_frame
+	if not modal_open(): open_shop_plan()

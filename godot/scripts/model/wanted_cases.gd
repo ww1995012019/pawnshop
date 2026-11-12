@@ -47,7 +47,7 @@ static func officer_slot(s: Dictionary, reserved_slot: int) -> int:
 	var visits = preload("res://scripts/model/visit_schedule.gd")
 	var quota := Model.daily_visit_limit(s)
 	var slot := 4 + int(draw % 2) if day <= 3 else int(draw % (6 if visits.legacy(s) else quota))
-	var final_slot := quota-1 if int(s.day) in [7,14,21] else -1
+	var final_slot := quota-1 if visits.is_rent_day(s) else -1
 	var canonical_merchant: int = visits.original_slot(s,reserved_slot)
 	return visits.remap_slot(s,visits.available_slot(s,slot,[canonical_merchant,final_slot]))
 
