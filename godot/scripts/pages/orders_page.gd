@@ -10,6 +10,7 @@ var selected_status := "open"
 var board: PanelContainer
 var status_note: Label
 var expanded_orders := {}
+var expanded_briefs := {}
 const STATUS_LABELS := {"open": "可接订单", "active": "进行中", "closed": "已结束"}
 
 func scene_name() -> String:
@@ -158,20 +159,39 @@ func _card(def: Dictionary) -> VBoxContainer:
 	hv.add_child(UIKit.label(def.name, 26, UIKit.INK, false, true))
 	var meta: BoxContainer = UIKit.vbox(4) if shell.portrait_mode() else UIKit.hbox(14)
 	meta.add_child(UIKit.label("报酬 " + UIKit.money(def.reward), 22, UIKit.RUST, true))
-	meta.add_child(UIKit.label("第 %s 天前交付" % Model.jnum(Model.order_due(Game.state,def.id)), 18, INK_SOFT))
+	meta.add_child(UIKit.label(_deadline(def), 18, INK_SOFT))
 	hv.add_child(meta)
 	head.add_child(hv)
 	v.add_child(head)
 	v.add_child(_dashes())
-	v.add_child(UIKit.label("委托事项", 15, INK_SOFT, true))
 	var brief := UIKit.label(_readable(String(def.description)), 19, UIKit.INK, false, true)
+	brief.name = "OrderBrief"
 	brief.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var req := "品相≥%s%s%s" % [UIKit.pct(def.minCondition), " · 须修复" if def.needsRepair else "", " · 顾客原物" if def.get("customerOwned", false) else ""]
+	v.add_child(UIKit.label(req, 19, UIKit.INK, false, true))
+	var details := UIKit.button("收起委托详情" if expanded_briefs.get(def.id,false) else "查看委托详情", "secondary", Vector2(0,38), 17)
+	details.name = "OrderBriefToggle"
+	for state in ["normal","hover","pressed"]:
+		details.add_theme_stylebox_override(state,UIKit.box(Color(0.3,0.2,0.1,0.08) if state!="normal" else Color.TRANSPARENT,INK_SOFT,0,1,5,0))
+	for state in ["font_color","font_hover_color","font_pressed_color","font_focus_color"]: details.add_theme_color_override(state,UIKit.INK)
+	details.add_theme_constant_override("outline_size",0)
+	brief.visible = expanded_briefs.get(def.id,false)
+	details.pressed.connect(func():
+		brief.visible = not brief.visible
+		expanded_briefs[def.id] = brief.visible
+		details.text = "收起委托详情" if brief.visible else "查看委托详情")
+	v.add_child(details)
 	v.add_child(brief)
-	var req := "需要：%s · 品相≥%s%s%s" % [GameData.def(def.itemId).name, UIKit.pct(def.minCondition), " · 须修复" if def.needsRepair else "", " · 顾客原物" if def.get("customerOwned", false) else ""]
-	v.add_child(UIKit.label(req, 17, INK_SOFT, false, true))
 	card.add_child(pin)
 	card.set_meta("v", v)
 	return v
+
+func _deadline(def: Dictionary) -> String:
+	var due := int(Model.order_due(Game.state,def.id))
+	var order = Model._order_state(Game.state,def.id)
+	if order != null and order.status in ["done","failed"]: return "截止第 %d 天" % due
+	var remaining := due-int(Game.state.day)
+	return "已逾期" if remaining<0 else "今天截止" if remaining==0 else "剩余 %d 天" % remaining
 
 ## Keep the actual order actions intact; only their presentation is folded.
 func _mobile_card(def: Dictionary) -> VBoxContainer:

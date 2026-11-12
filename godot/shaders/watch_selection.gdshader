@@ -21,9 +21,8 @@ void fragment() {
 	for (int i = 0; i < 16; i++) {
 		float angle = float(i) * 6.2831853 / 16.0;
 		vec2 direction = vec2(cos(angle), sin(angle)) * TEXTURE_PIXEL_SIZE;
-		halo += silhouette(UV + direction * 6.0) * 0.5;
-		halo += silhouette(UV + direction * 14.0) * 0.32;
-		halo += silhouette(UV + direction * 24.0) * 0.18;
+		halo += silhouette(UV + direction * 2.0) * 0.65;
+		halo += silhouette(UV + direction * 4.0) * 0.35;
 	}
 	float outside = 1.0 - silhouette(UV);
 	COLOR = vec4(gold.rgb, min(0.8, halo / 16.0 * 2.4) * outside * gold.a * strength * opacity);

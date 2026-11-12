@@ -8,6 +8,7 @@ var body: VBoxContainer
 var status: Label
 var tabs := {}
 var journal_uid := ""
+var market_details := false
 
 func setup(shell: Node, close: Callable, initial := "overview") -> void:
 	host = shell
@@ -118,13 +119,29 @@ func _overview() -> void:
 	var future: Dictionary = market.forecast(s)
 	var prices := _card("行情与下周预告")
 	_text(prices,String(now.get("title","本周行情")),UIKit.CYAN)
-	_text(prices,String(now.get("explanation","")))
+	_text(prices,_market_summary(now),UIKit.TEXT,17)
 	_text(prices,"下周："+String(future.get("title","行情预告")),UIKit.AMBER)
-	_text(prices,String(future.get("explanation","")),UIKit.MUTED,14)
-	_text(prices,"行情影响来客的交易判断；已经谈妥的价格保留。",UIKit.MUTED,13)
+	_text(prices,_market_summary(future),UIKit.TEXT,17)
+	var explanation := UIKit.vbox(5)
+	explanation.visible = market_details
+	_text(explanation,String(now.get("explanation","")),UIKit.MUTED,15)
+	_text(explanation,"下周："+String(future.get("explanation","")),UIKit.MUTED,15)
+	_text(explanation,"行情影响来客的交易判断；已经谈妥的价格保留。",UIKit.MUTED,15)
+	var expand := UIKit.button("收起行情说明" if market_details else "查看行情说明","secondary",Vector2(0,36),16)
+	expand.pressed.connect(func():
+		market_details = not market_details
+		explanation.visible = market_details
+		expand.text = "收起行情说明" if market_details else "查看行情说明")
+	prices.add_child(expand)
+	prices.add_child(explanation)
 	var shortcuts := _card("快捷操作")
 	_navigate(shortcuts,"查看账本与阶段成绩","report")
 	_navigate(shortcuts,"处理库存与来源","warehouse")
+
+func _market_summary(snapshot: Dictionary) -> String:
+	var labels: Dictionary = load("res://scripts/model/weekly_market.gd").LABELS
+	if String(snapshot.get("hotTier","")) == "": return "各档需求平稳 · 价格无额外浮动"
+	return "%s ↑%d%%   ·   %s ↓%d%%" % [labels.get(snapshot.hotTier,"走热"),int(snapshot.hotPercent),labels.get(snapshot.coldTier,"走冷"),absi(int(snapshot.coldPercent))]
 
 func _contracts() -> void:
 	var jobs = load("res://scripts/model/service_contracts.gd")

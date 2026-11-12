@@ -359,13 +359,19 @@ func _detail() -> void:
 	var reserved := Model.trade_reserved(s, it)
 	var shelf_why := _shelf_block(it, reserved)
 	_act(g, "下架" if it.location == "display" else "上架陈列", "good", {"type": "DISPLAY", "uid": it.uid}, shelf_why == "", shelf_why)
+	# Rotation substitutes for right-click on phones, so keep it with common actions.
+	_act(g, "旋转方向", "chip", func(): rotate_selected(), can_rotate_selected(), "" if can_rotate_selected() else "需要后仓里有能容纳旋转后形状的空位")
+	_act(g, "去鉴定", "secondary", func(): shell.go("inspect", it.uid))
+	_act(g, "去维修", "secondary", func(): shell.go("repair", it.uid))
+	var common_actions := g
+	detail.add_child(common_actions)
+	detail.add_child(UIKit.module_header("调价与来源", "扫描、登记及保管操作", "RECORDS"))
+	g = UIKit.grid(2,10)
 	var quote_problem := StoreCosts.device_problem(s, "quote_terminal")
 	var price_ok: bool = it.owner == "shop" and not it.has("orderId") and not reserved and quote_problem == ""
 	if quote_problem != "": detail.add_child(UIKit.label(quote_problem, 16, UIKit.DANGER, false, true))
 	_act(g, "挂牌 −10", "chip", {"type": "PRICE", "uid": it.uid, "price": maxf(1, it.listPrice - 10)}, price_ok and it.listPrice > 1, quote_problem)
 	_act(g, "挂牌 +10", "chip", {"type": "PRICE", "uid": it.uid, "price": it.listPrice + 10}, price_ok, quote_problem)
-	# Touch screens have no right-click while dragging, so rotation also needs a button.
-	_act(g, "旋转方向", "chip", func(): rotate_selected(), can_rotate_selected(), "" if can_rotate_selected() else "需要后仓里有能容纳旋转后形状的空位")
 	var scanner_problem := StoreCosts.device_problem(s, "scanner")
 	_act(g, "已扫描 · 复查" if s.scanned.has(it.uid) else "安检扫描", "secondary", {"type": "SCAN", "uid": it.uid}, scanner_problem == "", scanner_problem)
 	if scanner_problem != "":
@@ -389,8 +395,6 @@ func _detail() -> void:
 			shell.confirm("移交疑似赃物", "原物将从隔离柜移交站务，登记后风险下降、站务关系提升。", "确认移交", func():
 				Game.dispatch({"type": "REPORT_STOLEN", "uid": report_uid})))
 	_act(g, "解除隔离" if it.location == "isolation" else "放入隔离柜", "secondary", {"type": "ISOLATE", "uid": it.uid}, it.owner != "pawn" and not reserved, "正在柜台交易中" if reserved else "")
-	_act(g, "去鉴定", "secondary", func(): shell.go("inspect", it.uid))
-	_act(g, "去维修", "secondary", func(): shell.go("repair", it.uid))
 	if it.owner == "shop":
 		var forge_why := Commerce.forgery_problem(s, it)
 		var forge_uid: String = it.uid
@@ -417,7 +421,7 @@ func _detail() -> void:
 			shell.confirm("主动归还原主", "「%s」：%s" % [item_name, return_text], "确认归还", func():
 				Game.dispatch({"type": "RETURN_ITEM", "uid": uid})), it.owner != "pawn" and not reserved, "正在柜台交易中" if reserved else "")
 	detail.add_child(g)
-	if shell.mobile_mode(): detail.move_child(g,preview.get_index()+1)
+	if shell.mobile_mode(): detail.move_child(common_actions,preview.get_index()+1)
 	if shelf_why != "" and it.owner == "shop":
 		detail.add_child(UIKit.label("上架条件：" + shelf_why, 16, UIKit.DANGER, false, true))
 	elif reg_why != "" and not it.sourceVerified:
@@ -442,9 +446,13 @@ func _stock_summary() -> void:
 	detail.add_child(UIKit.rule())
 	detail.add_child(UIKit.module_header("工具柜存料", "完成维修时扣除", "SUPPLIES"))
 	var mats := UIKit.grid(2 if not shell.mobile_mode() else 1, 4)
+	mats.name = "MaterialStock"
+	mats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	detail.add_child(mats)
 	for m in GameData.materials:
-		mats.add_child(UIKit.label("%s  ×%s" % [m.name, Model.jnum(Game.state.materials.get(m.id, 0))], 16, UIKit.TEXT, false, true))
+		var row := UIKit.label("%s  ×%s" % [m.name, Model.jnum(Game.state.materials.get(m.id, 0))], 16, UIKit.TEXT, false, true)
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		mats.add_child(row)
 
 func on_changed(_p: Dictionary, _n: Dictionary, _a: Dictionary) -> void:
 	if Game.item(selected) == null:

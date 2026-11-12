@@ -32,6 +32,9 @@ class DeskCard extends Node2D:
  func _draw() -> void:
   var edge:=Color("f2c27b") if focused else Color("83b7a0") if agreed else Color("b77e65") if refused else Color("65765d")
   draw_style_box(_paper(edge),Rect2(-width/2,33,width,30))
+  if focused:
+   draw_rect(Rect2(-width/2,33,width,30),edge,false,2)
+   draw_colored_polygon(PackedVector2Array([Vector2(-5,-40),Vector2(5,-40),Vector2(0,-35)]),edge)
   draw_string(UIKit.font,Vector2(-width/2+5,46),caption,HORIZONTAL_ALIGNMENT_LEFT,width-10,16,Color("302c27"))
   draw_string(UIKit.font,Vector2(-width/2+5,60),note,HORIZONTAL_ALIGNMENT_LEFT,width-10,13,Color("8c482d") if refused else Color("315547"))
  func _paper(edge: Color) -> StyleBoxFlat:

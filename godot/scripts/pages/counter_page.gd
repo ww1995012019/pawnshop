@@ -857,6 +857,12 @@ func _refresh() -> void:
 	if dialogue: dialogue_put_aside.set_meta("action",CounterDialogue.action_for(s,"COUNTER_CANCEL"))
 	var delivery_action: Dictionary=CounterDialogue.action_for(s,"DELIVER") if dialogue else {"type":"DELIVER","tradeId":t.id if t!=null else ""}
 	var shown_original=Model.trade_item(s) if t!=null else null
+	var focus_edge := _flat(Color.TRANSPARENT)
+	if shown_original!=null:
+		focus_edge.border_color = UIKit.AMBER
+		focus_edge.border_width_left = 3
+	scr.line1.add_theme_stylebox_override("normal",focus_edge)
+	scr.line1.add_theme_color_override("font_color",UIKit.AMBER if shown_original!=null else Color("d0d4b6"))
 	var shown_uid: String=shown_original.uid if shown_original!=null else ""
 	if chosen_evidence_uid!=shown_uid: chosen_evidence="";chosen_evidence_uid=shown_uid
 	dialogue_put_aside.text="取消本件约定" if t!=null and t.locked else "这件先不买" if t!=null and t.kind=="buy" else "收回本件"
@@ -955,7 +961,8 @@ func _refresh() -> void:
 		scr.price.text = Model.jnum(t.price) + " Cr" if it != null else "待选货"
 		if it != null:
 			var e := Model.estimate(it)
-			scr.line1.text = "%s · %s %s" % [WatchForgery.sale_name(it).left(8), "估价", "%s–%s" % [Model.jnum(e.low), Model.jnum(e.high)]]
+			scr.line1.text = "▶ %s · %s–%s" % [WatchForgery.sale_name(it).left(8), Model.jnum(e.low), Model.jnum(e.high)]
+			scr.line1.tooltip_text = "%s · 估价 %s–%s Cr" % [WatchForgery.sale_name(it),Model.jnum(e.low),Model.jnum(e.high)]
 			scr.line2.text = "物证 %d · 已商谈 %d 次%s" % [Model.evidence_count(it), int(t.rounds), " · 已锁价" if t.locked else ""]
 		else:
 			scr.line1.text = "需求：" + Model.customer_need(t.npcId).left(20)

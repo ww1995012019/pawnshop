@@ -316,13 +316,18 @@ func _refresh_info() -> void:
 		info.add_child(distinction)
 	var appraisal := Model.estimate(it)
 	var price_text := "估价 %s–%s Cr" % [Model.jnum(appraisal.low), Model.jnum(appraisal.high)]
-	info.add_child(UIKit.note_card("检验估价 · %d/3" % appraisal.count, price_text + "\n鉴定只提供参考范围；加工或维修后复测不耗 AP，用电另计。"))
-	info.add_child(UIKit.label("观察记录 · %d / %d" % [it.evidence.size(), TOOL_IDS.size()], 17, UIKit.AMBER))
-	var pending: Array[String] = []
+	info.add_child(UIKit.note_card("检验估价", price_text + "\n鉴定只提供参考范围；加工或维修后复测不耗 AP，用电另计。"))
+	info.add_child(UIKit.label("有效记录 · %d / %d" % [appraisal.count, TOOL_IDS.size()], 17, UIKit.AMBER))
+	var progress := UIKit.grid(3,4)
+	progress.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_child(progress)
 	for index in TOOL_IDS.size():
 		var id: String = TOOL_IDS[index]
 		var done: bool = it.evidence.has(id)
 		var fresh: bool = done and it.get("inspectionFacts", {}).get(id, {}).get("appraisalRevision", "") == Model.appraisal_revision(it)
+		var state := UIKit.label(GameData.tool(id).name + "\n" + ("✓ 已记录" if fresh else "↻ 需复测" if done else "○ 待检"),15,UIKit.GOOD if fresh else UIKit.AMBER if done else UIKit.MUTED,false,true)
+		state.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		progress.add_child(state)
 		var problem := _tool_problem(id)
 		tool_buttons[id].disabled = problem != ""
 		tool_buttons[id].tooltip_text = problem
@@ -331,10 +336,6 @@ func _refresh_info() -> void:
 		tool_buttons[id].add_theme_stylebox_override("normal",UIKit.key_style("primary" if tool == id else "secondary","normal"))
 		if done:
 			info.add_child(UIKit.record_card(Model.evidence_caption(it, id), Model.displayed_clue(it, id), "物证 / %02d%s" % [index + 1, " · 需复测" if not fresh else ""]))
-		if not fresh:
-			pending.append("%02d %s" % [index + 1, GameData.tool(id).name])
-	if not pending.is_empty():
-		info.add_child(UIKit.label("待检：" + " / ".join(pending), 16, UIKit.MUTED, false, true))
 	info.add_child(UIKit.note_card("当前消耗", "首次记录消耗 1 AP；后续取证不耗 AP。紫外与称重按新的有效读数计电费。"))
 	var rules := UIKit.button("收起检验须知" if rules_expanded else "查看检验须知", "secondary", Vector2(0, 40), 16)
 	rules.name = "inspection_rules_toggle"
