@@ -28,6 +28,7 @@ var has_save := false
 
 func _ready() -> void:
 	GameData.ensure()
+	load("res://scripts/app/debug_values.gd").load_overrides()
 	backup_legacy_save()
 	if FileAccess.file_exists(PREFS_PATH):
 		var p = JSON.parse_string(FileAccess.get_file_as_string(PREFS_PATH))

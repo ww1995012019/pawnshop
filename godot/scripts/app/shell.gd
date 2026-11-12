@@ -832,6 +832,15 @@ func close_workspace() -> void:
 	sound("page", -12, 0.85)
 
 func _on_changed(prev: Dictionary, next: Dictionary, action: Dictionary) -> void:
+	if action.type in ["DEBUG_EDIT","DEBUG_RESTORE"]:
+		if workspace_mode: return
+		close_workspace()
+		Game.set_meta("counter_offer_drafts",{})
+		go("counter")
+		_refresh_hud()
+		if is_instance_valid(wanted_notice): wanted_notice.last_signature=""
+		_sync_wanted_notice()
+		return
 	if action.type == "NEW_GAME":
 		if workspace_mode:
 			return
@@ -1092,6 +1101,11 @@ func _route_layer_key(event: InputEventKey) -> bool:
 	return false
 
 func _input(e: InputEvent) -> void:
+	if not workspace_mode and e is InputEventKey and e.pressed and not e.echo and e.keycode==KEY_F8:
+		if modal_layer.find_child("DebugValuesPanel",true,false)!=null: close_top_modal()
+		else: open_debug_values()
+		get_viewport().set_input_as_handled()
+		return
 	if e is InputEventKey and e.keycode != KEY_ESCAPE and _route_layer_key(e):
 		return
 	if e is InputEventMouse:
@@ -1622,6 +1636,10 @@ func open_settings() -> void:
 		m[1].call()
 		open_watch_catalogue())
 	body.add_child(catalogue)
+	var debug := UIKit.button("调试系统 · 数值编辑","secondary",Vector2(0,48),18)
+	debug.name = "open_debug_values"
+	debug.pressed.connect(open_debug_values)
+	body.add_child(debug)
 	var reset := UIKit.button("新开一家店（清除当前进度）", "danger", Vector2(0, 56))
 	reset.pressed.connect(func():
 		m[1].call()
@@ -1636,6 +1654,20 @@ func open_settings() -> void:
 		body.add_child(legacy)
 
 # ---------------------------------------------------------------- title & shutter
+
+func open_debug_values() -> void:
+	if workspace_mode:
+		workspace_parent.open_debug_values()
+		return
+	if modal_layer.find_child("DebugValuesPanel",true,false)!=null: return
+	if page!=null and page.get("busy")==true:
+		toast("请等待当前交易动画结束，再打开调试。")
+		return
+	var m := modal("调试系统 · 数值编辑",1100)
+	var panel = load("res://scripts/ui/debug_values_panel.gd").new()
+	panel.name = "DebugValuesPanel"
+	m[0].add_child(panel)
+	panel.setup(self)
 
 func _close_title() -> void:
 	if is_instance_valid(title):

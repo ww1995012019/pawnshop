@@ -1,5 +1,5 @@
 class_name GameData
-## Read-only game content loaded from data/game_data.json.
+## Game content loaded from JSON, with optional local debug overrides.
 
 static var raw: Dictionary = {}
 static var items := {}
@@ -24,6 +24,13 @@ static func ensure() -> void:
 	if not raw.is_empty():
 		return
 	raw = JSON.parse_string(FileAccess.get_file_as_string("res://data/game_data.json"))
+	extra_npcs = JSON.parse_string(FileAccess.get_file_as_string("res://data/extra_residents.json"))
+	new_residents = JSON.parse_string(FileAccess.get_file_as_string("res://data/new_residents.json"))
+	_reindex()
+
+static func _reindex() -> void:
+	items = {}
+	tool_ids = []
 	item_list = raw.itemDefs
 	for d in raw.itemDefs:
 		items[d.id] = d
@@ -34,8 +41,6 @@ static func ensure() -> void:
 	inspection_motions = {}
 	materials = raw.materials
 	npcs = raw.npcs
-	extra_npcs = JSON.parse_string(FileAccess.get_file_as_string("res://data/extra_residents.json"))
-	new_residents = JSON.parse_string(FileAccess.get_file_as_string("res://data/new_residents.json"))
 	recipes = raw.recipes
 	orders = raw.orderDefs
 	order_earliest = raw.orderEarliest
@@ -43,6 +48,17 @@ static func ensure() -> void:
 	content_clues = raw.contentClues
 	faults = raw.functionFaults
 	art = raw.itemArt
+
+
+static func debug_snapshot() -> Dictionary:
+	ensure()
+	return {"content":raw.duplicate(true),"extra_npcs":extra_npcs.duplicate(true),"new_residents":new_residents.duplicate(true)}
+
+static func apply_debug_data(bundle: Dictionary) -> void:
+	raw = bundle.content.duplicate(true)
+	extra_npcs = bundle.extra_npcs.duplicate(true)
+	new_residents = bundle.new_residents.duplicate(true)
+	_reindex()
 
 static func def(id: String) -> Dictionary:
 	ensure()
