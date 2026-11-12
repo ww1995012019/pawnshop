@@ -17,6 +17,14 @@ func drag_original(page,from:Vector2,to:Vector2):
  viewport.push_input(motion,true);await frames(3)
  var release:=InputEventMouseButton.new();release.button_index=MOUSE_BUTTON_LEFT;release.pressed=false;release.position=to;release.global_position=to
  viewport.push_input(release,true);await frames()
+func click_control(control:Control):
+ var viewport=control.get_viewport();var point:Vector2=control.get_global_transform_with_canvas()*(control.size*0.5)
+ var hover:=InputEventMouseMotion.new();hover.position=point;hover.global_position=point
+ viewport.push_input(hover,true);await frames(3)
+ var down:=InputEventMouseButton.new();down.button_index=MOUSE_BUTTON_LEFT;down.button_mask=MOUSE_BUTTON_MASK_LEFT;down.pressed=true;down.position=point;down.global_position=point
+ viewport.push_input(down,true);await frames(3)
+ var up:=InputEventMouseButton.new();up.button_index=MOUSE_BUTTON_LEFT;up.pressed=false;up.position=point;up.global_position=point
+ viewport.push_input(up,true);await frames()
 func run():
  var game=root.get_node("Game")
  game.new_game("WAREHOUSE-UI");game.state.day=3;game.state.cash=1000
@@ -62,7 +70,7 @@ func run():
  var panel=shell.modal_layer.find_child("WarehouseExpansionPanel",true,false)
  panel.set_selection(0,selected[0]);panel.set_selection(1,selected[1]);await frames()
  check(not panel.apply_button.disabled,"two distinct qualifying originals enable confirmation")
- panel.apply_button.pressed.emit();await frames()
+ await click_control(panel.apply_button)
  var confirm:Button
  for key in shell.modal_layer.find_children("*","Button",true,false):
   if key.text=="确认交付并扩仓":confirm=key

@@ -1144,6 +1144,9 @@ func _active_document_cursor() -> int:
 	return -1
 
 func _update_cursor() -> void:
+	# Native modal controls own their hover and press state. Changing the
+	# global default here injects mouse motion and can cancel a held button.
+	if modal_open(): return
 	var document_cursor := _active_document_cursor()
 	if document_cursor >= 0:
 		world_cursor = document_cursor
