@@ -2,6 +2,22 @@ class_name TradeSession
 extends Object
 ## Original objects live in inventory or session.goods. Rows contain quotes, never copies.
 const ACTIONS := ["TRADE_OPEN","TRADE_ADD","TRADE_REMOVE","TRADE_REVIEW","TRADE_OFFER","TRADE_CONFIRM","TRADE_FOCUS","TRADE_CHECKOUT","TRADE_END","TRADE_REORDER"]
+const MAX_ITEMS := 8
+const COUNT_WEIGHTS := [40,24,14,9,6,4,2,1]
+
+## One deterministic draw: optional empty visits use 25%, then the same positive weights.
+static func goods_count(seed: String, visit_id: String, allow_empty := false) -> int:
+ var roll := int(Model.fnv(seed+"/"+visit_id+"/goods") % 10000)
+ var scale := 100
+ if allow_empty:
+  if roll < 2500: return 0
+  roll -= 2500
+  scale = 75
+ for index in COUNT_WEIGHTS.size():
+  roll -= int(COUNT_WEIGHTS[index])*scale
+  if roll < 0: return index+1
+ return MAX_ITEMS
+
 static func session(s: Dictionary) -> Dictionary:
  return s.get("trade",{}).get("session",{}) if s.get("trade") is Dictionary else {}
 static func row(s: Dictionary, uid: String) -> Dictionary:
@@ -31,7 +47,8 @@ static func ensure(s: Dictionary) -> void:
   record.star_budget_version=1
  s.npcTrade[t.npcId]=record
  var goods: Array=[]
- var count := int(Model.fnv(String(s.seed)+String(t.id)+"/goods")%4)
+ var must_bring: bool = t.kind=="buy" or (t.kind=="merchant" and t.get("rare") is Dictionary and t.rare.get("available",false))
+ var count := goods_count(String(s.seed),String(t.id),not must_bring)
  if t.kind=="buy" and t.get("item") is Dictionary: goods.append(t.item);count=maxi(1,count)
  if t.kind=="merchant" and t.get("rare") is Dictionary and t.rare.get("available",false):
   goods.append(Model.new_item(s,t.rare.defId,{"owner":"npc","authentic":t.rare.get("authentic",true),"working":true,"condition":0.8,"sourceVerified":true,"source":"流动商人的已登记货品"}))
@@ -55,7 +72,7 @@ static func ensure(s: Dictionary) -> void:
   var tracked := NightCrime._row(NightCrime._case(s,String(lot.get("crimeCaseId",""))),lot.uid)
   if not tracked.is_empty():
    prior_case_holders[lot.uid]=tracked.holder if tracked.holder!="trade" else ("case" if t.get("crimeCaseId","")==lot.get("crimeCaseId","") else "buyer")
- t.session={"version":1,"lines":[],"goods":goods,"acquired":[],"cash":float(record.cash),"want_count":1+Model.fnv(String(s.seed)+String(t.id)+"/quantity")%6,"bought":0,"completed":[],"focus":"","had_sale":false,"original_kind":t.kind,"prior_case_holders":prior_case_holders}
+ t.session={"version":1,"lines":[],"goods":goods,"acquired":[],"cash":float(record.cash),"want_count":goods_count(String(s.seed),String(t.id)+"/quantity"),"bought":0,"completed":[],"focus":"","had_sale":false,"original_kind":t.kind,"prior_case_holders":prior_case_holders}
  var existing = t.get("item") if t.kind=="buy" else Model.find_inventory(s,t.get("selectedUid",""))
  if existing!=null:
   var line := _new_row(s,existing,"buy" if t.kind=="buy" else "sell")
@@ -206,7 +223,7 @@ static func reduce(previous: Dictionary, action: Dictionary):
   for entry in se.lines:
    if entry.included and entry.direction==direction and entry.status!="done": active_count+=1
   if line.is_empty() or not line.included:
-   if active_count>=(6 if direction=="sell" else 3): return Model.notice(s,"本批最多推荐6件、购买3件，请先调整清单。")
+   if active_count>=MAX_ITEMS: return Model.notice(s,"本批最多推荐8件、购买8件，请先调整清单。")
    if line.is_empty(): line=_new_row(s,it,direction);se.lines.append(line)
    else: line.included=true;line.status="queued" if direction=="sell" else "ready"
    se.version+=1

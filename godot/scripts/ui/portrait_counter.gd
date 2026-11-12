@@ -331,6 +331,7 @@ func _goods_popup() -> void:
 		var key := _key(GameData.def(item.defId).name,func():
 			modal[1].call()
 			desk._focus_table(uid))
+		key.name = "table_good_"+uid
 		_goods_tile(key,UIKit.physical_icon(item),GameData.def(item.defId).name)
 		table_grid.add_child(key)
 

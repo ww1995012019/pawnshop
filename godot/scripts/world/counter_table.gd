@@ -41,6 +41,8 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
  var shown:=CounterDialogue.table_items(state)
  var keep: Array=[]
  var vi:=0;var pi:=0
+ var visitor_count: int=shown.filter(func(entry):return entry.direction=="buy").size()
+ var player_count: int=shown.size()-visitor_count
  for info in shown:
   var uid: String=info.uid
   var original=TradeSession.item(state,uid)
@@ -50,8 +52,9 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
   var index:=vi if visitor else pi
   if visitor: vi+=1
   else: pi+=1
-  var gap:=205.0 if visitor else 108.0
-  var default_position:=Vector2((785.0 if visitor else 720.0)+index*gap,508 if visitor else 610)
+  var side_count := visitor_count if visitor else player_count
+  var slots := CounterDialogue._table_slots(info.direction,side_count)
+  var default_position: Vector2=slots[mini(index,slots.size()-1)]
   var saved=TradeSession.session(state).get("table_positions",{}).get(uid,[])
   var pos:=Vector2(float(saved[0]),float(saved[1])) if saved is Array and saved.size()==2 else default_position
   pos=display_point(pos)
@@ -104,7 +107,7 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
     var settle:=sprite.create_tween();sprite.set_meta("layout_tween",settle)
     settle.tween_property(sprite,"position",pos,.18).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
     settle.tween_callback(func(): if is_instance_valid(sprite): sprite.remove_meta("layout_destination"))
-  card.width=178.0 if visitor else 102.0
+  card.width=70.0 if side_count>(3 if visitor else 6) else 178.0 if visitor else 102.0
   card.show_item_marks(original)
   card.visitor=visitor;card.focused=info.focused;card.agreed=info.selected;card.refused=info.status in ["rejected","blocked"]
   sprite.set_meta("hit_size",Vector2(card.width,98))
@@ -162,10 +165,15 @@ func clear() -> void:
 
 func hit_test(global_point: Vector2) -> String:
  var order: Array=sprites.keys();order.reverse()
+ var closest := ""
+ var distance := INF
  for uid in order:
   var sprite: ItemSprite=sprites[uid]
-  if sprite.contains(global_point) or (presentation_rect.size == Vector2.ZERO and cards[uid].area().has_point(to_local(global_point)-sprite.position)): return uid
- return ""
+  if sprite.contains(global_point) or (presentation_rect.size == Vector2.ZERO and cards[uid].area().has_point(to_local(global_point)-sprite.position)):
+   var candidate := global_point.distance_squared_to(sprite.body.global_position)
+   if candidate < distance:
+    closest=uid;distance=candidate
+ return closest
 
 func _process(_delta: float) -> void:
  for uid in sprites:

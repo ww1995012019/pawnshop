@@ -54,10 +54,12 @@ static func table_items(s: Dictionary) -> Array:
   if line.direction=="sell" and line.included and line.status!="done" and TradeSession.item(s,line.uid)!=null:
    presented.append({"uid":line.uid,"direction":"sell","status":line.status,"selected":line.selected,"price":line.context.price,"focused":se.get("focus","")==line.uid})
  return presented
-static func _table_slots(direction: String) -> Array:
+static func _table_slots(direction: String, count := 0) -> Array:
  var slots: Array=[]
  var visitor:=direction=="buy"
- for index in (3 if visitor else 6): slots.append(Vector2((785 if visitor else 720)+index*(205 if visitor else 108),508 if visitor else 610))
+ var legacy := 3 if visitor else 6
+ for index in (TradeSession.MAX_ITEMS if count>legacy else legacy):
+  slots.append(Vector2(704+index*80 if count>legacy else (785 if visitor else 720)+index*(205 if visitor else 108),508 if visitor else 610))
  return slots
 static func _place_table(s: Dictionary) -> void:
  var se := TradeSession.session(s)
@@ -68,10 +70,10 @@ static func _place_table(s: Dictionary) -> void:
  for info in shown:
   var old=se.table_positions.get(info.uid,[])
   var point:=Vector2(float(old[0]),float(old[1])) if old is Array and old.size()==2 else Vector2.INF
-  if point in _table_slots(info.direction) and point not in used: used.append(point)
+  if point in _table_slots(info.direction,shown.filter(func(entry):return entry.direction==info.direction).size()) and point not in used: used.append(point)
   else: se.table_positions.erase(info.uid);pending.append(info)
  for info in pending:
-  for point in _table_slots(info.direction):
+  for point in _table_slots(info.direction,shown.filter(func(entry):return entry.direction==info.direction).size()):
    if point in used: continue
    se.table_positions[info.uid]=[point.x,point.y];used.append(point);break
 static func _focus_remaining(s: Dictionary) -> Dictionary:
@@ -165,7 +167,7 @@ static func reduce(previous: Dictionary,a: Dictionary):
     if not (coordinate is int or coordinate is float) or not is_finite(float(coordinate)): return previous
    if not se.has("table_positions"): se.table_positions={}
    var info: Dictionary=table_items(s).filter(func(shown):return shown.uid==uid)[0]
-   var slots:=_table_slots(info.direction)
+   var slots:=_table_slots(info.direction,table_items(s).filter(func(entry):return entry.direction==info.direction).size())
    var drop:=Vector2(float(point[0]),float(point[1]))
    slots.sort_custom(func(left,right):return left.distance_squared_to(drop)<right.distance_squared_to(drop))
    var occupied: Array=[]

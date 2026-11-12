@@ -9,6 +9,8 @@ func run():
  var s=Model.create("TABLE-GOODS");s.ap=20;s.cash=5000
  s=Commerce.reduce(s,{"type":"ARRIVE"})
  var se=TradeSession.session(s)
+ if se.goods.size()>3: se.goods.resize(3)
+ se.lines=se.lines.filter(func(line):return se.goods.any(func(lot):return lot.uid==line.uid))
  while se.goods.size()<3: se.goods.append(Model.new_item(s,"WCH-002",{"owner":"npc","sourceVerified":true,"working":true}))
  s=CounterDialogue.begin(s);se=TradeSession.session(s);se.cash=5000;se.want_count=6
  check(se.lines.filter(func(line):return line.direction=="buy" and line.included).size()==3,"all three NPC originals are presented on arrival without next-item cycling")
@@ -27,12 +29,12 @@ func run():
  s=Commerce.reduce(s,{"type":"COUNTER_MOVE","tradeId":s.trade.id,"uid":second,"position":[900,610]})
  var restored: Dictionary=JSON.parse_string(JSON.stringify(s));restored=CounterDialogue.begin(restored)
  check(TradeSession.session(restored).get("table_positions",{}).get(second,[0,0])[0]==936 and TradeSession.session(restored).table_positions[second][1]==610 and TradeSession.row(restored,second).included and not TradeSession.row(restored,first).included,"reload preserves presented originals and physical placement without resurrecting removed goods")
- for i in 5:
+ for i in 7:
   var extra=Model.new_item(restored,"WCH-002",{"sourceVerified":true,"working":true,"condition":0.9,"authentic":true});Model.put_in(restored,extra)
   restored=Commerce.reduce(restored,{"type":"SELECT_TRADE","uid":extra.uid})
  var focused_before: String=TradeSession.session(restored).focus
  restored=Commerce.reduce(restored,{"type":"SELECT_TRADE","uid":first})
- check(TradeSession.session(restored).focus==focused_before and not TradeSession.row(restored,first).included,"full desk cannot focus an excluded seventh proposal after re-add is refused")
+ check(TradeSession.session(restored).focus==focused_before and not TradeSession.row(restored,first).included,"full desk cannot focus an excluded ninth proposal after re-add is refused")
  var placement=Model.create("DESK-REINTRODUCE");placement=Commerce.reduce(placement,{"type":"ARRIVE"})
  for lot in placement.inventory: lot.sourceVerified=true;lot.working=true;lot.authentic=true;lot.condition=0.9
  var a_uid: String=placement.inventory[0].uid;var b_uid: String=placement.inventory[1].uid
