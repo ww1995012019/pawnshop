@@ -188,9 +188,9 @@ func run() -> void:
 	warehouse.select(long_item.uid)
 	bridge.command({"type":"rotate_warehouse", "uid":long_item.uid})
 	var grid = warehouse.grid
-	grid_drag(grid, Vector2(36, 36), Vector2(108, 36))
+	grid_drag(grid, Vector2.ONE*warehouse.CELL*0.5, Vector2(warehouse.CELL*1.5,warehouse.CELL*0.5))
 	check(not game.item(long_item.uid).rotated and bridge.snapshot().get("warehouse_rotation_pending", false), "an invalid drop preserves the item and prepared direction")
-	grid_drag(grid, Vector2(36, 36), Vector2(396, 396))
+	grid_drag(grid, Vector2.ONE*warehouse.CELL*0.5, Vector2.ONE*warehouse.CELL*5.5)
 	var placed = game.item(long_item.uid)
 	check(placed.rotated and placed.x == 5 and placed.y == 5, "drag commits the prepared rotation and new position together")
 	check(not bridge.snapshot().get("warehouse_rotation_pending", true), "a successful drop clears the prepared rotation")

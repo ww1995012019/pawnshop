@@ -334,6 +334,9 @@ func _add_night_controls(s: Dictionary) -> void:
 	var section := UIKit.vbox(10)
 	section.name = "night_insurance"
 	body.add_child(section)
+	var slots=load("res://scripts/ui/pawn_slot_purchase.gd").new()
+	section.add_child(slots)
+	slots.setup()
 	section.add_child(UIKit.module_header("今晚失窃保险", "仅保今晚 · 每天主动购买，不自动续保", "NIGHT / %02d" % int(s.day)))
 	var risk_text := "当前失窃概率 %.2f%%。" % (NightCrime.theft_chance_bp(s)/100.0)
 	if int(s.day)<3:

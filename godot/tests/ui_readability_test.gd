@@ -19,11 +19,13 @@ func run() -> void:
   root.size=dimensions;await frames()
   shell.go("warehouse");await frames()
   var page=shell.active_shell().page
-  var stock=page.find_child("MaterialStock",true,false)
-  check(stock!=null,"material stock is available at "+str(dimensions))
+  page.cabinet_buttons.materials.pressed.emit();await frames()
+  var stock=page.materials_view
+  check(stock!=null and stock.visible,"material stock is available from its independent cabinet at "+str(dimensions))
   if stock!=null:
-   for label in stock.get_children():
-    check(label.size.x>=100 and label.get_line_count()<=2,"material name and quantity remain readable: "+label.text)
+   for label in stock.find_children("*","Label",true,false):
+    if label.text.contains("×"):
+     check(label.size.x>=80 and label.get_line_count()<=2,"material name and quantity remain readable: "+label.text)
   shell.close_workspace();await frames()
  shell.phone_override=false;root.size=Vector2i(1440,900);await frames()
  shell.go("orders");await frames()

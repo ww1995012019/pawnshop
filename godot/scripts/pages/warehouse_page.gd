@@ -2,9 +2,9 @@ extends Page
 ## Back room: an expandable storage grid you drag goods around (right-click rotates),
 ## the display shelf, the isolation locker and pawn safe, and item actions.
 
-const CELL := 72.0
-const DETAIL_WIDTH := 520.0
-const PANEL_GAP := 18.0
+const CELL := 56.0
+const DETAIL_WIDTH := 440.0
+const PANEL_GAP := 10.0
 const Commerce = preload("res://scripts/model/commerce.gd")
 
 var grid: StorageGrid
@@ -15,6 +15,20 @@ var holder: PanelContainer
 var holder_contents: VBoxContainer
 var storage_header: VBoxContainer
 var detail_panel: PanelContainer
+var display_panel: PanelContainer
+var display_scroll: ScrollContainer
+var display_grid
+var grid_scroll: ScrollContainer
+var cabinet_scroll: ScrollContainer
+var cabinet_grid
+var materials_view: VBoxContainer
+var display_count: Label
+var cabinet_buttons := {}
+var cabinet_mode := "warehouse"
+var scroll_positions := {}
+var expand_button: Button
+var cabinet_drag_uid := ""
+var cabinet_drag_preview:TextureRect
 
 func scene_name() -> String:
 	return "warehouse"
@@ -38,136 +52,167 @@ func toast_rect() -> Rect2:
 	return Rect2(r.position.x + (r.size.x - 640.0) * 0.5, r.end.y - 230.0, 640, 220)
 
 func enter() -> void:
-	holder = UIKit.plate()
-	add_child(holder)
-	var holder_scroll := ScrollContainer.new()
-	holder_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	holder_scroll.follow_focus = true
-	holder_scroll.custom_minimum_size.x = 0 if shell.mobile_mode() else CELL * 10
-	if shell.mobile_mode(): holder_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	holder.add_child(holder_scroll)
-	var v := UIKit.vbox(10)
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	holder_contents = v
-	holder_scroll.add_child(v)
-	storage_header = UIKit.vbox(0)
-	v.add_child(storage_header)
-	grid = StorageGrid.new()
-	grid.page = self
-	# Empty cells must let touch drags reach the enclosing scroll container;
-	# dragging an occupied cell is still handled by the grid itself.
-	grid.mouse_filter = Control.MOUSE_FILTER_PASS
-	grid.custom_minimum_size = Vector2(CELL * 10, CELL * ShopUpgrades.storage_rows(Game.state))
-	v.add_child(grid)
-	lists = UIKit.vbox(7)
-	v.add_child(lists)
-	holder.size = Vector2(CELL * 10 + 40, 0)
-	detail_panel = UIKit.plate()
-	add_child(detail_panel)
-	var sc := ScrollContainer.new()
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	detail = UIKit.vbox(12)
-	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# Keep printed edges and right-aligned serials clear of the scroll rail.
-	var scroll_gutter := MarginContainer.new()
-	scroll_gutter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll_gutter.add_theme_constant_override("margin_right", 4 if shell.mobile_mode() else 14)
-	scroll_gutter.add_child(detail)
-	sc.add_child(scroll_gutter)
-	detail_panel.add_child(sc)
-	# Only stock in our storage; the visitor's lot at the counter is not ours.
-	selected = Game.focus_uid if Model.find_inventory(Game.state, Game.focus_uid) != null else ""
-	_refresh()
-	relayout()
+	display_panel=UIKit.plate()
+	display_panel.name="WarehouseDisplay"
+	add_child(display_panel)
+	var display_body:=UIKit.vbox(6);display_panel.add_child(display_body)
+	display_count=UIKit.label("",16,UIKit.AMBER,true,true);display_body.add_child(display_count)
+	display_scroll=ScrollContainer.new();display_scroll.name="DisplayScroll"
+	display_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	display_scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;display_scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	display_body.add_child(display_scroll)
+	display_grid=load("res://scripts/ui/warehouse_location_grid.gd").new();display_grid.setup(self,"display");display_scroll.add_child(display_grid)
+	display_body.add_child(UIKit.label("拖入上架 · 拖回后仓",13,UIKit.MUTED,false,true))
+	holder=UIKit.plate();holder.name="WarehouseStorage";add_child(holder)
+	var body:=UIKit.vbox(6);holder_contents=body;holder.add_child(body)
+	var title_row:=UIKit.hbox(4);body.add_child(title_row)
+	storage_header=UIKit.vbox(0);storage_header.size_flags_horizontal=Control.SIZE_EXPAND_FILL;title_row.add_child(storage_header)
+	expand_button=UIKit.button("扩仓","primary",Vector2(58,34),15)
+	expand_button.icon=load("res://assets/ui/warehouse-expand.svg");expand_button.expand_icon=true
+	expand_button.add_theme_constant_override("icon_max_width",20)
+	expand_button.name="warehouse_expand";expand_button.tooltip_text="扩仓条件与所需交付原表"
+	expand_button.pressed.connect(func():shell.open_warehouse_expansion());title_row.add_child(expand_button)
+	var surfaces:=UIKit.hbox(5);surfaces.size_flags_vertical=Control.SIZE_EXPAND_FILL;body.add_child(surfaces)
+	var center:=UIKit.vbox(0);center.size_flags_horizontal=Control.SIZE_EXPAND_FILL;center.size_flags_vertical=Control.SIZE_EXPAND_FILL;surfaces.add_child(center)
+	grid_scroll=ScrollContainer.new();grid_scroll.name="WarehouseGridScroll";grid_scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL;grid_scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	grid_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;grid_scroll.follow_focus=true;center.add_child(grid_scroll)
+	grid=StorageGrid.new();grid.page=self;grid.mouse_filter=Control.MOUSE_FILTER_PASS;grid_scroll.add_child(grid)
+	cabinet_scroll=ScrollContainer.new();cabinet_scroll.name="CabinetScroll";cabinet_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	cabinet_scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL;cabinet_scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;center.add_child(cabinet_scroll)
+	var cabinet_body:=UIKit.vbox(6);cabinet_body.size_flags_horizontal=Control.SIZE_EXPAND_FILL;cabinet_scroll.add_child(cabinet_body)
+	cabinet_grid=load("res://scripts/ui/warehouse_location_grid.gd").new();cabinet_grid.setup(self,"isolation");cabinet_body.add_child(cabinet_grid)
+	materials_view=UIKit.vbox(5);materials_view.size_flags_horizontal=Control.SIZE_EXPAND_FILL;cabinet_body.add_child(materials_view)
+	var rail:=UIKit.vbox(4);surfaces.add_child(rail)
+	for spec in [["warehouse","后仓"],["materials","材料"],["isolation","隔离"],["pawn","抵押"]]:
+		var mode:String=spec[0]
+		var key:=UIKit.button(spec[1],"secondary",Vector2(42,36),14);key.name="cabinet_"+mode
+		key.pressed.connect(func():switch_cabinet(mode));rail.add_child(key);cabinet_buttons[mode]=key
+	lists=UIKit.vbox(3);body.add_child(lists)
+	detail_panel=UIKit.plate();detail_panel.name="WarehouseDetails";add_child(detail_panel)
+	var sc:=ScrollContainer.new();sc.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	detail=UIKit.vbox(7);detail.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	var gutter:=MarginContainer.new();gutter.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	gutter.add_theme_constant_override("margin_right",4 if shell.mobile_mode() else 10);gutter.add_child(detail);sc.add_child(gutter);detail_panel.add_child(sc)
+	selected=Game.focus_uid if Model.find_inventory(Game.state,Game.focus_uid)!=null else ""
+	set_process(true);_refresh();relayout()
 
 func _refresh() -> void:
-	var rows := ShopUpgrades.storage_rows(Game.state)
-	var grid_hint := "10 × %d  /  %s" % [rows,"拖动换位 · 点选后旋转" if shell._landscape_phone() else "拖动换位 · 右键旋转"]
+	var title:String={"warehouse":"手表后仓","materials":"工具材料","isolation":"隔离保管","pawn":"抵押保管"}[cabinet_mode]
 	UIKit.clear(storage_header)
-	storage_header.add_child(UIKit.module_header("货物保管区", grid_hint, "STORAGE / %d" % [rows * 10]))
-	grid.rebuild()
-	_lists()
-	_detail()
-	call_deferred("_resize_panels")
+	var caption: String="%d × %d · 拖动换位"%[WarehouseExpansion.columns(Game.state),WarehouseExpansion.rows(Game.state)] if cabinet_mode=="warehouse" else "独立仓位 · 点击查看原物"
+	storage_header.add_child(UIKit.label(title,18,UIKit.AMBER,true,true));storage_header.add_child(UIKit.label(caption,13,UIKit.MUTED,false,true))
+	grid.rebuild();_lists();_detail();call_deferred("_resize_panels")
 
-## Called by the shell after it updates its HUD and navigation geometry.
+func switch_cabinet(mode: String) -> void:
+	if not cabinet_buttons.has(mode):return
+	scroll_positions[cabinet_mode]=Vector2(cabinet_scroll.scroll_horizontal,cabinet_scroll.scroll_vertical)
+	cabinet_mode=mode
+	_refresh()
+	var point:Vector2=scroll_positions.get(mode,Vector2.ZERO)
+	cabinet_scroll.set_deferred("scroll_vertical",int(point.y))
+
 func relayout() -> void:
-	if not is_instance_valid(holder) or not is_instance_valid(detail_panel):
-		return
-	var r: Rect2 = shell.content_rect()
-	if shell.landscape_mode():
-		holder.position = r.position
-		detail_panel.position = Vector2(r.position.x+r.size.x*.54+8,r.position.y)
-		_resize_panels()
-		return
-	if shell.portrait_mode():
-		holder.position = r.position
-		detail_panel.position = r.position + Vector2(0,r.size.y*0.43+8)
-		_resize_panels()
-		return
-	var holder_w := holder.get_combined_minimum_size().x
-	var group_width := holder_w + PANEL_GAP + DETAIL_WIDTH
-	var left := r.position.x + maxf(0.0, (r.size.x - group_width) * 0.5)
-	holder.position = Vector2(left, r.position.y)
-	detail_panel.position = Vector2(left + holder_w + PANEL_GAP, r.position.y)
+	if not is_instance_valid(holder):return
 	_resize_panels()
 
-## Keep the work surfaces close to their contents instead of stretching down to
-## the navigation bar. Long item details stay reachable through their scroller.
 func _resize_panels() -> void:
-	if not is_instance_valid(holder) or not is_instance_valid(detail_panel):
-		return
-	var available: float = shell.content_rect().size.y
-	if shell.landscape_mode():
-		var r: Rect2 = shell.content_rect()
-		holder.size = Vector2(r.size.x*.54,r.size.y)
-		detail_panel.size = Vector2(r.size.x*.46-8,r.size.y)
-		return
+	if not is_instance_valid(holder):return
+	var r:Rect2=shell.content_rect()
+	var gap:float=6 if shell.mobile_mode() else PANEL_GAP
+	var left_width:float=maxf(114,floorf(r.size.x*(0.21 if shell.mobile_mode() else 0.19)))
 	if shell.portrait_mode():
-		var r: Rect2 = shell.content_rect()
-		holder.size = Vector2(r.size.x,r.size.y*0.43)
-		detail_panel.size = Vector2(r.size.x,r.size.y*0.57-8)
-		return
-	# On a short landscape screen the grid and location lists must scroll
-	# together rather than extend under the drawer's bottom edge.
-	var holder_style: StyleBox = holder.get_theme_stylebox("panel")
-	var holder_pad := holder_style.get_content_margin(SIDE_TOP) + holder_style.get_content_margin(SIDE_BOTTOM)
-	var holder_height := minf(available, holder_contents.get_combined_minimum_size().y + holder_pad + 4.0)
-	holder.size = Vector2(holder.get_combined_minimum_size().x, holder_height)
-	var style: StyleBox = detail_panel.get_theme_stylebox("panel")
-	var pad := style.get_content_margin(SIDE_TOP) + style.get_content_margin(SIDE_BOTTOM)
-	var detail_height := clampf(detail.get_combined_minimum_size().y + pad + 4.0, 240.0, minf(700.0, available))
-	detail_panel.size = Vector2(DETAIL_WIDTH, detail_height)
+		var top_height:float=r.size.y*0.43
+		display_panel.position=r.position;display_panel.size=Vector2(left_width,top_height)
+		holder.position=r.position+Vector2(left_width+gap,0);holder.size=Vector2(r.size.x-left_width-gap,top_height)
+		detail_panel.position=r.position+Vector2(0,top_height+gap);detail_panel.size=Vector2(r.size.x,r.size.y-top_height-gap)
+	else:
+		var detail_width:float=r.size.x*(0.41 if shell.mobile_mode() else 0.31)
+		var middle:float=r.size.x-left_width-detail_width-gap*2
+		display_panel.position=r.position;display_panel.size=Vector2(left_width,minf(r.size.y,350 if not shell.mobile_mode() else r.size.y))
+		holder.position=r.position+Vector2(left_width+gap,0);holder.size=Vector2(middle,r.size.y)
+		detail_panel.position=r.position+Vector2(left_width+middle+gap*2,0);detail_panel.size=Vector2(detail_width,r.size.y)
+	var target_columns:=2 if shell.mobile_mode() else 4
+	if display_grid.columns!=target_columns:display_grid.rebuild()
 
 func _lists() -> void:
-	UIKit.clear(lists)
-	for spec in [["display", "陈列架", 24], ["isolation", "隔离柜", 12], ["pawn", "抵押保管柜", 16]]:
-		var items := []
-		for it in Game.state.inventory:
-			if it.location == spec[0]:
-				items.append(it)
-		var row := UIKit.hbox(8)
-		var caption := UIKit.label("%s\n%d / %d" % [spec[1], items.size(), spec[2]], 15, UIKit.MUTED)
-		caption.custom_minimum_size.x = 116
-		row.add_child(caption)
-		var sc := ScrollContainer.new()
-		sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		var items_row := UIKit.hbox(8)
-		sc.add_child(items_row)
-		row.add_child(sc)
-		for it in items:
-			var b := UIKit.button("", "primary" if it.uid == selected else "chip", Vector2(52, 52))
-			b.icon = UIKit.physical_icon(it)
-			b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			b.expand_icon = true
-			UIKit.decorate_item(b, it, 16.0)
-			b.tooltip_text = GameData.def(it.defId).name + (" · 改装 / 已加工" if UIKit.is_modified(it) else "")
-			var uid: String = it.uid
-			b.pressed.connect(func(): select(uid))
-			items_row.add_child(b)
-		lists.add_child(row)
-	_document_inventory()
+	var shown:Array=Game.state.inventory.filter(func(it):return it.location=="display")
+	display_count.text="展示柜 %d / %d"%[shown.size(),WarehouseExpansion.capacity(Game.state,"display")]
+	display_grid.rebuild()
+	grid_scroll.visible=cabinet_mode=="warehouse";cabinet_scroll.visible=cabinet_mode!="warehouse"
+	cabinet_grid.visible=cabinet_mode in ["isolation","pawn"];materials_view.visible=cabinet_mode in ["materials","pawn"]
+	if cabinet_grid.visible:
+		cabinet_grid.location=cabinet_mode;cabinet_grid.rebuild()
+	UIKit.clear(materials_view)
+	if cabinet_mode=="materials":
+		var kinds:=0
+		for value in Game.state.materials.values():
+			if float(value)>0:kinds+=1
+		materials_view.add_child(UIKit.label("材料 %d / %d 种"%[kinds,WarehouseExpansion.capacity(Game.state,"materials")],15,UIKit.CYAN,false,true))
+		for m in GameData.materials:
+			var row:=UIKit.hbox(5)
+			row.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+			var picture:=TextureRect.new();picture.texture=material_texture(String(m.id))
+			picture.custom_minimum_size=Vector2(24,24);picture.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;picture.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;row.add_child(picture)
+			var caption:=UIKit.label("%s ×%s"%[m.name,Model.jnum(Game.state.materials.get(m.id,0))],14,UIKit.TEXT,false,true)
+			caption.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+			row.add_child(caption);materials_view.add_child(row)
+		materials_view.add_child(UIKit.label("检验工具：放大镜 · 紫外线 · 称重
+工具不占材料种类仓位。",14,UIKit.MUTED,false,true))
+	if cabinet_mode=="pawn":
+		var purchase=load("res://scripts/ui/pawn_slot_purchase.gd").new();materials_view.add_child(purchase);purchase.setup()
+	for mode in cabinet_buttons:
+		cabinet_buttons[mode].modulate=UIKit.AMBER if mode==cabinet_mode else Color.WHITE
+	UIKit.clear(lists);_document_inventory()
+
+func material_texture(id: String) -> AtlasTexture:
+	var texture:=AtlasTexture.new();texture.atlas=UIKit.tex("res://assets/ui/materials.png")
+	var index:=clampi(int(id.trim_prefix("MAT-"))-1,0,12);var cell:Vector2=texture.atlas.get_size()/4.0
+	texture.region=Rect2(Vector2(index%4,index/4)*cell,cell)
+	return texture
+
+func store_original(uid: String,location: String,point: Variant=null,rotated: Variant=null) -> void:
+	var action:Dictionary={"type":"STORE_ITEM","uid":uid,"location":location}
+	if point!=null:action.merge({"x":int(point.x),"y":int(point.y)})
+	if rotated!=null:action.rotated=rotated
+	Game.dispatch(action)
+
+func begin_cabinet_drag(uid: String) -> void:
+	cabinet_drag_uid=uid
+	cabinet_drag_preview=TextureRect.new()
+	cabinet_drag_preview.texture=UIKit.physical_icon(Game.item(uid))
+	cabinet_drag_preview.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+	cabinet_drag_preview.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	cabinet_drag_preview.size=Vector2(48,64)
+	cabinet_drag_preview.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	cabinet_drag_preview.modulate.a=0.8
+	cabinet_drag_preview.z_index=200
+	add_child(cabinet_drag_preview)
+
+func update_cabinet_drag(point: Vector2) -> void:
+	if is_instance_valid(cabinet_drag_preview):cabinet_drag_preview.position=point-Vector2(24,32)
+
+func finish_cabinet_drag(uid: String,point: Vector2) -> void:
+	cabinet_drag_uid=""
+	if is_instance_valid(cabinet_drag_preview):cabinet_drag_preview.queue_free()
+	if grid_scroll.visible and grid_scroll.get_global_rect().has_point(point):
+		var local:Vector2=grid.get_global_transform_with_canvas().affine_inverse()*point
+		store_original(uid,"warehouse",grid._cell(local))
+	elif display_panel.get_global_rect().has_point(point):store_original(uid,"display")
+	elif cabinet_scroll.visible and cabinet_mode=="isolation" and cabinet_scroll.get_global_rect().has_point(point):store_original(uid,"isolation")
+
+func _process(delta: float) -> void:
+	if grid==null:return
+	var manual:bool=grid.drag_uid!="" and grid.moved
+	if not manual and cabinet_drag_uid=="":return
+	var pointer:=get_global_mouse_position()
+	for scroller in [grid_scroll,display_scroll,cabinet_scroll]:
+		if not scroller.visible or not scroller.get_global_rect().has_point(pointer):continue
+		var box:Rect2=scroller.get_global_rect()
+		if pointer.x<box.position.x+24:scroller.scroll_horizontal-=ceili(180*delta)
+		elif pointer.x>box.end.x-24:scroller.scroll_horizontal+=ceili(180*delta)
+		if pointer.y<box.position.y+24:scroller.scroll_vertical-=ceili(180*delta)
+		elif pointer.y>box.end.y-24:scroller.scroll_vertical+=ceili(180*delta)
+	if manual:grid._update_ghost(grid.get_local_mouse_position())
 
 func _document_inventory() -> void:
 	if not WantedCases.has_notice(Game.state): return
@@ -214,7 +259,7 @@ func can_rotate_selected() -> bool:
 	if Model.can_place(Game.state, it.uid, it.x, it.y, next):
 		return true
 	for y in ShopUpgrades.storage_rows(Game.state):
-		for x in 10:
+		for x in WarehouseExpansion.columns(Game.state):
 			if Model.can_place(Game.state, it.uid, x, y, next):
 				return true
 	return false
@@ -246,7 +291,7 @@ func rotate_selected() -> void:
 	shell.sound("click", -8)
 
 func _act(g: GridContainer, text: String, kind: String, a, enabled := true, tip := "") -> void:
-	var b := UIKit.button(text, kind, Vector2(0, 54), 19)
+	var b := UIKit.button(text, kind, Vector2(0, 44), 15 if shell.mobile_mode() else 17)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.disabled = not enabled
 	b.tooltip_text = tip
@@ -443,16 +488,7 @@ func _shelf_block(it: Dictionary, reserved: bool) -> String:
 	return ""
 
 func _stock_summary() -> void:
-	detail.add_child(UIKit.rule())
-	detail.add_child(UIKit.module_header("工具柜存料", "完成维修时扣除", "SUPPLIES"))
-	var mats := UIKit.grid(2 if not shell.mobile_mode() else 1, 4)
-	mats.name = "MaterialStock"
-	mats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	detail.add_child(mats)
-	for m in GameData.materials:
-		var row := UIKit.label("%s  ×%s" % [m.name, Model.jnum(Game.state.materials.get(m.id, 0))], 16, UIKit.TEXT, false, true)
-		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		mats.add_child(row)
+	detail.add_child(UIKit.label("工具材料已移至后仓右侧「材料」按钮。",14,UIKit.MUTED,false,true))
 
 func on_changed(_p: Dictionary, _n: Dictionary, _a: Dictionary) -> void:
 	if Game.item(selected) == null:
@@ -476,6 +512,7 @@ class StorageGrid extends Control:
 	var ghost: TextureRect
 	var scroll_touch := -1
 	var scroll_touch_y := 0.0
+	var scroll_touch_x := 0.0
 
 	func cursor_at(at_position: Vector2) -> int:
 		if drag_uid != "":
@@ -483,7 +520,7 @@ class StorageGrid extends Control:
 		return Input.CURSOR_CAN_DROP if _uid_at(at_position) != "" else Input.CURSOR_ARROW
 
 	func rebuild() -> void:
-		custom_minimum_size = Vector2(page.CELL * 10, page.CELL * ShopUpgrades.storage_rows(Game.state))
+		custom_minimum_size = Vector2(page.CELL * WarehouseExpansion.columns(Game.state), page.CELL * ShopUpgrades.storage_rows(Game.state))
 		for c in get_children():
 			c.queue_free()
 		tiles.clear()
@@ -523,6 +560,7 @@ class StorageGrid extends Control:
 			if touch.pressed and scroll_touch < 0 and _uid_at(touch.position) == "":
 				scroll_touch = touch.index
 				scroll_touch_y = (get_global_transform_with_canvas() * touch.position).y
+				scroll_touch_x = (get_global_transform_with_canvas() * touch.position).x
 				accept_event()
 			elif not touch.pressed and touch.index == scroll_touch:
 				scroll_touch = -1
@@ -531,8 +569,11 @@ class StorageGrid extends Control:
 		if e is InputEventScreenDrag and (e as InputEventScreenDrag).index == scroll_touch:
 			var drag := e as InputEventScreenDrag
 			var current_y := (get_global_transform_with_canvas() * drag.position).y
-			var scroller := page.holder.get_child(0) as ScrollContainer
+			var current_x := (get_global_transform_with_canvas() * drag.position).x
+			var scroller:ScrollContainer=page.grid_scroll
 			scroller.scroll_vertical -= roundi(current_y - scroll_touch_y)
+			scroller.scroll_horizontal -= roundi(current_x - scroll_touch_x)
+			scroll_touch_x = current_x
 			scroll_touch_y = current_y
 			accept_event()
 			return
@@ -563,6 +604,8 @@ class StorageGrid extends Control:
 					tiles[uid].modulate.a = 1.0
 				if not moved:
 					page.select(uid)
+				elif page.display_panel.get_global_rect().has_point(get_global_transform_with_canvas()*mb.position):
+					page.store_original(uid,"display")
 				else:
 					var tl: Vector2 = ((mb.position - drag_offset) / page.CELL).round()
 					var it = Game.item(uid)
@@ -617,7 +660,7 @@ class StorageGrid extends Control:
 		var cs: float = page.CELL
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.03, 0.05, 0.06, 0.88))
 		for y in ShopUpgrades.storage_rows(Game.state):
-			for x in 10:
+			for x in WarehouseExpansion.columns(Game.state):
 				draw_rect(Rect2(Vector2(x, y) * cs + Vector2(2, 2), Vector2(cs, cs) - Vector2(4, 4)), Color(0.09, 0.13, 0.14, 0.9))
 		for it in Game.state.inventory:
 			if it.location != "warehouse":

@@ -275,6 +275,8 @@ static func _reduce(previous: Dictionary, action: Dictionary) -> Dictionary:
 			return _message(previous, "商人携带的这种材料不足。")
 		if previous.materials.get(id, 0) + qty > 99999:
 			return _message(previous, "材料库存已满，本次没有购买。")
+		var capacity_problem := WarehouseExpansion.material_problem(previous,id)
+		if capacity_problem!="": return _message(previous,capacity_problem)
 		var before: float = previous.materials.get(id, 0)
 		var next := Model.reduce(previous, action)
 		if next.materials.get(id, 0) == before + qty:

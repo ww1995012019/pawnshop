@@ -21,7 +21,9 @@ func model_helpers() -> void:
 	s.inventory.append(it)
 	check(not Model.can_place(s,it.uid,0,6),"base model placement retains six warehouse rows")
 	s.shopUpgrades = {"version":1,"extension":"storage"}
-	check(Model.can_place(s,it.uid,0,6),"storage extension enables model placement in added rows")
+	s.erase("storageExpansion")
+	WarehouseExpansion.ensure(s)
+	check(Model.can_place(s,it.uid,10,0),"legacy storage extension migrates placement into added columns")
 	s.inventory.clear()
 	var dimensions := Model.dimensions(it)
 	for y in range(0,6,int(dimensions[1])):
@@ -32,7 +34,7 @@ func model_helpers() -> void:
 			s.inventory.append(block)
 	var spare := Model.new_item(s,"WCH-001")
 	var position = Model.empty_cell(s,spare)
-	check(position != null and position.y == 6,"storage packing searches added rows after base rows fill")
+	check(position != null and position.x == 10,"storage packing searches added columns after old columns fill")
 	s.shopUpgrades.extension = "workshop"
 	s.phase = "report"
 	s.report = {"cash":s.cash}
@@ -56,17 +58,17 @@ func run() -> void:
 	var initial := JSON.stringify(s)
 	check(upgrades.reduce(s,{"type":"NO_EXTENSION_ACTION"}) == null and JSON.stringify(s) == initial,"unknown actions are unhandled without mutation")
 	var cards: Array = upgrades.options(s)
-	check(cards.size() == 3 and JSON.stringify(s) == initial,"three extension previews do not mutate")
+	check(cards.size() == 2 and JSON.stringify(s) == initial,"two specialty extension previews do not mutate")
 	for card in cards:
 		check(card.availability and card.problem == "" and card.name != "" and card.effect.contains("只能选择一项") and card.effect.contains("永久"),"%s clearly describes permanent exclusive choice" % card.id)
 	check(upgrades.storage_rows(s) == 6 and upgrades.daily_ap(s) == 12 and upgrades.sale_multiplier(s,s.inventory[0]) == 1.0,"unselected campaign keeps all base effects")
 	unchanged_failure(s,"unknown","unknown ID fails atomically")
 	var early := s.duplicate(true)
 	early.day = 2
-	unchanged_failure(early,"storage","day2 purchase fails atomically")
+	unchanged_failure(early,"workshop","day2 purchase fails atomically")
 	var poor := s.duplicate(true)
-	poor.cash = 239
-	unchanged_failure(poor,"storage","insufficient cash fails atomically")
+	poor.cash = 299
+	unchanged_failure(poor,"workshop","insufficient cash fails atomically")
 	var visitor := s.duplicate(true)
 	visitor.trade = {"id":"visitor","kind":"buy"}
 	unchanged_failure(visitor,"workshop","active visitor blocks purchase atomically")
@@ -83,7 +85,7 @@ func run() -> void:
 	closed.phase = "report"
 	closed.report = null
 	unchanged_failure(closed,"display","unsettled report cannot buy")
-	var costs := {"storage":240,"workshop":300,"display":280}
+	var costs := {"workshop":300,"display":280}
 	for id in costs:
 		var previous := ready()
 		previous.upgrades.lamp = true
@@ -94,8 +96,8 @@ func run() -> void:
 		check(bought.shopUpgrades.extension == id and bought.ledger.size() == previous.ledger.size()+1 and bought.ledger.back().kind == "upgrade" and bought.ledger.back().amount == -costs[id],"%s purchase posts exactly one upgrade ledger entry" % id)
 		check(bought.inventory == previous.inventory and bought.materials == previous.materials and bought.upgrades == previous.upgrades,"%s preserves originals, stock, materials, and independent upgrades" % id)
 		unchanged_failure(loaded(bought),id,"%s duplicate request cannot spend twice after reload" % id)
-		unchanged_failure(loaded(bought),"display" if id != "display" else "storage","%s permanently excludes the other extensions" % id)
-		check(upgrades.storage_rows(loaded(bought)) == (8 if id == "storage" else 6) and upgrades.daily_ap(loaded(bought)) == (14 if id == "workshop" else 12),"%s retained effects survive reload" % id)
+		unchanged_failure(loaded(bought),"display" if id != "display" else "workshop","%s permanently excludes the other specialty" % id)
+		check(upgrades.storage_rows(loaded(bought)) == 6 and upgrades.daily_ap(loaded(bought)) == (14 if id == "workshop" else 12),"%s retained effects survive reload" % id)
 		check(upgrades.sale_multiplier(bought,bought.inventory[0]) == (1.08 if id == "display" else 1.0),"%s has only its intended sale effect" % id)
 	var settled := Model.reduce(ready(),{"type":"SETTLE"})
 	var paid: Dictionary = upgrades.reduce(settled,{"type":"BUY_SHOP_EXTENSION","id":"display"})

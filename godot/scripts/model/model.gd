@@ -128,14 +128,14 @@ static func can_place(s: Dictionary, uid: String, x, y, rotated = null) -> bool:
 	if float(x) != floor(float(x)) or float(y) != floor(float(y)):
 		return false
 	var d := dimensions(it, it.rotated if rotated == null else rotated)
-	if x < 0 or y < 0 or x + d[0] > 10 or y + d[1] > Extensions.storage_rows(s):
+	if x < 0 or y < 0 or x + d[0] > Extensions.storage_columns(s) or y + d[1] > Extensions.storage_rows(s):
 		return false
 	return not _overlaps(s, uid, int(x), int(y), d[0], d[1])
 
 static func empty_cell(s: Dictionary, it: Dictionary):
 	var d := dimensions(it)
 	for y in range(0, Extensions.storage_rows(s) - d[1] + 1):
-		for x in range(0, 10 - d[0] + 1):
+		for x in range(0, Extensions.storage_columns(s) - d[0] + 1):
 			if not _overlaps(s, it.uid, x, y, d[0], d[1]):
 				return {"x": x, "y": y}
 	return null
@@ -649,6 +649,7 @@ static func create(seed := "ORBITAL-P0") -> Dictionary:
 		"inventory": [], "trade": null, "cursor": 0, "ledger": [], "completedTrades": [], "orders": orders, "materials": mats, "events": [], "repairProgress": {},
 		"scanned": [], "inspection": "announced", "upgrades": {"lamp": false, "shelf": false}, "report": null,
 		"storeCosts": {"version": 1, "fromDay": 1}, "notice": "回环九号旧港重新点灯。先接待来客，对照说明书检验手表，再安排维护和订单。", "nextId": 1, "tutorial": 0}
+	s.storageExpansion = WarehouseExpansion.default_state()
 	for id in ["WCH-001", "WCH-002", "WCH-003", "WCH-010", "WCH-011", "WCH-014"]:
 		var it := new_item(s, id, {"condition": 0.55 if id == "WCH-001" else 0.85, "working": id != "WCH-001", "source": "前任店主移交清单 / 所有权已核对", "cost": jround(D(id).value * 0.28)})
 		put_in(s, it)
@@ -994,8 +995,8 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			for i in s.inventory:
 				if i.location == "pawn":
 					pawned += 1
-			if pawned >= 16:
-				return notice(s, "抵押保管柜16格已满。")
+			if pawned >= WarehouseExpansion.capacity(s,"pawn"):
+				return notice(s, "抵押保管柜已满，可在保险处购买永久仓位。")
 			if evidence_count(it) < 2:
 				return notice(s, "抵押前须取得两条独立物证。")
 			var ap_est := estimate(it)
@@ -1064,8 +1065,8 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			for i in s.inventory:
 				if i.location == "display":
 					shown += 1
-			if shown >= 24:
-				return notice(s, "24个销售陈列位已满。")
+			if shown >= WarehouseExpansion.capacity(s,"display"):
+				return notice(s, "销售陈列位已满，请扩仓或先下架。")
 			it.location = "display"
 			if s.upgrades.shelf:
 				it.listPrice = jround(D(it.defId).value * sale_appearance(it).condition * 0.9)
@@ -1097,8 +1098,8 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			for i in s.inventory:
 				if i.location == "isolation":
 					isolated += 1
-			if isolated >= 12:
-				return notice(s, "4×3隔离柜已满，请先核验或归还现有货物。")
+			if isolated >= WarehouseExpansion.capacity(s,"isolation"):
+				return notice(s, "隔离柜已满，请扩仓或先核验现有货物。")
 			it.location = "isolation"
 			it.sealed = true
 			if s.inspection == "pending" and inspection_ready(s):
@@ -1279,6 +1280,8 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			return notice(s, "订单盖章：%s，%sCr已到账，原物已交还。" % [def.name, jnum(def.reward)])
 		"BUY_MATERIAL":
 			var m := GameData.material(a.id)
+			var space_problem := WarehouseExpansion.material_problem(s,String(a.id))
+			if space_problem!="": return notice(s,space_problem)
 			if m.is_empty() or float(a.qty) != floor(float(a.qty)) or a.qty < 1 or a.qty > 99:
 				return previous
 			var cost: float = m.price * a.qty

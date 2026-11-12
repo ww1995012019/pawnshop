@@ -291,7 +291,10 @@ func _receipt(receipt: Dictionary) -> void:
 
 func _upgrades() -> void:
 	var upgrades = load("res://scripts/model/shop_upgrades.gd")
-	_text(body,"本轮只能选择一项永久扩建，原有工作灯和陈列架升级仍可独立安排。请按经营路线选择。",UIKit.MUTED,14)
+	var storage:=UIKit.button("仓储扩建 · 五档仓库与展示位","primary",Vector2(0,40),16)
+	storage.pressed.connect(func():host.open_warehouse_expansion())
+	body.add_child(storage)
+	_text(body,"仓储可独立升级五档。维修工坊与精品展区仍只能选择一项永久专精，工作灯和陈列架升级独立安排。",UIKit.MUTED,14)
 	for option in upgrades.options(Game.state):
 		var id: String=option.id
 		var card := _card(String(option.name))

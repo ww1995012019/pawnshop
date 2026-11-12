@@ -52,7 +52,7 @@ var board_rent: Label
 var crate: PanelContainer
 var stock_grid: GridContainer
 var stock_count: Label
-var display_goods: Control
+var display_goods: ScrollContainer
 var orders_readout: Label
 var status_panel: Control
 var status_values := {}
@@ -426,10 +426,13 @@ func _build_crate() -> void:
 func _build_equipment() -> void:
 	_fixture("warehouse", Rect2(200, 735, 320, 300), "仓储 · 隔离柜", func(): shell.go("warehouse"))
 	_fixture("display", Rect2(170, 220, 386, 344), "陈列柜 · 选货", func(): shell.go("warehouse"), false)
-	display_goods = Control.new()
+	display_goods = ScrollContainer.new()
 	display_goods.position = Vector2(170, 220)
 	display_goods.size = Vector2(386, 314)
-	display_goods.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	display_goods.mouse_filter = Control.MOUSE_FILTER_STOP
+	display_goods.name="CounterDisplayScroll"
+	display_goods.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	display_goods.follow_focus=true
 	add_child(display_goods)
 	_fixture("repair", Rect2(1410, 730, 400, 305), "维修工作台", func(): _open_instrument("repair"))
 	# The gauge takes precedence over the surrounding repair station.
@@ -649,23 +652,26 @@ func _refresh_desk() -> void:
 			empty.custom_minimum_size = Vector2(58, 58)
 			empty.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			stock_grid.add_child(empty)
-	# Actual shop-owned goods populate the painted shelves, display goods first.
-	var shown: Array = []
-	for it in items:
-		if it.owner == "shop" and it.location == "display":
-			shown.append(it)
-	for it in items:
-		if it.owner == "shop" and it.location != "display":
-			shown.append(it)
-	for i in mini(shown.size(), 9):
-		var slot := _stock_slot(shown[i], picking, true)
-		slot.position = Vector2(30 + (i % 3) * 124, 17 + (i / 3) * 103)
-		display_goods.add_child(slot)
+	# The physical display holds only originals actually placed on display.
+	var shown:Array=items.filter(func(original):return original.location=="display")
+	var margin:=MarginContainer.new()
+	margin.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	margin.add_theme_constant_override("margin_left",30)
+	margin.add_theme_constant_override("margin_top",17)
+	margin.add_theme_constant_override("margin_right",12)
+	margin.add_theme_constant_override("margin_bottom",10)
+	display_goods.add_child(margin)
+	var stream:=UIKit.grid(3,0)
+	stream.name="CounterDisplayGrid"
+	stream.add_theme_constant_override("h_separation",42)
+	stream.add_theme_constant_override("v_separation",25)
+	margin.add_child(stream)
+	for original in shown:stream.add_child(_stock_slot(original,picking,true))
 	if shown.is_empty():
-		var empty := UIKit.label("陈列架暂空\n点击整理仓储", 21, UIKit.MUTED)
-		empty.position = Vector2(56, 109)
-		empty.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		display_goods.add_child(empty)
+		var empty:=UIKit.label("陈列架暂空\n整理仓储后拖入上架",18,UIKit.MUTED,false,true)
+		empty.custom_minimum_size=Vector2(280,150)
+		empty.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		stream.add_child(empty)
 	if busy and t == null:
 		return
 	var it = Model.trade_item(s) if t != null else null

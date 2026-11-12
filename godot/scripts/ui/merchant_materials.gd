@@ -188,7 +188,9 @@ func _refresh() -> void:
 	focus_targets["sell:" + selected_id] = _sell
 	_buy.text = "购买 %s · %s" % [material.name, UIKit.money(buy_total)]
 	_sell.text = "出售 · %s" % UIKit.money(sell_total)
-	_buy.disabled = available < quantity or _state.cash < buy_total or owned + quantity > 99999
+	var capacity_problem:=WarehouseExpansion.material_problem(_state,selected_id)
+	_buy.disabled = available < quantity or _state.cash < buy_total or owned + quantity > 99999 or capacity_problem!=""
 	_sell.disabled = owned < quantity or _state.cash + sell_total > 1000000000
 	_buy.tooltip_text = "库存不足" if available < quantity else "现金不足" if _state.cash < buy_total else "材料库存已满" if owned + quantity > 99999 else "购买 %d 件，共 %s" % [quantity, UIKit.money(buy_total)]
+	if capacity_problem!="":_buy.tooltip_text=capacity_problem
 	_sell.tooltip_text = "持有数量不足" if owned < quantity else "现金已达到保存上限" if _state.cash + sell_total > 1000000000 else "出售 %d 件，共 %s" % [quantity, UIKit.money(sell_total)]

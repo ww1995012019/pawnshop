@@ -104,6 +104,7 @@ func new_game(seed := "") -> void:
 
 ## Apply an action. Returns true when the state actually changed.
 func ensure_shop_state(s: Dictionary, include_journal := true) -> void:
+	WarehouseExpansion.ensure(s)
 	Life.ensure(s)
 	Market.ensure(s)
 	Extensions.ensure(s)
@@ -118,7 +119,8 @@ func dispatch(a: Dictionary) -> bool:
 	# ledgers as historical receipts. A rejected action keeps the original state.
 	var prepared: Dictionary = prev.duplicate(true)
 	ensure_shop_state(prepared)
-	var next: Variant = Life.reduce(prepared,a)
+	var next: Variant = WarehouseExpansion.reduce(prepared,a)
+	if next == null: next = Life.reduce(prepared,a)
 	if next == null: next = Extensions.reduce(prepared,a)
 	if next == null: next = Crates.reduce(prepared,a)
 	if next == null: next = Stories.reduce(prepared,a)
@@ -132,6 +134,14 @@ func dispatch(a: Dictionary) -> bool:
 	Journal.observe(prepared,next,a)
 	Stories.observe_journal(prepared,next,a)
 	_enrich_shop_feedback(prepared,next,a)
+	if a.get("type","") in ["EXPAND_WAREHOUSE","BUY_PAWN_SLOTS"]:
+		if not load("res://scripts/app/debug_values.gd")._write(SAVE_PATH,next):
+			changed.emit(prev,prev,{"type":"STORAGE_SAVE_FAILED"})
+			return false
+		state=next
+		has_save=true
+		changed.emit(prev,next,a)
+		return true
 	state = next
 	save()
 	changed.emit(prev, next, a)

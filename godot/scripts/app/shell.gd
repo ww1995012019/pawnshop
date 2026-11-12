@@ -832,6 +832,9 @@ func close_workspace() -> void:
 	sound("page", -12, 0.85)
 
 func _on_changed(prev: Dictionary, next: Dictionary, action: Dictionary) -> void:
+	if action.type=="STORAGE_SAVE_FAILED":
+		toast("扩仓保存失败，原表和现金均已保留。")
+		return
 	if action.type in ["DEBUG_EDIT","DEBUG_RESTORE"]:
 		if workspace_mode: return
 		close_workspace()
@@ -1668,6 +1671,18 @@ func open_debug_values() -> void:
 	panel.name = "DebugValuesPanel"
 	m[0].add_child(panel)
 	panel.setup(self)
+
+func open_warehouse_expansion() -> void:
+	if workspace_mode:
+		workspace_parent.open_warehouse_expansion()
+		return
+	if modal_layer.find_child("WarehouseExpansionPanel",true,false)!=null:return
+	WarehouseExpansion.ensure(Game.state)
+	var m:=modal("仓储扩建 · 交付原表",900)
+	var panel=load("res://scripts/ui/warehouse_expansion_panel.gd").new()
+	panel.name="WarehouseExpansionPanel"
+	m[0].add_child(panel)
+	panel.setup(self,m[1])
 
 func _close_title() -> void:
 	if is_instance_valid(title):
