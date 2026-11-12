@@ -67,6 +67,6 @@ Expected: more than20 displayed goods remain accessible; nightly policy expiry n
 
 - [x] Build Web export, run npm test and exported-resource smoke check; visually inspect native drawer, expansion selection and high-capacity scrolling.
 - [x] Obtain fresh whole-branch review, fix material issues with reproducing tests and verify the resulting tree.
-- [ ] Commit, merge main, generate deployment manifests with hashes and previous assets, push main and gh-pages, wait for the exact Pages run to succeed.
+- [x] Commit, merge main, generate deployment manifests with hashes and previous assets, push main and gh-pages, wait for the exact Pages run to succeed.
 
 Expected: complete feature is available at the existing pawnshop GitHub Pages URL, with old saves preserved.
