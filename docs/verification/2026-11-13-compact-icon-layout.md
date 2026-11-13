@@ -14,3 +14,7 @@ Inspection tools use horizontal buttons; repair stock/supplies use icons; cabine
 - Fresh read-only review found no critical or important transaction regressions. Browser verification additionally caught collapsed mobile footer buttons; explicit width regressions now cover that fix.
 
 Some existing Godot tests still log resource-at-exit warnings; the runner treats those separately from script/parse errors.
+
+## Published release
+
+Source: ba8a70a2bb515c91470ca017152c9d946ed35cca. Pages commit: b8338adeb3e3c5b4d3643c1abc5bba4c5c51ccd8. Release3c74952a9b51496b; pack workbench-f535d8fca4369dfa.pck. Exact Pages deployment43359351589 completed successfully. All three final browser viewport runs pass, including exact cash/AP/remaining-original identities and reload. Previous release assets remain available.

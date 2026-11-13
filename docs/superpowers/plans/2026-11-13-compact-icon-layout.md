@@ -11,7 +11,7 @@
 - [x] Benches/storage: horizontal inspection tools, repair icon selection/material counts, consistent square cabinet slots and content-aware display height. Verify drag, rotation and four screen sizes.
 - [x] Management: compact orders, report entry row, parallel plan cards and bulk icons, settings/help entries. Verify financial totals and irreversible wording.
 - [x] Integrate: register regressions, run full native suite, build/export smoke, fresh browser screenshots at1440x900,844x390,390x844 and merchant transaction/persistence checks.
-- [ ] Review current diff against audit, fix important findings, commit main source and publish verified package to gh-pages; verify exact deployment SHA success.
+- [x] Review current diff against audit, fix important findings, commit main source and publish verified package to gh-pages; verify exact deployment SHA success.
 
 ## Review focus
 
