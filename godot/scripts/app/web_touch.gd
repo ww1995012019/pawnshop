@@ -10,9 +10,15 @@ var last_json := ""
 var opening_until := 0
 var visibility_callback: JavaScriptObject
 var background_paused := false
+var _merchant_quote_state: Dictionary = {}
+var _merchant_quote_trade := ""
+var _merchant_quotes: Array = []
+var _merchant_quotes_valid := false
 
 func setup(owner_shell: Node) -> void:
 	shell = owner_shell
+	if not Game.changed.is_connected(_invalidate_merchant_quotes):
+		Game.changed.connect(_invalidate_merchant_quotes)
 	set_process(OS.has_feature("web"))
 	if not OS.has_feature("web"):
 		return
@@ -166,12 +172,7 @@ func snapshot() -> Dictionary:
 			result.merchant_goods = goods
 			var rare = trade.get("rare", null)
 			result.merchant_rare = {"name": GameData.def(rare.defId).name, "price": rare.price} if rare is Dictionary and rare.get("available", false) else null
-			var sellable := []
-			for item in state.inventory:
-				if item.owner == "shop" and not item.has("orderId") and not item.sealed and item.location != "isolation" and item.sourceVerified:
-					sellable.append({"uid": item.uid, "name": GameData.def(item.defId).name,
-						"price": Commerce.recovery_price(state, item)})
-			result.merchant_items = sellable
+			result.merchant_items = _merchant_inventory_quotes(state)
 	if not TradeSession.session(state).is_empty(): result.trade_session=TradeSession.summary(state)
 	if CounterDialogue.active(state):
 		result.table_items=CounterDialogue.table_items(state)
@@ -182,6 +183,29 @@ func snapshot() -> Dictionary:
 		result.can_accept=not line.is_empty() and line.status in ["ready","counter"] and not state.trade.locked
 		result.can_deliver=TradeSession.summary(state).sell_count+TradeSession.summary(state).buy_count>0 and TradeSession.checkout_problem(state)==""
 	return result
+
+func _invalidate_merchant_quotes(_previous: Dictionary, _next: Dictionary, _action: Dictionary) -> void:
+	_merchant_quotes_valid = false
+	_merchant_quote_state = {}
+	_merchant_quotes = []
+
+## Status is polled even with the merchant popup closed. Recovery pricing
+## refreshes journal knowledge, so recomputing every original on every poll
+## becomes quadratic with a large inventory. Quotes only change with state.
+func _merchant_inventory_quotes(state: Dictionary) -> Array:
+	var trade_id := String(state.trade.id)
+	if _merchant_quotes_valid and is_same(state,_merchant_quote_state) and trade_id == _merchant_quote_trade:
+		return _merchant_quotes
+	var sellable := []
+	for item in state.inventory:
+		if item.owner == "shop" and not item.has("orderId") and not item.sealed and item.location != "isolation" and item.sourceVerified:
+			sellable.append({"uid":item.uid,"name":GameData.def(item.defId).name,
+				"price":Commerce.recovery_price(state,item)})
+	_merchant_quote_state = state
+	_merchant_quote_trade = trade_id
+	_merchant_quotes = sellable
+	_merchant_quotes_valid = true
+	return _merchant_quotes
 
 func _screen_rect(control: Control) -> Dictionary:
 	var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1",true)) if OS.has_feature("web") else 1.0
