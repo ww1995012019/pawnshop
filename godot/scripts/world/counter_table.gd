@@ -25,9 +25,16 @@ class DeskCard extends Node2D:
  func show_item_marks(it: Dictionary) -> void:
   if item_marks==null:
    item_marks=Control.new();item_marks.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(item_marks)
-  item_marks.position=Vector2(-width/2,-35)
-  item_marks.size=Vector2(width,64)
   UIKit.decorate_item(item_marks,it,18.0,false)
+ func align_item_marks(sprite: ItemSprite) -> void:
+  if item_marks==null:return
+  # The price tag's generous hit area is independent of the rendered watch.
+  # Follow the body's transform so lifting, flipping and scaling retain the
+  # corner attachment instead of leaving a crest at the edge of the slot.
+  var body_transform:=global_transform.affine_inverse()*sprite.body.global_transform
+  var bounds:Rect2=body_transform*Rect2(-sprite.tex_size()*0.5,sprite.tex_size())
+  item_marks.position=bounds.position
+  item_marks.size=bounds.size
  func area() -> Rect2: return Rect2(Vector2(-width/2,-35),Vector2(width,98))
  func tag_rect() -> Rect2:
   var tag_width:=minf(width,86.0)
@@ -123,7 +130,7 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
   sprite.set_meta("hit_size",Vector2(card.width,98))
   card.caption=""
   card.note=Model.jnum(info.price)+" Cr"
-  card.position=sprite.position;card.queue_redraw()
+  card.position=sprite.position;card.align_item_marks(sprite);card.queue_redraw()
   if fresh and animate and not Game.prefs.reduced_motion:
    var start:=to_local(from);sprite.position=start;sprite.set_meta("arriving",true)
    var tw:=sprite.create_tween()
@@ -192,4 +199,6 @@ func _process(_delta: float) -> void:
    var old=sprites[uid].get_meta("layout_tween") if sprites[uid].has_meta("layout_tween") else null
    if old is Tween and old.is_valid(): old.kill()
    sprites[uid].remove_meta("layout_destination")
-  if cards.has(uid): cards[uid].position=sprites[uid].position
+  if cards.has(uid):
+   cards[uid].position=sprites[uid].position
+   cards[uid].align_item_marks(sprites[uid])
