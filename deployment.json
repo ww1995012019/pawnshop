@@ -1,8 +1,8 @@
 {
-  "source_commit": "9312159ee6c13faebc02820b6537aca2bcd1caf6",
-  "release_id": "f54d7f45360fe349",
-  "pack": "workbench-3449b2df6a840bf2.pck",
-  "html_sha256": "f1b37fba04f3cb029a81bd45ffd06ee04d36930e3d461f47d2e452292dcfa066",
+  "source_commit": "f27f680b914916fee41dd6a27a0c6c4288dd2c42",
+  "release_id": "e96222a8c0849f32",
+  "pack": "workbench-890dd85c2655e2f5.pck",
+  "html_sha256": "ca3e55fe504e3dc35c6851aa7f45955c2ffa7b4a93bc3f32457acb17afabafa8",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -165,5 +165,6 @@
   "warehouse_rows": 6,
   "display_capacity_max": 130,
   "pawn_slot_cash": 5,
-  "pawn_slots_permanent": true
+  "pawn_slots_permanent": true,
+  "flat_action_buttons_version": 1
 }
