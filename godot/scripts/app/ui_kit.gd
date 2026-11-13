@@ -107,19 +107,21 @@ const KEY_TINT := {"primary": Color(1, 1, 1), "secondary": Color(0.92, 0.95, 1.0
 ## compact: icon-only keys and small tiles use the thin xs rim and tight
 ## padding, so the icon or label fills the key instead of a heavy frame.
 static func key_style(kind: String, state: String, compact := false) -> StyleBox:
-	var tint: Color = KEY_TINT.get(kind, Color.WHITE)
+	var fill := Color("20322e")
+	var edge := Color("d1bd92") if kind == "primary" else Color("73857a")
 	match state:
 		"hover":
-			tint = tint * Color(1.18, 1.18, 1.18)
+			fill = Color("304941")
 		"pressed":
-			tint = tint * Color(0.78, 0.78, 0.78)
+			fill = Color("152521")
 		"disabled":
-			tint = Color(0.42, 0.44, 0.46, 0.85)
-	var s := skin(KEY_SKIN.get(kind, "graphite"), "xs" if mobile_ui or kind == "chip" or compact else "sm", 0.0, tint)
+			fill = Color("343d38")
+			edge = Color("59625b")
+	var s := box(fill, edge, 0, 1, 0, 0)
 	s.content_margin_left = 6 if compact or mobile_ui else 16
 	s.content_margin_right = 6 if compact or mobile_ui else 16
-	s.content_margin_top = (4 if phone_landscape() else 6) + (2 if state == "pressed" else 0)
-	s.content_margin_bottom = (4 if phone_landscape() else 6) - (2 if state == "pressed" else 0)
+	s.content_margin_top = 4 if phone_landscape() else 6
+	s.content_margin_bottom = 4 if phone_landscape() else 6
 	return s
 
 static func focus_style() -> StyleBoxFlat:
@@ -249,12 +251,11 @@ static func button(text: String, kind := "secondary", min_size := Vector2(0, 58)
 	for st in ["normal", "hover", "pressed", "disabled"]:
 		b.add_theme_stylebox_override(st, key_style(kind, st, compact))
 	if kind == "primary":
-		# Cream lettering with a burnt outline stays legible on the copper key.
+		# Cream lettering remains legible on the dark flat key.
 		for c in ["font_color", "font_hover_color", "font_focus_color"]:
 			b.add_theme_color_override(c, Color("fff3df"))
 		b.add_theme_color_override("font_pressed_color", Color("ffe2b8"))
-		b.add_theme_color_override("font_outline_color", Color(0.22, 0.08, 0.0, 0.9))
-		b.add_theme_constant_override("outline_size", 2)
+		b.add_theme_constant_override("outline_size", 0)
 	else:
 		b.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
 		b.add_theme_constant_override("outline_size", 1)
