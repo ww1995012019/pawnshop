@@ -4,8 +4,12 @@ extends Page
 
 const CUSTOMER_HEIGHT := 320.0
 const CRATE_COLS := 10
-const FRONT_RAIL_Y := 684.0
+# The front face spans source rows 168..176 in the 480px shop artwork,
+# displayed at 4x. Center the keys between its painted edges (672..708).
+const FRONT_RAIL_TOP := 168.0 * 4.0
+const FRONT_RAIL_BOTTOM := 177.0 * 4.0
 const FRONT_RAIL_HEIGHT := 28.0
+const FRONT_RAIL_Y := (FRONT_RAIL_TOP + FRONT_RAIL_BOTTOM - FRONT_RAIL_HEIGHT) * 0.5
 const TERMINAL_KEY_HEIGHT := 32.0
 # Mounting strips measured on the 1920×1080 shop illustration. Labels belong
 # to these physical rails/bezel faces, independently of the equipment hit area.
