@@ -61,3 +61,28 @@ Evidence: `work/fixed-counter/trade.png`, `fixed-320.png`, `negotiation.png`, `t
 Verification: native long-dialogue and 320/360/390/430 px layout assertions pass; no main ScrollContainer; closing quotation does not submit; open-workspace rotation remains supported. Complete native suite: 68/68 groups; packaging/font/loading checks passed. Browser regression uses actual wheel/finger input to confirm the main screen stays fixed, opens/closes dialogue/item/tool/quote/records sheets with their real close buttons, and completes quote/accept/delivery. See `work/fixed-counter/web-final.log` and `suite.log`.
 
 Final result for this follow-up: passed.
+
+## Merchant materials panel — 2026-11-13
+
+Final result: passed.
+
+The supplied merchant screenshot mixed unlabeled icons, ambiguous owned counts,
+selected material stock and a long purchase button in the same dense section.
+The material cards now show short names and explicit owned quantities. A single
+divider separates browsing from the selected material summary and the aligned
+quantity, purchase and sale controls. Each transaction shows its unit price and
+total; full material names and descriptions remain in tooltips. Existing game
+artwork, compact modal width and transaction rules are retained.
+
+Actual browser captures reviewed: `work/icon-layout/1920-merchant-materials.png`,
+`1440-merchant-materials.png`, `844-merchant-materials.png` and
+`390-merchant-materials.png`. Names fit the cards, the quantity is centered,
+and purchase/sale buttons share an aligned row. On phones, the selected material
+summary remains with the fixed transaction controls while the material grid can
+scroll. No remaining P0/P1/P2 findings in the changed panel.
+
+Validation: native material transactions/layout, compact merchant and commerce UI
+tests pass. Browser tests pass at 1440×900, 844×390 and 390×844 using actual mouse
+or touch input, covering material purchase, watch selection and sale, and saved
+inventory persistence after reload. No script errors were reported. Web export
+passes. This follow-up covers the merchant panel only.

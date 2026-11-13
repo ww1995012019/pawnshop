@@ -1146,7 +1146,12 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 	if t == null or t.kind != "merchant":
 		contents.add_child(UIKit.label("商人已经离开。", 20, UIKit.MUTED))
 		return
-	contents.add_child(UIKit.label("现金 %s · 材料交易不消耗 AP" % UIKit.money(s.cash), 16, UIKit.AMBER, false, true))
+	var wallet := UIKit.hbox(12)
+	contents.add_child(wallet)
+	var cash_label := UIKit.label("现金 %s" % UIKit.money(s.cash), 15, UIKit.TEXT)
+	cash_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wallet.add_child(cash_label)
+	wallet.add_child(UIKit.label("材料交易不消耗 AP", 13, UIKit.MUTED))
 	var category: String = contents.get_meta("category", "materials")
 	var tabs := UIKit.hbox(6)
 	tabs.name = "merchant_categories"

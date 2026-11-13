@@ -45,7 +45,7 @@ func run() -> void:
 		open_shop.pressed.emit()
 		await frame()
 		check(shell.modal_open(), "opening the merchant shows the goods panel")
-		var buy := button_with_text(shell.modal_layer, "购买 导电纤维")
+		var buy: Button = shell.modal_layer.find_child("material_buy", true, false)
 		check(buy != null and not buy.disabled, "basic repair materials can be bought from the merchant panel")
 		if buy != null:
 			var before_cash: float = game.state.cash
@@ -56,7 +56,7 @@ func run() -> void:
 			await frame()
 			check(game.state.cash == before_cash - 8 and game.state.materials["MAT-001"] == before_stock + 1,
 				"the merchant panel performs the real material transaction")
-			var refreshed := button_with_text(shell.modal_layer, "购买 导电纤维")
+			var refreshed: Button = shell.modal_layer.find_child("material_buy", true, false)
 			check(refreshed != null and refreshed.has_focus(), "merchant purchase retains keyboard focus after the panel updates")
 		shell.close_top_modal()
 		await frame()

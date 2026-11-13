@@ -10,17 +10,19 @@ var focus_targets := {}
 var _state: Dictionary
 var _cards := {}
 var _grid: GridContainer
-var actions: HFlowContainer
-var _picture: TextureRect
+var actions: VBoxContainer
 var _name: Label
 var _stock: Label
-var _description: Label
+var _operations: BoxContainer
+var _quantity_group: BoxContainer
+var _buy_unit: Label
+var _sell_unit: Label
 var _quantity_label: Label
 var _minus: Button
 var _plus: Button
 var _buy: Button
 var _sell: Button
-var _detail: PanelContainer
+var _detail: Control
 
 func setup(state: Dictionary, id: String, qty: int) -> void:
 	_state = state
@@ -36,7 +38,7 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 	add_child(_grid)
 	for material in GameData.materials:
 		var material_id: String = material.id
-		var card := UIKit.button("", "secondary", Vector2(64, 64), 17)
+		var card := UIKit.button("", "secondary", Vector2(64, 82), 17)
 		card.name = "material_" + material_id
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.tooltip_text = "%s\n%s" % [material.name, material.description]
@@ -46,17 +48,16 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 		margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		for side in ["left", "right", "top", "bottom"]:
 			margin.add_theme_constant_override("margin_" + side, 3)
-		var column := UIKit.vbox(4)
+		var column := UIKit.vbox(0)
 		margin.add_child(column)
-		column.add_child(_icon(material_id, 36))
-		var title := UIKit.label(material.name, 13, UIKit.TEXT)
+		column.add_child(_icon(material_id, 32))
+		var title := UIKit.label(String(material.name).trim_prefix("匹配"), 12, UIKit.TEXT)
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		title.custom_minimum_size.x = 0
-		title.hide()
 		column.add_child(title)
-		var counts := UIKit.label("×%d" % int(state.materials.get(material_id, 0)), 14, UIKit.TEXT)
-		counts.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		var counts := UIKit.label("持有 %d" % int(state.materials.get(material_id, 0)), 12, UIKit.MUTED)
+		counts.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		counts.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		counts.custom_minimum_size.x = 0
 		column.add_child(counts)
@@ -65,36 +66,35 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 		card.pressed.connect(func(): _select(material_id))
 		_cards[material_id] = card
 		_grid.add_child(card)
-	var detail := UIKit.plate(UIKit.inset_style(4))
-	_detail = detail
-	detail.name = "material_detail"
-	add_child(detail)
-	var details := UIKit.vbox(4)
-	detail.add_child(details)
-	var heading := UIKit.hbox(12)
-	details.add_child(heading)
-	_picture = _icon(selected_id, 36)
-	_picture.custom_minimum_size.x = 40
-	_picture.hide()
-	heading.add_child(_picture)
-	var labels := UIKit.hbox(8)
-	labels.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	heading.add_child(labels)
-	_name = UIKit.label("", 17, UIKit.AMBER)
-	labels.add_child(_name)
-	_stock = UIKit.label("", 14, UIKit.TEXT, false, true)
-	_stock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	labels.add_child(_stock)
-	_description = UIKit.label("", 14, UIKit.MUTED, false, true)
-	_description.hide()
-	details.add_child(_description)
-	actions = HFlowContainer.new()
+	# The summary travels with the transaction controls into the phone footer.
+	# Keep one flat section instead of nesting another framed panel.
+	actions = UIKit.vbox(8)
 	actions.name = "merchant_material_actions"
-	actions.add_theme_constant_override("h_separation", 10)
-	actions.add_theme_constant_override("v_separation", 8)
-	details.add_child(actions)
+	actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_detail = actions
+	add_child(actions)
+	actions.add_child(UIKit.rule())
+	var heading := UIKit.hbox(12)
+	actions.add_child(heading)
+	_name = UIKit.label("", 17, UIKit.AMBER)
+	heading.add_child(_name)
+	_stock = UIKit.label("", 13, UIKit.MUTED, false, true)
+	_stock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_stock.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_stock.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	heading.add_child(_stock)
+	_operations = BoxContainer.new()
+	_operations.add_theme_constant_override("separation", 12)
+	actions.add_child(_operations)
+	_quantity_group = BoxContainer.new()
+	_quantity_group.add_theme_constant_override("separation", 4)
+	_quantity_group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_operations.add_child(_quantity_group)
+	var quantity_title := UIKit.label("交易数量", 12, UIKit.MUTED)
+	quantity_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_quantity_group.add_child(quantity_title)
 	var quantity_row := UIKit.hbox(6)
-	actions.add_child(quantity_row)
+	_quantity_group.add_child(quantity_row)
 	_minus = UIKit.button("−", "secondary", Vector2(40, 44), 20)
 	_minus.custom_minimum_size.x = 44
 	_minus.tooltip_text = "减少数量"
@@ -104,6 +104,9 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 	quantity_row.add_child(_minus)
 	_quantity_label = UIKit.label("", 20, UIKit.TEXT, true)
 	_quantity_label.custom_minimum_size = Vector2(30, 0)
+	_quantity_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_quantity_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_quantity_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	quantity_row.add_child(_quantity_label)
 	_plus = UIKit.button("+", "secondary", Vector2(40, 44), 20)
 	_plus.custom_minimum_size.x = 44
@@ -112,15 +115,32 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 	focus_targets["qty:plus"] = _plus
 	_plus.pressed.connect(func(): _set_quantity(quantity + 1))
 	quantity_row.add_child(_plus)
-	_buy = UIKit.button("", "primary", Vector2(154, 44), 16)
-	_buy.custom_minimum_size.x = 200
+	var trades := UIKit.hbox(8)
+	trades.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	trades.size_flags_stretch_ratio = 2.5
+	_operations.add_child(trades)
+	var buying := UIKit.vbox(4)
+	buying.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	trades.add_child(buying)
+	_buy_unit = UIKit.label("", 12, UIKit.MUTED)
+	buying.add_child(_buy_unit)
+	_buy = UIKit.button("", "primary", Vector2(110, 44), 16)
+	_buy.name = "material_buy"
+	_buy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_buy.pressed.connect(func(): transaction_requested.emit({"type": "BUY_MATERIAL", "id": selected_id, "qty": quantity}))
-	actions.add_child(_buy)
-	_sell = UIKit.button("", "secondary", Vector2(100, 44), 16)
-	_sell.custom_minimum_size.x = 110
+	buying.add_child(_buy)
+	var selling := UIKit.vbox(4)
+	selling.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	trades.add_child(selling)
+	_sell_unit = UIKit.label("", 12, UIKit.MUTED)
+	selling.add_child(_sell_unit)
+	_sell = UIKit.button("", "secondary", Vector2(110, 44), 16)
+	_sell.name = "material_sell"
+	_sell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_sell.pressed.connect(func(): transaction_requested.emit({"type": "SELL_MATERIAL", "id": selected_id, "qty": quantity}))
-	actions.add_child(_sell)
+	selling.add_child(_sell)
 	resized.connect(_layout_grid)
+	actions.resized.connect(_layout_grid)
 	get_viewport().size_changed.connect(_layout_grid)
 	_refresh()
 	call_deferred("_layout_grid")
@@ -151,6 +171,9 @@ func _layout_grid() -> void:
 	if not is_inside_tree(): return
 	var width := maxf(64.0, size.x)
 	_grid.columns = clampi(floori((width + 6.0) / 70.0), 1, 7)
+	var narrow := actions.size.x < 520
+	_operations.vertical = narrow
+	_quantity_group.vertical = not narrow
 
 func _select(id: String) -> void:
 	selected_id = id
@@ -159,7 +182,7 @@ func _select(id: String) -> void:
 	var ancestor := get_parent()
 	while ancestor != null:
 		if ancestor is ScrollContainer:
-			ancestor.ensure_control_visible(_detail)
+			if ancestor.is_ancestor_of(_detail): ancestor.ensure_control_visible(_detail)
 			break
 		ancestor = ancestor.get_parent()
 
@@ -179,10 +202,8 @@ func _refresh() -> void:
 		for state in ["normal", "hover", "pressed"]:
 			card.add_theme_stylebox_override(state, UIKit.key_style("primary" if id == selected_id else "secondary", state, true))
 	_name.text = material.name
-	_stock.text = "商人库存 %d / 已持有 %d" % [available, owned]
-	_description.text = material.description
+	_stock.text = "商人剩余 %d · 自己持有 %d" % [available, owned]
 	_detail.tooltip_text = material.name + "：" + material.description
-	_picture.texture = _texture(selected_id)
 	_quantity_label.text = str(quantity)
 	_minus.disabled = quantity <= 1
 	_plus.disabled = quantity >= 99
@@ -192,10 +213,11 @@ func _refresh() -> void:
 	_sell.set_meta("merchant_focus", "sell:" + selected_id)
 	focus_targets["buy:" + selected_id] = _buy
 	focus_targets["sell:" + selected_id] = _sell
-	_buy.text = "购买 %s · %s" % [material.name, UIKit.money(buy_total)]
+	_buy_unit.text = "买入单价 %s" % UIKit.money(material.price)
+	_sell_unit.text = "卖出单价 %s" % UIKit.money(maxi(1, floori(float(material.price) * 0.5)))
+	_buy.text = "购买 · %s" % UIKit.money(buy_total)
 	_sell.text = "出售 · %s" % UIKit.money(sell_total)
-	# Mobile buttons clip their label by default; reserve the measured text width
-	# so FlowContainer can wrap whole usable actions instead of shrinking them.
+	# Reserve the measured label width even when phone buttons clip their text.
 	for action in [_buy, _sell]:
 		var font: Font = action.get_theme_font("font")
 		var font_size: int = action.get_theme_font_size("font_size")
@@ -204,6 +226,7 @@ func _refresh() -> void:
 	var capacity_problem:=WarehouseExpansion.material_problem(_state,selected_id)
 	_buy.disabled = available < quantity or _state.cash < buy_total or owned + quantity > 99999 or capacity_problem!=""
 	_sell.disabled = owned < quantity or _state.cash + sell_total > 1000000000
-	_buy.tooltip_text = "库存不足" if available < quantity else "现金不足" if _state.cash < buy_total else "材料库存已满" if owned + quantity > 99999 else "购买 %d 件，共 %s" % [quantity, UIKit.money(buy_total)]
+	_buy.tooltip_text = "库存不足" if available < quantity else "现金不足" if _state.cash < buy_total else "材料库存已满" if owned + quantity > 99999 else "数量 %d，共 %s" % [quantity, UIKit.money(buy_total)]
 	if capacity_problem!="":_buy.tooltip_text=capacity_problem
+	_buy.tooltip_text = "购买 %s\n%s" % [material.name, _buy.tooltip_text]
 	_sell.tooltip_text = "持有数量不足" if owned < quantity else "现金已达到保存上限" if _state.cash + sell_total > 1000000000 else "出售 %d 件，共 %s" % [quantity, UIKit.money(sell_total)]

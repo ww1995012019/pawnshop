@@ -82,23 +82,36 @@ func run() -> void:
 		shell.page._merchant_shop()
 		await frames()
 		var all_fit := true
+		var names_fit := true
 		for material in GameData.materials:
 			var item := keyed("material:" + material.id)
 			all_fit = all_fit and item != null
 			if item != null:
 				all_fit = all_fit and item.get_global_rect().position.x >= 0 and item.get_global_rect().end.x <= root.get_visible_rect().size.x + 1
+				var title: Label = item.find_children("*", "Label", true, false)[0]
+				var font: Font = title.get_theme_font("font")
+				var text_width := font.get_string_size(title.text, HORIZONTAL_ALIGNMENT_LEFT, -1, title.get_theme_font_size("font_size")).x
+				names_fit = names_fit and title.is_visible_in_tree() and title.size.x >= text_width and item.get_global_rect().encloses(title.get_global_rect())
 		if not all_fit:
 			var node: Node = keyed("material:MAT-001")
 			while node is Control:
 				print("LAYOUT ", node.name, " rect=", node.get_global_rect(), " min=", node.get_combined_minimum_size())
 				node = node.get_parent()
 		check(all_fit, "all material cards fit horizontally at " + str(window))
+		check(names_fit, "material names are visible and fit their cards at " + str(window))
 		var first := keyed("material:MAT-001")
 		var second := keyed("material:MAT-002")
 		check(is_equal_approx(first.global_position.y, second.global_position.y), "materials remain horizontally browsable at " + str(window))
 		var purchase := keyed("buy:MAT-001")
 		var clip = shell.modal_layer.find_child("ModalSheet", true, false)
 		check(clip.get_global_rect().encloses(purchase.get_global_rect()), "primary purchase is visible without scrolling at " + str(window))
+		var materials = shell.modal_layer.find_child("material_grid", true, false).get_parent()
+		check(clip.get_global_rect().encloses(materials._name.get_global_rect()) and clip.get_global_rect().encloses(materials._stock.get_global_rect()), "selected material context stays with the transaction controls at " + str(window))
+		check(is_equal_approx(materials._buy.global_position.y, materials._sell.global_position.y), "buy and sell buttons align at " + str(window))
+		var quantity_center: float = materials._quantity_label.get_global_rect().get_center().y
+		var stepper_center: float = materials._plus.get_global_rect().get_center().y
+		if absf(quantity_center - stepper_center) > 1.0: print("QUANTITY CENTERS ", quantity_center, " / ", stepper_center)
+		check(absf(quantity_center - stepper_center) <= 1.0, "quantity is vertically centered between the stepper buttons at " + str(window))
 	shell.close_top_modal()
 	await frames()
 	game.dispatch({"type": "REFUSE"})
