@@ -33,6 +33,9 @@ func run():
  for dimensions in [Vector2i(1440,900),Vector2i(844,390),Vector2i(390,844)]:
   root.size=dimensions;shell.phone_override=dimensions.x<1000;await frames();shell.go("warehouse");await frames()
   var page=shell.active_shell().page
+  if not shell.portrait_mode():check(absf(page.display_panel.size.y-shell.active_shell().content_rect().size.y)<2,"display cabinet uses full workspace height")
+  for key in page.cabinet_buttons.values():check(key.get_global_rect().end.y<=page.grid_scroll.get_global_rect().position.y,"category tabs sit above the grid")
+  check(page.grid_scroll.size.x-page.grid.custom_minimum_size.x<=22,"grid fills width without a side toolbar gap")
   check(page.expand_button.text=="" and page.expand_button.icon!=null,"expansion is icon only")
   check(not page.grid_scroll.get_h_scroll_bar().visible,"no horizontal storage scrolling")
   page.grid_scroll.scroll_vertical=100000;await frames()
@@ -47,7 +50,7 @@ func run():
     var slots=page.materials_view.find_child("MaterialSlots",true,false)
     check(slots!=null and slots is GridContainer,"materials use a slot grid")
   game.state.storageExpansion=WarehouseExpansion.default_state();page._refresh();await frames()
-  check(page.holder.size.y<=maxf(page.grid.size.y,page.cabinet_rail.size.y)+130 or page.grid_scroll.get_v_scroll_bar().visible,"no large blank area under storage")
+  check(page.holder.size.y<=maxf(page.grid.size.y,page.cabinet_rail.size.y)+180 or page.grid_scroll.get_v_scroll_bar().visible,"no large blank area under storage")
   game.state.storageExpansion=WarehouseExpansion.default_state(5)
   shell.close_workspace();await frames()
  shell.queue_free();await frames();quit(1 if failures else 0)

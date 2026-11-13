@@ -28,7 +28,7 @@ var cabinet_mode := "warehouse"
 var cell_size := CELL
 var surfaces: HBoxContainer
 var center: VBoxContainer
-var cabinet_rail: VBoxContainer
+var cabinet_rail: GridContainer
 var scroll_positions := {}
 var expand_button: Button
 var cabinet_drag_uid := ""
@@ -90,11 +90,12 @@ func enter() -> void:
 	materials_view=UIKit.vbox(5);materials_view.size_flags_horizontal=Control.SIZE_EXPAND_FILL;cabinet_body.add_child(materials_view)
 	# Purchases belong above the pawn slots, so small screens expose them first.
 	cabinet_body.move_child(materials_view,0)
-	cabinet_rail=UIKit.vbox(4);surfaces.add_child(cabinet_rail)
+	cabinet_rail=UIKit.grid(4,4);cabinet_rail.name="CabinetTabs";body.add_child(cabinet_rail);body.move_child(cabinet_rail,1)
 	for spec in [["warehouse","后仓"],["materials","材料"],["isolation","隔离"],["pawn","抵押"]]:
 		var mode:String=spec[0]
 		var key:=UIKit.button(spec[1],"secondary",Vector2(42,36),14);key.name="cabinet_"+mode
 		key.custom_minimum_size.x=44
+		key.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		key.toggle_mode=true
 		key.add_theme_stylebox_override("pressed",UIKit.key_style("primary","normal",true))
 		key.add_theme_stylebox_override("hover_pressed",UIKit.key_style("primary","hover",true))
@@ -147,8 +148,9 @@ func _resize_panels() -> void:
 	var gap:float=6 if shell.mobile_mode() else PANEL_GAP
 	var left_width:float=maxf(114,floorf(r.size.x*(0.21 if shell.mobile_mode() else 0.19)))
 	var middle_width:float=r.size.x-left_width-gap if shell.portrait_mode() else r.size.x-left_width-r.size.x*(0.41 if shell.mobile_mode() else 0.31)-gap*2
-	var available:float=maxf(10,middle_width-holder.get_theme_stylebox("panel").get_minimum_size().x-cabinet_rail.get_combined_minimum_size().x-5-14)
-	var next_cell:float=minf(CELL,floorf(available/10.0))
+	cabinet_rail.columns=2 if middle_width<220 else 4
+	var available:float=maxf(10,middle_width-holder.get_theme_stylebox("panel").get_minimum_size().x-14)
+	var next_cell:float=available/10.0
 	if next_cell!=cell_size:
 		cell_size=next_cell;grid.rebuild()
 		if cabinet_mode=="materials":_build_materials()
@@ -160,12 +162,12 @@ func _resize_panels() -> void:
 	else:
 		var detail_width:float=r.size.x*(0.41 if shell.mobile_mode() else 0.31)
 		var middle:float=r.size.x-left_width-detail_width-gap*2
-		display_panel.position=r.position;display_panel.size=Vector2(left_width,minf(r.size.y,350 if not shell.mobile_mode() else r.size.y))
+		display_panel.position=r.position;display_panel.size=Vector2(left_width,r.size.y)
 		holder.position=r.position+Vector2(left_width+gap,0);holder.size=Vector2(middle,r.size.y)
 		detail_panel.position=r.position+Vector2(left_width+middle+gap*2,0);detail_panel.size=Vector2(detail_width,r.size.y)
 	var content_height:float=grid.custom_minimum_size.y if cabinet_mode=="warehouse" else cabinet_scroll.get_child(0).get_combined_minimum_size().y
-	var frame_height:float=holder.get_theme_stylebox("panel").get_minimum_size().y+storage_header.get_combined_minimum_size().y+18+lists.get_combined_minimum_size().y
-	holder.size.y=minf(holder.size.y,maxf(content_height,cabinet_rail.get_combined_minimum_size().y)+frame_height)
+	var frame_height:float=holder.get_theme_stylebox("panel").get_minimum_size().y+maxf(storage_header.get_combined_minimum_size().y,expand_button.get_combined_minimum_size().y)+cabinet_rail.get_combined_minimum_size().y+24+lists.get_combined_minimum_size().y
+	holder.size.y=minf(holder.size.y,content_height+frame_height)
 	var target_columns:=2 if shell.mobile_mode() else 4
 	if display_grid.columns!=target_columns:display_grid.rebuild()
 

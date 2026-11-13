@@ -81,6 +81,8 @@ def main():
             cmd({'type':'start'});wait('!s.title&&!s.busy')
             if args.layout_only:
                 cmd({'type':'page','page':'warehouse'});wait('s.workspace==="warehouse"')
+                page.wait_for_timeout(700)
+                page.screenshot(path=str(output/f'{width}-warehouse.png'))
                 for label in ['@warehouse_expand','@cabinet_warehouse','@cabinet_materials','@cabinet_isolation','@cabinet_pawn']:
                     hit=service.phone.locate(page,label)
                     assert hit['width']>=(40 if mobile else 30),hit
