@@ -36,7 +36,7 @@ func run():
   var entry=page.find_child("warehouse_expand",true,false)
   check(entry!=null,"fixed expansion entry is available at "+str(dimensions))
   if entry==null:shell.queue_free();await frames();quit(1);return
-  check(entry.size.x>=56,"expansion icon and caption retain visible width")
+  check(entry.size.x>=40 and entry.text=="" and entry.icon!=null,"expansion icon retains visible width")
   for key in page.cabinet_buttons.values():check(key.size.x>=40,"cabinet captions retain readable touch width")
   check(page.display_panel.get_global_rect().end.x<=page.holder.get_global_rect().position.x+2,"display stands to the left of the warehouse")
   for box in [page.display_panel,page.holder,page.detail_panel]:
@@ -60,9 +60,9 @@ func run():
   shell.close_top_modal();await frames()
   var original_capacity:Dictionary=game.state.storageExpansion.duplicate(true)
   game.state.storageExpansion=WarehouseExpansion.default_state(5);page._refresh();await frames()
-  page.grid_scroll.scroll_horizontal=100000;await frames()
-  var final_cell:Vector2=page.grid.get_global_transform_with_canvas()*Vector2(page.CELL*49.5,page.CELL*0.5)
-  check(page.grid_scroll.scroll_horizontal>0 and page.warehouse_drop_rect().has_point(final_cell),"horizontal scrolling reaches the50th column at "+str(dimensions))
+  page.grid_scroll.scroll_vertical=100000;await frames()
+  var final_cell:Vector2=page.grid.get_global_transform_with_canvas()*Vector2(page.cell_size*9.5,page.cell_size*29.5)
+  check(page.grid_scroll.scroll_vertical>0 and page.warehouse_drop_rect().has_point(final_cell),"vertical scrolling reaches the30th row at "+str(dimensions))
   game.state.storageExpansion=original_capacity;page._refresh();await frames()
   shell.close_workspace();await frames()
  root.size=Vector2i(1440,900);shell.phone_override=false;await frames()
@@ -85,7 +85,7 @@ func run():
   if key.text=="确认交付并扩仓":confirm=key
  check(confirm!=null,"consumption confirmation identifies the final action")
  if confirm!=null:confirm.pressed.emit();await frames()
- check(game.state.cash==800 and game.state.inventory.is_empty() and WarehouseExpansion.columns(game.state)==20,"UI confirmation consumes selected watches and200 cash")
+ check(game.state.cash==800 and game.state.inventory.is_empty() and WarehouseExpansion.rows(game.state)==12,"UI confirmation consumes selected watches and200 cash")
  shell.close_workspace();await frames()
  for i in 25:
   var it:=Model.new_item(game.state,"WCH-007",{"location":"display"});game.state.inventory.append(it)
@@ -98,9 +98,9 @@ func run():
  page=shell.active_shell().page
  var original_slot=page.display_grid.get_child(0)
  var original_uid:String=original_slot.uid
- await drag_original(page,original_slot.get_global_rect().get_center(),page.grid.get_global_rect().position+Vector2(page.CELL*2.5,page.CELL*0.5))
+ await drag_original(page,original_slot.get_global_rect().get_center(),page.grid.get_global_rect().position+Vector2(page.cell_size*2.5,page.cell_size*0.5))
  check(game.item(original_uid).location=="warehouse" and game.item(original_uid).x==2,"pointer drag moves a displayed original to the requested warehouse cell")
- await drag_original(page,page.grid.get_global_rect().position+Vector2(page.CELL*2.5,page.CELL*0.5),page.cabinet_buttons.pawn.get_global_rect().get_center())
+ await drag_original(page,page.grid.get_global_rect().position+Vector2(page.cell_size*2.5,page.cell_size*0.5),page.cabinet_buttons.pawn.get_global_rect().get_center())
  check(game.item(original_uid).x==2 and game.item(original_uid).y==0,"dropping over cabinet controls cannot move an original into invisible warehouse columns")
  shell.close_workspace();await frames()
  shell.go("report");await frames()

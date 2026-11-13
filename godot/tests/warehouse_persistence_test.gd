@@ -19,7 +19,7 @@ func run():
  DirAccess.remove_absolute(staged)
  check(game.dispatch({"type":"EXPAND_WAREHOUSE","level":1,"uids":uids}) and game.state.cash==800 and game.state.inventory.is_empty(),"successful checked save commits the entire upgrade")
  var restored:Dictionary=JSON.parse_string(FileAccess.get_file_as_string(game.SAVE_PATH))
- check(restored.cash==800 and restored.inventory.is_empty() and WarehouseExpansion.columns(restored)==20,"reloaded save retains paid upgrade and consumed original UIDs")
+ check(restored.cash==800 and restored.inventory.is_empty() and WarehouseExpansion.columns(restored)==10 and WarehouseExpansion.rows(restored)==12,"reloaded save retains paid upgrade and consumed original UIDs")
  game.state=restored
  check(game.dispatch({"type":"BUY_PAWN_SLOTS","quantity":5,"requestId":"five-permanent"}) and game.state.cash==775,"permanent slots use the same checked settlement")
  restored=JSON.parse_string(FileAccess.get_file_as_string(game.SAVE_PATH));restored.day+=1;restored.nightCrime.policies={};WarehouseExpansion.ensure(restored)

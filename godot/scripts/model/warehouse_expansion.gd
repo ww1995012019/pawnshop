@@ -1,7 +1,7 @@
 class_name WarehouseExpansion
 extends RefCounted
 ## Independent storage progression. Upgrade inputs are physical originals.
-const WIDTHS := [10,20,25,30,35,50]
+const ROWS := [6,12,15,18,21,30]
 const DISPLAYS := [20,32,47,65,90,130]
 const MATERIALS := [20,40,60,80,80,130]
 const ISOLATION := [20,40,60,80,100,150]
@@ -11,7 +11,7 @@ const TIERS := ["low","mid","luxury","ultra"]
 
 static func default_state(level := 0) -> Dictionary:
  level=clampi(level,0,5)
- return {"version":1,"level":level,"columns":WIDTHS[level],"rows":6,"displayCapacity":DISPLAYS[level],"materialCapacity":MATERIALS[level],"isolationCapacity":ISOLATION[level],"pawnCapacity":20,"completedOrderIds":[]}
+ return {"version":2,"level":level,"columns":10,"rows":ROWS[level],"displayCapacity":DISPLAYS[level],"materialCapacity":MATERIALS[level],"isolationCapacity":ISOLATION[level],"pawnCapacity":20,"completedOrderIds":[]}
 
 static func ensure(s: Dictionary) -> void:
  if not s.get("storageExpansion") is Dictionary:
@@ -23,6 +23,11 @@ static func ensure(s: Dictionary) -> void:
   s.storageExpansion.displayCapacity=maxi(int(s.storageExpansion.displayCapacity),shown)
   if legacy:_repack(s)
  var data:Dictionary=s.storageExpansion
+ if int(data.get("version",1))<2:
+  var cells:=int(data.get("columns",10))*int(data.get("rows",6))
+  data.columns=10;data.rows=maxi(ROWS[clampi(int(data.get("level",0)),0,5)],ceili(cells/10.0))
+  data.version=2
+  _repack(s)
  var defaults:=default_state(int(data.get("level",0)))
  for key in defaults:
   if not data.has(key):data[key]=defaults[key]
@@ -120,15 +125,15 @@ static func _repack(s: Dictionary) -> void:
   if it.location!="warehouse":continue
   var dim:=Model.dimensions(it)
   var point:=Vector2i(int(it.x),int(it.y))
-  if not _fits(point,dim,placed,columns(s),6):
+  if not _fits(point,dim,placed,columns(s),rows(s)):
    point=Vector2i(-1,-1)
-   for y in range(6-int(dim[1])+1):
+   for y in range(rows(s)-int(dim[1])+1):
     for x in range(columns(s)-int(dim[0])+1):
-     if _fits(Vector2i(x,y),dim,placed,columns(s),6):point=Vector2i(x,y);break
+     if _fits(Vector2i(x,y),dim,placed,columns(s),rows(s)):point=Vector2i(x,y);break
     if point.x>=0:break
    if point.x<0:
     # Keep unusual old/debug saves usable; never discard a stored original.
-    point=Vector2i(int(it.x),int(it.y));s.storageExpansion.rows=maxi(rows(s),point.y+int(dim[1]))
+    point=Vector2i(0,rows(s));s.storageExpansion.rows=point.y+int(dim[1])
   it.x=point.x;it.y=point.y
   placed.append(Rect2i(point,Vector2i(int(dim[0]),int(dim[1]))))
 
@@ -153,7 +158,7 @@ static func reduce(previous: Dictionary,action: Dictionary):
   for key in ["level","columns","rows","displayCapacity","materialCapacity","isolationCapacity"]:
    s.storageExpansion[key]=maxi(int(s.storageExpansion.get(key,0)),int(updated[key]))
   if s.report is Dictionary:s.report.cash=s.cash
-  return Model.notice(s,"扩仓完成：%d×6，展示位%d；已交付%d只原表。"%[columns(s),capacity(s,"display"),ids.size()])
+  return Model.notice(s,"扩仓完成：%d×%d，展示位%d；已交付%d只原表。"%[columns(s),rows(s),capacity(s,"display"),ids.size()])
  if kind=="BUY_PAWN_SLOTS":
   var count=action.get("quantity",0);var request_id:=String(action.get("requestId",""))
   if typeof(count) not in [TYPE_INT,TYPE_FLOAT] or not is_finite(float(count)) or float(count)!=floor(float(count)) or count<1 or count>100:return Model.notice(s,"每次请选择1～100个仓位。")

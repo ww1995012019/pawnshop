@@ -25,6 +25,10 @@ var materials_view: VBoxContainer
 var display_count: Label
 var cabinet_buttons := {}
 var cabinet_mode := "warehouse"
+var cell_size := CELL
+var surfaces: HBoxContainer
+var center: VBoxContainer
+var cabinet_rail: VBoxContainer
 var scroll_positions := {}
 var expand_button: Button
 var cabinet_drag_uid := ""
@@ -67,16 +71,17 @@ func enter() -> void:
 	var body:=UIKit.vbox(6);holder_contents=body;holder.add_child(body)
 	var title_row:=UIKit.hbox(4);body.add_child(title_row)
 	storage_header=UIKit.vbox(0);storage_header.size_flags_horizontal=Control.SIZE_EXPAND_FILL;title_row.add_child(storage_header)
-	expand_button=UIKit.button("扩仓","primary",Vector2(58,34),15)
-	expand_button.custom_minimum_size.x=58
+	expand_button=UIKit.button("","primary",Vector2(44,40),15)
+	expand_button.custom_minimum_size.x=44
+	expand_button.alignment=HORIZONTAL_ALIGNMENT_CENTER
 	expand_button.icon=load("res://assets/ui/warehouse-expand.svg");expand_button.expand_icon=true
-	expand_button.add_theme_constant_override("icon_max_width",20)
+	expand_button.add_theme_constant_override("icon_max_width",26)
 	expand_button.name="warehouse_expand";expand_button.tooltip_text="扩仓条件与所需交付原表"
 	expand_button.pressed.connect(func():shell.open_warehouse_expansion());title_row.add_child(expand_button)
-	var surfaces:=UIKit.hbox(5);surfaces.size_flags_vertical=Control.SIZE_EXPAND_FILL;body.add_child(surfaces)
-	var center:=UIKit.vbox(0);center.size_flags_horizontal=Control.SIZE_EXPAND_FILL;center.size_flags_vertical=Control.SIZE_EXPAND_FILL;surfaces.add_child(center)
+	surfaces=UIKit.hbox(5);surfaces.size_flags_vertical=Control.SIZE_EXPAND_FILL;body.add_child(surfaces)
+	center=UIKit.vbox(0);center.size_flags_horizontal=Control.SIZE_EXPAND_FILL;center.size_flags_vertical=Control.SIZE_EXPAND_FILL;surfaces.add_child(center)
 	grid_scroll=ScrollContainer.new();grid_scroll.name="WarehouseGridScroll";grid_scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL;grid_scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL
-	grid_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;grid_scroll.follow_focus=true;center.add_child(grid_scroll)
+	grid_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;grid_scroll.follow_focus=true;center.add_child(grid_scroll)
 	grid=StorageGrid.new();grid.page=self;grid.mouse_filter=Control.MOUSE_FILTER_PASS;grid_scroll.add_child(grid)
 	cabinet_scroll=ScrollContainer.new();cabinet_scroll.name="CabinetScroll";cabinet_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
 	cabinet_scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL;cabinet_scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;center.add_child(cabinet_scroll)
@@ -85,12 +90,15 @@ func enter() -> void:
 	materials_view=UIKit.vbox(5);materials_view.size_flags_horizontal=Control.SIZE_EXPAND_FILL;cabinet_body.add_child(materials_view)
 	# Purchases belong above the pawn slots, so small screens expose them first.
 	cabinet_body.move_child(materials_view,0)
-	var rail:=UIKit.vbox(4);surfaces.add_child(rail)
+	cabinet_rail=UIKit.vbox(4);surfaces.add_child(cabinet_rail)
 	for spec in [["warehouse","后仓"],["materials","材料"],["isolation","隔离"],["pawn","抵押"]]:
 		var mode:String=spec[0]
 		var key:=UIKit.button(spec[1],"secondary",Vector2(42,36),14);key.name="cabinet_"+mode
 		key.custom_minimum_size.x=44
-		key.pressed.connect(func():switch_cabinet(mode));rail.add_child(key);cabinet_buttons[mode]=key
+		key.toggle_mode=true
+		key.add_theme_stylebox_override("pressed",UIKit.key_style("primary","normal",true))
+		key.add_theme_stylebox_override("hover_pressed",UIKit.key_style("primary","hover",true))
+		key.pressed.connect(func():switch_cabinet(mode));cabinet_rail.add_child(key);cabinet_buttons[mode]=key
 	lists=UIKit.vbox(3);body.add_child(lists)
 	detail_panel=UIKit.plate();detail_panel.name="WarehouseDetails";add_child(detail_panel)
 	var sc:=ScrollContainer.new();sc.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
@@ -107,9 +115,12 @@ func _refresh() -> void:
 	if cabinet_mode in ["isolation","pawn"]:
 		var used:int=Game.state.inventory.filter(func(it):return it.location==cabinet_mode).size()
 		caption="%d / %d 位 · 剩余 %d"%[used,WarehouseExpansion.capacity(Game.state,cabinet_mode),maxi(0,WarehouseExpansion.capacity(Game.state,cabinet_mode)-used)]
+	if cabinet_mode=="materials":
+		var kinds:int=Game.state.materials.values().filter(func(value):return float(value)>0).size()
+		caption="材料 %d / %d 种"%[kinds,WarehouseExpansion.capacity(Game.state,"materials")]
 	if shell.mobile_mode():
 		title={"warehouse":"后仓","materials":"材料柜","isolation":"隔离柜","pawn":"抵押柜"}[cabinet_mode]
-		caption="%d × %d"%[WarehouseExpansion.columns(Game.state),WarehouseExpansion.rows(Game.state)] if cabinet_mode=="warehouse" else "种类仓位"
+		caption="%d × %d"%[WarehouseExpansion.columns(Game.state),WarehouseExpansion.rows(Game.state)] if cabinet_mode=="warehouse" else caption
 		if cabinet_mode in ["isolation","pawn"]:
 			var count:int=Game.state.inventory.filter(func(it):return it.location==cabinet_mode).size()
 			caption="%d / %d 位"%[count,WarehouseExpansion.capacity(Game.state,cabinet_mode)]
@@ -118,11 +129,13 @@ func _refresh() -> void:
 
 func switch_cabinet(mode: String) -> void:
 	if not cabinet_buttons.has(mode):return
-	scroll_positions[cabinet_mode]=Vector2(cabinet_scroll.scroll_horizontal,cabinet_scroll.scroll_vertical)
+	var previous_scroll:ScrollContainer=grid_scroll if cabinet_mode=="warehouse" else cabinet_scroll
+	scroll_positions[cabinet_mode]=Vector2(0,previous_scroll.scroll_vertical)
 	cabinet_mode=mode
 	_refresh()
 	var point:Vector2=scroll_positions.get(mode,Vector2.ZERO)
-	cabinet_scroll.set_deferred("scroll_vertical",int(point.y))
+	var active_scroll:ScrollContainer=grid_scroll if mode=="warehouse" else cabinet_scroll
+	active_scroll.set_deferred("scroll_vertical",int(point.y))
 
 func relayout() -> void:
 	if not is_instance_valid(holder):return
@@ -133,6 +146,12 @@ func _resize_panels() -> void:
 	var r:Rect2=shell.content_rect()
 	var gap:float=6 if shell.mobile_mode() else PANEL_GAP
 	var left_width:float=maxf(114,floorf(r.size.x*(0.21 if shell.mobile_mode() else 0.19)))
+	var middle_width:float=r.size.x-left_width-gap if shell.portrait_mode() else r.size.x-left_width-r.size.x*(0.41 if shell.mobile_mode() else 0.31)-gap*2
+	var available:float=maxf(10,middle_width-holder.get_theme_stylebox("panel").get_minimum_size().x-cabinet_rail.get_combined_minimum_size().x-5-14)
+	var next_cell:float=minf(CELL,floorf(available/10.0))
+	if next_cell!=cell_size:
+		cell_size=next_cell;grid.rebuild()
+		if cabinet_mode=="materials":_build_materials()
 	if shell.portrait_mode():
 		var top_height:float=r.size.y*0.43
 		display_panel.position=r.position;display_panel.size=Vector2(left_width,top_height)
@@ -144,6 +163,9 @@ func _resize_panels() -> void:
 		display_panel.position=r.position;display_panel.size=Vector2(left_width,minf(r.size.y,350 if not shell.mobile_mode() else r.size.y))
 		holder.position=r.position+Vector2(left_width+gap,0);holder.size=Vector2(middle,r.size.y)
 		detail_panel.position=r.position+Vector2(left_width+middle+gap*2,0);detail_panel.size=Vector2(detail_width,r.size.y)
+	var content_height:float=grid.custom_minimum_size.y if cabinet_mode=="warehouse" else cabinet_scroll.get_child(0).get_combined_minimum_size().y
+	var frame_height:float=holder.get_theme_stylebox("panel").get_minimum_size().y+storage_header.get_combined_minimum_size().y+18+lists.get_combined_minimum_size().y
+	holder.size.y=minf(holder.size.y,maxf(content_height,cabinet_rail.get_combined_minimum_size().y)+frame_height)
 	var target_columns:=2 if shell.mobile_mode() else 4
 	if display_grid.columns!=target_columns:display_grid.rebuild()
 
@@ -157,25 +179,34 @@ func _lists() -> void:
 		cabinet_grid.location=cabinet_mode;cabinet_grid.rebuild()
 	UIKit.clear(materials_view)
 	if cabinet_mode=="materials":
-		var kinds:=0
-		for value in Game.state.materials.values():
-			if float(value)>0:kinds+=1
-		materials_view.add_child(UIKit.label("材料 %d / %d 种"%[kinds,WarehouseExpansion.capacity(Game.state,"materials")],15,UIKit.CYAN,false,true))
-		for m in GameData.materials:
-			var row:=UIKit.hbox(5)
-			row.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-			var picture:=TextureRect.new();picture.texture=material_texture(String(m.id))
-			picture.custom_minimum_size=Vector2(24,24);picture.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;picture.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;row.add_child(picture)
-			var caption:=UIKit.label("%s ×%s"%[m.name,Model.jnum(Game.state.materials.get(m.id,0))],14,UIKit.TEXT,false,true)
-			caption.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-			row.add_child(caption);materials_view.add_child(row)
-		materials_view.add_child(UIKit.label("检验工具：放大镜 · 紫外线 · 称重
-工具不占材料种类仓位。",14,UIKit.MUTED,false,true))
+		_build_materials()
 	if cabinet_mode=="pawn":
 		var purchase=load("res://scripts/ui/pawn_slot_purchase.gd").new();materials_view.add_child(purchase);purchase.setup()
 	for mode in cabinet_buttons:
-		cabinet_buttons[mode].modulate=UIKit.AMBER if mode==cabinet_mode else Color.WHITE
+		cabinet_buttons[mode].set_pressed_no_signal(mode==cabinet_mode)
 	UIKit.clear(lists);_document_inventory()
+
+func _build_materials() -> void:
+	UIKit.clear(materials_view)
+	var slots:=GridContainer.new();slots.name="MaterialSlots";slots.columns=10
+	slots.add_theme_constant_override("h_separation",0);slots.add_theme_constant_override("v_separation",0)
+	materials_view.add_child(slots)
+	var materials:Array=GameData.materials.filter(func(m):return float(Game.state.materials.get(m.id,0))>0)
+	for i in WarehouseExpansion.capacity(Game.state,"materials"):
+		var slot:=PanelContainer.new();slot.custom_minimum_size=Vector2(cell_size,cell_size)
+		var style:=StyleBoxFlat.new();style.bg_color=Color("172124");style.border_color=Color("0b1214")
+		style.set_border_width_all(2);slot.add_theme_stylebox_override("panel",style);slots.add_child(slot)
+		if i>=materials.size():continue
+		var m:Dictionary=materials[i];var count:String=Model.jnum(Game.state.materials.get(m.id,0))
+		slot.tooltip_text="%s ×%s"%[m.name,count]
+		var picture:=TextureRect.new();picture.texture=material_texture(String(m.id));picture.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+		picture.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;picture.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		picture.texture_filter=CanvasItem.TEXTURE_FILTER_NEAREST;slot.add_child(picture)
+		var quantity:=UIKit.label(count,maxi(10,mini(14,int(cell_size*0.3))),UIKit.TEXT)
+		quantity.clip_text=true
+		quantity.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT;quantity.vertical_alignment=VERTICAL_ALIGNMENT_BOTTOM
+		quantity.mouse_filter=Control.MOUSE_FILTER_IGNORE;slot.add_child(quantity)
+	materials_view.add_child(UIKit.label("检验工具：放大镜 · 紫外线 · 称重",13,UIKit.MUTED,false,true))
 
 func material_texture(id: String) -> AtlasTexture:
 	var texture:=AtlasTexture.new();texture.atlas=UIKit.tex("res://assets/ui/materials.png")
@@ -542,7 +573,7 @@ class StorageGrid extends Control:
 		return Input.CURSOR_CAN_DROP if _uid_at(at_position) != "" else Input.CURSOR_ARROW
 
 	func rebuild() -> void:
-		custom_minimum_size = Vector2(page.CELL * WarehouseExpansion.columns(Game.state), page.CELL * ShopUpgrades.storage_rows(Game.state))
+		custom_minimum_size = Vector2(page.cell_size * WarehouseExpansion.columns(Game.state), page.cell_size * ShopUpgrades.storage_rows(Game.state))
 		for c in get_children():
 			c.queue_free()
 		tiles.clear()
@@ -556,15 +587,15 @@ class StorageGrid extends Control:
 			tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			var d := Model.dimensions(it)
-			tr.position = Vector2(it.x, it.y) * page.CELL + Vector2(4, 4)
-			tr.size = Vector2(d[0], d[1]) * page.CELL - Vector2(8, 8)
+			tr.position = Vector2(it.x, it.y) * page.cell_size + Vector2(4, 4)
+			tr.size = Vector2(d[0], d[1]) * page.cell_size - Vector2(8, 8)
 			UIKit.decorate_item(tr, it, 20.0)
 			add_child(tr)
 			tiles[it.uid] = tr
 		queue_redraw()
 
 	func _cell(p: Vector2) -> Vector2i:
-		return Vector2i(floori(p.x / page.CELL), floori(p.y / page.CELL))
+		return Vector2i(floori(p.x / page.cell_size), floori(p.y / page.cell_size))
 
 	func _uid_at(p: Vector2) -> String:
 		var c := _cell(p)
@@ -594,7 +625,6 @@ class StorageGrid extends Control:
 			var current_x := (get_global_transform_with_canvas() * drag.position).x
 			var scroller:ScrollContainer=page.grid_scroll
 			scroller.scroll_vertical -= roundi(current_y - scroll_touch_y)
-			scroller.scroll_horizontal -= roundi(current_x - scroll_touch_x)
 			scroll_touch_x = current_x
 			scroll_touch_y = current_y
 			accept_event()
@@ -613,7 +643,7 @@ class StorageGrid extends Control:
 						page.shell.hint(page.hint_text())
 					drag_rot = prepared_rot if prepared_uid == uid else it.rotated
 					press_pos = mb.position
-					drag_offset = mb.position - Vector2(it.x, it.y) * page.CELL
+					drag_offset = mb.position - Vector2(it.x, it.y) * page.cell_size
 					moved = false
 			elif mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed and drag_uid != "":
 				handled = true
@@ -631,7 +661,7 @@ class StorageGrid extends Control:
 				elif not page.warehouse_drop_rect().has_point(get_global_transform_with_canvas()*mb.position):
 					page.shell.toast("未放入可见仓格，原物已保留原位。")
 				else:
-					var tl: Vector2 = ((mb.position - drag_offset) / page.CELL).round()
+					var tl: Vector2 = ((mb.position - drag_offset) / page.cell_size).round()
 					var it = Game.item(uid)
 					Game.dispatch({"type": "MOVE", "uid": uid, "x": int(tl.x), "y": int(tl.y), "rotated": drag_rot})
 					var placed = Game.item(uid)
@@ -676,12 +706,12 @@ class StorageGrid extends Control:
 			return
 		var it = Game.item(drag_uid)
 		var d := Model.dimensions(it, drag_rot)
-		ghost.size = Vector2(d[0], d[1]) * page.CELL - Vector2(8, 8)
+		ghost.size = Vector2(d[0], d[1]) * page.cell_size - Vector2(8, 8)
 		ghost.position = pos - drag_offset + Vector2(4, 4)
 		queue_redraw()
 
 	func _draw() -> void:
-		var cs: float = page.CELL
+		var cs: float = page.cell_size
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.03, 0.05, 0.06, 0.88))
 		for y in ShopUpgrades.storage_rows(Game.state):
 			for x in WarehouseExpansion.columns(Game.state):

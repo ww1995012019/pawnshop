@@ -113,7 +113,7 @@ def main():
             wait('!s.blocked')
             page.wait_for_timeout(400)
             paid=saved_when(lambda s:s['cash']==4800 and s['storageExpansion']['level']==1)
-            assert paid['storageExpansion']['columns']==20 and paid['storageExpansion']['displayCapacity']==32,paid['storageExpansion']
+            assert paid['storageExpansion']['columns']==10 and paid['storageExpansion']['rows']==12 and paid['storageExpansion']['displayCapacity']==32,paid['storageExpansion']
             assert len(paid['inventory'])==22 and paid['cash']==4800
             page.screenshot(path=str(output/f'{width}-expanded.png'))
             click('@cabinet_pawn');click('@buy_pawn_slots');wait('s.cash===4795')
@@ -123,7 +123,7 @@ def main():
             page.reload();page.wait_for_function('window.OrbitalTouch?.state?.ready&&OrbitalTouch.state.has_save',timeout=120000)
             cmd({'type':'start'});wait('!s.title&&!s.busy')
             reloaded=page.evaluate(service.READ_SAVE)['state']
-            assert reloaded['storageExpansion']['columns']==20 and reloaded['storageExpansion']['pawnCapacity']==21 and reloaded['cash']==4795
+            assert reloaded['storageExpansion']['columns']==10 and reloaded['storageExpansion']['rows']==12 and reloaded['storageExpansion']['pawnCapacity']==21 and reloaded['cash']==4795
             assert not errors,errors
             print('PASS browser warehouse upgrade, consumed watches, permanent slots and reload',width,height,flush=True)
             context.close()

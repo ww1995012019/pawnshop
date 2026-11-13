@@ -16,7 +16,7 @@ func setup(shell,close: Callable) -> void:
   add_child(UIKit.label("仓储已满级 · %d × %d · 展示位 %d"%[WarehouseExpansion.columns(Game.state),WarehouseExpansion.rows(Game.state),WarehouseExpansion.capacity(Game.state,"display")],20,UIKit.AMBER,false,true))
   apply_button=UIKit.button("已达到最高档","secondary",Vector2(0,40),18);apply_button.disabled=true;add_child(apply_button);return
  var next:=WarehouseExpansion.default_state(level)
- add_child(UIKit.label("第 %d / 5 档 · 后仓 %d × 6 → %d × 6"%[level,WarehouseExpansion.columns(Game.state),next.columns],22,UIKit.AMBER,false,true))
+ add_child(UIKit.label("第 %d / 5 档 · 后仓 %d × %d → %d × %d"%[level,WarehouseExpansion.columns(Game.state),WarehouseExpansion.rows(Game.state),next.columns,next.rows],22,UIKit.AMBER,false,true))
  add_child(UIKit.label("展示位 %d → %d · 材料种类 %d → %d · 隔离位 %d → %d"%[WarehouseExpansion.capacity(Game.state,"display"),next.displayCapacity,WarehouseExpansion.capacity(Game.state,"materials"),next.materialCapacity,WarehouseExpansion.capacity(Game.state,"isolation"),next.isolationCapacity],16,UIKit.CYAN,false,true))
  add_child(UIKit.label("现金 %s / %d Cr · 累计委托 %d / %d 单"%[Model.jnum(Game.state.cash),WarehouseExpansion.FEES[level-1],WarehouseExpansion.completed_count(Game.state),WarehouseExpansion.ORDERS[level-1]],18,UIKit.TEXT,false,true))
  add_child(UIKit.label("扩仓将消耗所选原表和本档现金；仅接受未伪造的自有原物。价值按当前实际价值判定。",16,UIKit.DANGER,false,true))
@@ -59,7 +59,7 @@ func _confirm() -> void:
  for uid in ids:
   var it=Game.item(uid)
   if it!=null:labels.append(GameData.def(it.defId).name+" · "+String(uid))
- host.confirm("交付原表并扩仓","将消耗以下原表：\n%s\n\n另支付 %d Cr，扩至 %d × 6。"%["\n".join(labels),WarehouseExpansion.FEES[level-1],WarehouseExpansion.WIDTHS[level]],"确认交付并扩仓",func():
+ host.confirm("交付原表并扩仓","将消耗以下原表：\n%s\n\n另支付 %d Cr，扩至 10 × %d。"%["\n".join(labels),WarehouseExpansion.FEES[level-1],WarehouseExpansion.ROWS[level]],"确认交付并扩仓",func():
   Game.dispatch({"type":"EXPAND_WAREHOUSE","level":level,"uids":ids})
   if int(Game.state.storageExpansion.level)==level:close_panel.call()
   else:_sync())

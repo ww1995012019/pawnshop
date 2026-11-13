@@ -23,7 +23,7 @@ func model_helpers() -> void:
 	s.shopUpgrades = {"version":1,"extension":"storage"}
 	s.erase("storageExpansion")
 	WarehouseExpansion.ensure(s)
-	check(Model.can_place(s,it.uid,10,0),"legacy storage extension migrates placement into added columns")
+	check(Model.can_place(s,it.uid,0,6),"legacy storage extension migrates placement into added rows")
 	s.inventory.clear()
 	var dimensions := Model.dimensions(it)
 	for y in range(0,6,int(dimensions[1])):
@@ -34,7 +34,7 @@ func model_helpers() -> void:
 			s.inventory.append(block)
 	var spare := Model.new_item(s,"WCH-001")
 	var position = Model.empty_cell(s,spare)
-	check(position != null and position.x == 10,"storage packing searches added columns after old columns fill")
+	check(position != null and position.x == 0 and position.y == 6,"storage packing searches added rows after old rows fill")
 	s.shopUpgrades.extension = "workshop"
 	s.phase = "report"
 	s.report = {"cash":s.cash}
