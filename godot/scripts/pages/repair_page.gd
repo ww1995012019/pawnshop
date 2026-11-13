@@ -149,7 +149,7 @@ func _item_tile(row: Button, it: Dictionary, status: String, selected: bool) -> 
 	picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stack.add_child(picture)
 	for caption in [Game.def_name(it.defId),status]:
-		var label := UIKit.label(caption,11,UIKit.INK if selected else UIKit.TEXT)
+		var label := UIKit.label(caption,11,UIKit.AMBER if selected else UIKit.TEXT)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE

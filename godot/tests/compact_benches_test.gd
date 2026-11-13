@@ -6,6 +6,24 @@ func check(ok:bool,label:String):
  if not ok:failures+=1
 func frames():
  for i in 14:await process_frame
+func luminance(color:Color)->float:
+ var linear:=Vector3.ZERO
+ for i in 3:
+  var channel:float=color[i]
+  linear[i]=channel/12.92 if channel<=0.04045 else pow((channel+0.055)/1.055,2.4)
+ return linear.dot(Vector3(0.2126,0.7152,0.0722))
+func check_tile_contrast(page):
+ var lowest:=100.0
+ for tile in page.list_box.get_children():
+  if not tile is Button:continue
+  for caption in tile.get_child(0).get_children():
+   if not caption is Label:continue
+   var ink:=luminance(caption.get_theme_color("font_color"))
+   for state in ["normal","hover","pressed"]:
+    var background:StyleBoxFlat=tile.get_theme_stylebox(state)
+    var fill:=luminance(background.bg_color)
+    lowest=minf(lowest,(maxf(ink,fill)+0.05)/(minf(ink,fill)+0.05))
+ check(lowest>=4.5,"selected and unselected repair captions remain readable in every button state (contrast %.2f)"%lowest)
 func run():
  var game=root.get_node("Game");game.new_game("COMPACT");game.prefs.sound=false;game.prefs.reduced_motion=true
  var shell=load("res://main.tscn").instantiate();root.add_child(shell);await frames();shell._close_title()
@@ -19,6 +37,10 @@ func run():
   check(key.get_global_rect().end.y<=page.mat_rect.position.y,"inspection toolbar sits above physical workbench")
  shell.go("repair");await frames();page=shell.active_shell().page
  check(page.list_box.columns>=2,"desktop repair selection has multiple columns")
+ check_tile_contrast(page)
+ var candidates:Array=page._candidates()
+ if candidates.size()>1:
+  page._select(candidates[1].uid);await frames();check_tile_contrast(page)
  var supplies=page.info.find_child("RepairSupplies",true,false)
  check(supplies is GridContainer,"repair supplies form icon quantity grid")
  if supplies!=null:
@@ -45,6 +67,7 @@ func run():
    check(not page.cabinet_scroll.get_h_scroll_bar().visible,"mobile %s has no horizontal overflow"%mode)
   shell.go("repair");await frames();page=shell.active_shell().page
   check(not page.list_box.get_parent().get_h_scroll_bar().visible,"mobile repair tiles avoid horizontal overflow")
+  check_tile_contrast(page)
   supplies=page.info.find_child("RepairSupplies",true,false)
   check(supplies!=null and supplies.get_combined_minimum_size().x<=page.detail_panel.size.x,"mobile supplies fit details width")
  shell.queue_free();await frames();quit(1 if failures else 0)
