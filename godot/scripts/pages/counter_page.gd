@@ -4,12 +4,13 @@ extends Page
 
 const CUSTOMER_HEIGHT := 320.0
 const CRATE_COLS := 10
-const ACTION_TOP := 640.0
-const ACTION_HEIGHT := 40.0
+const FRONT_RAIL_Y := 684.0
+const FRONT_RAIL_HEIGHT := 28.0
+const TERMINAL_KEY_HEIGHT := 32.0
 # Mounting strips measured on the 1920×1080 shop illustration. Labels belong
 # to these physical rails/bezel faces, independently of the equipment hit area.
 const FIXTURE_MOUNTS := {
-	"report": Rect2(218, 675, 244, 28),
+	"report": Rect2(218, FRONT_RAIL_Y, 244, FRONT_RAIL_HEIGHT),
 	"warehouse": Rect2(212, 1003, 300, 28),
 	"display": Rect2(180, 533, 370, 28),
 	"repair": Rect2(1596, 1003, 204, 28),
@@ -362,9 +363,10 @@ func _build_board() -> void:
 	board.add_child(board_rent)
 	for label in [board_day, board_rent]:
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var report := UIKit.button("日结账本 · 打烊", "secondary", Vector2(244, ACTION_HEIGHT), 18)
+	var report := UIKit.button("日结账本 · 打烊", "secondary", Vector2(244, FRONT_RAIL_HEIGHT), 16)
+	_till_key(report, "secondary")
 	report.name = "fixture_report"
-	report.position = Vector2(218, ACTION_TOP)
+	report.position = Vector2(218, FRONT_RAIL_Y)
 	report.pressed.connect(func():
 		if not _scene_blocked() and not busy: shell.go("report"))
 	add_child(report)
@@ -558,8 +560,8 @@ func relayout() -> void:
 	terminal.scale = Vector2(0.9, 0.9)
 	crate.position = Vector2(604, 759)
 	crate.size = Vector2(672, 224)
-	actions.position = Vector2(54, (ACTION_TOP - terminal.position.y) / terminal.scale.y)
-	actions.size = Vector2(472, ACTION_HEIGHT / terminal.scale.y)
+	actions.position = Vector2(54, 245)
+	actions.size = Vector2(472, TERMINAL_KEY_HEIGHT)
 	bubble.position = bubble_rect.position
 	bubble.size = bubble_rect.size
 	bubble_name.position = Vector2(12, 10)
@@ -819,8 +821,8 @@ func _till_key(button: Button, kind: String) -> void:
 		var cap := UIKit.key_style(kind, state, true)
 		cap.content_margin_left = 6
 		cap.content_margin_right = 6
-		cap.content_margin_top = 4
-		cap.content_margin_bottom = 4
+		cap.content_margin_top = 1
+		cap.content_margin_bottom = 1
 		button.add_theme_stylebox_override(state, cap)
 	for state in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
 		button.add_theme_color_override(state, Color("eee0bb"))
@@ -838,7 +840,7 @@ func _terminal_label(parent: Control, pos: Vector2, extent: Vector2, font_size: 
 
 func _act(text: String, kind: String, fn: Callable, enabled := true, _wide := false, tip := "") -> Button:
 	var caption := "抵押合同" if text.begins_with("抵押（") or text == "签抵押合同" else text
-	var b := UIKit.button(caption, kind, Vector2(70, ACTION_HEIGHT / terminal.scale.y), 20)
+	var b := UIKit.button(caption, kind, Vector2(70, TERMINAL_KEY_HEIGHT), 18)
 	_till_key(b, kind)
 	b.disabled = not enabled or busy
 	b.tooltip_text = tip
@@ -1809,9 +1811,10 @@ func _process(delta: float) -> void:
 
 # ------------------------------------------------ police / conversations
 func _build_police_controls() -> void:
-	alarm_button=UIKit.button("报警 · 呼叫巡警","danger",Vector2(280,ACTION_HEIGHT),18)
+	alarm_button=UIKit.button("报警 · 呼叫巡警","danger",Vector2(280,FRONT_RAIL_HEIGHT),16)
+	_till_key(alarm_button,"danger")
 	alarm_button.name="alarm_button"
-	alarm_button.position=Vector2(650,ACTION_TOP)
+	alarm_button.position=Vector2(650,FRONT_RAIL_Y)
 	alarm_button.pressed.connect(func():
 		if not busy and not _scene_blocked(): _confirm_alarm())
 	add_child(alarm_button)
