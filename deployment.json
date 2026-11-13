@@ -1,8 +1,8 @@
 {
-  "source_commit": "6820aeef94c611ad43592607198d300ce7bab10d",
-  "release_id": "b9cd38a8dbdc4d72",
-  "pack": "workbench-dfe318c5ea177186.pck",
-  "html_sha256": "b8603746eac8d8cd213d14f845a2da2ab8ac60f73934f2847388b257dca84f89",
+  "source_commit": "c2647d1ae6f6afdf45af124024ae3594e3eebc26",
+  "release_id": "b69bf21cf94648b0",
+  "pack": "workbench-8b265b36227e5c6e.pck",
+  "html_sha256": "87b19970854a5c3ab61acc29709546c89c787365fc2e96e4a5f8bfd85d0e865a",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 120,
+  "native_regression_groups": 121,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -176,5 +176,6 @@
   "merchant_material_clarity_version": 1,
   "workspace_history_version": 1,
   "warehouse_receipt_layout_version": 1,
-  "cleaning_checkpoint_version": 1
+  "cleaning_checkpoint_version": 1,
+  "draggable_window_version": 1
 }
