@@ -1,10 +1,11 @@
 """Check compact icon selection, merchant transfers, and representative page screenshots."""
-import importlib.util,json,os,shutil,subprocess,tempfile
+import argparse,importlib.util,json,os,shutil,subprocess,tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'work/icon-layout';OUT.mkdir(exist_ok=True)
 spec=importlib.util.spec_from_file_location('warehouse',ROOT/'scripts/test-warehouse-expansion-web.py');svc=importlib.util.module_from_spec(spec);spec.loader.exec_module(svc)
 def main():
+ parser=argparse.ArgumentParser();parser.add_argument("--merchant-only",action="store_true");args=parser.parse_args()
  with tempfile.TemporaryDirectory() as saves:
   subprocess.run(['godot','--headless','--path',str(ROOT/'godot'),'--script','res://tests/icon_layout_browser_fixture.gd'],env={**os.environ,'XDG_DATA_HOME':saves},check=True,capture_output=True,timeout=30)
  with sync_playwright() as p:
@@ -47,6 +48,9 @@ def main():
    assert sold['cash']==cash-10+quote and sold['ap']==before_ap-1,sold
    page.reload();page.wait_for_function('window.OrbitalTouch?.state?.ready&&OrbitalTouch.state.has_save',timeout=120000)
    cmd({'type':'start'});wait('!s.title&&!s.busy');assert all(i['uid']!=uid for i in page.evaluate(svc.service.READ_SAVE)['state']['inventory'])
+   if args.merchant_only:
+    assert not errors,errors
+    print('PASS merchant icons and transfers',width,height,flush=True);ctx.close();continue
    load('base')
    for target in ['warehouse','inspect','repair','orders','report']:
     for i in range(3):cmd({'type':'close'});page.wait_for_timeout(200)

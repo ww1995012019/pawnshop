@@ -43,6 +43,10 @@ func run() -> void:
 		var sheet = shell.modal_layer.find_child("ModalSheet", true, false)
 		if window == Vector2i(1440,900):
 			check(sheet.size.y < 620, "desktop material popup shrinks to content")
+			var grid = shell.modal_layer.find_child("material_grid", true, false)
+			check(grid.columns == 7, "thirteen materials use balanced seven and six icon rows")
+			check(sheet.size.x <= 700, "merchant module is compact in width")
+			check(keyed("category:materials").size.x <= 150, "category control does not stretch across the module")
 		var buy := keyed("buy:MAT-001")
 		check(buy != null and sheet.get_global_rect().encloses(buy.get_global_rect()) and root.get_visible_rect().encloses(buy.get_global_rect()), "material action stays inside sheet at " + str(window))
 		keyed("material:MAT-002").pressed.emit()

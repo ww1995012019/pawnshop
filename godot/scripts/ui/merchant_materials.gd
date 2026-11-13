@@ -36,9 +36,9 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 	add_child(_grid)
 	for material in GameData.materials:
 		var material_id: String = material.id
-		var card := UIKit.button("", "secondary", Vector2(76, 80), 17)
+		var card := UIKit.button("", "secondary", Vector2(64, 64), 17)
 		card.name = "material_" + material_id
-		card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.tooltip_text = "%s\n%s" % [material.name, material.description]
 		card.set_meta("merchant_focus", "material:" + material_id)
 		focus_targets["material:" + material_id] = card
@@ -53,9 +53,10 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		title.custom_minimum_size.x = 0
+		title.hide()
 		column.add_child(title)
-		var counts := UIKit.label("%d / %d" % [int(state.trade.stock.get(material_id, 0)), int(state.materials.get(material_id, 0))], 11, UIKit.MUTED)
-		counts.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var counts := UIKit.label("×%d" % int(state.materials.get(material_id, 0)), 14, UIKit.TEXT)
+		counts.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		counts.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		counts.custom_minimum_size.x = 0
 		column.add_child(counts)
@@ -64,26 +65,28 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 		card.pressed.connect(func(): _select(material_id))
 		_cards[material_id] = card
 		_grid.add_child(card)
-	var detail := UIKit.plate(UIKit.inset_style(12))
+	var detail := UIKit.plate(UIKit.inset_style(4))
 	_detail = detail
 	detail.name = "material_detail"
 	add_child(detail)
-	move_child(detail, 0)
 	var details := UIKit.vbox(4)
 	detail.add_child(details)
 	var heading := UIKit.hbox(12)
 	details.add_child(heading)
 	_picture = _icon(selected_id, 36)
 	_picture.custom_minimum_size.x = 40
+	_picture.hide()
 	heading.add_child(_picture)
-	var labels := UIKit.vbox(4)
+	var labels := UIKit.hbox(8)
 	labels.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_child(labels)
 	_name = UIKit.label("", 17, UIKit.AMBER)
 	labels.add_child(_name)
 	_stock = UIKit.label("", 14, UIKit.TEXT, false, true)
+	_stock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	labels.add_child(_stock)
 	_description = UIKit.label("", 14, UIKit.MUTED, false, true)
+	_description.hide()
 	details.add_child(_description)
 	actions = HFlowContainer.new()
 	actions.name = "merchant_material_actions"
@@ -146,8 +149,8 @@ func _ignore_pointer(node: Control) -> void:
 
 func _layout_grid() -> void:
 	if not is_inside_tree(): return
-	var width := maxf(76.0, size.x)
-	_grid.columns = clampi(floori((width + 6.0) / 82.0), 1, 10)
+	var width := maxf(64.0, size.x)
+	_grid.columns = clampi(floori((width + 6.0) / 70.0), 1, 7)
 
 func _select(id: String) -> void:
 	selected_id = id
@@ -178,6 +181,7 @@ func _refresh() -> void:
 	_name.text = material.name
 	_stock.text = "商人库存 %d / 已持有 %d" % [available, owned]
 	_description.text = material.description
+	_detail.tooltip_text = material.name + "：" + material.description
 	_picture.texture = _texture(selected_id)
 	_quantity_label.text = str(quantity)
 	_minus.disabled = quantity <= 1

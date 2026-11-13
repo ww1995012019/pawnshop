@@ -1084,7 +1084,7 @@ func _prepare_inspection() -> void:
 func _merchant_shop() -> void:
 	if Game.state.trade == null or Game.state.trade.kind != "merchant":
 		return
-	var panel: Array = shell.modal("流动商人的补给", 1000)
+	var panel: Array = shell.modal("流动商人的补给", 660)
 	var body: VBoxContainer = panel[0]
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2.ZERO
@@ -1150,7 +1150,8 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 		tab.icon = UIKit.icon(entry[2])
 		tab.expand_icon = true
 		tab.add_theme_constant_override("icon_max_width",20)
-		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tab.custom_minimum_size.x = 110
+		tab.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		tab.set_meta("merchant_focus", "category:" + entry[0])
 		focus_targets["category:" + entry[0]] = tab
 		var category_id: String = entry[0]
