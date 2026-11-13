@@ -29,16 +29,23 @@ class DeskCard extends Node2D:
   item_marks.size=Vector2(width,64)
   UIKit.decorate_item(item_marks,it,18.0,false)
  func area() -> Rect2: return Rect2(Vector2(-width/2,-35),Vector2(width,98))
+ func tag_rect() -> Rect2:
+  var tag_width:=minf(width,86.0)
+  return Rect2(-tag_width/2,35,tag_width,22)
  func _draw() -> void:
-  var edge:=Color("f2c27b") if focused else Color("83b7a0") if agreed else Color("b77e65") if refused else Color("65765d")
-  draw_style_box(_paper(edge),Rect2(-width/2,33,width,30))
+  var edge:=Color("f2c27b") if focused else Color("83b7a0") if agreed else Color("b77e65") if refused else Color("4d625c")
+  var box:=tag_rect()
+  draw_style_box(_paper(edge),box)
+  var text: String=("✓ " if agreed else "× " if refused else "")+note
+  var font_size:=14
+  while font_size>9 and UIKit.font.get_string_size(text,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x>box.size.x-8:
+   font_size-=1
+  var ink:=Color("f2c27b") if focused else Color("a9d4bc") if agreed else Color("efb19a") if refused else Color("e1e6d6")
+  draw_string(UIKit.font,Vector2(box.position.x+4,box.position.y+16),text,HORIZONTAL_ALIGNMENT_CENTER,box.size.x-8,font_size,ink)
   if focused:
-   draw_rect(Rect2(-width/2,33,width,30),edge,false,2)
-   draw_colored_polygon(PackedVector2Array([Vector2(-5,-40),Vector2(5,-40),Vector2(0,-35)]),edge)
-  draw_string(UIKit.font,Vector2(-width/2+5,46),caption,HORIZONTAL_ALIGNMENT_LEFT,width-10,16,Color("302c27"))
-  draw_string(UIKit.font,Vector2(-width/2+5,60),note,HORIZONTAL_ALIGNMENT_LEFT,width-10,13,Color("8c482d") if refused else Color("315547"))
+   draw_colored_polygon(PackedVector2Array([Vector2(-4,-40),Vector2(4,-40),Vector2(0,-36)]),edge)
  func _paper(edge: Color) -> StyleBoxFlat:
-  var style:=StyleBoxFlat.new();style.bg_color=Color("dfcfaa");style.border_color=edge;style.set_border_width_all(1);return style
+  var style:=StyleBoxFlat.new();style.bg_color=Color("1b2c2c");style.border_color=edge;style.set_border_width_all(1);return style
 
 func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
  var shown:=CounterDialogue.table_items(state)
@@ -114,8 +121,8 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
   card.show_item_marks(original)
   card.visitor=visitor;card.focused=info.focused;card.agreed=info.selected;card.refused=info.status in ["rejected","blocked"]
   sprite.set_meta("hit_size",Vector2(card.width,98))
-  card.caption=("来客 · " if visitor else "店·")+WatchForgery.sale_name(original).left(8 if visitor else 5)
-  card.note=("已谈妥 " if info.selected else "不收 " if card.refused else "开价 " if visitor else "报价 ")+Model.jnum(info.price)
+  card.caption=""
+  card.note=Model.jnum(info.price)+" Cr"
   card.position=sprite.position;card.queue_redraw()
   if fresh and animate and not Game.prefs.reduced_motion:
    var start:=to_local(from);sprite.position=start;sprite.set_meta("arriving",true)

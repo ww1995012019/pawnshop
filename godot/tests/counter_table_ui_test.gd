@@ -13,6 +13,11 @@ func run() -> void:
  var table=page.get("counter_table")
  check(table!=null,"counter has a physical multi-original surface")
  if table==null: shell.queue_free();await frames();quit(1);return
+ for card in table.cards.values():
+  check(card.caption=="" and card.note.ends_with(" Cr"),"desk tag shows price without repetitive ownership captions")
+  check(card.has_method("tag_rect"),"desk tag exposes compact geometry")
+  if card.has_method("tag_rect"):
+   check(card.tag_rect().size.y<=24 and card.tag_rect().size.x<=102,"desk tag stays compact below the original")
  check(table.sprites.size()==3,"all three NPC originals are already laid out without asking next")
  var first: String=game.state.inventory[0].uid;var second: String=game.state.inventory[1].uid
  await click(button_named(page,"stock_recommend_"+first));await click(button_named(page,"stock_recommend_"+second))
