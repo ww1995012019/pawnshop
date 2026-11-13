@@ -72,6 +72,7 @@ func run():
 	active.go("repair")
 	await process_frame
 	await process_frame
+	active = shell.active_shell()
 	page = active.page
 	for i in 8: await process_frame
 	var candidates: Array = page._candidates()
@@ -132,6 +133,7 @@ func run():
 	# display resolution changes, without resetting the item or the tool.
 	active.go("inspect")
 	await process_frame
+	active = shell.active_shell()
 	page = active.page
 	page._set_tool("TOL-005")
 	await create_timer(0.2).timeout

@@ -182,17 +182,24 @@ func _select(uid: String) -> void:
 		item.setup(it.defId, uid, 360.0)
 		item.draggable = false
 		add_world(item)
-		var alpha: Image = item.body.texture.get_image().get_region(Rect2i(item.body.region_rect))
-		cleaning = Cleaning.new()
-		cleaning.configure(alpha, uid, it.get("service", {}).get("operations", {}).get("dust", {}))
-		mask_tex = ImageTexture.create_from_image(cleaning.image())
-		item.mat.set_shader_parameter("grime_mask",mask_tex)
+		_reload_cleaning(it)
 	if it != null and it.get("refurbishment",{}).get("active_case",false):
 		mode = "refurb"
 		task = "refurb_case"
 	_fill_list()
 	_stage_ui()
 	_refresh_info()
+
+func _reload_cleaning(it: Dictionary) -> void:
+	var alpha: Image = item.body.texture.get_image().get_region(Rect2i(item.body.region_rect))
+	cleaning = Cleaning.new()
+	cleaning.configure(alpha, it_uid, it.get("service", {}).get("operations", {}).get("dust", {}))
+	mask_tex = ImageTexture.create_from_image(cleaning.image())
+	item.mat.set_shader_parameter("grime_mask",mask_tex)
+	dirty = cleaning.remaining()
+	cleaning_unsaved = false
+	scrubbing = false
+	cloth_uv = Vector2(-1,-1)
 
 func _fill_list() -> void:
 	_sync_modes()
@@ -783,6 +790,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			_save_cleaning()
 
 func _process(delta: float) -> void:
+	# GUI controls can consume mouseup before _unhandled_input sees it.
+	if scrubbing and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		scrubbing = false
+		cloth_uv = Vector2(-1,-1)
+		_save_cleaning()
+		queue_redraw()
 	if is_instance_valid(art) and art.visible and art.interaction_allowed != (_current_problem() == ""):
 		_update_guidance()
 	if is_instance_valid(instruction):
@@ -801,7 +814,9 @@ func _process(delta: float) -> void:
 			last_uv = uv
 	save_clock += delta
 	operation_clock += delta
-	if save_clock >= 0.4:
+	# Whole-save serialization is synchronous. Flush on release, navigation,
+	# completion or backgrounding instead of interrupting the held stroke.
+	if save_clock >= 0.4 and not scrubbing:
 		save_clock = 0.0
 		_save_cleaning()
 
@@ -830,6 +845,12 @@ func toast_rect() -> Rect2:
 
 func on_changed(_prev: Dictionary,_next: Dictionary,action: Dictionary) -> void:
 	if action.type in ["SERVICE_PROGRESS","SERVICE_BEGIN","REFURB_PROGRESS"]: return
+	if action.type == "WORKSPACE_RESUME":
+		var current = Game.item(it_uid)
+		if current == null:
+			_select("")
+			return
+		if is_instance_valid(item): _reload_cleaning(current)
 	_update_guidance()
 	if action.type == "BUY_MATERIAL":
 		call_deferred("_refresh_info")

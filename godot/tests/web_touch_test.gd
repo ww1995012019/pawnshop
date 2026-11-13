@@ -77,7 +77,7 @@ func run() -> void:
 	check(shell.workspace_shell.page.tool == "", "touch can deselect a tool and return to moving the item")
 	bridge.command({"type":"accept"})
 	check(not game.state.trade.locked, "equipment drawer blocks background trade commands")
-	shell.close_workspace()
+	shell.go("counter")
 	await frame()
 	bridge.command({"type":"accept"})
 	check(game.state.trade.locked and game.state.cash == initial_cash, "accept locks the actual visitor offer without paying the draft")

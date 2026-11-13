@@ -86,3 +86,40 @@ tests pass. Browser tests pass at 1440×900, 844×390 and 390×844 using actual 
 or touch input, covering material purchase, watch selection and sale, and saved
 inventory persistence after reload. No script errors were reported. Web export
 passes. This follow-up covers the merchant panel only.
+
+## Warehouse receipt, workspace return and cloth input — 2026-11-13
+
+Final result: passed.
+
+The warehouse receipt now uses a fixed-size watch/name header and full-width
+metadata. The previous narrow desktop image could stretch to 363px tall; the
+same modified luxury fixture now has an 88px header. Actual browser captures
+reviewed at `work/workspace-return/1595-receipt.png`, `844-receipt.png` and
+`390-receipt.png`: tier, ownership, condition and valuation lines use the paper
+width, and the image marks remain with the watch. The phone receipt stays
+scrollable inside its existing detail panel.
+
+Linked workspace navigation preserves the original page and its selected item,
+scroll position and focus. Hidden workspaces stop rendering, processing and
+receiving input. Close/Escape pops one workspace; explicit counter navigation
+and game resets discard the whole history. Resume refreshes current saved work
+and UV markings so older pages cannot restore stale progress or serials.
+
+Held cloth strokes no longer serialize the full save every 0.4 seconds or rebuild
+all counter inventory controls. Mouse release, navigation, completion and
+backgrounding flush the current mask. The physical button state also handles
+releases consumed by GUI controls. With an 81-item fixture, native progress
+notification overhead fell from 19.01ms to 0.044ms.
+
+The 81-item Chromium/SwiftShader profile confirms held input has the same median
+frame time as idle (183ms in this software-rendered environment). Absolute frame
+times remain renderer-limited; this is not evidence of a hardware 60fps result.
+The GUI-release persistence check passed after waiting for asynchronous WebFS
+to reach IndexedDB.
+
+Validation: full native run passed 114/120 groups initially; the six affected
+groups were corrected and rerun successfully, along with cleaning-input,
+cleaning-performance and optical-face tests. Browser workspace return tests pass
+at 1595×860, 844×390 and 390×844. Desktop and phone actual cloth input tests pass
+continuous fading, release, page/reload persistence and cleaning completion.
+Web export passes. No remaining P0/P1/P2 in the changed surfaces.

@@ -35,6 +35,10 @@ func setup(owner_shell: Node) -> void:
 func _visibility_changed(args: Array) -> void:
 	if args.is_empty() or not is_instance_valid(shell): return
 	var hidden := bool(args[0])
+	if hidden:
+		var active = shell.active_shell()
+		if active.page != null and active.page.has_method("prepare_close_workspace"):
+			active.page.prepare_close_workspace()
 	if hidden and shell.mobile_mode():
 		background_paused = true
 		get_tree().paused = true

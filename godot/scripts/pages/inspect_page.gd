@@ -376,6 +376,7 @@ func _refresh_info() -> void:
 func _load_item() -> void:
 	_set_tool("")
 	if is_instance_valid(item): item.queue_free()
+	item = null
 	var it = Game.workbench_item()
 	it_uid = it.uid if it != null else ""
 	Game.focus_uid = it_uid
@@ -594,6 +595,16 @@ func _record() -> void:
 	_refresh_info()
 
 func on_changed(_p: Dictionary,_n: Dictionary,_a: Dictionary) -> void:
+	# A linked repair workspace can replace the physical UV marking while
+	# this exact item stays on the inspection mat. Refresh only its marking.
+	var current = Game.item(it_uid)
+	if current == null and _a.get("type", "") == "WORKSPACE_RESUME":
+		_load_item()
+		queue_relayout()
+		return
+	if current != null and is_instance_valid(item):
+		var serial: String = WatchRules.serial(current)
+		if item.reveal.text != serial: item.set_reveal(serial,Vector2(.5,.62))
 	if _tool_problem(tool) != "": _set_tool("")
 	_refresh_info()
 

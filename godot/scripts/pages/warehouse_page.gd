@@ -389,7 +389,9 @@ func _detail() -> void:
 	var pic := TextureRect.new()
 	pic.texture = UIKit.physical_icon(it)
 	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	pic.custom_minimum_size = Vector2(48,64) if shell.mobile_mode() else Vector2(120,120)
+	pic.custom_minimum_size = Vector2(48,64) if shell.mobile_mode() else Vector2(72,88)
+	# The image and its corner marks must not stretch with wrapped receipt text.
+	pic.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	UIKit.decorate_item(pic, it, 22.0)
@@ -397,24 +399,25 @@ func _detail() -> void:
 	var hv := UIKit.vbox(4)
 	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hv.add_child(UIKit.label(def.name, 26, UIKit.INK, false, true))
-	hv.add_child(UIKit.label("型号档次：%s" % GameData.tier_label(it.defId), 17, UIKit.RUST,false,true))
-	if UIKit.presentation_id(it) != String(it.defId):
-		hv.add_child(UIKit.label("外观档次：%s · 改装外壳" % GameData.tier_label(UIKit.presentation_id(it)), 17, UIKit.RUST,false,true))
 	if UIKit.is_modified(it):
 		hv.add_child(UIKit.label("改 · 已加工", 17, UIKit.RUST))
+	head.add_child(hv)
+	record.add_child(head)
+	# Long metadata uses the full paper width, including narrow desktop drawers.
+	record.add_child(UIKit.label("型号档次：%s" % GameData.tier_label(it.defId), 17, UIKit.RUST,false,true))
+	if UIKit.presentation_id(it) != String(it.defId):
+		record.add_child(UIKit.label("外观档次：%s · 改装外壳" % GameData.tier_label(UIKit.presentation_id(it)), 17, UIKit.RUST,false,true))
 	if UIKit.presentation_tier(it) in ["luxury","ultra"]:
 		var distinction := UIKit.hbox(8)
 		distinction.add_child(UIKit.tier_badge(UIKit.presentation_id(it)))
 		var distinction_text := UIKit.label("珍稀型号 · 穹铸工艺" if UIKit.presentation_tier(it)=="ultra" else "名贵型号 · 金饰徽章", 16, UIKit.RUST,false,true)
 		distinction_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		distinction.add_child(distinction_text)
-		hv.add_child(distinction)
+		record.add_child(distinction)
 	var owner: String = {"shop": "店铺自有", "customer": "顾客委修", "pawn": "抵押保管"}[it.owner]
 	var loc: String = {"warehouse": "后仓", "display": "陈列架", "isolation": "隔离柜", "pawn": "抵押柜"}[it.location]
-	hv.add_child(UIKit.label("%s · %s · 占格 %d×%d" % [owner, loc, def.size[0], def.size[1]], 16, Color("6b5a40"), false, true))
-	hv.add_child(UIKit.label("品相 %s · 物证 %d · 挂牌 %s" % [UIKit.pct(it.condition), Model.evidence_count(it), UIKit.money(it.listPrice)], 17, UIKit.INK, false, true))
-	head.add_child(hv)
-	record.add_child(head)
+	record.add_child(UIKit.label("%s · %s · 占格 %d×%d" % [owner, loc, def.size[0], def.size[1]], 16, Color("6b5a40"), false, true))
+	record.add_child(UIKit.label("品相 %s · 物证 %d · 挂牌 %s" % [UIKit.pct(it.condition), Model.evidence_count(it), UIKit.money(it.listPrice)], 17, UIKit.INK, false, true))
 	record.add_child(UIKit.label(Model.appraisal_text(it) + " · 成本 " + UIKit.money(it.cost), 18, UIKit.RUST, false, true))
 	record.add_child(UIKit.label(("来源已核验" if it.sourceVerified else "来源待核") + " · " + String(it.source), 16, Color("2f6b3a") if it.sourceVerified else UIKit.RUST, false, true))
 	if known_crime:
@@ -744,5 +747,5 @@ class StorageGrid extends Control:
 func _open_forgery(uid: String) -> void:
 	if Game.item(uid) == null: return
 	shell.go("repair",uid)
-	var active = shell.active_shell()
+	var active = shell.workspace_parent.active_shell() if shell.workspace_mode else shell.active_shell()
 	if active.page_name == "repair": active.page.call_deferred("open_forgery")

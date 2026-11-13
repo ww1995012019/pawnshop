@@ -64,6 +64,12 @@ var workspace_title: Label
 var workspace_close: Button
 var workspace_origin: Control
 var workspace_suspended_focus: Array = []
+var workspace_history: Array[Dictionary] = []
+var workspace_suspended := false
+var workspace_dirty := false
+var workspace_suspended_state := {}
+var page_transition: Tween
+var page_transition_position := Vector2.ZERO
 var workspace_logical_size := Vector2(1600, 900)
 const WORKSPACE_LABELS := {"inspect": "鉴定台", "repair": "维修工作台", "warehouse": "货物抽屉", "orders": "委托终端", "report": "营业账本"}
 const WORKSPACE_SIZE := Vector2(1600, 900)
@@ -607,7 +613,7 @@ func go(name: String, focus_uid := "") -> void:
 	if workspace_mode and mobile_mode() and page != null:
 		if workspace_parent.workspace_close_pending: return
 		if page.has_method("can_close_workspace") and not page.can_close_workspace():
-			if name == "counter": workspace_parent.close_workspace()
+			if name == "counter": workspace_parent.close_workspace(true)
 			else: toast("请等当前动作落稳后切换")
 			return
 	if not PAGES.has(name):
@@ -616,18 +622,25 @@ func go(name: String, focus_uid := "") -> void:
 		_clear_toasts()
 		if workspace_mode and is_instance_valid(workspace_parent): workspace_parent._clear_toasts()
 	if workspace_mode and name == "counter":
-		workspace_parent.close_workspace()
+		workspace_parent.close_workspace(true)
+		return
+	if workspace_mode and page != null and name != page_name:
+		workspace_parent._suspend_workspace()
+		workspace_parent.open_workspace(name, focus_uid)
 		return
 	if not workspace_mode:
 		if name != "counter":
 			open_workspace(name, focus_uid)
 			return
 		if workspace_open():
-			close_workspace()
+			close_workspace(true)
 			return
 	if focus_uid != "":
 		Game.focus_uid = focus_uid
 	if page != null:
+		_settle_page_transition()
+		if page.has_method("prepare_close_workspace"):
+			page.prepare_close_workspace()
 		page.leave()
 		page.queue_free()
 	page_name = name
@@ -644,11 +657,11 @@ func go(name: String, focus_uid := "") -> void:
 	_place_toasts()
 	if not Game.prefs.reduced_motion:
 		page.modulate.a = 0.0
-		var final_position := page.position
+		page_transition_position = page.position
 		page.position.y += 12.0
-		var transition := create_tween().set_parallel(true)
-		transition.tween_property(page, "position", final_position, 0.24).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		transition.tween_property(page, "modulate:a", 1.0, 0.2)
+		page_transition = create_tween().set_parallel(true)
+		page_transition.tween_property(page, "position", page_transition_position, 0.24).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		page_transition.tween_property(page, "modulate:a", 1.0, 0.2)
 	for k in nav_buttons:
 		var b: Button = nav_buttons[k]
 		b.add_theme_stylebox_override("normal", UIKit.key_style("primary" if k == name else "secondary", "normal"))
@@ -663,18 +676,53 @@ func workspace_open() -> bool:
 func active_shell() -> Node:
 	return workspace_shell if workspace_open() else self
 
+func _settle_page_transition() -> void:
+	if page_transition != null and page_transition.is_valid():
+		page_transition.kill()
+		if is_instance_valid(page):
+			page.position = page_transition_position
+			page.modulate.a = 1.0
+
+func _suspend_workspace() -> void:
+	var focused := _keyboard_owner()
+	var focus_text: String = focused.text if focused is Button else ""
+	var ui_visible: bool = workspace_shell.ui.visible
+	var fx_visible: bool = workspace_shell.fx.visible
+	workspace_shell._settle_page_transition()
+	workspace_shell.workspace_suspended = true
+	workspace_shell.process_mode = Node.PROCESS_MODE_DISABLED
+	workspace_shell.hide()
+	workspace_shell.ui.hide()
+	workspace_shell.fx.hide()
+	if workspace_shell.page.has_method("prepare_close_workspace"):
+		workspace_shell.page.prepare_close_workspace()
+	workspace_shell.workspace_suspended_state = Game.state.duplicate(true)
+	workspace_shell.workspace_dirty = false
+	_focus_keyboard(null)
+	var viewport := workspace_container.get_child(0) as SubViewport
+	viewport.gui_disable_input = true
+	viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	workspace_overlay.process_mode = Node.PROCESS_MODE_DISABLED
+	workspace_overlay.hide()
+	workspace_history.append({"shell":workspace_shell,"overlay":workspace_overlay,
+		"frame":workspace_frame,"container":workspace_container,"host":workspace_host,
+		"title":workspace_title,"close":workspace_close,"size":workspace_logical_size,
+		"focus":focused,"focus_text":focus_text,"focus_uid":Game.focus_uid,"ui_visible":ui_visible,"fx_visible":fx_visible})
+	workspace_shell = null
+	workspace_overlay = null
+
 func open_workspace(name: String, focus_uid := "") -> void:
-	if focus_uid != "":
-		Game.focus_uid = focus_uid
 	if workspace_open():
 		workspace_shell.go(name, focus_uid)
-		_workspace_heading(name)
 		return
-	workspace_origin = get_viewport().gui_get_focus_owner()
-	workspace_suspended_focus.clear()
-	_suspend_home_focus()
-	if page.has_method("workspace_state_changed"):
-		page.workspace_state_changed(true)
+	if focus_uid != "":
+		Game.focus_uid = focus_uid
+	if workspace_history.is_empty():
+		workspace_origin = get_viewport().gui_get_focus_owner()
+		workspace_suspended_focus.clear()
+		_suspend_home_focus()
+		if page.has_method("workspace_state_changed"):
+			page.workspace_state_changed(true)
 	workspace_overlay = Control.new()
 	workspace_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	workspace_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -699,7 +747,7 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	if not mobile_mode(): header.add_child(UIKit.label("店内操作  /  ESC 收起", 18, UIKit.MUTED))
 	workspace_close = UIKit.button("" if mobile_mode() else "收起", "secondary", Vector2(28,28) if mobile_mode() else Vector2(108,48),14 if mobile_mode() else 20,"close")
 	workspace_close.add_theme_constant_override("icon_max_width",16 if mobile_mode() else 24)
-	workspace_close.tooltip_text = "关闭并返回柜台"
+	workspace_close.tooltip_text = "关闭并返回柜台" if workspace_history.is_empty() else "关闭并返回" + WORKSPACE_LABELS.get(workspace_history.back().shell.page_name, "上一工作台")
 	workspace_close.pressed.connect(close_workspace)
 	header.add_child(workspace_close)
 	body.add_child(header_mount)
@@ -746,6 +794,7 @@ func _suspend_home_focus() -> void:
 			control.focus_mode = Control.FOCUS_NONE
 
 func _layout_workspace() -> void:
+	if not workspace_open(): return
 	var area := safe_area()
 	var visible := area.size
 	var phone := _landscape_phone()
@@ -804,9 +853,11 @@ func _workspace_heading(name: String) -> void:
 	if workspace_open(): call_deferred("_layout_workspace")
 
 var workspace_close_pending := false
-func close_workspace() -> void:
+var workspace_close_to_counter := false
+func close_workspace(return_to_counter := false, discard := false) -> void:
 	if not workspace_open(): return
-	if mobile_mode() and workspace_shell.page.has_method("can_close_workspace") and not workspace_shell.page.can_close_workspace():
+	workspace_close_to_counter = workspace_close_to_counter or return_to_counter
+	if not discard and mobile_mode() and workspace_shell.page.has_method("can_close_workspace") and not workspace_shell.page.can_close_workspace():
 		workspace_shell.page.request_close_workspace()
 		workspace_close_pending = true
 		workspace_close.text = "" if mobile_mode() else "稍后关闭"
@@ -819,8 +870,9 @@ func close_workspace() -> void:
 	# Stop this subtree synchronously: queue_free alone would allow one more
 	# animation tick (and possibly a completion) after the save boundary.
 	workspace_shell.process_mode = Node.PROCESS_MODE_DISABLED
+	workspace_shell.workspace_suspended = true
 	# Explicitly save/release before the viewport is queued for deletion.
-	if workspace_shell.page.has_method("prepare_close_workspace"):
+	if not discard and workspace_shell.page.has_method("prepare_close_workspace"):
 		workspace_shell.page.prepare_close_workspace()
 	# Stop processing before queue_free, so Escape cannot close two layers.
 	workspace_shell.set_process_input(false)
@@ -828,6 +880,15 @@ func close_workspace() -> void:
 	workspace_overlay.queue_free()
 	workspace_shell = null
 	workspace_overlay = null
+	if workspace_close_to_counter:
+		for entry in workspace_history:
+			entry.overlay.queue_free()
+		workspace_history.clear()
+	workspace_close_to_counter = false
+	if not workspace_history.is_empty():
+		_restore_workspace(workspace_history.pop_back())
+		sound("page", -12, 0.85)
+		return
 	for entry in workspace_suspended_focus:
 		if is_instance_valid(entry[0]):
 			entry[0].focus_mode = entry[1]
@@ -839,13 +900,59 @@ func close_workspace() -> void:
 		workspace_origin.grab_focus()
 	sound("page", -12, 0.85)
 
+func _restore_workspace(entry: Dictionary) -> void:
+	Game.focus_uid = entry.get("focus_uid", "")
+	workspace_shell = entry.shell
+	workspace_overlay = entry.overlay
+	workspace_frame = entry.frame
+	workspace_container = entry.container
+	workspace_host = entry.host
+	workspace_title = entry.title
+	workspace_close = entry.close
+	workspace_logical_size = entry.size
+	workspace_overlay.show()
+	workspace_overlay.process_mode = Node.PROCESS_MODE_INHERIT
+	workspace_shell.process_mode = Node.PROCESS_MODE_INHERIT
+	workspace_shell.workspace_suspended = false
+	workspace_shell.show()
+	workspace_shell.ui.visible = entry.ui_visible
+	workspace_shell.fx.visible = entry.fx_visible
+	var viewport := workspace_container.get_child(0) as SubViewport
+	viewport.gui_disable_input = false
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_workspace_heading(workspace_shell.page_name)
+	_layout_workspace()
+	workspace_shell._fit()
+	if workspace_shell.workspace_dirty:
+		workspace_shell.page.on_changed(workspace_shell.workspace_suspended_state, Game.state, {"type":"WORKSPACE_RESUME"})
+		workspace_shell.workspace_dirty = false
+	workspace_shell.workspace_suspended_state = {}
+	call_deferred("_restore_workspace_focus", entry)
+
+func _restore_workspace_focus(entry: Dictionary) -> void:
+	if not workspace_open() or workspace_shell != entry.shell: return
+	var target: Variant = entry.focus
+	var controls := _keyboard_controls()
+	# A refreshed panel detaches and queues its old buttons before they are
+	# freed. Restore the equivalent action when that control has left the UI.
+	if not is_instance_valid(target) or not controls.has(target): target = null
+	if target == null and entry.focus_text != "":
+		for control in controls:
+			if control is Button and control.text == entry.focus_text:
+				target = control
+				break
+	_restore_keyboard_focus(target)
+
 func _on_changed(prev: Dictionary, next: Dictionary, action: Dictionary) -> void:
+	if workspace_suspended:
+		workspace_dirty = true
+		return
 	if action.type=="STORAGE_SAVE_FAILED":
 		toast("扩仓保存失败，原表和现金均已保留。")
 		return
 	if action.type in ["DEBUG_EDIT","DEBUG_RESTORE"]:
 		if workspace_mode: return
-		close_workspace()
+		close_workspace(true, true)
 		Game.set_meta("counter_offer_drafts",{})
 		go("counter")
 		_refresh_hud()
@@ -855,14 +962,17 @@ func _on_changed(prev: Dictionary, next: Dictionary, action: Dictionary) -> void
 	if action.type == "NEW_GAME":
 		if workspace_mode:
 			return
-		close_workspace()
+		close_workspace(true, true)
 		Game.set_meta("counter_offer_drafts", {})
 		go("counter")
 		_refresh_hud()
 		_sync_wanted_notice()
 		return
-	_sync_wanted_notice()
 	var quiet_save: bool = action.type in ["SERVICE_PROGRESS", "SERVICE_BEGIN"] and next.notice == prev.notice
+	if action.type in ["SERVICE_PROGRESS", "REFURB_PROGRESS"] and next.notice == prev.notice:
+		if page != null: page.on_changed(prev, next, action)
+		return
+	_sync_wanted_notice()
 	if not workspace_open() and not quiet_save and next.notice != "" and (next.notice != prev.notice or action.type != "OFFER"):
 		toast(next.notice)
 	var spent: float = prev.ap - next.ap
@@ -875,7 +985,7 @@ func _on_changed(prev: Dictionary, next: Dictionary, action: Dictionary) -> void
 	_refresh_hud()
 	hint(page.hint_text() if page else "")
 	if action.type in ["NEXT","CONTINUE_CAMPAIGN"] and next.phase == "open" and not workspace_mode:
-		close_workspace()
+		close_workspace(true, true)
 		shutter(next.day)
 
 func _refresh_hud() -> void:
@@ -1843,7 +1953,7 @@ func _process(delta: float) -> void:
 	if workspace_layout_deferred and workspace_open() and workspace_shell.page.can_close_workspace():
 		_layout_workspace()
 		workspace_shell._fit()
-	if workspace_close_pending and workspace_open() and workspace_shell.page.can_close_workspace(): close_workspace()
+	if workspace_close_pending and workspace_open() and workspace_shell.page.can_close_workspace(): close_workspace(workspace_close_to_counter)
 	_poll_night_report()
 	_update_cursor()
 	var t := Time.get_ticks_msec() / 1000.0

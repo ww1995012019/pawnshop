@@ -1402,6 +1402,10 @@ func _ring() -> void:
 	Game.dispatch({"type": "ARRIVE"})
 
 func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
+	# Hidden workbench checkpoints change no counter inventory or prices.
+	# Rebuilding every stock button here interrupts a continuous cloth stroke.
+	# The counter refreshes when the workspace closes and on actual commits.
+	if _workspace_suspended and a.type in ["SERVICE_PROGRESS", "REFURB_PROGRESS"]: return
 	if a.type in CounterDialogue.VERBS or a.type in TradeSession.ACTIONS or a.type == "ISSUE_WANTED":
 		_departure_key = ""
 	var pt = prev.trade

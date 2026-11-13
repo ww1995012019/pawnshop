@@ -29,6 +29,9 @@ func run():
 	check(audio.current_music == 'storeroom', 'warehouse switches to storeroom: ' + audio.current_music)
 	shell.close_workspace()
 	await create_timer(0.2).timeout
+	check(shell.workspace_open() and shell.active_shell().page_name == 'inspect' and audio.current_music == 'workbench', 'closing warehouse restores the inspection workbench theme: ' + audio.current_music)
+	shell.close_workspace()
+	await create_timer(0.2).timeout
 	check(audio.current_music == 'shop', 'closing returns to the shop theme: ' + audio.current_music)
 	await create_timer(1.6).timeout
 	var playing := 0
