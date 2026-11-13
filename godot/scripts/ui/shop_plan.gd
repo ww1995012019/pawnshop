@@ -78,7 +78,8 @@ func _action(parent: Node, caption: String, action: Dictionary, problem := "", p
 	return key
 
 func _navigate(parent: Node, caption: String, page: String, uid := "") -> void:
-	var key := UIKit.button(caption,"secondary",Vector2(0,34),14)
+	var key := UIKit.button(caption,"secondary",Vector2(0,40),14,page if page in ["report","warehouse","inspect","repair"] else "next")
+	key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	key.pressed.connect(func(): dismiss.call();host.call_deferred("_plan_navigate",page,uid))
 	parent.add_child(key)
 
@@ -135,8 +136,10 @@ func _overview() -> void:
 	prices.add_child(expand)
 	prices.add_child(explanation)
 	var shortcuts := _card("快捷操作")
-	_navigate(shortcuts,"查看账本与阶段成绩","report")
-	_navigate(shortcuts,"处理库存与来源","warehouse")
+	var quick := UIKit.grid(2,5)
+	shortcuts.add_child(quick)
+	_navigate(quick,"账本","report")
+	_navigate(quick,"库存","warehouse")
 
 func _market_summary(snapshot: Dictionary) -> String:
 	var labels: Dictionary = load("res://scripts/model/weekly_market.gd").LABELS
@@ -151,9 +154,11 @@ func _contracts() -> void:
 	for job in all:
 		if job.status in ["available","diagnosis","quoting","declined","approved","ready"] or (job.status=="expired" and job.get("uid","")!="" and Game.item(job.uid)!=null): visible_jobs.append(job)
 	if visible_jobs.is_empty(): _text(body,"今天的委修已全部处理，新的预约会在下个营业日出现。")
+	var choices := _choices()
 	for job in visible_jobs:
 		var id: String = job.id
-		var card := _card(String(job.title))
+		var card := _card(String(job.title),choices)
+		_object_icon(card,UIKit.item_icon(String(job.model)))
 		_text(card,"%s · 第%d天前 · 预算不超过 %s" % [GameData.def(String(job.model)).name,int(job.dueDay),UIKit.money(job.budget)])
 		_text(card,String(job.statusText),UIKit.CYAN)
 		if job.originalParts: _text(card,"原装要求：保留顾客机芯、表壳与表带，不得替换或伪装。",UIKit.AMBER,13)
@@ -206,12 +211,15 @@ func _bulk() -> void:
 		var item := _card("抽查记录 · 第%d件" % (int(sample.get("index",0))+1),card)
 		_text(item,String(sample.get("model","已查原物")))
 		_text(item,String(sample.get("observation","")),UIKit.MUTED,14)
-	var samples := UIKit.grid(2,5)
+	var samples := UIKit.grid(2 if host.portrait_mode() else 4,5)
+	samples.name = "ManagementChoices"
 	samples.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	card.add_child(samples)
 	for choice in lot.get("sampleOptions",[]):
 		var index: int=int(choice.get("index",0))
-		var key:=UIKit.button(String(choice.get("label","抽查一件")),"secondary",Vector2(0,34),14)
+		var key:=UIKit.button("第%d件" % (index+1),"secondary",Vector2(0,70),14,"warehouse")
+		key.icon = UIKit.item_icon(String(lot.items[index].defId))
+		key.add_theme_constant_override("icon_max_width",42)
 		key.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		key.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 		key.tooltip_text=String(choice.get("label",""))
@@ -295,9 +303,11 @@ func _upgrades() -> void:
 	storage.pressed.connect(func():host.open_warehouse_expansion())
 	body.add_child(storage)
 	_text(body,"仓储可独立升级五档。维修工坊与精品展区仍只能选择一项永久专精，工作灯和陈列架升级独立安排。",UIKit.MUTED,14)
+	var choices := _choices()
 	for option in upgrades.options(Game.state):
 		var id: String=option.id
-		var card := _card(String(option.name))
+		var card := _card(String(option.name),choices)
+		_object_icon(card,UIKit.icon("repair" if id == "workshop" else "warehouse"))
 		_text(card,String(option.get("effect","")),UIKit.CYAN)
 		_text(card,"费用 "+UIKit.money(option.cost))
 		var buy := UIKit.button("确认选择这项扩建","primary",Vector2(0,36),15)
@@ -305,3 +315,19 @@ func _upgrades() -> void:
 		buy.pressed.connect(func(): host.confirm("确认永久扩建","本轮经营只能选一项扩建。支付 %s 安排「%s」后，本轮不能改选。" % [UIKit.money(option.cost),String(option.name)],"确认扩建",func(): Game.dispatch({"type":"BUY_SHOP_EXTENSION","id":id})))
 		card.add_child(buy)
 		if buy.disabled: _text(card,String(option.get("problem","当前不可购买")),UIKit.MUTED,13)
+
+func _choices() -> GridContainer:
+	var choices := UIKit.grid(1 if host.portrait_mode() else 2,8)
+	choices.name = "ManagementChoices"
+	choices.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(choices)
+	return choices
+
+func _object_icon(parent: Node, texture: Texture2D) -> void:
+	var icon := TextureRect.new()
+	icon.texture = texture
+	icon.custom_minimum_size = Vector2(0,48)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	parent.add_child(icon)
+	parent.move_child(icon,0)

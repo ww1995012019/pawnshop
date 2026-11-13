@@ -35,6 +35,9 @@ func run() -> void:
 		for section in ["overview","contracts","bulk","customers","history","upgrades"]:
 			plan.tabs[section].pressed.emit()
 			await frames()
+			if section in ["contracts","bulk","upgrades"]:
+				var choices = plan.find_child("ManagementChoices",true,false)
+				check(choices != null and choices is GridContainer,"%s uses parallel choice cards" % section)
 			var sheet: Control=shell.modal_layer.find_child("ModalSheet",true,false)
 			var area: Rect2=shell.safe_area()
 			check(sheet.size.x<=area.size.x+1 and sheet.size.y<=area.size.y+1,"%s sheet stays inside %s" % [section,str(dimensions)])

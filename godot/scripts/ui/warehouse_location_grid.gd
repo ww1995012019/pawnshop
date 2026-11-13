@@ -6,14 +6,16 @@ var cell_size := 48.0
 
 func setup(owner_page,kind: String) -> void:
  page=owner_page;location=kind
- size_flags_horizontal=Control.SIZE_EXPAND_FILL
+ size_flags_horizontal=Control.SIZE_SHRINK_BEGIN
  add_theme_constant_override("h_separation",4);add_theme_constant_override("v_separation",4)
  rebuild()
 
 func rebuild() -> void:
  UIKit.clear(self)
- columns=2 if page.shell.mobile_mode() else 4
- cell_size=36 if page.shell.mobile_mode() else 48
+ columns=(2 if page.shell.mobile_mode() else 4) if location=="display" else 10
+ cell_size=(36.0 if page.shell.mobile_mode() else 48.0) if location=="display" else page.cell_size
+ add_theme_constant_override("h_separation",4 if location=="display" else 0)
+ add_theme_constant_override("v_separation",4 if location=="display" else 0)
  var items:Array=Game.state.inventory.filter(func(it):return it.location==location)
  var limit:=WarehouseExpansion.capacity(Game.state,location)
  # Long purchased safe capacity need not allocate thousands of empty controls.
@@ -22,8 +24,9 @@ func rebuild() -> void:
   var key=Slot.new()
   key.cabinet=self
   key.custom_minimum_size=Vector2(cell_size,cell_size)
-  key.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-  key.add_theme_stylebox_override("normal",UIKit.key_style("secondary","normal",true))
+  key.size_flags_horizontal=Control.SIZE_SHRINK_BEGIN
+  key.add_theme_constant_override("icon_max_width",maxi(8,int(cell_size)-8))
+  key.add_theme_stylebox_override("normal",slot_style())
   key.add_theme_stylebox_override("hover",UIKit.key_style("primary","hover",true))
   if i<items.size():
    var it:Dictionary=items[i]
@@ -35,6 +38,12 @@ func rebuild() -> void:
    if page.selected==it.uid:key.add_theme_stylebox_override("normal",UIKit.key_style("primary","normal",true))
   else:key.tooltip_text="空仓位 · 可拖入符合条件的原表"
   add_child(key)
+
+func slot_style() -> StyleBoxFlat:
+ var style:=StyleBoxFlat.new()
+ style.bg_color=Color("172124");style.border_color=Color("0b1214")
+ style.set_border_width_all(2)
+ return style
 
 func _can_drop_data(_position: Vector2,data: Variant) -> bool:
  return data is Dictionary and data.get("kind","")=="warehouse-original" and location in ["display","isolation"]

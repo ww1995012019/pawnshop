@@ -31,18 +31,21 @@ func check_workbench(page, label: String) -> void:
 	check(left != null and right != null and bench != null, label + " exposes all three columns")
 	if left == null or right == null or bench == null:
 		return
-	check(is_equal_approx(left.position.y, r.position.y) and is_equal_approx(left.get_rect().end.y, r.end.y), label + " left column shares top and bottom edges")
+	if active.page_name == "inspect":
+		check(not left.visible and page.portrait_tools.visible,label+" tools use the horizontal toolbar")
+	else:
+		check(is_equal_approx(left.position.y, r.position.y) and is_equal_approx(left.get_rect().end.y, r.end.y), label + " left column shares top and bottom edges")
 	check(is_equal_approx(right.position.y, r.position.y) and is_equal_approx(right.get_rect().end.y, r.end.y), label + " right column shares top and bottom edges")
-	check(r.encloses(bench.get_rect()) and bench.position.x >= left.get_rect().end.x + 15 and bench.get_rect().end.x <= right.position.x - 15, label + " controls stay inside the middle column")
+	check(r.encloses(bench.get_rect()) and (active.page_name == "inspect" or bench.position.x >= left.get_rect().end.x + 15) and bench.get_rect().end.x <= right.position.x - 15, label + " controls stay inside the middle column")
 	var mat = page.get("mat_rect")
 	check(mat is Rect2, label + " has an explicit item surface")
 	if mat is Rect2:
-		check(r.encloses(mat) and not mat.intersects(bench.get_rect()) and is_equal_approx(mat.position.y, r.position.y), label + " item surface is aligned and clear of controls")
+		check(r.encloses(mat) and not mat.intersects(bench.get_rect()) and is_equal_approx(mat.position.y, r.position.y+(64 if active.page_name == "inspect" else 0)), label + " item surface is aligned and clear of controls")
 	var item = page.item
 	if is_instance_valid(item) and item.visible:
 		var transform: Transform2D = active.get_viewport().get_canvas_transform() * item.body.global_transform
 		var art: Rect2 = transform * Rect2(-item.tex_size() * 0.5, item.tex_size())
-		check(not art.intersects(bench.get_global_rect()) and art.position.x > left.get_global_rect().end.x and art.end.x < right.global_position.x, label + " whole item is visible between the panels")
+		check(not art.intersects(bench.get_global_rect()) and (active.page_name == "inspect" or art.position.x > left.get_global_rect().end.x) and art.end.x < right.global_position.x, label + " whole item is visible between the panels")
 		if mat is Rect2:
 			check(mat.encloses(art), label + " item fits inside its surface")
 

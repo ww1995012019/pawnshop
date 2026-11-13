@@ -43,6 +43,8 @@ func run() -> void:
 	await settle()
 	var active = shell.active_shell()
 	var page = active.page
+	var entries: GridContainer = page.find_child("ReportEntries",true,false)
+	check(entries != null and entries.columns >= 3,"report top uses parallel compact management entries")
 	check(shell.toast_box.get_child_count() == 0, "entering report clears stale global notices")
 	check(all_text(page).contains("预计电费") and all_text(page).contains("固定清洁费") and all_text(page).contains("支付后现金"), "forecast names electricity, cleaning and cash after fees")
 	var breakdown: Button = page.find_child("electricity_details_toggle", true, false)

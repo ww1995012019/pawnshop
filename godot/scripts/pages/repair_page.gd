@@ -68,7 +68,7 @@ func enter() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	list_box = UIKit.grid(1,6)
+	list_box = UIKit.grid(2,6)
 	list_box.name = "repair_item_grid"
 	list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list_box)
@@ -133,7 +133,7 @@ func _item_tile(row: Button, it: Dictionary, status: String, selected: bool) -> 
 	row.custom_minimum_size = Vector2(92,94)
 	row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	row.tooltip_text = Game.def_name(it.defId)+"\n"+status
-	PortraitSkin.button(row,selected,true)
+	if shell.mobile_mode(): PortraitSkin.button(row,selected,true)
 	var stack := UIKit.vbox(2)
 	stack.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	stack.offset_left = 5
@@ -197,7 +197,7 @@ func _select(uid: String) -> void:
 func _fill_list() -> void:
 	_sync_modes()
 	list_landscape = shell.landscape_mode()
-	list_box.columns = maxi(1,floori((shell.content_rect().size.x-16)/100.0)) if list_landscape else 1
+	list_box.columns = maxi(1,floori((shell.content_rect().size.x-16)/100.0)) if list_landscape else (maxi(2,floori((shell.content_rect().size.x-40)/100.0)) if shell.portrait_mode() else 2)
 	UIKit.clear(list_box)
 	for it in _candidates():
 		var selected: bool = it.uid == it_uid
@@ -210,21 +210,12 @@ func _fill_list() -> void:
 			var forged: int = WatchForgery.treatments(it).size()
 			status = "已加工 %d/%d" % [forged,WatchForgery.available_methods(it).size()] if forged > 0 else "自有库存 · 可加工"
 		row.name = "repair_item_"+it.uid
-		if list_landscape:
-			_item_tile(row,it,status,selected)
-		else:
-			row.text = Game.def_name(it.defId) + "\n" + status
-			row.icon = UIKit.physical_icon(it)
-			row.expand_icon = true
-			row.add_theme_constant_override("icon_max_width",48)
-			row.alignment = HORIZONTAL_ALIGNMENT_LEFT
-			row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		UIKit.decorate_item(row,it,12 if list_landscape else 18)
-		if list_landscape:
-			var badge := row.get_node_or_null("item_decoration/modified_badge") as Label
-			if badge != null:
-				badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-				badge.position = Vector2(5,3)
+		_item_tile(row,it,status,selected)
+		UIKit.decorate_item(row,it,12)
+		var badge := row.get_node_or_null("item_decoration/modified_badge") as Label
+		if badge != null:
+			badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+			badge.position = Vector2(5,3)
 		var uid: String = it.uid
 		row.pressed.connect(func(): call_deferred("_select",uid))
 		list_box.add_child(row)
@@ -303,8 +294,33 @@ func _refresh_info() -> void:
 	if why != "": info.add_child(UIKit.label(why,17,UIKit.DANGER,false,true))
 	info.add_child(UIKit.rule())
 	info.add_child(UIKit.module_header("材料库存","完成对应操作时扣除","SUPPLIES"))
+	var supplies := UIKit.grid(4,6)
+	supplies.name = "RepairSupplies"
+	info.add_child(supplies)
 	for material in GameData.materials:
-		info.add_child(UIKit.label("%s  ×%s" % [material.name,Model.jnum(Game.state.materials.get(material.id,0))],16,UIKit.MUTED))
+		var slot := UIKit.plate(UIKit.screen_style(4))
+		slot.custom_minimum_size = Vector2(58,68)
+		slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		slot.tooltip_text = material.name+" ×"+Model.jnum(Game.state.materials.get(material.id,0))
+		var stack := UIKit.vbox(0)
+		var picture := TextureRect.new()
+		var texture := AtlasTexture.new()
+		texture.atlas = UIKit.tex("res://assets/ui/materials.png")
+		var index := clampi(int(String(material.id).trim_prefix("MAT-"))-1,0,12)
+		var cell := texture.atlas.get_size()/4.0
+		texture.region = Rect2(Vector2(index%4,index/4)*cell,cell)
+		picture.texture = texture
+		picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		picture.custom_minimum_size = Vector2(32,32)
+		picture.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		stack.add_child(picture)
+		var quantity := UIKit.label("×"+Model.jnum(Game.state.materials.get(material.id,0)),14,UIKit.TEXT)
+		quantity.name = String(material.id)
+		quantity.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		stack.add_child(quantity)
+		slot.add_child(stack)
+		supplies.add_child(slot)
 
 func _cost_text(cost: Dictionary) -> String:
 	var parts := []

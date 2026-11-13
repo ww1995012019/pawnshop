@@ -38,6 +38,14 @@ func run_check() -> void:
 	await process_frame
 	var page = shell.active_shell().page
 	check(page.counts.open > 0, "open orders missing")
+	var summary: Button = page.cols.open.find_child("OrderSummary",true,false)
+	check(summary != null, "desktop orders use compact expandable summaries")
+	if summary != null:
+		check(summary.find_child("OrderIcon",true,false) != null, "order summary identifies the physical object")
+		var details: Control = page.cols.open.get_child(0).get_meta("mobile_details")
+		check(not details.visible, "unselected order details start folded")
+		summary.button_pressed = true
+		check(details.visible, "selected order exposes its existing actions")
 	check(page.counts.active == 0, "active should start empty")
 	check(page.scrollers.open.visible and not page.scrollers.active.visible, "only selected list should show")
 	var accept := find_button(page.cols.open, "接取订单")

@@ -154,6 +154,7 @@ func _resize_panels() -> void:
 	if next_cell!=cell_size:
 		cell_size=next_cell;grid.rebuild()
 		if cabinet_mode=="materials":_build_materials()
+		if cabinet_mode in ["isolation","pawn"]:cabinet_grid.rebuild()
 	if shell.portrait_mode():
 		var top_height:float=r.size.y*0.43
 		display_panel.position=r.position;display_panel.size=Vector2(left_width,top_height)
@@ -170,6 +171,9 @@ func _resize_panels() -> void:
 	holder.size.y=minf(holder.size.y,content_height+frame_height)
 	var target_columns:=2 if shell.mobile_mode() else 4
 	if display_grid.columns!=target_columns:display_grid.rebuild()
+	var display_body:Control=display_panel.get_child(0)
+	var display_frame:float=display_panel.get_theme_stylebox("panel").get_minimum_size().y+display_count.get_combined_minimum_size().y+display_body.get_child(2).get_combined_minimum_size().y+12
+	display_panel.size.y=minf(display_panel.size.y,display_grid.get_combined_minimum_size().y+display_frame)
 
 func _lists() -> void:
 	var shown:Array=Game.state.inventory.filter(func(it):return it.location=="display")

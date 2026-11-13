@@ -75,7 +75,7 @@ func run() -> void:
 	contents.set_meta("material_quantity", 100)
 	await refresh()
 	check(keyed("qty:plus").disabled and keyed("buy:MAT-002").text.contains("990 Cr"), "quantity respects the reducer's 99-unit transaction limit")
-	for window in [Vector2i(1440,900), Vector2i(390,844)]:
+	for window in [Vector2i(1440,900), Vector2i(844,390), Vector2i(390,844)]:
 		shell.close_top_modal()
 		root.size = window
 		await frames()
@@ -97,7 +97,7 @@ func run() -> void:
 		var second := keyed("material:MAT-002")
 		check(is_equal_approx(first.global_position.y, second.global_position.y), "materials remain horizontally browsable at " + str(window))
 		var purchase := keyed("buy:MAT-001")
-		var clip = shell.modal_layer.find_child("merchant_contents", true, false).get_parent()
+		var clip = shell.modal_layer.find_child("ModalSheet", true, false)
 		check(clip.get_global_rect().encloses(purchase.get_global_rect()), "primary purchase is visible without scrolling at " + str(window))
 	shell.close_top_modal()
 	await frames()

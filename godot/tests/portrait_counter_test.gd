@@ -55,7 +55,7 @@ func run():
   check(shell.workspace_logical_size.x < 600, "workspace uses portrait logical width")
   root.size = Vector2i(1440,900)
   await frames()
-  check(shell.workspace_shell.page.instrument_panel.visible, "open inspection restores desktop tools on rotation")
+  check(shell.workspace_shell.page.portrait_tools.visible and not shell.workspace_shell.page.instrument_panel.visible, "open inspection restores desktop toolbar on rotation")
   root.size = Vector2i(390,844)
   await frames()
   check(shell.workspace_shell.page.portrait_tools.get_child_count() == 3, "open inspection restores portrait tools on rotation")

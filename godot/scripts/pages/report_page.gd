@@ -14,6 +14,9 @@ var insurance_expanded := false
 var columns: BoxContainer
 var upgrades_row: BoxContainer
 var totals_panel: PanelContainer
+var report_entries: GridContainer
+var night_expanded := false
+var pawn_expanded := false
 
 func scene_name() -> String:
 	return "counter"
@@ -80,6 +83,7 @@ func relayout() -> void:
 	var narrow := r.size.x < 880
 	if is_instance_valid(columns): columns.vertical = narrow
 	if is_instance_valid(upgrades_row): upgrades_row.vertical = narrow
+	if is_instance_valid(report_entries): report_entries.columns = 2 if narrow else 4
 	if is_instance_valid(totals_panel): totals_panel.custom_minimum_size.x = 0 if narrow else 390
 	var receipt_scroll := find_child("ledger_receipt_scroll", true, false) as ScrollContainer
 	if receipt_scroll != null: receipt_scroll.custom_minimum_size.y = 0 if shell.mobile_mode() else 400 if r.size.y >= 750 and r.size.x >= 880 else 250
@@ -133,7 +137,7 @@ func _refresh() -> void:
 	else:
 		body.add_child(UIKit.module_header("第 %d 天 · %s" % [day, "日结报告" if s.phase == "report" else "营业中"], "营业账目", "LEDGER / %02d" % day))
 	_add_status()
-	if not shell.mobile_mode(): _add_night_controls(s)
+	_add_night_controls(s)
 	var today := []
 	for r in s.ledger:
 		if r.day == s.day:
@@ -265,7 +269,6 @@ func _refresh() -> void:
 		if shell.mobile_mode():
 			body.move_child(next,2)
 			if continuation != null: body.move_child(continuation,2)
-	if shell.mobile_mode(): _add_night_controls(s)
 
 func _add_continuation(s: Dictionary) -> VBoxContainer:
 	if Life.continue_problem(s) != "": return null
@@ -287,7 +290,11 @@ func _add_cost_details(parent: VBoxContainer, costs: Dictionary) -> void:
 		return
 	var toggle := UIKit.button(("收起" if costs_expanded else "展开") + "电费明细", "secondary", Vector2(0, 48), 18)
 	toggle.name = "electricity_details_toggle"
-	parent.add_child(toggle)
+	report_entries.add_child(toggle)
+	toggle.icon = UIKit.icon("energy")
+	toggle.expand_icon = true
+	toggle.add_theme_constant_override("icon_max_width",28)
+	toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var details := UIKit.vbox(6)
 	details.name = "electricity_details"
 	details.visible = costs_expanded
@@ -331,12 +338,26 @@ func on_changed(_p: Dictionary, _n: Dictionary, _a: Dictionary) -> void:
 ## Exact values are published by the policy, without adding appraisal evidence.
 func _add_night_controls(s: Dictionary) -> void:
 	var q := NightCrime.insurance_quote(s)
+	report_entries = UIKit.grid(4,6)
+	report_entries.name = "ReportEntries"
+	report_entries.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(report_entries)
 	var section := UIKit.vbox(10)
 	section.name = "night_insurance"
+	section.visible = night_expanded or bool(NightCrime.public_report(s).inspection.pending)
 	body.add_child(section)
 	var slots=load("res://scripts/ui/pawn_slot_purchase.gd").new()
-	section.add_child(slots)
+	body.add_child(slots)
 	slots.setup()
+	slots.visible = pawn_expanded
+	var pawn := UIKit.button("抵押仓位","secondary",Vector2(0,44),16,"warehouse")
+	pawn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pawn.pressed.connect(func(): pawn_expanded = not pawn_expanded; slots.visible = pawn_expanded)
+	report_entries.add_child(pawn)
+	var insurance := UIKit.button("今晚保险","secondary",Vector2(0,44),16,"lock")
+	insurance.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	insurance.pressed.connect(func(): night_expanded = not night_expanded;section.visible = night_expanded)
+	report_entries.add_child(insurance)
 	section.add_child(UIKit.module_header("今晚失窃保险", "仅保今晚 · 每天主动购买，不自动续保", "NIGHT / %02d" % int(s.day)))
 	var risk_text := "当前失窃概率 %.2f%%。" % (NightCrime.theft_chance_bp(s)/100.0)
 	if int(s.day)<3:
@@ -353,9 +374,10 @@ func _add_night_controls(s: Dictionary) -> void:
 	section.add_child(UIKit.label(risk_text+" 基础 3% + 每件名贵 0.08% + 每件珍稀 0.10%（最高 100%）；仅计可被盗库存，按可见型号档次计算。",17,UIKit.TEXT,false,true))
 	var inspection: Dictionary = NightCrime.public_report(s).inspection
 	section.add_child(UIKit.label("今日抽查概率 %.2f%% · 关注度×0.03%%。警官到场后可先整理，隔离箱不查；现场查到赃物合计罚30 Cr。" % float(inspection.get("chancePercent",NightCrime.inspection_chance(s.risk))),17,UIKit.TEXT,false,true))
-	var history := UIKit.button("夜间失窃与查货记录", "secondary", Vector2(0, 52), 20)
+	var history := UIKit.button("查货记录", "secondary", Vector2(0,44),16,"report")
+	history.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	history.pressed.connect(func(): shell.open_night_report())
-	section.add_child(history)
+	report_entries.add_child(history)
 	section.add_child(UIKit.label("第 %d 晚 · 当前报价 %s · 已付 %s · 本次补付 %s" % [q.day, UIKit.money(q.premium), UIKit.money(q.paid), UIKit.money(q.due)], 19, UIKit.TEXT, false, true))
 	var details := UIKit.vbox(10)
 	details.visible = insurance_expanded

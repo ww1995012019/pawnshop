@@ -102,7 +102,7 @@ func run():
 	check(page.cleaning.serialize() == cleaned, "buying supplies preserves the physical cleaning mask")
 	var updated_quantity := false
 	for control in page.info.find_children("*", "Label", true, false):
-		if control.text.contains("导电纤维") and control.text.contains("×%d" % (materials_before + 1)):
+		if control.name == "MAT-001" and control.text == "×%d" % (materials_before + 1):
 			updated_quantity = true
 	check(updated_quantity, "supply count refreshes after purchase")
 	game.state.trade = old_trade

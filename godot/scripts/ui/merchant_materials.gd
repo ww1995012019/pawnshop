@@ -10,7 +10,7 @@ var focus_targets := {}
 var _state: Dictionary
 var _cards := {}
 var _grid: GridContainer
-var _scroll: ScrollContainer
+var actions: HFlowContainer
 var _picture: TextureRect
 var _name: Label
 var _stock: Label
@@ -28,35 +28,33 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 	quantity = clampi(qty, 1, 99)
 	add_theme_constant_override("separation", 12)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_scroll = ScrollContainer.new()
-	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_scroll.follow_focus = true
-	_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add_child(_scroll)
 	_grid = GridContainer.new()
+	_grid.name = "material_grid"
 	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_grid.add_theme_constant_override("h_separation", 10)
-	_grid.add_theme_constant_override("v_separation", 10)
-	_scroll.add_child(_grid)
+	_grid.add_theme_constant_override("h_separation", 6)
+	_grid.add_theme_constant_override("v_separation", 6)
+	add_child(_grid)
 	for material in GameData.materials:
 		var material_id: String = material.id
-		var card := UIKit.button("", "secondary", Vector2(124, 112), 17)
+		var card := UIKit.button("", "secondary", Vector2(76, 80), 17)
 		card.name = "material_" + material_id
-		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		card.tooltip_text = "%s\n%s" % [material.name, material.description]
 		card.set_meta("merchant_focus", "material:" + material_id)
 		focus_targets["material:" + material_id] = card
 		var margin := MarginContainer.new()
 		margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		for side in ["left", "right", "top", "bottom"]:
-			margin.add_theme_constant_override("margin_" + side, 8)
+			margin.add_theme_constant_override("margin_" + side, 3)
 		var column := UIKit.vbox(4)
 		margin.add_child(column)
-		column.add_child(_icon(material_id, 42))
-		var title := UIKit.label(material.name, 17, UIKit.TEXT)
+		column.add_child(_icon(material_id, 36))
+		var title := UIKit.label(material.name, 13, UIKit.TEXT)
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		title.custom_minimum_size.x = 0
 		column.add_child(title)
-		var counts := UIKit.label("库存 %d · 持有 %d" % [int(state.trade.stock.get(material_id, 0)), int(state.materials.get(material_id, 0))], 14, UIKit.MUTED)
+		var counts := UIKit.label("%d / %d" % [int(state.trade.stock.get(material_id, 0)), int(state.materials.get(material_id, 0))], 11, UIKit.MUTED)
 		counts.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		counts.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		counts.custom_minimum_size.x = 0
@@ -70,52 +68,56 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 	_detail = detail
 	detail.name = "material_detail"
 	add_child(detail)
-	var details := UIKit.vbox(8)
+	move_child(detail, 0)
+	var details := UIKit.vbox(4)
 	detail.add_child(details)
 	var heading := UIKit.hbox(12)
 	details.add_child(heading)
-	_picture = _icon(selected_id, 52)
-	_picture.custom_minimum_size.x = 60
+	_picture = _icon(selected_id, 36)
+	_picture.custom_minimum_size.x = 40
 	heading.add_child(_picture)
 	var labels := UIKit.vbox(4)
 	labels.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_child(labels)
-	_name = UIKit.label("", 21, UIKit.AMBER)
+	_name = UIKit.label("", 17, UIKit.AMBER)
 	labels.add_child(_name)
-	_stock = UIKit.label("", 16, UIKit.TEXT, false, true)
+	_stock = UIKit.label("", 14, UIKit.TEXT, false, true)
 	labels.add_child(_stock)
-	_description = UIKit.label("", 16, UIKit.MUTED, false, true)
+	_description = UIKit.label("", 14, UIKit.MUTED, false, true)
 	details.add_child(_description)
-	var actions := HFlowContainer.new()
+	actions = HFlowContainer.new()
+	actions.name = "merchant_material_actions"
 	actions.add_theme_constant_override("h_separation", 10)
 	actions.add_theme_constant_override("v_separation", 8)
 	details.add_child(actions)
 	var quantity_row := UIKit.hbox(6)
 	actions.add_child(quantity_row)
-	_minus = UIKit.button("−", "secondary", Vector2(44, 48), 20)
+	_minus = UIKit.button("−", "secondary", Vector2(40, 44), 20)
+	_minus.custom_minimum_size.x = 44
 	_minus.tooltip_text = "减少数量"
 	_minus.set_meta("merchant_focus", "qty:minus")
 	focus_targets["qty:minus"] = _minus
 	_minus.pressed.connect(func(): _set_quantity(quantity - 1))
 	quantity_row.add_child(_minus)
 	_quantity_label = UIKit.label("", 20, UIKit.TEXT, true)
-	_quantity_label.custom_minimum_size = Vector2(46, 0)
+	_quantity_label.custom_minimum_size = Vector2(30, 0)
 	quantity_row.add_child(_quantity_label)
-	_plus = UIKit.button("+", "secondary", Vector2(44, 48), 20)
+	_plus = UIKit.button("+", "secondary", Vector2(40, 44), 20)
+	_plus.custom_minimum_size.x = 44
 	_plus.tooltip_text = "增加数量"
 	_plus.set_meta("merchant_focus", "qty:plus")
 	focus_targets["qty:plus"] = _plus
 	_plus.pressed.connect(func(): _set_quantity(quantity + 1))
 	quantity_row.add_child(_plus)
-	_buy = UIKit.button("", "primary", Vector2(220, 48), 16)
+	_buy = UIKit.button("", "primary", Vector2(154, 44), 16)
+	_buy.custom_minimum_size.x = 200
 	_buy.pressed.connect(func(): transaction_requested.emit({"type": "BUY_MATERIAL", "id": selected_id, "qty": quantity}))
 	actions.add_child(_buy)
-	_sell = UIKit.button("", "secondary", Vector2(120, 48), 16)
+	_sell = UIKit.button("", "secondary", Vector2(100, 44), 16)
+	_sell.custom_minimum_size.x = 110
 	_sell.pressed.connect(func(): transaction_requested.emit({"type": "SELL_MATERIAL", "id": selected_id, "qty": quantity}))
 	actions.add_child(_sell)
 	resized.connect(_layout_grid)
-	_scroll.resized.connect(_layout_grid)
-	_detail.minimum_size_changed.connect(_layout_grid)
 	get_viewport().size_changed.connect(_layout_grid)
 	_refresh()
 	call_deferred("_layout_grid")
@@ -144,19 +146,19 @@ func _ignore_pointer(node: Control) -> void:
 
 func _layout_grid() -> void:
 	if not is_inside_tree(): return
-	var width := maxf(124.0, _scroll.size.x - _scroll.get_v_scroll_bar().size.x)
-	_grid.columns = clampi(floori((width + 10.0) / 134.0), 1, 5)
-	var rows := ceili(float(GameData.materials.size()) / _grid.columns)
-	# Reserve room for the selected material's actions before allocating the
-	# scrollable grid. Even the portrait view can trade without scrolling past it.
-	var panel_height := minf(620, get_viewport_rect().size.y - 230)
-	var budget := maxf(112, panel_height - position.y - _detail.get_combined_minimum_size().y - 12)
-	_scroll.custom_minimum_size.y = minf(rows * 122.0 - 10.0, budget)
+	var width := maxf(76.0, size.x)
+	_grid.columns = clampi(floori((width + 6.0) / 82.0), 1, 10)
 
 func _select(id: String) -> void:
 	selected_id = id
 	_refresh()
 	selection_changed.emit(selected_id, quantity)
+	var ancestor := get_parent()
+	while ancestor != null:
+		if ancestor is ScrollContainer:
+			ancestor.ensure_control_visible(_detail)
+			break
+		ancestor = ancestor.get_parent()
 
 func _set_quantity(value: int) -> void:
 	quantity = clampi(value, 1, 99)
@@ -188,6 +190,13 @@ func _refresh() -> void:
 	focus_targets["sell:" + selected_id] = _sell
 	_buy.text = "购买 %s · %s" % [material.name, UIKit.money(buy_total)]
 	_sell.text = "出售 · %s" % UIKit.money(sell_total)
+	# Mobile buttons clip their label by default; reserve the measured text width
+	# so FlowContainer can wrap whole usable actions instead of shrinking them.
+	for action in [_buy, _sell]:
+		var font: Font = action.get_theme_font("font")
+		var font_size: int = action.get_theme_font_size("font_size")
+		var width := font.get_string_size(action.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		action.custom_minimum_size.x = maxf(110, width + 20)
 	var capacity_problem:=WarehouseExpansion.material_problem(_state,selected_id)
 	_buy.disabled = available < quantity or _state.cash < buy_total or owned + quantity > 99999 or capacity_problem!=""
 	_sell.disabled = owned < quantity or _state.cash + sell_total > 1000000000

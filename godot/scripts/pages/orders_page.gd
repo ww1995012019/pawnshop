@@ -70,14 +70,16 @@ func relayout() -> void:
 	board.position = Vector2(r.position.x + (r.size.x - width) * 0.5, r.position.y)
 	board.size = Vector2(width, r.size.y)
 	for key in cols:
-		cols[key].columns = 2 if width >= 1200.0 and counts.get(key, 0) > 0 else 1
+		cols[key].columns = 3 if width >= 1400.0 else 2 if width >= 860.0 else 1
 		if shell.mobile_mode():
 			tabs[key].custom_minimum_size.y = 36 if shell.landscape_mode() else 44
 			for card in cols[key].get_children():
 				var summary: Button = card.find_child("OrderSummary",true,false)
 				if summary == null: continue
 				summary.custom_minimum_size.y = 42 if shell.landscape_mode() else 58
-				var title: Label = summary.get_child(0).get_child(0)
+				var icon: TextureRect = summary.find_child("OrderIcon",true,false)
+				icon.size = Vector2(34,34) if shell.landscape_mode() else Vector2(46,46)
+				var title: Label = summary.find_child("OrderTitle",true,false)
 				title.add_theme_font_size_override("font_size",14 if shell.landscape_mode() else 16)
 
 func _select_status(key: String) -> void:
@@ -124,67 +126,7 @@ const INK_SOFT := Color("6b5a40")
 
 ## Each commission is a pinned paper work ticket in dark ink.
 func _card(def: Dictionary) -> VBoxContainer:
-	if shell.mobile_mode(): return _mobile_card(def)
-	var card := UIKit.plate(UIKit.paper_style(22))
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# A slight, stable tilt per ticket so the board reads as pinned paper.
-	card.pivot_offset = Vector2(300, 20)
-	card.rotation = (Model.fnv(String(def.id)) % 7 - 3) * 0.0016
-	var pin := Pin.new()
-	pin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var v := UIKit.vbox(10)
-	card.add_child(v)
-	var strip := UIKit.hbox(8)
-	var fac: Array = FACTION.get(def.faction, ["委托", INK_SOFT])
-	var badge := PanelContainer.new()
-	badge.add_theme_stylebox_override("panel", UIKit.box(fac[1], Color.TRANSPARENT, 3, 0, 4, 0))
-	var bl := UIKit.label(" %s委托 " % fac[0], 15, Color("f3e8d2"))
-	badge.add_child(bl)
-	strip.add_child(badge)
-	strip.add_child(UIKit.spacer(false))
-	strip.add_child(UIKit.label("No.%s" % String(def.id).get_slice("-", 1), 15, INK_SOFT, true))
-	v.add_child(strip)
-	var head := UIKit.hbox(14)
-	var frame := UIKit.plate(UIKit.skin("socket", "xs", 6.0))
-	var pic := TextureRect.new()
-	pic.texture = UIKit.item_icon(def.itemId)
-	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	pic.custom_minimum_size = Vector2(54,64) if shell.portrait_mode() else Vector2(84,84)
-	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	frame.add_child(pic)
-	head.add_child(frame)
-	var hv := UIKit.vbox(4)
-	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hv.add_child(UIKit.label(def.name, 26, UIKit.INK, false, true))
-	var meta: BoxContainer = UIKit.vbox(4) if shell.portrait_mode() else UIKit.hbox(14)
-	meta.add_child(UIKit.label("报酬 " + UIKit.money(def.reward), 22, UIKit.RUST, true))
-	meta.add_child(UIKit.label(_deadline(def), 18, INK_SOFT))
-	hv.add_child(meta)
-	head.add_child(hv)
-	v.add_child(head)
-	v.add_child(_dashes())
-	var brief := UIKit.label(_readable(String(def.description)), 19, UIKit.INK, false, true)
-	brief.name = "OrderBrief"
-	brief.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var req := "品相≥%s%s%s" % [UIKit.pct(def.minCondition), " · 须修复" if def.needsRepair else "", " · 顾客原物" if def.get("customerOwned", false) else ""]
-	v.add_child(UIKit.label(req, 19, UIKit.INK, false, true))
-	var details := UIKit.button("收起委托详情" if expanded_briefs.get(def.id,false) else "查看委托详情", "secondary", Vector2(0,38), 17)
-	details.name = "OrderBriefToggle"
-	for state in ["normal","hover","pressed"]:
-		details.add_theme_stylebox_override(state,UIKit.box(Color(0.3,0.2,0.1,0.08) if state!="normal" else Color.TRANSPARENT,INK_SOFT,0,1,5,0))
-	for state in ["font_color","font_hover_color","font_pressed_color","font_focus_color"]: details.add_theme_color_override(state,UIKit.INK)
-	details.add_theme_constant_override("outline_size",0)
-	brief.visible = expanded_briefs.get(def.id,false)
-	details.pressed.connect(func():
-		brief.visible = not brief.visible
-		expanded_briefs[def.id] = brief.visible
-		details.text = "收起委托详情" if brief.visible else "查看委托详情")
-	v.add_child(details)
-	v.add_child(brief)
-	card.add_child(pin)
-	card.set_meta("v", v)
-	return v
+	return _mobile_card(def)
 
 func _deadline(def: Dictionary) -> String:
 	var due := int(Model.order_due(Game.state,def.id))
@@ -199,7 +141,7 @@ func _mobile_card(def: Dictionary) -> VBoxContainer:
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var stack := UIKit.vbox(4)
 	card.add_child(stack)
-	var summary := UIKit.button("", "secondary", Vector2(0,42 if shell.landscape_mode() else 58),16)
+	var summary := UIKit.button("", "secondary", Vector2(0,58),16)
 	summary.name = "OrderSummary"
 	summary.toggle_mode = true
 	summary.button_pressed = expanded_orders.get(def.id,false)
@@ -209,11 +151,21 @@ func _mobile_card(def: Dictionary) -> VBoxContainer:
 	stack.add_child(summary)
 	var caption := UIKit.vbox(2)
 	caption.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	caption.offset_left = 4
+	caption.offset_left = 58
 	caption.offset_right = -4
 	caption.offset_top = 3
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pic := TextureRect.new()
+	pic.name = "OrderIcon"
+	pic.texture = UIKit.item_icon(def.itemId)
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pic.position = Vector2(5,4)
+	pic.size = Vector2(46,46)
+	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	summary.add_child(pic)
 	var title := UIKit.label(def.name,16,UIKit.INK)
+	title.name = "OrderTitle"
 	title.clip_text = true
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -362,13 +314,12 @@ func _refresh() -> void:
 			v.add_child(stamp)
 			cols.closed.add_child(v.get_parent())
 	for k in cols:
-		if shell.mobile_mode():
-			for card in cols[k].get_children():
-				var content: VBoxContainer = card.get_child(0)
-				var details: VBoxContainer = card.get_meta("mobile_details")
-				for action in content.get_children().slice(2):
-					content.remove_child(action)
-					details.add_child(action)
+		for card in cols[k].get_children():
+			var content: VBoxContainer = card.get_child(0)
+			var details: VBoxContainer = card.get_meta("mobile_details")
+			for action in content.get_children().slice(2):
+				content.remove_child(action)
+				details.add_child(action)
 		counts[k] = cols[k].get_child_count()
 		tabs[k].text = "%s %d" % [{"open":"可接","active":"进行","closed":"记录"}[k],counts[k]] if shell.portrait_mode() else "%s  %02d" % [STATUS_LABELS[k], counts[k]]
 		if counts[k] == 0:

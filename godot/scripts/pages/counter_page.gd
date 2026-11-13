@@ -1084,11 +1084,12 @@ func _prepare_inspection() -> void:
 func _merchant_shop() -> void:
 	if Game.state.trade == null or Game.state.trade.kind != "merchant":
 		return
-	var panel: Array = shell.modal("流动商人的补给", 1100)
+	var panel: Array = shell.modal("流动商人的补给", 1000)
 	var body: VBoxContainer = panel[0]
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, minf(620, get_viewport_rect().size.y - 230))
+	scroll.custom_minimum_size = Vector2.ZERO
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
 	if not shell.mobile_mode(): body.add_child(scroll)
 	var contents := UIKit.vbox(10)
 	contents.name = "merchant_contents"
@@ -1096,8 +1097,27 @@ func _merchant_shop() -> void:
 	if shell.mobile_mode():
 		body.add_child(contents)
 		scroll.free()
-	else: scroll.add_child(contents)
+	else:
+		scroll.add_child(contents)
+		contents.minimum_size_changed.connect(func(): _merchant_scroll_height.call_deferred(scroll, contents))
+		contents.resized.connect(func(): _merchant_scroll_height.call_deferred(scroll, contents))
+		_merchant_scroll_height.call_deferred(scroll, contents)
+	if shell.mobile_mode():
+		var footer := UIKit.vbox(4)
+		footer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		footer.name = "merchant_sticky_actions"
+		body.get_parent().get_parent().add_child(footer)
+		contents.set_meta("action_footer", footer)
 	_populate_merchant(contents)
+
+func _merchant_scroll_height(scroll: ScrollContainer, contents: VBoxContainer) -> void:
+	if not is_instance_valid(scroll) or not is_instance_valid(contents) or scroll.is_queued_for_deletion(): return
+	# Only set the minimum when the content height changes. Category rebuilds
+	# and grid reflow can each notify more than once during container sorting.
+	var limit := maxf(1, minf(440, get_viewport_rect().size.y - 230))
+	var height := minf(limit, contents.get_combined_minimum_size().y)
+	if not is_equal_approx(scroll.custom_minimum_size.y, height):
+		scroll.custom_minimum_size.y = height
 
 func _merchant_transaction(action: Dictionary, contents: VBoxContainer) -> void:
 	Game.dispatch(action)
@@ -1108,61 +1128,74 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 		return
 	var current_focus := get_viewport().gui_get_focus_owner()
 	var focus_key := ""
-	if is_instance_valid(current_focus) and contents.is_ancestor_of(current_focus):
+	if is_instance_valid(current_focus) and (contents.is_ancestor_of(current_focus) or (contents.has_meta("action_footer") and contents.get_meta("action_footer").is_ancestor_of(current_focus))):
 		focus_key = String(current_focus.get_meta("merchant_focus", ""))
 	var focus_targets := {}
 	UIKit.clear(contents)
+	var footer = contents.get_meta("action_footer") if contents.has_meta("action_footer") else null
+	if is_instance_valid(footer): UIKit.clear(footer)
 	var s := Game.state
 	var t = s.trade
 	if t == null or t.kind != "merchant":
 		contents.add_child(UIKit.label("商人已经离开。", 20, UIKit.MUTED))
 		return
-	contents.add_child(UIKit.label("现金 %s · 维修材料交易不消耗 AP" % UIKit.money(s.cash), 19, UIKit.AMBER, false, true))
-	contents.add_child(UIKit.label("常用材料：商人离店后不能购买", 20, UIKit.TEXT, false, true))
-	var materials = load("res://scripts/ui/merchant_materials.gd").new()
-	contents.add_child(materials)
-	materials.setup(s, String(contents.get_meta("material_id", "MAT-001")), int(contents.get_meta("material_quantity", 1)))
-	materials.selection_changed.connect(func(id: String, quantity: int):
-		contents.set_meta("material_id", id)
-		contents.set_meta("material_quantity", quantity))
-	materials.transaction_requested.connect(func(action: Dictionary): _merchant_transaction(action, contents))
-	focus_targets.merge(materials.focus_targets)
-	contents.add_child(UIKit.rule())
-	var rare = t.get("rare", null)
-	if rare is Dictionary and rare.get("available", false):
-		var rare_row := HFlowContainer.new()
-		var rare_name: String = GameData.def(rare.defId).name
-		var label := UIKit.label("随行货：%s · 入后仓" % rare_name, 19, UIKit.AMBER, false, true)
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		rare_row.add_child(label)
-		var buy_rare := UIKit.button("购买随行货 · %s · 1 AP" % UIKit.money(rare.price), "good", Vector2(270, 50), 17)
-		buy_rare.set_meta("merchant_focus", "rare")
-		focus_targets["rare"] = buy_rare
-		buy_rare.disabled = s.cash < rare.price or s.ap < 1
-		buy_rare.pressed.connect(func(): _merchant_transaction({"type": "BUY_RARE_ITEM"}, contents))
-		rare_row.add_child(buy_rare)
-		contents.add_child(rare_row)
+	contents.add_child(UIKit.label("现金 %s · 材料交易不消耗 AP" % UIKit.money(s.cash), 16, UIKit.AMBER, false, true))
+	var category: String = contents.get_meta("category", "materials")
+	var tabs := UIKit.hbox(6)
+	tabs.name = "merchant_categories"
+	contents.add_child(tabs)
+	for entry in [["materials","材料","repair"],["rare","随行货","warehouse"],["watches","售表","inspect"]]:
+		var tab := UIKit.button(entry[1], "primary" if category == entry[0] else "secondary", Vector2(100,44),16)
+		tab.name = "merchant_tab_" + entry[0]
+		tab.icon = UIKit.icon(entry[2])
+		tab.expand_icon = true
+		tab.add_theme_constant_override("icon_max_width",20)
+		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tab.set_meta("merchant_focus", "category:" + entry[0])
+		focus_targets["category:" + entry[0]] = tab
+		var category_id: String = entry[0]
+		tab.pressed.connect(func():
+			contents.set_meta("category", category_id)
+			_populate_merchant(contents))
+		tabs.add_child(tab)
+	if category == "materials":
+		var materials = load("res://scripts/ui/merchant_materials.gd").new()
+		contents.add_child(materials)
+		materials.setup(s, String(contents.get_meta("material_id", "MAT-001")), int(contents.get_meta("material_quantity", 1)))
+		materials.selection_changed.connect(func(id: String, quantity: int):
+			contents.set_meta("material_id", id)
+			contents.set_meta("material_quantity", quantity))
+		materials.transaction_requested.connect(func(action: Dictionary): _merchant_transaction(action, contents))
+		if is_instance_valid(footer): materials.actions.reparent(footer)
+		focus_targets.merge(materials.focus_targets)
+	elif category == "rare":
+		var rare = t.get("rare", null)
+		if rare is Dictionary and rare.get("available", false):
+			var picture := TextureRect.new()
+			picture.texture = UIKit.item_icon(rare.defId)
+			picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			picture.custom_minimum_size = Vector2(76,88)
+			contents.add_child(picture)
+			contents.add_child(UIKit.label("%s · 购入后仓" % GameData.def(rare.defId).name, 18, UIKit.AMBER, false, true))
+			var buy_rare := UIKit.button("购买随行货 · %s · 1 AP" % UIKit.money(rare.price), "good", Vector2(0,44),16)
+			buy_rare.custom_minimum_size.x = 240
+			buy_rare.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			buy_rare.set_meta("merchant_focus", "rare")
+			focus_targets["rare"] = buy_rare
+			buy_rare.disabled = s.cash < rare.price or s.ap < 1
+			buy_rare.pressed.connect(func(): _merchant_transaction({"type":"BUY_RARE_ITEM"}, contents))
+			if is_instance_valid(footer): footer.add_child(buy_rare)
+			else: contents.add_child(buy_rare)
+		else: contents.add_child(UIKit.label("本次没有可购买的随行货。",18,UIKit.MUTED))
 	else:
-		contents.add_child(UIKit.label("本次没有可购买的随行货。", 18, UIKit.MUTED))
-	contents.add_child(UIKit.rule())
-	contents.add_child(UIKit.label("出售手表 · 商人按自己的判断报价，每件消耗1 AP", 19, UIKit.TEXT, false, true))
-	var eligible := 0
-	for item in s.inventory:
-		if item.owner != "shop" or item.has("orderId") or item.sealed or item.location == "isolation" or not item.sourceVerified:
-			continue
-		eligible += 1
-		var uid: String = item.uid
-		var price := Commerce.recovery_price(Game.state, item)
-		var sell_item := UIKit.button("出售旧物 %s · 收 %s" % [WatchForgery.sale_name(item), UIKit.money(price)], "secondary", Vector2(0, 50), 17)
-		sell_item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		sell_item.set_meta("merchant_focus", "item:" + uid)
-		focus_targets["item:" + uid] = sell_item
-		sell_item.disabled = s.ap < 1 or Commerce.forgery_rejected(s, item)
-		if Commerce.forgery_rejected(s, item): sell_item.tooltip_text = "本轮商人已识破这只表的加工，不接受反复出售。"
-		sell_item.pressed.connect(func(): _merchant_transaction({"type": "SELL_MERCHANT_ITEM", "uid": uid}, contents))
-		contents.add_child(sell_item)
-	if eligible == 0:
-		contents.add_child(UIKit.label("没有可回收的自有货物。", 18, UIKit.MUTED))
+		var watches = load("res://scripts/ui/merchant_watches.gd").new()
+		contents.add_child(watches)
+		watches.setup(s,String(contents.get_meta("watch_uid","")))
+		watches.selection_changed.connect(func(uid: String): contents.set_meta("watch_uid",uid))
+		watches.transaction_requested.connect(func(action: Dictionary): _merchant_transaction(action,contents))
+		if is_instance_valid(footer): watches.actions.reparent(footer)
+		focus_targets.merge(watches.focus_targets)
 	if focus_key != "":
 		var target = focus_targets.get(focus_key, null)
 		if target == null or target.disabled:

@@ -141,23 +141,7 @@ func relayout() -> void:
 	elif shell.portrait_mode():
 		mat_rect = _portrait_layout()
 	else:
-		instrument_panel.show()
-		if is_instance_valid(portrait_tools):
-			detail_panel.add_theme_stylebox_override("panel",UIKit.plate_style())
-			bench.add_theme_stylebox_override("panel",UIKit.plate_style())
-			portrait_tools.hide()
-			for id in TOOL_IDS:
-				var b: Button = tool_buttons[id]
-				if b.get_parent() != instrument_list: b.reparent(instrument_list)
-				b.custom_minimum_size = Vector2(0,72)
-				b.text = GameData.tool(id).name
-				b.clip_text = false
-				b.add_theme_font_size_override("font_size",19)
-				b.add_theme_constant_override("icon_max_width",48)
-				b.icon = UIKit.tool_icon(id)
-				for state in ["normal","hover","pressed","disabled"]:
-					b.add_theme_stylebox_override(state,UIKit.key_style("primary" if tool==id else "secondary",state))
-		mat_rect = layout_workbench(instrument_panel,detail_panel,bench,300)
+		mat_rect = _desktop_layout()
 	for optic in [lens,wand]:
 		if is_instance_valid(optic): optic.scale = Vector2.ONE*(.5 if shell.landscape_mode() else 1.0)
 	if is_instance_valid(uv_light): uv_light.scale = Vector2(.62,.38)*(.5 if shell.landscape_mode() else 1.0)
@@ -189,6 +173,43 @@ func relayout() -> void:
 				scale_pan.scale = Vector2.ONE
 				scale_pan.position = scale_target + Vector2(0,90)
 
+func _desktop_layout() -> Rect2:
+	var r: Rect2 = shell.content_rect()
+	instrument_panel.hide()
+	detail_panel.show()
+	bench.show()
+	detail_panel.add_theme_stylebox_override("panel",UIKit.plate_style())
+	bench.add_theme_stylebox_override("panel",UIKit.plate_style())
+	if not is_instance_valid(portrait_tools):
+		portrait_tools = UIKit.hbox(8)
+		add_child(portrait_tools)
+	# The drawer keyboard bridge follows scene order; tools lead every layout.
+	move_child(portrait_tools,0)
+	portrait_tools.show()
+	var width := r.size.x-490.0
+	portrait_tools.position = r.position
+	portrait_tools.size = Vector2(width,52)
+	for id in TOOL_IDS:
+		var key: Button = tool_buttons[id]
+		if key.get_parent() != portrait_tools: key.reparent(portrait_tools)
+		key.custom_minimum_size = Vector2(0,52)
+		key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		key.text = {"TOL-001":"放大镜","TOL-002":"紫外灯","TOL-005":"电子秤"}[id]
+		key.clip_text = false
+		key.icon = UIKit.tool_icon(id)
+		key.add_theme_font_size_override("font_size",18)
+		key.add_theme_constant_override("icon_max_width",32)
+		for state in ["normal","hover","pressed","disabled"]:
+			key.add_theme_stylebox_override(state,UIKit.key_style("primary" if tool==id else "secondary",state))
+	detail_panel.position = Vector2(r.end.x-470,r.position.y)
+	detail_panel.size = Vector2(470,r.size.y)
+	var height := maxf(84,bench.get_combined_minimum_size().y)
+	bench.position = Vector2(r.position.x,r.end.y-height)
+	bench.size = Vector2(width,height)
+	var mat := Rect2(r.position+Vector2(0,64),Vector2(width,r.size.y-height-84))
+	shell.work_surface.set_mat(mat)
+	return mat
+
 func prepare_close_workspace() -> void:
 	optical_dragging = false
 	if is_instance_valid(item) and item.dragging: item.end_drag()
@@ -199,6 +220,8 @@ func _landscape_layout() -> Rect2:
 	if not is_instance_valid(portrait_tools):
 		portrait_tools = UIKit.hbox(4)
 		add_child(portrait_tools)
+	# The drawer keyboard bridge follows scene order; tools lead every layout.
+	move_child(portrait_tools,0)
 	portrait_tools.show()
 	portrait_tools.position = r.position
 	portrait_tools.size = Vector2(r.size.x-220,30)
@@ -264,6 +287,8 @@ func _portrait_layout() -> Rect2:
 	if not is_instance_valid(portrait_tools):
 		portrait_tools = UIKit.hbox(4)
 		add_child(portrait_tools)
+	# The drawer keyboard bridge follows scene order; tools lead every layout.
+	move_child(portrait_tools,0)
 	portrait_tools.show()
 	for id in TOOL_IDS:
 		var b: Button = tool_buttons[id]
