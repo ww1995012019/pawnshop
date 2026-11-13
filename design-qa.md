@@ -123,3 +123,26 @@ cleaning-performance and optical-face tests. Browser workspace return tests pass
 at 1595×860, 844×390 and 390×844. Desktop and phone actual cloth input tests pass
 continuous fading, release, page/reload persistence and cleaning completion.
 Web export passes. No remaining P0/P1/P2 in the changed surfaces.
+
+## Movable workspace and dialog title bars — 2026-11-13
+
+Final result: passed.
+
+All five workspace frames and shared root/embedded dialogs now move by their
+title bars. The same drag handler converts pointer coordinates through the
+actual parent transform, including scaled and high-DPI embedded viewports.
+Body controls and Close retain native GUI input. Opening animations settle on
+drag; later content/layout changes preserve a moved window's position. Returning
+from a linked workspace restores the original frame and its moved position.
+The screen edge retains a reachable portion of the title bar so large windows
+can be moved aside and dragged back. Existing floating papers keep their drag
+and resize behavior.
+
+Evidence reviewed: `work/window-drag/1440-warehouse-moved.png`,
+`844-modal-moved.png` and `390-modal-moved.png`. Native actual-input tests pass
+for all five workspaces, root/embedded dialogs, content refresh, body and Close
+buttons, history restoration, extreme movement and viewport resize. Thirteen
+focused native regression groups plus the font check pass. Browser mouse/touch
+tests pass at 1440×900, 844×390 and 390×844 (phone DPR 2), including nested repair
+dialogs and unchanged cash/AP. No script errors. Web export and independent
+code review pass; no remaining P0/P1/P2 in this change.

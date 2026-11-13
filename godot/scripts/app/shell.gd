@@ -1,4 +1,5 @@
 extends Node2D
+const WindowDrag = preload("res://scripts/ui/window_drag.gd")
 ## The shop around every screen: painted rooms with real 2D lights, the HUD,
 ## navigation dock, notices, modals, title and the day shutter.
 
@@ -739,6 +740,7 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	workspace_frame.add_child(body)
 	var header_mount := UIKit.plate(UIKit.skin("strip", "sm", 0 if landscape_mode() else 8))
 	var header := UIKit.hbox(12)
+	header.name = "WorkspaceTitleBar"
 	header_mount.add_child(header)
 	workspace_title = UIKit.label("", 20 if mobile_mode() else 27, UIKit.AMBER)
 	workspace_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -751,6 +753,13 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	workspace_close.pressed.connect(close_workspace)
 	header.add_child(workspace_close)
 	body.add_child(header_mount)
+	var drag := WindowDrag.new()
+	workspace_frame.add_child(drag)
+	var moving_frame := workspace_frame
+	drag.setup(moving_frame,header,func():return safe_area(),func():
+		var opening: Tween = moving_frame.get_meta("opening_tween") if moving_frame.has_meta("opening_tween") else null
+		if opening != null and opening.is_valid(): opening.kill()
+		moving_frame.modulate.a = 1.0)
 	# Each module chooses its logical size. Render its viewport at the
 	# display's pixel scale so text is rasterized at the final resolution.
 	workspace_host = Control.new()
@@ -784,6 +793,7 @@ func open_workspace(name: String, focus_uid := "") -> void:
 		workspace_frame.position.y += 28
 		workspace_frame.modulate.a = 0
 		var tw := workspace_frame.create_tween().set_parallel(true)
+		workspace_frame.set_meta("opening_tween",tw)
 		tw.tween_property(workspace_frame, "position", destination, 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		tw.tween_property(workspace_frame, "modulate:a", 1.0, 0.16)
 
@@ -824,7 +834,7 @@ func _layout_workspace() -> void:
 	workspace_frame.size = frame_size
 	var fit := minf(1.0, minf((visible.x - 20.0) / frame_size.x, (visible.y - 20.0) / frame_size.y))
 	workspace_frame.scale = Vector2.ONE * fit
-	workspace_frame.position = area.position + ((visible - frame_size * fit) * 0.5).floor()
+	workspace_frame.get_meta("window_drag").reposition()
 	var output_scale := get_viewport().get_final_transform().get_scale()
 	_set_workspace_render_scale(maxf(absf(output_scale.x), absf(output_scale.y)) * fit)
 
@@ -1323,18 +1333,11 @@ func modal(title_text: String, width := 900.0) -> Array:
 	# so hold it weakly; a freed opener falls back to the first control.
 	var previous_ref: WeakRef = weakref(previous_focus) if previous_focus != null else null
 	dim.tree_exited.connect(func(): focus_host.call_deferred("_restore_keyboard_focus", previous_ref.get_ref() if previous_ref != null else null))
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.add_child(center)
 	var compact := mobile_mode()
 	var sheet := UIKit.plate(UIKit.skin("rail","xs",8) if compact else null)
 	sheet.name = "ModalSheet"
 	sheet.custom_minimum_size = Vector2(minf(width, get_viewport().get_visible_rect().size.x - 48.0), 0)
-	if compact:
-		center.queue_free()
-		dim.add_child(sheet)
-	else:
-		center.add_child(sheet)
+	dim.add_child(sheet)
 	var v := UIKit.vbox(6 if compact else 12)
 	sheet.add_child(v)
 	var status_line := HBoxContainer.new()
@@ -1349,6 +1352,7 @@ func modal(title_text: String, width := 900.0) -> Array:
 	if not compact: v.add_child(status_line)
 	else: status_line.free()
 	var head := UIKit.hbox(6 if compact else 12)
+	head.name = "ModalTitleBar"
 	var t := UIKit.label(title_text,16 if compact else 24 if mobile_mode() else 30,UIKit.AMBER)
 	t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1378,6 +1382,13 @@ func modal(title_text: String, width := 900.0) -> Array:
 	head.add_child(x)
 	focus_host.call_deferred("_restore_keyboard_focus", x)
 	v.add_child(head)
+	var drag := WindowDrag.new()
+	sheet.add_child(drag)
+	drag.setup(sheet,head,func():return safe_area().grow(-8),func():
+		var opening: Tween = dim.get_meta("opening_tween") if dim.has_meta("opening_tween") else null
+		if opening != null and opening.is_valid(): opening.kill()
+		sheet.scale = Vector2.ONE
+		dim.modulate.a = 1.0)
 	v.add_child(UIKit.rule())
 	var body := UIKit.vbox(6 if compact else 14)
 	if mobile_mode():
@@ -1398,13 +1409,20 @@ func modal(title_text: String, width := 900.0) -> Array:
 			var chrome := v.get_combined_minimum_size().y + 16.0
 			var sheet_height := minf(area.size.y,body.get_combined_minimum_size().y+chrome)
 			sheet.size = Vector2(sheet_width,sheet_height)
-			sheet.position = area.position + (area.size-sheet.size)*0.5
+			drag.reposition()
 		body.minimum_size_changed.connect(layout.call_deferred)
 		v.minimum_size_changed.connect(layout.call_deferred)
 		dim.resized.connect(layout.call_deferred)
 		layout.call_deferred()
 	else:
 		v.add_child(body)
+		var layout := func():
+			if not is_instance_valid(sheet) or sheet.is_queued_for_deletion(): return
+			sheet.reset_size()
+			drag.reposition()
+		v.minimum_size_changed.connect(layout.call_deferred)
+		dim.resized.connect(layout.call_deferred)
+		layout.call_deferred()
 	# Esc (see _input) and a click on the dimmed backdrop both dismiss the sheet.
 	dim.set_meta("close", close)
 	dim.gui_input.connect(func(ev: InputEvent):
