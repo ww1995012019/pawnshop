@@ -25,14 +25,13 @@ func enter() -> void:
 	board = UIKit.plate()
 	board.minimum_size_changed.connect(queue_relayout)
 	add_child(board)
-	var surface := UIKit.vbox(6 if shell.mobile_mode() else 16)
+	var surface := UIKit.vbox(6 if shell.mobile_mode() else 10)
 	board.add_child(surface)
-	if not shell.mobile_mode(): surface.add_child(UIKit.module_header("委托终端", "接单 · 备货 · 交付", "ORDERS / 登记簿"))
 	var tab_row := UIKit.hbox(10)
 	surface.add_child(tab_row)
 	for status in ["open", "active", "closed"]:
 		var key: String = status
-		var tab := UIKit.button("", "secondary", Vector2(0 if shell.portrait_mode() else 210, 50 if shell.portrait_mode() else 56), 15 if shell.portrait_mode() else 22)
+		var tab := UIKit.button("", "secondary", Vector2(0 if shell.portrait_mode() else 160, 40), 15 if shell.portrait_mode() else 18)
 		tab.pressed.connect(func(): _select_status(key))
 		if shell.mobile_mode():
 			tab.custom_minimum_size = Vector2(0,36 if shell.landscape_mode() else 44)
@@ -40,7 +39,7 @@ func enter() -> void:
 		tab_row.add_child(tab)
 		tabs[key] = tab
 	surface.add_child(UIKit.rule())
-	status_note = UIKit.label("", 19, UIKit.MUTED, false, true)
+	status_note = UIKit.label("", 16, UIKit.MUTED, false, true)
 	surface.add_child(status_note)
 	for key in ["open", "active", "closed"]:
 		var sc := ScrollContainer.new()
@@ -56,11 +55,11 @@ func enter() -> void:
 	_refresh()
 	relayout()
 
-## Notices sit in the board's header row, right of the tabs.
+## Notices use the guidance row below the tabs, including in narrow drawers.
 func toast_rect() -> Rect2:
 	if not is_instance_valid(board):
 		return Rect2()
-	return Rect2(board.position.x + 760, board.position.y + 70, minf(640.0, board.size.x - 800), 150)
+	return Rect2(board.position + Vector2(24,72), Vector2(maxf(200,board.size.x-48),64))
 
 func relayout() -> void:
 	if not is_instance_valid(board):
@@ -70,7 +69,7 @@ func relayout() -> void:
 	board.position = Vector2(r.position.x + (r.size.x - width) * 0.5, r.position.y)
 	board.size = Vector2(width, r.size.y)
 	for key in cols:
-		cols[key].columns = 3 if width >= 1400.0 else 2 if width >= 860.0 else 1
+		cols[key].columns = 1 if counts.get(key,0)==0 else 3 if width >= 1400.0 else 2 if width >= 860.0 else 1
 		if shell.mobile_mode():
 			tabs[key].custom_minimum_size.y = 36 if shell.landscape_mode() else 44
 			for card in cols[key].get_children():
@@ -103,23 +102,38 @@ func _select_status(key: String) -> void:
 	status_note.visible = not shell.mobile_mode() or terminal_problem != "" or closed != ""
 	if status_changed:
 		tabs[key].call_deferred("grab_focus")
+	if shell.workspace_mode and not shell.mobile_mode():
+		shell.workspace_parent.call_deferred("_layout_workspace")
+
+func preferred_workspace_size() -> Vector2:
+	var count := int(counts.get(selected_status,0))
+	if count == 0: return Vector2(840,400)
+	return Vector2(1040,clampf(220+ceilf(count/2.0)*92,440,620))
 
 func _empty_state(key: String) -> void:
-	var panel := UIKit.plate(UIKit.inset_style(28))
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var content := UIKit.vbox(14)
-	panel.add_child(content)
-	content.add_child(UIKit.label({"open": "今天暂时没有可接的委托", "active": "还没有进行中的委托", "closed": "还没有已结束的委托"}[key], 26, UIKit.TEXT))
-	content.add_child(UIKit.label({"open": "先整理库存、完成维修，新的委托会随营业日出现。", "active": "从可接订单中挑选一项，接单后可在这里核验并交付。", "closed": "委托交付或到期后，会在这里保留记录。"}[key], 21, UIKit.MUTED, false, true))
-	var next := UIKit.button("查看可接订单" if key != "open" else "整理仓储", "primary", Vector2(240, 54), 22)
-	next.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	var content := UIKit.vbox(10)
+	content.name = "OrdersEmptyState"
+	content.custom_minimum_size.y = 150
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.alignment = BoxContainer.ALIGNMENT_CENTER
+	var heading := UIKit.label({"open": "今天暂时没有可接的委托", "active": "还没有进行中的委托", "closed": "还没有已结束的委托"}[key], 22, UIKit.TEXT,false,true)
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(heading)
+	var explanation := UIKit.label({"open": "先整理库存、完成维修，新的委托会随营业日出现。", "active": "从可接订单中挑选一项，接单后可在这里核验并交付。", "closed": "委托交付或到期后，会在这里保留记录。"}[key], 16, UIKit.MUTED, false, true)
+	explanation.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(explanation)
+	var next := UIKit.button("查看可接订单" if key != "open" else "整理仓储", "primary", Vector2(180, 38), 18)
+	# Mobile text is clipped to fit flexible rows; this centered control needs
+	# an explicit width or its minimum collapses to just the frame margins.
+	next.custom_minimum_size.x = 180
+	next.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	next.pressed.connect(func():
 		if key == "open":
 			shell.go("warehouse")
 		else:
 			_select_status("open"))
 	content.add_child(next)
-	cols[key].add_child(panel)
+	cols[key].add_child(content)
 
 const FACTION := {"station": ["站务", Color("2f5f74")], "salvage": ["拾荒", Color("7a4a1e")], "merchant": ["商会", Color("5b3d6e")]}
 const INK_SOFT := Color("6b5a40")

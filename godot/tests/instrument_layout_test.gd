@@ -143,8 +143,8 @@ func run():
 			shell._set_workspace_render_scale(render_scale)
 			await create_timer(0.15).timeout
 			var viewport: SubViewport = active.get_viewport()
-			check(viewport.get_visible_rect().size == Vector2(1600, 900), "logical drawer layout remains stable at %s×" % render_scale)
-			check(viewport.size == Vector2i(roundi(1600 * render_scale), roundi(900 * render_scale)), "drawer raster follows %s× display resolution" % render_scale)
+			check(viewport.get_visible_rect().size == Vector2(1440, 800), "compact logical drawer layout remains stable at %s×" % render_scale)
+			check(viewport.size == Vector2i(roundi(1440 * render_scale), roundi(800 * render_scale)), "drawer raster follows %s× display resolution" % render_scale)
 			check(page.it_uid == uid and page.tool == "TOL-005", "resizing preserves the selected lot and instrument")
 			if page.scale_occupied: page._scale_remove()
 			page.tared = false

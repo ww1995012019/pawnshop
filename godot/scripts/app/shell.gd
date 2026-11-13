@@ -67,6 +67,11 @@ var workspace_suspended_focus: Array = []
 var workspace_logical_size := Vector2(1600, 900)
 const WORKSPACE_LABELS := {"inspect": "鉴定台", "repair": "维修工作台", "warehouse": "货物抽屉", "orders": "委托终端", "report": "营业账本"}
 const WORKSPACE_SIZE := Vector2(1600, 900)
+const DESKTOP_WORKSPACE_SIZES := {
+	"inspect": Vector2(1440, 800), "repair": Vector2(1440, 800),
+	"warehouse": Vector2(1360, 760), "orders": Vector2(1040, 560),
+	"report": Vector2(1120, 720),
+}
 
 func art(u: float, v: float) -> Vector2:
 	return CENTER + (Vector2(u, v) - Vector2(836, 470.5)) * K
@@ -698,7 +703,7 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	workspace_close.pressed.connect(close_workspace)
 	header.add_child(workspace_close)
 	body.add_child(header_mount)
-	# The drawer's logical size remains fixed. Render its viewport at the
+	# Each module chooses its logical size. Render its viewport at the
 	# display's pixel scale so text is rasterized at the final resolution.
 	workspace_host = Control.new()
 	workspace_host.custom_minimum_size = WORKSPACE_SIZE
@@ -744,7 +749,9 @@ func _layout_workspace() -> void:
 	var area := safe_area()
 	var visible := area.size
 	var phone := _landscape_phone()
-	var target := WORKSPACE_SIZE
+	var target: Vector2 = DESKTOP_WORKSPACE_SIZES.get(workspace_shell.page_name, WORKSPACE_SIZE)
+	if workspace_shell.page != null and workspace_shell.page.has_method("preferred_workspace_size"):
+		target = workspace_shell.page.preferred_workspace_size()
 	if portrait_mode():
 		target = Vector2(visible.x - 32, visible.y - 130)
 	elif landscape_mode():
@@ -766,7 +773,7 @@ func _layout_workspace() -> void:
 	workspace_frame.reset_size()
 	var frame_size := workspace_frame.get_combined_minimum_size()
 	workspace_frame.size = frame_size
-	var fit := minf((visible.x - 20.0) / frame_size.x, (visible.y - 20.0) / frame_size.y) if phone or portrait_mode() else 1.0
+	var fit := minf(1.0, minf((visible.x - 20.0) / frame_size.x, (visible.y - 20.0) / frame_size.y))
 	workspace_frame.scale = Vector2.ONE * fit
 	workspace_frame.position = area.position + ((visible - frame_size * fit) * 0.5).floor()
 	var output_scale := get_viewport().get_final_transform().get_scale()
@@ -794,6 +801,7 @@ func _workspace_heading(name: String) -> void:
 	Audio.music_for(name)
 	if is_instance_valid(workspace_title):
 		workspace_title.text = WORKSPACE_LABELS.get(name, "店内设备")
+	if workspace_open(): call_deferred("_layout_workspace")
 
 var workspace_close_pending := false
 func close_workspace() -> void:

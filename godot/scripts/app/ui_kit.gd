@@ -117,7 +117,9 @@ static func key_style(kind: String, state: String, compact := false) -> StyleBox
 		"disabled":
 			fill = Color("343d38")
 			edge = Color("59625b")
-	var s := box(fill, edge, 0, 1, 0, 0)
+	# At fractional viewport scales a single logical pixel can disappear on
+	# one side. Two pixels keep the complete flat outline visible.
+	var s := box(fill, edge, 0, 2, 0, 0)
 	s.content_margin_left = 6 if compact or mobile_ui else 16
 	s.content_margin_right = 6 if compact or mobile_ui else 16
 	s.content_margin_top = 4 if phone_landscape() else 6
@@ -267,7 +269,7 @@ static func button(text: String, kind := "secondary", min_size := Vector2(0, 58)
 	b.mouse_exited.connect(func(): _button_rest_feedback(b))
 	b.focus_entered.connect(func(): _button_rest_feedback(b))
 	b.focus_exited.connect(func(): _button_rest_feedback(b))
-	b.button_down.connect(func(): _button_feedback(b, Vector2(0.98, 0.97), Color.WHITE))
+	b.button_down.connect(func(): _button_feedback(b, Vector2.ONE, Color.WHITE))
 	b.button_up.connect(func(): _button_rest_feedback(b))
 	return b
 

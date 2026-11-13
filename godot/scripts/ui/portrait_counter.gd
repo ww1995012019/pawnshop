@@ -137,6 +137,7 @@ func _build() -> void:
 		flipped = not flipped
 		_update_art(), "secondary", "flip")
 	flip.size_flags_horizontal = Control.SIZE_SHRINK_END
+	flip.custom_minimum_size.x = 88
 	title_row.add_child(flip)
 	mat_body.add_child(title_row)
 	item_art = _picture(null,0)
