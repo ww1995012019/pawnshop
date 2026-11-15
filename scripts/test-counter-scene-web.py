@@ -21,7 +21,7 @@ with sync_playwright() as p:
  phone.wait(page,'!s.title&&!s.busy',timeout=30000)
  page.wait_for_timeout(2200)
  # Persist initial state before injecting a populated inventory in this test-only browser.
- page.mouse.click(706,545);page.wait_for_timeout(1000)
+ page.evaluate('orbitalTouchSend(JSON.stringify({type:"arrive"}))');page.wait_for_timeout(3000)
  spec2=importlib.util.spec_from_file_location('service','scripts/test-watch-service-web.py');service=importlib.util.module_from_spec(spec2);spec2.loader.exec_module(service)
  row=page.evaluate(service.READ_SAVE)
  assert row
@@ -48,21 +48,26 @@ with sync_playwright() as p:
    page.mouse.move(x+(tx-x)*step/12,y+(ty-y)*step/12);page.wait_for_timeout(100)
   page.mouse.up();page.wait_for_timeout(1600)
  uid=fixture['inventory'][0]['uid']
- drag(240,275,805,540)
+ def point(name):
+  loc=phone.locate(page,'@'+name);return loc['x'],loc['y']
+ def drag_to(source,target):
+  drag(*point(source),*point(target))
+ warehouse_uid=[i['uid'] for i in fixture['inventory'] if i['location']=='warehouse'][1]
+ drag_to('stock_recommend_'+uid,'stock_recommend_'+warehouse_uid)
  state=saved_when(lambda s:next(i for i in s['inventory'] if i['uid']==uid)['location']=='warehouse')
  assert state['showroomLayout']['warehouse'][uid]==1,state['showroomLayout']
- drag(805,540,240,275)
+ drag_to('stock_recommend_'+uid,'showroom_empty_display_0')
  state=saved_when(lambda s:next(i for i in s['inventory'] if i['uid']==uid)['location']=='display')
  assert state['showroomLayout']['display'][uid]==0
- drag(240,275,355,275)
+ drag_to('stock_recommend_'+uid,'stock_recommend_'+fixture['inventory'][1]['uid'])
  state=saved_when(lambda s:s['showroomLayout']['display'].get(uid)==1)
  assert state['cash']==5000 and state['ap']==12
  page.screenshot(path=str(out/'pc-dragged.png'))
  print('PASS real drag: cabinet→counter→cabinet, swap, no cash/AP change',flush=True)
  # Counter world is letterboxed from a 1920x1080 coordinate system.
- page.mouse.click(240,275);page.mouse.move(1370,940);page.wait_for_timeout(800)
+ page.mouse.click(*point('stock_recommend_'+uid));page.mouse.move(1370,940);page.wait_for_timeout(800)
  page.screenshot(path=str(out/'pc-selected.png'))
- page.mouse.click(1175,565);page.mouse.move(1370,940);page.wait_for_timeout(500)
+ page.mouse.click(1175,725);page.mouse.move(1370,940);page.wait_for_timeout(500)
  page.screenshot(path=str(out/'pc-flipped.png'))
  try:
   click('放大镜 · 查看标识');phone.wait(page,'s.workspace==="inspect"',timeout=10000)

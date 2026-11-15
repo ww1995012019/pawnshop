@@ -19,6 +19,9 @@ func run():
  for key in grid.get_children():
   if String(key.name).begins_with("showroom_empty_display_"):
    check(key.text=="" and key.get_theme_stylebox("normal").bg_color.a==0,"empty cabinet slots have no plus or frame")
+ page._refresh();page._refresh();await frames()
+ check(page.find_children("*","Label",true,false).filter(func(label):return label.text=="来客交易").size()==1,"refresh reuses the desktop heading")
+ check(page.footer.get_parent()==page.bubble.get_parent(),"speech actions follow the desktop visibility boundary")
  var room=page.showroom
  var uid: String=game.state.inventory[0].uid
  room.place_original(uid,"warehouse",4)

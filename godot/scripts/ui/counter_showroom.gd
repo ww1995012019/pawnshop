@@ -32,14 +32,14 @@ func setup(page) -> void:
  mouse_filter = Control.MOUSE_FILTER_IGNORE
  set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  tray = UIKit.hbox(10)
- tray.position = Vector2(660,490)
+ tray.position = Vector2(600,650)
  tray.size = Vector2(650,126)
  add_child(tray)
  paging=UIKit.hbox(6)
- paging.position=Vector2(660,635)
+ paging.position=Vector2(600,805)
  add_child(paging)
  preview_pad = Panel.new()
- preview_pad.position = Vector2(1080,482)
+ preview_pad.position = Vector2(1080,642)
  preview_pad.size = Vector2(190,166)
  preview_pad.add_theme_stylebox_override("panel",desk._flat(Color("344e43"),Color("ad9260"),8))
  preview_pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -49,7 +49,7 @@ func setup(page) -> void:
  preview.name = "LiftedOriginal"
  preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
  preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
- preview.position = Vector2(1100,490)
+ preview.position = Vector2(1100,650)
  preview.size = Vector2(150,150)
  preview.pivot_offset = Vector2(75,75)
  preview.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -61,8 +61,8 @@ func setup(page) -> void:
    preview.accept_event())
  add_child(preview)
  details = UIKit.plate(desk._flat(Color("302832"),Color("ad9260"),12))
- details.position = Vector2(1040,132)
- details.size = Vector2(286,300)
+ details.position = Vector2(1375,170)
+ details.size = Vector2(480,500)
  add_child(details)
  info = UIKit.vbox(8)
  details.add_child(info)
@@ -197,13 +197,13 @@ func refresh() -> void:
  preview.texture = UIKit.physical_icon(it,preview_back)
  if changed:
   if is_instance_valid(preview_tween): preview_tween.kill()
-  preview.position = Vector2(1100,490)
+  preview.position = Vector2(1100,650)
   preview.modulate.a = 1.0
   if not Game.prefs.reduced_motion:
    preview.position = Vector2(310,320) if it.location=="display" else Vector2(770,520)
    preview.modulate.a = .3
    preview_tween = create_tween().set_parallel(true)
-   preview_tween.tween_property(preview,"position",Vector2(1100,490),.34).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+   preview_tween.tween_property(preview,"position",Vector2(1100,650),.34).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
    preview_tween.tween_property(preview,"modulate:a",1.0,.2)
  UIKit.clear(info)
  info.add_child(UIKit.label(WatchForgery.sale_name(it),21,UIKit.AMBER,false,true))

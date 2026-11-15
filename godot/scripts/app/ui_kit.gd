@@ -2,20 +2,20 @@ class_name UIKit
 ## One visual language for every screen: colours, spacing, panels, keys, icons,
 ## and item/character art lookup. Layouts use containers so edges line up.
 
-const BG := Color("0b1118")
-const PLATE := Color(0.075, 0.082, 0.09, 0.97)
-const PLATE_EDGE := Color("58615f")
-const INSET := Color(0.035, 0.042, 0.047, 0.97)
-const AMBER := Color("ffc27a")
-const AMBER_DEEP := Color("8a5226")
-const CYAN := Color("7fe6dc")
-const TEXT := Color("ece7d9")
-const MUTED := Color("9aa8a5")
-const PAPER := Color("eee5d0")
-const INK := Color("2a241c")
-const RUST := Color("9a4a1f")
-const DANGER := Color("d98a78")
-const GOOD := Color("98d6a8")
+const BG := Color("e7d6b5")
+const PLATE := Color("efdfbf")
+const PLATE_EDGE := Color("342c27")
+const INSET := Color("e3cfaa")
+const AMBER := Color("7c3024")
+const AMBER_DEEP := Color("8f3c2e")
+const CYAN := Color("3e6150")
+const TEXT := Color("302b25")
+const MUTED := Color("706653")
+const PAPER := Color("f1dfbc")
+const INK := Color("302b25")
+const RUST := Color("b44c36")
+const DANGER := Color("a33b2d")
+const GOOD := Color("3d684c")
 const GAP := 12
 const PAD := 20
 
@@ -47,11 +47,11 @@ static func ensure() -> void:
 
 static func box(fill: Color, edge := Color.TRANSPARENT, radius := 8, border := 2, pad := PAD, shadow := 10) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
-	s.bg_color = fill
-	s.border_color = edge
+	s.bg_color = PAPER if fill.a > .8 and fill.get_luminance() < .16 else fill
+	s.border_color = INK if edge.a > .8 and edge.get_luminance() > .25 else edge
 	s.set_border_width_all(border if edge.a > 0.0 else 0)
-	s.set_corner_radius_all(0)
-	s.shadow_color = Color(0, 0, 0, 0.45)
+	s.set_corner_radius_all(clampi(radius,0,18))
+	s.shadow_color = Color(0.16, 0.12, 0.08, 0.16)
 	s.shadow_size = shadow
 	s.shadow_offset = Vector2(0, 3)
 	s.set_content_margin_all(pad)
@@ -76,17 +76,8 @@ const SKIN_RIM := {"glass": [49, 50, 41, 63], "strip": [27, 32, 27, 53], "amber"
 	"paper": [9, 9, 9, 9], "screen": [41, 41, 41, 49]}
 
 static func skin(name: String, size := "lg", pad := -1.0, tint := Color.WHITE) -> StyleBox:
-	var fills := {"glass": Color("243d38"), "strip": Color("34362f"), "amber": Color("97653a"), "graphite": Color("3b4442"), "socket": Color("1a2525"), "rail": Color("2d3331"), "paper": Color("e8d9b7"), "screen": Color("142c29")}
-	var edges := {"glass": Color("64877b"), "strip": Color("837961"), "amber": Color("d8a76a"), "graphite": Color("78877f"), "socket": Color("566960"), "rail": Color("9c8064"), "paper": Color("b09a73"), "screen": Color("5f8172")}
-	var surface = load("res://scripts/ui/retro_surface.gd").new()
-	surface.kind = name
-	surface.fill = fills.get(name,PLATE)
-	surface.edge = edges.get(name,PLATE_EDGE)
-	surface.tint = tint
-	surface.compact = size == "xs"
-	surface.thin = mobile_ui
-	if mobile_ui: surface.compact = true
-	surface.set_content_margin_all((18.0 if size == "lg" else 12.0 if size == "sm" else 8.0) if pad < 0 else pad)
+	var fills := {"paper": PAPER, "screen": Color("e4d3ae"), "socket": Color("dfcba5"), "amber": Color("bb5039"), "glass": Color("d9d6b1")}
+	var surface := box(fills.get(name,PAPER),INK,5,2,18 if pad < 0 else int(pad),2)
 	return surface
 
 static func plate_style() -> StyleBox:
@@ -107,16 +98,16 @@ const KEY_TINT := {"primary": Color(1, 1, 1), "secondary": Color(0.92, 0.95, 1.0
 ## compact: icon-only keys and small tiles use the thin xs rim and tight
 ## padding, so the icon or label fills the key instead of a heavy frame.
 static func key_style(kind: String, state: String, compact := false) -> StyleBox:
-	var fill := Color("20322e")
-	var edge := Color("d1bd92") if kind == "primary" else Color("73857a")
+	var fill := Color("ecd9b6")
+	var edge := Color("a84432") if kind == "primary" else Color("493b30")
 	match state:
 		"hover":
-			fill = Color("304941")
+			fill = Color("f7eacc")
 		"pressed":
-			fill = Color("152521")
+			fill = Color("d5bd95")
 		"disabled":
-			fill = Color("343d38")
-			edge = Color("59625b")
+			fill = Color("d4c7ad")
+			edge = Color("9c917b")
 	# At fractional viewport scales a single logical pixel can disappear on
 	# one side. Two pixels keep the complete flat outline visible.
 	var s := box(fill, edge, 0, 2, 0, 0)
@@ -144,15 +135,17 @@ static func build_theme() -> Theme:
 		t.set_stylebox(st, "Button", key_style("secondary", st))
 	t.set_stylebox("focus", "Button", focus_style())
 	t.set_color("font_color", "Button", TEXT)
-	t.set_color("font_hover_color", "Button", Color.WHITE)
-	t.set_color("font_pressed_color", "Button", AMBER)
+	t.set_color("font_hover_color", "Button", INK)
+	t.set_color("font_pressed_color", "Button", INK)
+	t.set_color("font_focus_color", "Button", INK)
+	t.set_color("font_hover_pressed_color", "Button", INK)
 	t.set_color("font_disabled_color", "Button", Color("b9b0a1"))
 	t.set_font_size("font_size", "Button", 22)
 	t.set_stylebox("panel", "TooltipPanel", paper_style(12))
 	t.set_color("font_color", "TooltipLabel", INK)
 	t.set_font_size("font_size", "TooltipLabel", 18)
 	var grab := box(AMBER, Color("3a2412"), 10, 2, 0, 2)
-	t.set_stylebox("grabber_area", "HSlider", box(Color("8a5226"), Color.TRANSPARENT, 4, 0, 0, 0))
+	t.set_stylebox("grabber_area", "HSlider", box(Color("8f3c2e"), Color.TRANSPARENT, 4, 0, 0, 0))
 	t.set_stylebox("slider", "HSlider", box(Color("101618"), Color("2f3b3c"), 4, 1, 4, 0))
 	t.set_stylebox("panel", "ScrollContainer", StyleBoxEmpty.new())
 	for axis in ["VScrollBar","HScrollBar"]:
@@ -164,7 +157,7 @@ static func build_theme() -> Theme:
 	t.set_stylebox("hover", "OptionButton", key_style("secondary", "hover"))
 	t.set_stylebox("pressed", "OptionButton", key_style("secondary", "pressed"))
 	t.set_font_size("font_size","OptionButton",14 if mobile_ui else 16)
-	t.set_stylebox("panel", "PopupMenu", box(Color("121a1d"), PLATE_EDGE, 6, 1, 6, 8))
+	t.set_stylebox("panel", "PopupMenu", box(Color("f0dfbf"), PLATE_EDGE, 6, 1, 6, 8))
 	t.set_font_size("font_size", "PopupMenu", 14 if mobile_ui else 16)
 	t.set_constant("separation", "VBoxContainer", GAP)
 	t.set_constant("separation", "HBoxContainer", GAP)
@@ -193,7 +186,7 @@ static func label(text: String, size := 22, color := TEXT, is_mono := false, wra
 	var l := Label.new()
 	l.text = text
 	l.add_theme_font_size_override("font_size", mini(size,14) if phone_landscape() else mini(size,17) if mobile_ui else size)
-	l.add_theme_color_override("font_color", color)
+	l.add_theme_color_override("font_color", INK if color.get_luminance() > .5 else color)
 	if is_mono:
 		l.add_theme_font_override("font", mono)
 	if wrap:
@@ -232,7 +225,7 @@ static func _configure_option(picker: OptionButton, min_width: float) -> void:
 		picker.add_theme_stylebox_override(state,style)
 	var menu := picker.get_popup()
 	menu.add_theme_font_size_override("font_size",size)
-	menu.add_theme_stylebox_override("panel",box(Color("121a1d"),PLATE_EDGE,0,1,4,0))
+	menu.add_theme_stylebox_override("panel",box(Color("f0dfbf"),PLATE_EDGE,0,1,4,0))
 	menu.add_theme_constant_override("v_separation",8)
 	if picker.is_inside_tree():
 		var area := picker.get_viewport_rect().size
@@ -255,12 +248,12 @@ static func button(text: String, kind := "secondary", min_size := Vector2(0, 58)
 	if kind == "primary":
 		# Cream lettering remains legible on the dark flat key.
 		for c in ["font_color", "font_hover_color", "font_focus_color"]:
-			b.add_theme_color_override(c, Color("fff3df"))
-		b.add_theme_color_override("font_pressed_color", Color("ffe2b8"))
+			b.add_theme_color_override(c, INK)
+		b.add_theme_color_override("font_pressed_color", INK)
 		b.add_theme_constant_override("outline_size", 0)
 	else:
 		b.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
-		b.add_theme_constant_override("outline_size", 1)
+		b.add_theme_constant_override("outline_size", 0)
 	if icon_name != "":
 		b.icon = icon(icon_name)
 		b.expand_icon = true
@@ -327,7 +320,7 @@ class SwitchKnob extends Control:
 		var on: bool = (get_parent() as Button).button_pressed
 		var compact := size.y < 44
 		var r := Rect2(size.x - (50 if compact else 88), size.y * 0.5 - (10 if compact else 16), 38 if compact else 64, 20 if compact else 32)
-		draw_style_box(UIKit.box(Color("8a5226") if on else Color("10171a"), Color("f0b56a") if on else Color("4b5a5a"), 16, 2, 0, 0), r)
+		draw_style_box(UIKit.box(Color("8f3c2e") if on else Color("10171a"), Color("f0b56a") if on else Color("4b5a5a"), 16, 2, 0, 0), r)
 		var knob := Vector2(r.end.x - r.size.y*0.5 if on else r.position.x + r.size.y*0.5, r.get_center().y)
 		draw_circle(knob + Vector2(0, 2), 7 if compact else 12, Color(0, 0, 0, 0.35))
 		draw_circle(knob, 7 if compact else 12, Color("fff3df") if on else Color("8b939a"))

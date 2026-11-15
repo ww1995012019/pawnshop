@@ -177,7 +177,8 @@ func set_scene(name: String) -> void:
 	# The counter page plays inside the painted room: the visitor stands
 	# behind the counter front (fg), fixtures sit on the walls and counter.
 	if name == "counter" and not workspace_mode:
-		bg.texture = UIKit.tex("res://assets/scene/shop_pixel.png")
+		bg.texture = UIKit.tex("res://assets/scene/shop_comic.png")
+		bg.position = CENTER + Vector2(0,-40)
 		bg.scale = Vector2(1920,1080) / bg.texture.get_size()
 		bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		bg.material = Util.unshaded()
@@ -307,7 +308,7 @@ func _build_ui() -> void:
 	_build_nav()
 	hint_label = UIKit.label("", 20, Color("e7dcc4"))
 	hint_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	hint_label.add_theme_constant_override("outline_size", 6)
+	hint_label.add_theme_constant_override("outline_size", 0)
 	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1080,7 +1081,7 @@ func toast(text: String, tone := "info") -> void:
 func float_text(text: String, at: Vector2, color := UIKit.AMBER) -> void:
 	var l := UIKit.label(text, 26, color, true)
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	l.add_theme_constant_override("outline_size", 6)
+	l.add_theme_constant_override("outline_size", 0)
 	fx.add_child(l)
 	l.position = at - Vector2(40, 0)
 	if Game.prefs.reduced_motion:

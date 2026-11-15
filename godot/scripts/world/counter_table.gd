@@ -78,10 +78,10 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
   if presentation_rect.size != Vector2.ZERO and shown.size()==1 and not (saved is Array and saved.size()==2):
    pos=presentation_rect.get_center()
 
-  var mobile := presentation_rect.size != Vector2.ZERO
+  var mobile := presentation_rect.size != Vector2.ZERO and presentation_rect.size.x < 640
   var height := minf(148.0 if shown.size()==1 else 116.0,presentation_rect.size.y+44.0) if mobile and info.focused else 54.0 if mobile else 64.0
   var bounds := Rect2(670,500,610,110)
-  if mobile:
+  if presentation_rect.size != Vector2.ZERO:
    var half := height*.5
    var low := presentation_rect.position+Vector2(-36+half,-26+half)
    var high := presentation_rect.end+Vector2(36-half,22-half)

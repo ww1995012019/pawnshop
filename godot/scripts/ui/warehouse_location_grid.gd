@@ -41,7 +41,7 @@ func rebuild() -> void:
 
 func slot_style() -> StyleBoxFlat:
  var style:=StyleBoxFlat.new()
- style.bg_color=Color("172124");style.border_color=Color("0b1214")
+ style.bg_color=Color("d8c59f");style.border_color=Color("75654b")
  style.set_border_width_all(2)
  return style
 

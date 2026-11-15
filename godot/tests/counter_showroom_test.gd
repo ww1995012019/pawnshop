@@ -70,9 +70,10 @@ func run():
   game.prefs.reduced_motion = false
   room.select_original(uid)
   check(room.selected_uid==uid,"animated selection begins on original")
+  check(not shell.page.terminal.visible,"own-watch tools are not covered by trade terminal")
   room.select_original(uid)
   await create_timer(.5).timeout
-  check(room.preview.position.is_equal_approx(Vector2(1100,490)),"rapid input settles watch animation")
+  check(room.preview.position.is_equal_approx(Vector2(1100,650)),"rapid input settles watch animation")
   room.flip_original()
   room.flip_original()
   await create_timer(.4).timeout
@@ -80,6 +81,8 @@ func run():
   game.state.inventory.clear()
   room.refresh()
   check(room.selected_uid=="","removed originals leave no stale preview")
+  shell.page._refresh()
+  check(shell.page.terminal.visible,"removed preview original restores trade terminal")
  shell.queue_free()
  for i in 3: await process_frame
  quit(1 if failures else 0)

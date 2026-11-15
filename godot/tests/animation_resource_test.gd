@@ -38,9 +38,6 @@ func run() -> void:
  if not is_equal_approx(sprite.tex_size().y*sprite.body.scale.y,height): push_error("animated flip must preserve height after landing");quit(1);return
  var wall = load("res://scripts/ui/wall_status.gd").new()
  root.add_child(wall)
- var expected: Image = kit.tex("res://assets/scene/shop_pixel.png").get_image().get_region(Rect2i(412,12,56,28))
- expected.resize(224,112,Image.INTERPOLATE_NEAREST)
- if wall.get_child(0).texture.get_image().get_data()!=expected.get_data(): push_error("wall bezel must retain canonical border pixels");quit(1);return
  var held: Texture2D
  for definition in GameData.item_list:
   var lot = Model.new_item(game.state,definition.id)

@@ -154,7 +154,6 @@ func _layout() -> void:
 	# This view may have been constructed before the browser acquired phone
 	# dimensions. Apply its header metrics when it actually becomes visible.
 	var header_style := UIKit.skin("graphite","xs",0)
-	header_style.thin = true
 	panels[0].add_theme_stylebox_override("panel",header_style)
 	for label in [heading,balance]:
 		label.add_theme_font_size_override("font_size",14)

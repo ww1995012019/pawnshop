@@ -200,7 +200,7 @@ func _build_materials() -> void:
 	var materials:Array=GameData.materials.filter(func(m):return float(Game.state.materials.get(m.id,0))>0)
 	for i in WarehouseExpansion.capacity(Game.state,"materials"):
 		var slot:=PanelContainer.new();slot.custom_minimum_size=Vector2(cell_size,cell_size)
-		var style:=StyleBoxFlat.new();style.bg_color=Color("172124");style.border_color=Color("0b1214")
+		var style:=StyleBoxFlat.new();style.bg_color=Color("d8c59f");style.border_color=Color("75654b")
 		style.set_border_width_all(2);slot.add_theme_stylebox_override("panel",style);slots.add_child(slot)
 		if i>=materials.size():continue
 		var m:Dictionary=materials[i];var count:String=Model.jnum(Game.state.materials.get(m.id,0))
@@ -721,10 +721,10 @@ class StorageGrid extends Control:
 
 	func _draw() -> void:
 		var cs: float = page.cell_size
-		draw_rect(Rect2(Vector2.ZERO, size), Color(0.03, 0.05, 0.06, 0.88))
+		draw_rect(Rect2(Vector2.ZERO, size), Color("b5a17c"))
 		for y in ShopUpgrades.storage_rows(Game.state):
 			for x in WarehouseExpansion.columns(Game.state):
-				draw_rect(Rect2(Vector2(x, y) * cs + Vector2(2, 2), Vector2(cs, cs) - Vector2(4, 4)), Color(0.09, 0.13, 0.14, 0.9))
+				draw_rect(Rect2(Vector2(x, y) * cs + Vector2(2, 2), Vector2(cs, cs) - Vector2(4, 4)), Color("d9c59f"))
 		for it in Game.state.inventory:
 			if it.location != "warehouse":
 				continue

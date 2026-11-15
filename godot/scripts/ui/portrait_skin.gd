@@ -44,5 +44,5 @@ static func button(key: Button, primary := false, compact := false) -> void:
 		key.add_theme_stylebox_override(state,UIKit.key_style("primary" if primary else "secondary",state,compact))
 	if primary:
 		for state in ["font_color","font_hover_color","font_focus_color","font_pressed_color"]:
-			key.add_theme_color_override(state,Color("fff3df"))
+			key.add_theme_color_override(state,UIKit.INK)
 		key.add_theme_constant_override("outline_size",0)

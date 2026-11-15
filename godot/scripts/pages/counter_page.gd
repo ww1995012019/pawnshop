@@ -2,7 +2,7 @@ extends Page
 ## Every action belongs to a piece of equipment in the painted shop.
 ## Coordinates are the final 1920 x 1080 scene, not the former art transform.
 
-const CUSTOMER_HEIGHT := 320.0
+const CUSTOMER_HEIGHT := 420.0
 const CRATE_COLS := 10
 # The front face spans source rows 168..176 in the 480px shop artwork,
 # displayed at 4x. Center the keys between its painted edges (672..708).
@@ -25,7 +25,7 @@ const FIXTURE_MOUNTS := {
 }
 const Commerce = preload("res://scripts/model/commerce.gd")
 var MAT_POS := Vector2(990, 575)
-var STAND := Vector2(880, 490)
+var STAND := Vector2(800, 530)
 var fixture_buttons: Dictionary = {}
 var customer: Customer
 var mat_item: ItemSprite
@@ -132,6 +132,7 @@ class FixtureButton extends Button:
 		focus_entered.connect(queue_redraw)
 		focus_exited.connect(queue_redraw)
 	func _draw() -> void:
+		if get_meta("comic_key",false): return
 		var active := is_hovered() or has_focus()
 		if caption == "":
 			if active:
@@ -179,12 +180,12 @@ func enter() -> void:
 	back_root.material = Util.unshaded()
 	add_world(back_root, "mid")
 	resident_window = Control.new()
-	resident_window.position = Vector2(644, 124)
-	resident_window.size = Vector2(690, 366)
+	resident_window.position = Vector2(430, 105)
+	resident_window.size = Vector2(900, 465)
 	resident_window.clip_contents = true
 	resident_window.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	back_root.add_child(resident_window)
-	back_root.add_child(CounterExtension.new())
+	# Comic room supplies the uninterrupted felt surface.
 	stage_root = Node2D.new()
 	stage_root.material = Util.unshaded()
 	add_world(stage_root, "top")
@@ -325,10 +326,11 @@ func _spawn_mat_item(it: Dictionary, animate: bool, from := Vector2.ZERO) -> voi
 
 func _flat(fill: Color, edge := Color.TRANSPARENT, pad := 0) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = fill
-	style.border_color = edge
+	style.bg_color = UIKit.PAPER if fill.a > .5 and fill.get_luminance() < .18 else fill
+	style.border_color = UIKit.INK if edge.a > .5 else edge
 	style.set_border_width_all(2 if edge.a > 0 else 0)
 	style.set_content_margin_all(pad)
+	style.set_corner_radius_all(5)
 	style.anti_aliasing = false
 	return style
 
@@ -586,6 +588,7 @@ func relayout() -> void:
 	tag_info.custom_minimum_size.x = 246
 	idle_label.position = Vector2(692, 590)
 	idle_label.size = Vector2(610, 56)
+	preload("res://scripts/ui/comic_counter.gd").apply(self)
 	if is_instance_valid(customer) and not customer.walking:
 		customer.position = STAND - resident_window.position
 	if is_instance_valid(mat_item):
@@ -652,6 +655,7 @@ func _stock_slot(it: Dictionary, picking: bool, display := false) -> Button:
 	if display:
 		var price := UIKit.label(Model.jnum(it.get("listPrice",0))+" Cr",12,UIKit.TEXT)
 		price.name = "PhysicalPriceTag"
+		price.add_theme_color_override("font_color",UIKit.PAPER)
 		price.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 		price.offset_top = -18
 		price.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -783,7 +787,7 @@ func _build_terminal() -> void:
 	cash_tray.size = Vector2(116, 64)
 	cash_tray.mouse_filter = Control.MOUSE_FILTER_STOP
 	cash_tray.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	cash_tray.tooltip_text = "查看本局总流水 · 钱箱按钮开关抽屉"
+	cash_tray.tooltip_text = "查看本局总流水"
 	cash_tray.gui_input.connect(func(event: InputEvent):
 		if event is InputEventMouseButton and event.pressed and not busy and not _scene_blocked():
 			if event.button_index in [MOUSE_BUTTON_LEFT,MOUSE_BUTTON_RIGHT]: shell.open_campaign_ledger()
@@ -878,7 +882,7 @@ func _till_key(button: Button, kind: String) -> void:
 		cap.content_margin_bottom = 1
 		button.add_theme_stylebox_override(state, cap)
 	for state in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
-		button.add_theme_color_override(state, Color("eee0bb"))
+		button.add_theme_color_override(state, UIKit.INK)
 	button.add_theme_color_override("font_disabled_color", Color("858975"))
 	button.add_theme_constant_override("outline_size", 0)
 
@@ -893,10 +897,17 @@ func _terminal_label(parent: Control, pos: Vector2, extent: Vector2, font_size: 
 
 func _act(text: String, kind: String, fn: Callable, enabled := true, _wide := false, tip := "") -> Button:
 	var caption := "抵押合同" if text.begins_with("抵押（") or text == "签抵押合同" else text
-	var b := UIKit.button(caption, kind, Vector2(70, TERMINAL_KEY_HEIGHT), 18)
+	var full_caption := caption
+	var b := UIKit.button(caption, kind, Vector2(78, 54), 18)
+	b.clip_text=true
+	b.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	_till_key(b, kind)
+	var action_icon := "next" if caption.begins_with("出价") else "check" if caption.begins_with("接受") else "inspect" if "鉴定" in caption else "orders" if "抵押" in caption else "close" if "送客" in caption else ""
+	if action_icon!="":
+		b.icon=UIKit.icon(action_icon)
+		b.add_theme_constant_override("icon_max_width",20)
 	b.disabled = not enabled or busy
-	b.tooltip_text = tip
+	b.tooltip_text = full_caption + (" · " + tip if tip!="" else "")
 	b.pressed.connect(func():
 		if _scene_blocked():
 			return
@@ -909,6 +920,7 @@ func _act(text: String, kind: String, fn: Callable, enabled := true, _wide := fa
 
 func _refresh() -> void:
 	_refresh_desk()
+	preload("res://scripts/ui/comic_counter.gd").refresh(self)
 	var s := Game.state
 	var t = s.trade
 	var dialogue := CounterDialogue.active(s)
@@ -1380,6 +1392,25 @@ func _build_bubble() -> void:
 
 func _layout_bubble_content() -> void:
 	if not is_instance_valid(bubble) or not is_instance_valid(bubble_label) or not is_instance_valid(footer):
+		return
+	if not shell.mobile_mode():
+		bubble_name.hide()
+		bubble_label.position=Vector2(16,14)
+		bubble_label.size=Vector2(293,132)
+		bubble.size=Vector2(325,160)
+		if footer.get_parent()!=bubble.get_parent(): footer.reparent(bubble.get_parent())
+		footer.position=Vector2(1390,650);footer.size=Vector2(470,34)
+		footer.visible=Game.state.trade!=null
+		if dialogue_choices.get_parent()!=bubble.get_parent(): dialogue_choices.reparent(bubble.get_parent())
+		dialogue_choices.position=Vector2(1390,690);dialogue_choices.size=Vector2(470,38)
+		var customer_name=find_child("ComicCustomerName",true,false)
+		if customer_name==null:
+			customer_name=UIKit.label("",22,UIKit.RUST)
+			customer_name.name="ComicCustomerName";customer_name.position=Vector2(560,125)
+			customer_name.add_theme_stylebox_override("normal",UIKit.paper_style(8))
+			bubble.get_parent().add_child(customer_name)
+		customer_name.text=bubble_name.text
+		customer_name.visible=Game.state.trade!=null
 		return
 	# Keep the purchase note next to the spoken line, while reserving room for
 	# longer dialogue and retaining a bounded, scrollable text area.
