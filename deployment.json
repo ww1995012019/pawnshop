@@ -1,8 +1,8 @@
 {
-  "source_commit": "60f0e3bda12bb449cb58e766c120a759cba8cae3",
-  "release_id": "4bd752a6dc83bbc5",
-  "pack": "workbench-bf4dd41678520ab8.pck",
-  "html_sha256": "952292f57e571bd20bc0e300abdd76deed7e392518a4973e20f7e435a12ecafc",
+  "source_commit": "c9667f84ce2675581cd8b070e13d338697effecb",
+  "release_id": "f4b1bf3eb294a579",
+  "pack": "workbench-5af367f60766f143.pck",
+  "html_sha256": "4e36af195a82cc5f6017234db991432a87d62f0e1b4608dd0e3988b719d2f00c",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -206,5 +206,26 @@
     ]
   ],
   "live_browser_verification": "blocked: runtime proxy rejects public Pages domain; cloud browser unavailable",
-  "quote_readability_version": 1
+  "quote_readability_version": 1,
+  "dense_counter_layout_version": 1,
+  "desktop_dialogue_font_size": 18,
+  "dense_counter_verified_counts": [
+    7,
+    16,
+    15
+  ],
+  "dense_counter_verified_viewports": [
+    [
+      1920,
+      1080
+    ],
+    [
+      1778,
+      974
+    ],
+    [
+      1440,
+      900
+    ]
+  ]
 }
