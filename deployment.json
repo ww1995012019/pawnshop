@@ -1,8 +1,8 @@
 {
-  "source_commit": "c9667f84ce2675581cd8b070e13d338697effecb",
-  "release_id": "f4b1bf3eb294a579",
-  "pack": "workbench-5af367f60766f143.pck",
-  "html_sha256": "4e36af195a82cc5f6017234db991432a87d62f0e1b4608dd0e3988b719d2f00c",
+  "source_commit": "c62eeeac9558f10b19dab264518728d3df7d8d6a",
+  "release_id": "6ad861053df3bfb7",
+  "pack": "workbench-2013c0ed8d88d24f.pck",
+  "html_sha256": "2c6dcb306ca38490b4b3e0e72109705f21e9cecec6c48c7c617ecca107b41fde",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 127,
+  "native_regression_groups": 128,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -197,12 +197,16 @@
       1080
     ],
     [
+      1778,
+      974
+    ],
+    [
       1440,
       900
     ],
     [
-      2560,
-      1440
+      1420,
+      800
     ]
   ],
   "live_browser_verification": "blocked: runtime proxy rejects public Pages domain; cloud browser unavailable",
@@ -226,6 +230,45 @@
     [
       1440,
       900
+    ]
+  ],
+  "quick_trade_list_version": 1,
+  "quick_trade_batch_ap": 1,
+  "quick_trade_unselect_preserves_position": true,
+  "explicit_original_withdrawal_version": 1,
+  "shared_paper_interior_cleanup_version": 1,
+  "counter_portrait_contact_version": 1,
+  "quick_trade_list_verified_counts": [
+    0,
+    1,
+    2,
+    4,
+    8,
+    15,
+    16
+  ],
+  "quick_trade_list_verified_viewports": [
+    [
+      1920,
+      1080
+    ],
+    [
+      1778,
+      974
+    ],
+    [
+      1440,
+      900
+    ]
+  ],
+  "warehouse_paper_verified_viewports": [
+    [
+      1920,
+      1080
+    ],
+    [
+      1420,
+      800
     ]
   ]
 }
