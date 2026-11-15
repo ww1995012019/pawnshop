@@ -15,6 +15,8 @@ func run():
  page._refresh();await frames();page.showroom.select_original(uid);await frames()
  var caption=view.get_node_or_null("StrictAskCaption")
  check(caption!=null and caption.text=="挂牌" and view.ask.text=="321 Cr","own-original ribbon shows the real list price rather than arrival count")
+ var preview_tag=view.table.get_child(0).find_children("*","Label",true,false)[0]
+ check(preview_tag.get_visible_line_count()>=1 and preview_tag.size.y>=preview_tag.get_theme_font("font").get_height(preview_tag.get_theme_font_size("font_size")),"single-original price has room for its complete text line")
  await click(button(view,"放大镜 · 查看标识"));await frames()
  shell.close_workspace();await frames()
  await click(button(view,"放回原位"));await frames()

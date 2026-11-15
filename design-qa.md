@@ -141,3 +141,33 @@ failures), plus quote-console/payment/reference-state/mobile-quote regressions.
 Final quote-fix build: `4bd752a6dc83bbc5` /
 `workbench-bf4dd41678520ab8.pck`. No remaining actionable P0/P1/P2 for this
 reported defect. Other presentation assets and game rules are unchanged.
+
+## Follow-up: multi-item occlusion and dialogue size
+
+The user reported connected price tags, a hidden far-right original and
+clipped dialogue after partial checkout. The desktop projection used the
+remaining item count although canonical positions still included an empty
+eighth slot. Visitor tags also retained a 120 px single-item width, and the
+upper/lower button regions overlapped. Native tests reproduce these failures
+with eight originals per side and a real checkout leaving canonical slot 5
+empty. The repair projects the full canonical slot range into the counter,
+uses the same projection for drag/drop, fits compact price tags and includes
+the entire tag in its pointer target. Dialogue uses 18 px text and three full
+font-height lines in the existing bubble. Browser verification passed for
+7, 16 and 15 visible originals at 1920×1080, 1778×974 and 1440×900. Every
+original can be focused with real mouse input; dragging into the empty slot
+and reloading preserve the canonical position without changing cash or AP.
+Browser errors: none.
+
+Same-state full-view evidence: `work/multi-counter/comparison.png`; focused
+evidence: `comparison-table.png` and `comparison-dialogue.png` in that
+directory. Final screenshots: `user-1778.png`, `maximum-1920.png`,
+`seven-hole-1920.png`, `dragged.png` and `reloaded.png`. The original bubble
+and folio artwork stay in place; the smaller type and capacity-aware table
+spacing are the user-requested corrections. No actionable P0/P1/P2 remains.
+
+Verification: `native-before.log` reproduces 11 failures; `native-after.log`
+passes, including a real partial checkout preserving the far-right slot and
+the inverse drag mapping. Seven related native groups and the single-original
+price/preview state regression pass. `browser-results.json` records no errors.
+Build: `f4b1bf3eb294a579` / `workbench-5af367f60766f143.pck`.

@@ -43,3 +43,11 @@ Run `python scripts/build-godot-web.py`, start the preview on port 4174, then
 transaction/drag/reload evidence are written to `work/strict-reference`.
 Native regressions include reference-asset and reference-state coverage.
 See project-root `design-qa.md` for the final visual comparison and checks.
+
+Dense desktop tables project all canonical slots, including vacancies after
+checkout, into the visible felt. The display and drag/drop share this mapping.
+Compact tags fit the available spacing and their complete area is clickable;
+upper/lower pointer regions do not overlap. The existing speech bubble uses
+18 px text and three complete font-height lines. Run
+`python scripts/test-strict-multi-counter-web.py` for 7/16/15-original cases at
+1920×1080, 1778×974 and 1440×900, including real focus, drag and reload checks.

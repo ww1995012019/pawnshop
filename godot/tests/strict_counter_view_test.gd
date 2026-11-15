@@ -74,7 +74,38 @@ func run() -> void:
  view._drop_data(Vector2(780,510),{"kind":"strict_trade","uid":moving_uid});await frames()
  check(view.table.get_node("strict_table_"+moving_uid).position!=before_position and TradeSession.session(game.state).get("table_positions",{}).has(moving_uid),"table dragging immediately renders the saved canonical position")
  check(game.state.cash==cash and game.state.ap==ap,"table placement preserves cash, AP and ownership")
- shell.queue_free();await frames();print("STRICT UI failures=",failures);quit(1 if failures else 0)
+ shell.queue_free();await frames()
+ for hole in [false,true]:
+  game.state=preload("res://tests/strict_multi_counter_fixture.gd").build(hole)
+  shell=load("res://main.tscn").instantiate();root.add_child(shell);await frames();shell._close_title();await frames()
+  check(CounterDialogue.table_items(game.state).size()==(15 if hole else 16),"dense fixture retains every original after partial checkout" if hole else "dense fixture reaches eight originals on each side")
+  _check_table_readability(shell.page.strict_view)
+  if hole:
+   var moving:String=TradeSession.session(game.state).goods[4].uid
+   var original_x:float=shell.page.strict_view.table.get_node("strict_table_"+moving).position.x
+   shell.page.strict_view._drop_data(Vector2(940,501),{"kind":"strict_trade","uid":moving});await frames()
+   var stored=TradeSession.session(game.state).table_positions[moving]
+   check(Vector2(float(stored[0]),float(stored[1]))==Vector2(1104,508) and shell.page.strict_view.table.get_node("strict_table_"+moving).position.x>original_x+40,"dragging into the empty slot uses the same visible-to-canonical mapping")
+  shell.queue_free();await frames()
+ print("STRICT UI failures=",failures);quit(1 if failures else 0)
+
+func _check_table_readability(view) -> void:
+ var safe=Rect2(470,451,704,294);var tags:Array[Rect2]=[];var hits:Array[Rect2]=[]
+ var within=true;var separated=true;var distinct=true;var fitted=true
+ var inverse=view.get_global_transform().affine_inverse()
+ for key in view.table.get_children():
+  var label=key.find_children("*","Label",true,false)[0]
+  var tag:Rect2=inverse*label.get_global_rect();var hit:Rect2=inverse*key.get_global_rect()
+  within=within and safe.encloses(tag) and safe.encloses(hit)
+  for previous in tags:separated=separated and not tag.grow(3).intersects(previous.grow(3))
+  for previous in hits:distinct=distinct and not hit.intersects(previous)
+  fitted=fitted and hit.encloses(tag) and label.get_theme_font("font").get_string_size(label.text,HORIZONTAL_ALIGNMENT_LEFT,-1,label.get_theme_font_size("font_size")).x<=tag.size.x-4
+  tags.append(tag);hits.append(hit)
+ check(within,"all originals and prices remain inside the counter, clear of the bell and folio")
+ check(separated,"dense price tags retain at least six pixels of space")
+ check(distinct,"upper and lower originals retain separate pointer targets")
+ check(fitted,"every displayed price fits its own tag")
+ check(view.speech.get_theme_font_size("normal_font_size")<=20 and view.speech.get_content_height()<=view.speech.size.y,"ordinary dialogue fits the smaller three-line speech area")
 
 func contrast(front: Color,back: Color) -> float:
  var shown=back.blend(front).srgb_to_linear();var background=back.srgb_to_linear()

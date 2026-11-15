@@ -210,9 +210,9 @@ func _build() -> void:
  _image(self,R.name_skin(),Rect2(496,99,100,55)).name="StrictNamePaper"
  name_key=_label(self,"",Rect2(501,104,88,39),29,Color("fff0d6"),true);name_key.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
  var bubble=_image(self,R.bubble(),Rect2(760,157,285,101));bubble.name="StrictSpeechBubble";bubble.stretch_mode=TextureRect.STRETCH_SCALE
- speech=RichTextLabel.new();speech.position=Vector2(807,170);speech.size=Vector2(220,75)
- speech.add_theme_font_override("normal_font",R.font(true));speech.add_theme_font_size_override("normal_font_size",25)
- speech.add_theme_color_override("default_color",INK);speech.add_theme_constant_override("line_separation",-4);speech.scroll_active=true
+ speech=RichTextLabel.new();speech.position=Vector2(807,166);speech.size=Vector2(220,R.font(true).get_height(18)*3)
+ speech.add_theme_font_override("normal_font",R.font(true));speech.add_theme_font_size_override("normal_font_size",18)
+ speech.add_theme_color_override("default_color",INK);speech.add_theme_constant_override("line_separation",0);speech.scroll_active=true
  speech.mouse_filter=Control.MOUSE_FILTER_STOP;add_child(speech)
  bell_art=_image(self,R.bell(),Rect2(366,489,95,77));bell_art.stretch_mode=TextureRect.STRETCH_SCALE
  var bell_button=_hit(self,"",Rect2(366,489,95,77),func():desk._bell_clicked());bell_button.tooltip_text="接客铃 · 接待下一位来客"
@@ -511,42 +511,57 @@ func _stock_button(it,display: bool,extent: Vector2) -> Button:
   desk._stock_clicked(str(current.uid),picking,why);dirty=true)
  return b
 
+func _table_points(direction: String,count: int) -> Array[Vector2]:
+ # Project the entire canonical slot range, including holes after checkout,
+ # into the visible counter. The same projection is used for dragging.
+ var capacity=CounterDialogue._table_slots(direction,count).size()
+ var single=direction=="buy" and count==1
+ var start=700.0 if single else 524.0 if direction=="buy" else 510.0
+ var spacing=120.0 if single else (1107.0-start)/maxi(capacity-1,1)
+ var points:Array[Vector2]=[]
+ for index in capacity:points.append(Vector2(start+index*spacing,501 if direction=="buy" else 625))
+ return points
+
 func _table() -> void:
  for c in table.get_children():c.free()
  var shown=CounterDialogue.table_items(Game.state)
  var buys=shown.filter(func(info):return info.direction=="buy")
  var sells=shown.filter(func(info):return info.direction!="buy")
  for group in [buys,sells]:
+  if group.is_empty():continue
+  var direction:String=group[0].direction
+  var slots=CounterDialogue._table_slots(direction,group.size())
+  var points=_table_points(direction,group.size())
+  var visitor=direction=="buy"
+  var tag_width=120.0 if visitor and group.size()==1 else 76.0 if slots.size()==8 else 108.0 if visitor else 90.0
   for index in group.size():
    var info=group[index];var it=TradeSession.item(Game.state,info.uid)
    if it==null:continue
-   var xs=[510.0,608.0,708.0,804.0,902.0,1005.0,1107.0]
-   var x=700.0 if group.size()==1 and info.direction=="buy" else xs[index] if index<7 else 510.0+index*(594.0/maxi(group.size()-1,6))
-   var y=501.0 if info.direction=="buy" else 625.0
-   var slots=CounterDialogue._table_slots(info.direction,group.size())
+   var slot_index=index
    var saved=TradeSession.session(Game.state).get("table_positions",{}).get(info.uid,[])
    if saved is Array and saved.size()==2:
-    var unit=slots[1].x-slots[0].x
-    var target_unit=120.0 if group.size()==1 and info.direction=="buy" else 594.0/maxi(group.size()-1,6)
-    x=(700.0 if group.size()==1 and info.direction=="buy" else 510.0)+(float(saved[0])-slots[0].x)/unit*target_unit
-   _table_watch(it,Vector2(x,y),info.price,info.focused,func():
-    Game.dispatch({"type":"COUNTER_FOCUS","tradeId":Game.state.trade.id,"uid":info.uid});dirty=true)
+    var found=slots.find(Vector2(float(saved[0]),float(saved[1])))
+    if found>=0:slot_index=found
+   _table_watch(it,points[clampi(slot_index,0,points.size()-1)],info.price,info.focused,func():
+    Game.dispatch({"type":"COUNTER_FOCUS","tradeId":Game.state.trade.id,"uid":info.uid});dirty=true,visitor,tag_width)
  if Game.state.trade==null and desk.showroom.selected_uid!="":
   var it=Game.item(desk.showroom.selected_uid)
-  if it!=null:_table_watch(it,Vector2(700,505),it.get("listPrice",0),true,func():desk.showroom.flip_original();dirty=true)
+  if it!=null:_table_watch(it,Vector2(700,505),it.get("listPrice",0),true,func():desk.showroom.flip_original();dirty=true,true,120)
 
-func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable) -> void:
+func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visitor:=false,tag_width:=90.0) -> void:
  var b=TradeWatch.new();b.mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND;b.controller=self;b.uid=it.uid;b.name="strict_table_"+str(it.uid)
- b.position=center-Vector2(32,43);b.size=Vector2(64,130)
+ b.position=center-Vector2(tag_width/2,43);b.size=Vector2(tag_width,118 if visitor else 130)
  for state in ["normal","hover","pressed","focus"]:b.add_theme_stylebox_override(state,StyleBoxEmpty.new())
  table.add_child(b)
  var is_back=desk.showroom.preview_back if Game.state.trade==null else desk.counter_table.sprites.has(it.uid) and desk.counter_table.sprites[it.uid].back
- var texture=A.watch(it,is_back,"visitor" if center.y<560 else "table")
- var art_rect=Rect2(4,0,56,84)
+ var texture=A.watch(it,is_back,"visitor" if visitor else "table")
+ var art_rect=Rect2((tag_width-56)/2,0,56,78 if visitor else 84)
  if not is_back and texture.has_meta("native_anchor"):
-  art_rect=Rect2(Vector2(32,43)-texture.get_meta("native_anchor"),texture.get_size())
- var shadow=R.shadow_for(it,center.y<560)
- if shadow!=null:_image(b,shadow,Rect2(Vector2(32,43)-shadow.get_meta("native_anchor"),shadow.get_size()))
+  art_rect=Rect2(Vector2(tag_width/2,43)-texture.get_meta("native_anchor"),texture.get_size())
+  if visitor and art_rect.size.y>78:
+   art_rect.size*=78.0/art_rect.size.y;art_rect.position=Vector2((tag_width-art_rect.size.x)/2,0)
+ var shadow=R.shadow_for(it,visitor)
+ if shadow!=null:_image(b,shadow,Rect2(Vector2(tag_width/2,43)-shadow.get_meta("native_anchor"),shadow.get_size()))
  var art=_image(b,texture,art_rect)
  if watch_sides.has(it.uid) and watch_sides[it.uid]!=is_back and not Game.prefs.reduced_motion:
   art.pivot_offset=art.size*.5;art.scale.x=.04
@@ -559,13 +574,16 @@ func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable) -> v
     if desk.counter_table.sprites.has(it.uid):desk.counter_table.sprites[it.uid].flip()
    else:desk.showroom.flip_original()
    dirty=true;b.accept_event())
- var tag_width=120 if center.y<560 else 90
- var tag=_label(b,"未定价" if Game.state.trade==null and price<=0 else Model.jnum(price)+" Cr",Rect2((64-tag_width)/2.0,78 if center.y<560 else 93,tag_width,36 if center.y<560 else 37),24 if center.y<560 else 20,Color("f7e7c6"))
- _decorate_original(b,it)
+ var tag_font=24 if visitor and tag_width>110 else 20
+ var tag=_label(b,"未定价" if Game.state.trade==null and price<=0 else Model.jnum(price)+" Cr",Rect2(0,82 if visitor else 93,tag_width,34 if visitor else 37),tag_font,Color("f7e7c6"))
+ tag.name="PriceTag";tag.clip_text=true
+ var text_width=tag.get_theme_font("font").get_string_size(tag.text,HORIZONTAL_ALIGNMENT_LEFT,-1,tag_font).x
+ tag.add_theme_font_size_override("font_size",mini(tag_font,maxi(14,int(tag_font*(tag_width-8)/maxf(tag_width-8,text_width)))))
+ _decorate_original(b,it,tag_width<90)
  tag.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
- var normal_tag=_source_style(R.visitor_tag() if center.y<560 else R.price_tag(false),4);normal_tag.set_content_margin_all(0)
+ var normal_tag=_source_style(R.visitor_tag() if visitor else R.price_tag(false),4);normal_tag.set_content_margin_all(0)
  tag.add_theme_stylebox_override("normal",normal_tag)
- var arrow=_image(b,R.region("selection-arrow",Rect2i(996,565,18,11)),Rect2(23,-17,18,11));arrow.hide()
+ var arrow=_image(b,R.region("selection-arrow",Rect2i(996,565,18,11)),Rect2(tag_width/2-9,-17,18,11));arrow.hide()
  b.mouse_entered.connect(func():
   var hover_tag=_source_style(R.price_tag(true),4);hover_tag.set_content_margin_all(0)
   tag.add_theme_stylebox_override("normal",hover_tag);tag.add_theme_color_override("font_color",Color("efb34f"));arrow.visible=center.y>560)
@@ -574,10 +592,11 @@ func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable) -> v
  b.pressed.connect(func():
   if not desk.busy and not desk._scene_blocked():fn.call())
 
-func _decorate_original(button: Control,it) -> void:
+func _decorate_original(button: Control,it,compact:=false) -> void:
+ var inset=Vector2((button.size.x-64)/2,0)
  if UIKit.presentation_tier(it) in ["luxury","ultra"]:
-  _image(button,R.crest(),Rect2(41,0,27,28)).name="tier_crest"
- if UIKit.is_modified(it):_image(button,R.modified(),Rect2(-18,39,33,31)).name="modified_badge"
+  _image(button,R.crest(),Rect2(inset+Vector2(42,0),Vector2(24,25)) if compact else Rect2(inset+Vector2(41,0),Vector2(27,28))).name="tier_crest"
+ if UIKit.is_modified(it):_image(button,R.modified(),Rect2(inset+Vector2(0,36),Vector2(22,22)) if compact else Rect2(inset+Vector2(-18,39),Vector2(33,31))).name="modified_badge"
 
 func _unhandled_key_input(event: InputEvent) -> void:
  if not visible or quote.has_focus() or desk.busy or desk._scene_blocked():return
@@ -603,10 +622,11 @@ func _drop_data(at_position: Vector2,data) -> void:
   var info=shown.filter(func(entry):return entry.uid==uid)[0]
   var count=shown.filter(func(entry):return entry.direction==info.direction).size()
   var slots=CounterDialogue._table_slots(info.direction,count)
-  var origin=700.0 if count==1 and info.direction=="buy" else 510.0
-  var spacing=120.0 if count==1 and info.direction=="buy" else 594.0/maxi(count-1,6)
-  var x=slots[0].x+(at_position.x-origin)/spacing*(slots[1].x-slots[0].x)
-  Game.dispatch({"type":"COUNTER_MOVE","tradeId":Game.state.trade.id,"uid":uid,"position":[x,slots[0].y]})
+  var points=_table_points(info.direction,count)
+  var nearest=0
+  for index in points.size():
+   if points[index].distance_squared_to(at_position)<points[nearest].distance_squared_to(at_position):nearest=index
+  Game.dispatch({"type":"COUNTER_MOVE","tradeId":Game.state.trade.id,"uid":uid,"position":[slots[nearest].x,slots[nearest].y]})
  elif at_position.x>430:
   desk.showroom.select_original(uid)
  elif at_position.y<500:
@@ -631,7 +651,7 @@ func _model_changed(previous: Dictionary,next: Dictionary,action: Dictionary) ->
   if not child is TradeWatch or child.uid in remaining:continue
   var it=TradeSession.item(previous,child.uid)
   if it==null:continue
-  var ghost=_image(self,A.watch(it),Rect2(child.position,Vector2(60,85)))
+  var ghost=_image(self,A.watch(it),Rect2(child.position+Vector2((child.size.x-60)/2,0),Vector2(60,85)))
   var target=Vector2(150,705) if it.owner=="npc" else Vector2(690,250)
   var tw=create_tween().set_parallel(true)
   tw.tween_property(ghost,"position",target,.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
