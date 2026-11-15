@@ -1,8 +1,8 @@
 {
-  "source_commit": "8a2e14bcb09ea2ac2bd2523210759c7691c16653",
-  "release_id": "e7dfebff008cc95d",
-  "pack": "workbench-6fd5e77628f664a7.pck",
-  "html_sha256": "1aeb16231a42a0f4ddf98a046decfaedeac6d0c5d771bbdcc8ef728af7665273",
+  "source_commit": "a2ef0aff7f89de44fc780a069b48073e10871794",
+  "release_id": "2c35db7028a74226",
+  "pack": "workbench-a96565faf903ddc8.pck",
+  "html_sha256": "4919e5df34aedc9a02102c23b330e8a346cd7b57ca9eee4e991b6335815abcd9",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 124,
+  "native_regression_groups": 127,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -182,5 +182,28 @@
   "persistent_showroom_layout_version": 1,
   "decorative_fixture_effects_removed_version": 1,
   "cabinet_empty_markers_removed_version": 1,
-  "comic_presentation_version": 1
+  "comic_presentation_version": 2,
+  "strict_reference_presentation_version": 1,
+  "approved_reference_sha256": "fd64f2a98f6ad27e3cc06a1ae32f040a37a53fb712a414c80d8f24280832eb86",
+  "approved_reference_dimensions": [
+    1671,
+    941
+  ],
+  "local_design_qa": "passed",
+  "strict_counter_browser_errors": 0,
+  "strict_counter_verified_viewports": [
+    [
+      1920,
+      1080
+    ],
+    [
+      1440,
+      900
+    ],
+    [
+      2560,
+      1440
+    ]
+  ],
+  "live_browser_verification": "blocked: runtime proxy rejects public Pages domain; cloud browser unavailable"
 }
