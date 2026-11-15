@@ -14,6 +14,11 @@ func run():
  var page=shell.page
  for control_name in ["CounterSceneProps","ShowroomDoor","CounterLampSwitch","CounterDrawerToggle"]:
   check(page.find_child(control_name,true,false)==null,"removed fixture control: "+control_name)
+ check(not page.display_goods.get_v_scroll_bar().visible,"cabinet hides scrollbar when goods fit")
+ var grid=page.display_goods.find_child("CounterDisplayGrid",true,false)
+ for key in grid.get_children():
+  if String(key.name).begins_with("showroom_empty_display_"):
+   check(key.text=="" and key.get_theme_stylebox("normal").bg_color.a==0,"empty cabinet slots have no plus or frame")
  var room=page.showroom
  var uid: String=game.state.inventory[0].uid
  room.place_original(uid,"warehouse",4)

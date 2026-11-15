@@ -225,10 +225,13 @@ func empty_slot(location: String,index: int,extent: Vector2) -> Button:
  key.showroom=self;key.location=location;key.slot=index
  key.name="showroom_empty_%s_%d"%[location,index]
  key.custom_minimum_size=extent
- key.text="＋"
+ key.text="" if location=="display" else "＋"
  key.add_theme_font_size_override("font_size",18)
  key.add_theme_color_override("font_color",Color("9caa8d"))
- key.add_theme_stylebox_override("normal",desk._flat(Color(0.12,.2,.18,.2),Color(.6,.65,.5,.25),2))
+ key.add_theme_stylebox_override("normal",desk._flat(Color.TRANSPARENT) if location=="display" else desk._flat(Color(0.12,.2,.18,.2),Color(.6,.65,.5,.25),2))
+ if location=="display":
+  for style in ["hover","pressed","focus","disabled"]:
+   key.add_theme_stylebox_override(style,StyleBoxEmpty.new())
  key.tooltip_text="空展位 · 将手表拖到这里" if location=="display" else "空托盘 · 将手表拖到这里"
  key.pressed.connect(func():
   if selected_uid!="": place_original(selected_uid,location,index))

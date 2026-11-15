@@ -7,7 +7,6 @@ var uid := ""
 
 func _get_drag_data(_point: Vector2):
  if showroom==null or not showroom.allowed() or Game.state.trade!=null or not showroom.available(Game.item(uid)): return null
- if location=="display" and not showroom.door_open: return null
  var picture:=TextureRect.new()
  picture.texture=UIKit.physical_icon(Game.item(uid))
  picture.expand_mode=TextureRect.EXPAND_IGNORE_SIZE

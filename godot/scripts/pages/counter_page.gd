@@ -450,6 +450,7 @@ func _build_equipment() -> void:
 	display_goods.mouse_filter = Control.MOUSE_FILTER_STOP
 	display_goods.name="CounterDisplayScroll"
 	display_goods.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	display_goods.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO
 	display_goods.follow_focus=true
 	add_child(display_goods)
 	_fixture("repair", Rect2(1410, 730, 400, 305), "维修工作台", func(): _open_instrument("repair"))
@@ -710,7 +711,13 @@ func _refresh_desk() -> void:
 	stream.add_theme_constant_override("v_separation",25)
 	margin.add_child(stream)
 	var layout = preload("res://scripts/model/showroom_layout.gd")
-	for index in layout.capacity(s,"display"):
+	# Empty capacity must not create scrollable rows. Keep the painted three
+	# shelves available for drops and extend only for occupied slots.
+	var occupied_end := 0
+	for slot_index in s.get("showroomLayout",{}).get("display",{}).values():
+		occupied_end = maxi(occupied_end,int(slot_index)+1)
+	var shown_slots := mini(layout.capacity(s,"display"),maxi(9,ceili(occupied_end/3.0)*3))
+	for index in shown_slots:
 		var uid: String = layout.uid_at(s,"display",index)
 		var original = Model.find_inventory(s,uid)
 		if original == null:
