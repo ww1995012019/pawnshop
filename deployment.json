@@ -1,8 +1,8 @@
 {
-  "source_commit": "a2ef0aff7f89de44fc780a069b48073e10871794",
-  "release_id": "2c35db7028a74226",
-  "pack": "workbench-a96565faf903ddc8.pck",
-  "html_sha256": "4919e5df34aedc9a02102c23b330e8a346cd7b57ca9eee4e991b6335815abcd9",
+  "source_commit": "60f0e3bda12bb449cb58e766c120a759cba8cae3",
+  "release_id": "4bd752a6dc83bbc5",
+  "pack": "workbench-bf4dd41678520ab8.pck",
+  "html_sha256": "952292f57e571bd20bc0e300abdd76deed7e392518a4973e20f7e435a12ecafc",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -205,5 +205,6 @@
       1440
     ]
   ],
-  "live_browser_verification": "blocked: runtime proxy rejects public Pages domain; cloud browser unavailable"
+  "live_browser_verification": "blocked: runtime proxy rejects public Pages domain; cloud browser unavailable",
+  "quote_readability_version": 1
 }
