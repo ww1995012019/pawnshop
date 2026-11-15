@@ -171,3 +171,54 @@ passes, including a real partial checkout preserving the far-right slot and
 the inverse drag mapping. Seven related native groups and the single-original
 price/preview state regression pass. `browser-results.json` records no errors.
 Build: `f4b1bf3eb294a579` / `workbench-5af367f60766f143.pck`.
+
+## Follow-up: customer quick list and shared paper cleanup
+
+The requested PC right panel now lists the actual originals presented by the
+visitor and shop. Each row has selection, inspection, negotiation and guarded
+extra operations. Choosing originals changes no cash/AP; the fixed summary
+settles the selected batch for **1 AP**. Canceling a choice keeps the original
+and saved table position; explicit withdrawal is a separate More action,
+including rejected originals when all eight presentation slots are occupied.
+Orders/people remain fixed below the checkout. Empty arrivals show a clear
+recommendation state without a stale quote editor. Scrolling appears only
+when rows exceed the list height; table focus scrolls to the matching row.
+The illustration, counter, cabinet, stock and existing speech bubble remain.
+
+The user's warehouse screenshots exposed baked red button/ribbon fragments
+inside the shared paper texture. Its previous donor cleared too narrow an
+interior; the nine-patch margins repeated those remnants across cards.
+The shared source paper now clears the entire interior and preserves the
+illustrated outer rim. The same correction applies to warehouse receipts,
+inspection, repair, orders, report and modal cards. No replacement room or
+portrait art was introduced. Counter-only portrait atlases also remove the
+transparent foot padding below CHR-008/019/034, so painted hands meet the desk.
+
+Rendered evidence, opened and visually checked:
+- `work/quick-trade-list/comparison.png`: same-state before/after, retaining
+  the room/table and correcting visitor contact while introducing the list.
+- `verified-states.png`: selected warehouse receipt, empty visitor, two
+  selections and typed quote; no old red/black control fragments remain.
+- `warehouse-selected-{1920,1420}.png`: actual native tile selection in the
+  browser, full receipt and operations visible at both PC sizes.
+- `workspaces.png`: actual inspection, warehouse, repair, orders, report,
+  people, handbook and settings captures on the cleaned-paper build.
+- `four-1920.png`, `maximum-focused-bottom.png`, `seven-hole-1440.png`:
+  compact/overflow list states, linked table focus, readable separate tags.
+
+Verification: native selection/payment tests RED→GREEN; four shop-side review
+assertions RED→GREEN; shared-paper red-fragment asset test RED→GREEN. All 128
+native groups are accounted for: final full run passed 127, with the existing
+bell peak timer failing under concurrent software-rendering load; an isolated
+rerun passes without source/test changes. Full Chromium workspace/quote/
+payment/drag/reload and selected warehouse/empty-state tests pass with zero
+browser errors. The final list test additionally verifies shop unselect and
+explicit withdrawal at full capacity. One fresh read-only reviewer found two
+Important shop interaction gaps; both were reproduced and fixed. No deferred
+Minor or declined-to-judge findings.
+
+Final pack: `workbench-2013c0ed8d88d24f.pck`, release `6ad861053df3bfb7`.
+The export used an identical temporary project copy so editor writes could not
+race the native suite; font coverage and pinned runtime checks pass. Live
+Pages verification remains separately blocked by the runtime's public-domain
+proxy. Local browser screenshots use the exact release pack.

@@ -41,8 +41,8 @@ focuses before invoking existing inspection, offer, consent, cancel or deliver.
 
 ### Task 3: Browser and whole-change review
 Files: browser regression, design-qa.md, presentation documentation.
-- [ ] Run real Chromium with 1/8/16-item and partial-checkout fixtures: list
+- [x] Run real Chromium with 1/8/16-item and partial-checkout fixtures: list
   focus/scroll, row selection, typed negotiation, inspect/return and settlement.
-- [ ] Capture/review full PC, list, popup, empty and portrait-contact screenshots.
-- [ ] Obtain one read-only final review; resolve important findings and verify.
-- [ ] Commit and publish under the user's standing push/publish authorization.
+- [x] Capture/review full PC, list, popup, empty and portrait-contact screenshots.
+- [x] Obtain one read-only final review; resolve important findings and verify.
+- [x] Commit and publish under the user's standing push/publish authorization.

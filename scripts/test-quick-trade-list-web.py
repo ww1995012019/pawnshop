@@ -101,7 +101,11 @@ def main():
   click('@quick_select_'+first)
   phone.wait(page,'s.trade_session.lines.filter(r=>r.selected).length===1',timeout=10000)
   assert len(state()['table_items'])==16
-  assert state()['trade_session']['table_positions'][first]==position
+  for _ in range(50):
+   current=saved()['trade']['session']
+   if len([r for r in current['lines'] if r['selected']])==1:break
+   page.wait_for_timeout(150)
+  assert current['table_positions'][first]==position
   snap('shop-unselected')
   click('@strict_table_'+rejected);click('@quick_more_'+rejected);snap('shop-more')
   click('收回本件')
