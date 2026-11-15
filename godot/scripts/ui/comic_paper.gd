@@ -11,8 +11,8 @@ var radius := 8
 var surface: StyleBoxTexture
 var outline := StyleBoxFlat.new()
 func _init() -> void:
- surface=StyleBoxTexture.new();surface.texture=UIKit.tex("res://assets/comic/paper_frame.png")
- for side in [SIDE_LEFT,SIDE_TOP,SIDE_RIGHT,SIDE_BOTTOM]:surface.set_texture_margin(side,8)
+ surface=StyleBoxTexture.new();surface.texture=preload("res://scripts/ui/reference_atlas.gd").paper_skin()
+ for side in [SIDE_LEFT,SIDE_TOP,SIDE_RIGHT,SIDE_BOTTOM]:surface.set_texture_margin(side,22)
 func set_border_width_all(value: int) -> void:border=value
 func set_corner_radius_all(value: int) -> void:radius=value
 func _draw(canvas: RID,rect: Rect2) -> void:
@@ -20,4 +20,4 @@ func _draw(canvas: RID,rect: Rect2) -> void:
  if border>0:
   outline.bg_color=Color.TRANSPARENT;outline.border_color=border_color
   outline.set_border_width_all(border);outline.set_corner_radius_all(radius)
-  outline.draw(canvas,rect.grow(-1))
+  pass # The approved paper already contains its complete ink frame.

@@ -1,22 +1,25 @@
 # Comic presentation assets
 
-The approved visual reference is `exec-cb94836f-d9e8-4983-928f-8509c343c80a.png`.
-The room, separated residents, watch illustration sheets, bell, paper grain,
-scalable paper border, red paper and tailed speech bubble were generated as
-independent presentation assets. Controls, prices, dialogue and stock are live
-Godot nodes; no full-screen screenshot is used as an interactive background.
+`approved-reference.png` is the user's supplied 1671×941 approved design,
+preserved unchanged and imported losslessly. `reference_atlas.gd` separates
+its painted scenery, resident, watches, shadows and UI skins at runtime.
+Dynamic text and objects are cleared from scenery before independent live
+Godot nodes are rendered. `reference-clean-room.png` is an Image Gen donor for
+occluded scenery and the continuous cabinet backing; exposed structural
+woodwork and all foreground reference artwork are retained.
 
-`comic_assets.gd` owns atlas regions. Resident cells follow the existing game
-IDs. Watch UI illustrations follow apparent model and silhouette; detailed
-technical specimen textures, markings and counterfeit evidence are still
-rendered by the canonical watch renderer, so those facts are not repainted.
+Existing generated residents, front/back watch sheets, paper and room art
+remain as matching fallbacks for characters, models and views absent from the
+reference. `comic_assets.gd` maps real model/appearance IDs to those sprites.
+Technical inspection specimens, markings and counterfeit clues retain the
+canonical renderer so illustration changes do not invent or remove evidence.
 
-PNG originals are kept; the committed Godot import settings use high-quality
-lossy texture compression. The frame is imported at 256px for 8px nine-patch
-caps; this avoids compressing oversized corner caps into short price labels.
+Controls, prices, dialogue and stock remain live game nodes. Static painted
+captions/icons may remain in a control skin; changing actions use a cleared
+skin and their current caption. No full-screen screenshot overlay is used.
 
-Most interface SVGs are Lucide outline icons, downloaded from
-https://github.com/lucide-icons/lucide/tree/main/icons on 2026-11-15.
-See `icons/LUCIDE-LICENSE.txt` (ISC). Warning/fingerprint and any retained
-Font Awesome icons use Font Awesome Free; see `icons/LICENSE.txt`.
-`icons_ink` contains ink-colored aliases for the existing UIKit icon keys.
+Most interface SVGs are Lucide icons from
+https://github.com/lucide-icons/lucide/tree/main/icons (2026-11-15), ISC license
+in `icons/LUCIDE-LICENSE.txt`. Retained Font Awesome Free icons are covered by
+`icons/LICENSE.txt`. `icons_ink` provides ink-colored existing UIKit aliases.
+Font licensing is in `../fonts/`, including `reference-latin-LICENSE.txt`.

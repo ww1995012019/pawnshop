@@ -1,21 +1,29 @@
 extends Control
 ## Reference-sized presentation. Every action delegates to the existing game.
+const R = preload("res://scripts/ui/reference_atlas.gd")
 const A = preload("res://scripts/ui/comic_assets.gd")
 const PAPER = Color("f7e5c3")
 const INK = Color("20241e")
 const RED = Color("b84e37")
 const GREEN = Color("243a30")
-const S := 1920.0/1672.0
+const REFERENCE_SIZE := Vector2(1671,941)
+const PRESENTATION_SIZE := Vector2(1920,1080)
 var desk
 var face: TextureRect
 var speech: RichTextLabel
 var name_key: Label
+var business_label: Label
+var ask_caption: Label
 var day: Label
 var rent: Label
 var money: Label
 var ap: Label
 var risk: Label
 var selected: TextureRect
+var meta_cover: TextureRect
+var cost_cover: TextureRect
+var muted_paper: TextureRect
+var muted_symbol: TextureRect
 var item_name: Label
 var item_meta: Label
 var price_band: Label
@@ -31,7 +39,7 @@ var stock_count: Label
 var trade_buttons: Array=[]
 var quote_controls: Array=[]
 var stock: GridContainer
-var shelves: GridContainer
+var shelves: Control
 var table: Control
 var detail_tools: VBoxContainer
 var own: Control
@@ -49,6 +57,7 @@ var stock_scroll: ScrollContainer
 var display_scroll: ScrollContainer
 var modal_bar: Control
 var bell_art: TextureRect
+var letterbox: ColorRect
 
 class TradeWatch extends Button:
  var controller
@@ -66,7 +75,7 @@ class TradeWatch extends Button:
 func setup(page) -> void:
  desk=page;name="StrictCounterView"
  mouse_filter=Control.MOUSE_FILTER_STOP
- scale=Vector2.ONE*S;size=Vector2(1672,941)
+ scale=PRESENTATION_SIZE/REFERENCE_SIZE;size=REFERENCE_SIZE
  texture_filter=CanvasItem.TEXTURE_FILTER_LINEAR
  A.prewarm()
  _build()
@@ -92,7 +101,7 @@ func _panel(rect: Rect2,fill: Color=PAPER,border := true,radius := 8) -> Panel:
 
 func _label(parent: Node,text: String,rect: Rect2,font_size := 24,color: Color=INK,bold := false) -> Label:
  var l=Label.new();l.text=text;l.position=rect.position;l.size=rect.size
- l.add_theme_font_override("font",UIKit.mono if bold else UIKit.font)
+ l.add_theme_font_override("font",R.font(bold))
  l.add_theme_font_size_override("font_size",font_size);l.add_theme_color_override("font_color",color)
  l.mouse_filter=Control.MOUSE_FILTER_IGNORE
  parent.add_child(l);return l
@@ -136,6 +145,12 @@ func _button(parent: Node,text: String,rect: Rect2,fn: Callable,icon_name := "",
  b.pressed.connect(func():
   if desk.busy or desk._scene_blocked():return
   desk.shell.sound("click",-10);fn.call();dirty=true)
+ b.button_down.connect(func():b.modulate=Color(.95,.93,.9,b.modulate.a))
+ b.button_up.connect(func():
+  if Game.prefs.reduced_motion:b.modulate=Color(1,1,1,b.modulate.a)
+  else:
+   var tween=b.create_tween().set_parallel(true)
+   for channel in ["r","g","b"]:tween.tween_property(b,"modulate:"+channel,1.0,.12))
  return b
 
 func _nav(text: String,icon: String,x: float,width: float,fn: Callable) -> Button:
@@ -149,166 +164,130 @@ func _nav(text: String,icon: String,x: float,width: float,fn: Callable) -> Butto
 func _legacy(key: String) -> void:
  if desk.fixture_buttons.has(key):desk.fixture_buttons[key].pressed.emit()
 
+func _source_style(texture: Texture2D,cap := 6) -> StyleBoxTexture:
+ var st=StyleBoxTexture.new();st.texture=texture
+ for side in [SIDE_LEFT,SIDE_TOP,SIDE_RIGHT,SIDE_BOTTOM]:st.set_texture_margin(side,cap)
+ return st
+
+func _hit(parent: Node,text: String,rect: Rect2,fn: Callable) -> Button:
+ var b=_button(parent,text,rect,fn)
+ b.icon=null
+ for state in ["normal","hover","pressed","disabled","focus"]:b.add_theme_stylebox_override(state,StyleBoxEmpty.new())
+ for key in ["font_color","font_hover_color","font_pressed_color","font_disabled_color","font_focus_color"]:b.add_theme_color_override(key,Color.TRANSPARENT)
+ return b
+
+func _source_nav(text: String,key: String,rect: Rect2,fn: Callable) -> Button:
+ var b=_hit(self,text,rect,fn);b.name="StrictNav_"+key;return b
+
 func _build() -> void:
- _image(self,A.tex("room.png"),Rect2(0,0,1672,941)).stretch_mode=TextureRect.STRETCH_SCALE
- # The source frame is a compact, continuous 60px paper status strip.
- _panel(Rect2(2,2,1668,57),PAPER,false,1)
- _panel(Rect2(3,3,270,50),RED,false,2)
- day=_label(self,"第25天",Rect2(49,7,125,41),29,INK,true)
- _panel(Rect2(20,4,152,48),PAPER,false,1)
- move_child(day,-1)
- _label(self,"营业",Rect2(190,8,76,40),29,Color("fff0d6"),true)
- rent=_label(self,"租期余3天",Rect2(326,12,139,35),24,INK,true)
- var event_button=_button(self,"事件",Rect2(480,9,77,40),func():_legacy("events"))
- for state in ["normal","hover","pressed","focus"]:event_button.add_theme_stylebox_override(state,StyleBoxEmpty.new())
- _image(self,A.icon("circle-exclamation"),Rect2(560,11,24,27),RED)
- for divider_x in [306,715,1276]:_panel(Rect2(divider_x,15,2,31),INK,false,0)
- _image(self,A.icon("coins"),Rect2(747,14,38,32),INK)
- money=_label(self,"979081 Cr",Rect2(805,10,155,38),25,INK,true)
- var ledger=_button(self,"",Rect2(741,7,220,46),func():desk.shell.open_campaign_ledger())
- ledger.name="StrictCashLedger";ledger.tooltip_text="现金流水 · 查看账本"
- for state in ["normal","hover","pressed","focus"]:ledger.add_theme_stylebox_override(state,StyleBoxEmpty.new())
- _image(self,A.icon("bolt"),Rect2(968,13,25,33),INK)
- ap=_label(self,"AP 10",Rect2(1002,11,94,35),24,INK,true)
- _image(self,A.icon("eye"),Rect2(1107,15,34,27),INK)
- risk=_label(self,"关注 100",Rect2(1152,11,123,35),24,INK,true)
- for spec in [["手册","book-open",1304,"help"],["经营","store",1390,"plan"],["声音","volume-high",1476,"sound"],["设置","gear",1564,"settings"]]:
-  var key: String=spec[3]
-  var b=_button(self,spec[0],Rect2(spec[2],10,88,39),func():desk._utility_clicked(key,null),spec[1])
-  for state in ["normal","hover","pressed","focus"]:b.add_theme_stylebox_override(state,StyleBoxEmpty.new())
-  b.add_theme_font_size_override("font_size",22)
- _label(self,"陈列",Rect2(22,76,100,44),30,INK,true).add_theme_stylebox_override("normal",_style())
+ letterbox=ColorRect.new();letterbox.name="StrictLetterbox";letterbox.color=INK
+ letterbox.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(letterbox)
+ _image(self,R.environment(),Rect2(0,0,1671,941)).stretch_mode=TextureRect.STRETCH_SCALE
+ _image(self,R.hud(),Rect2(0,0,1671,61)).stretch_mode=TextureRect.STRETCH_SCALE
+ day=_label(self,"",Rect2(49,7,127,44),32,INK,true)
+ business_label=_label(self,"",Rect2(184,7,90,46),31,Color("fff0d6"),false);business_label.name="StrictBusinessState";business_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ rent=_label(self,"",Rect2(325,10,132,39),24,INK,true)
+ money=_label(self,"",Rect2(804,10,150,38),25,INK,true)
+ ap=_label(self,"",Rect2(1000,10,92,38),25,INK,true)
+ risk=_label(self,"",Rect2(1151,10,112,38),24,INK,true)
+ var ledger=_hit(self,"",Rect2(742,6,219,48),func():desk.shell.open_campaign_ledger());ledger.name="StrictCashLedger";ledger.tooltip_text="现金流水 · 查看账本"
+ _hit(self,"事件",Rect2(476,8,101,43),func():_legacy("events"))
+ muted_paper=_image(self,R.muted_patch(),Rect2(1487,13,39,35))
+ muted_symbol=_image(self,A.icon("volume-xmark"),Rect2(1492,16,29,29),RED)
+ for spec in [["手册",1297,"help"],["经营",1386,"plan"],["声音",1473,"sound"],["设置",1560,"settings"]]:
+  var key:String=spec[2]
+  _hit(self,spec[0],Rect2(spec[1],7,99,45),func():desk._utility_clicked(key,null))
  display_scroll=ScrollContainer.new();display_scroll.name="StrictDisplayScroll"
- display_scroll.position=Vector2(34,160);display_scroll.size=Vector2(304,286)
- display_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
- display_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;add_child(display_scroll)
- shelves=GridContainer.new();shelves.columns=3;shelves.add_theme_constant_override("h_separation",20)
- shelves.add_theme_constant_override("v_separation",27);display_scroll.add_child(shelves)
- _panel(Rect2(779,67,139,97),RED,false,1)
- _label(self,"当",Rect2(793,65,108,93),78,Color("e5ad64"),true).horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
- face=_image(self,null,Rect2(470,91,390,370))
+ display_scroll.position=Vector2(34,159);display_scroll.size=Vector2(312,291)
+ display_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;display_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;add_child(display_scroll)
+ shelves=Control.new();shelves.custom_minimum_size=Vector2(304,286);display_scroll.add_child(shelves)
+ face=_image(self,null,Rect2(474,94,383,362));face.stretch_mode=TextureRect.STRETCH_SCALE
  face.mouse_filter=Control.MOUSE_FILTER_STOP;face.mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND
  face.gui_input.connect(func(event):
   if event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT and Game.state.trade!=null and not desk._scene_blocked() and not desk.busy:
    if is_instance_valid(desk.customer):desk.customer.nod()
    desk.shell.open_people(Game.state.trade.npcId);face.accept_event())
- name_key=_label(self,"",Rect2(499,104,92,44),26,Color("fff0d6"),true)
- name_key.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
- name_key.add_theme_stylebox_override("normal",_style(RED,INK,3))
- var bubble=_image(self,A.region("speech_bubble.png",Rect2(196,120,1630,537)),Rect2(765,160,280,96));bubble.name="StrictSpeechBubble"
- bubble.stretch_mode=TextureRect.STRETCH_SCALE
- speech=RichTextLabel.new();speech.position=Vector2(804,169);speech.size=Vector2(219,78)
- speech.add_theme_font_override("normal_font",UIKit.mono);speech.add_theme_font_size_override("normal_font_size",24)
- speech.add_theme_color_override("default_color",INK);speech.add_theme_constant_override("line_separation",-5);speech.scroll_active=true
+ _image(self,R.name_skin(),Rect2(496,99,100,55)).name="StrictNamePaper"
+ name_key=_label(self,"",Rect2(501,104,88,39),29,Color("fff0d6"),true);name_key.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ var bubble=_image(self,R.bubble(),Rect2(760,157,285,101));bubble.name="StrictSpeechBubble";bubble.stretch_mode=TextureRect.STRETCH_SCALE
+ speech=RichTextLabel.new();speech.position=Vector2(807,170);speech.size=Vector2(220,75)
+ speech.add_theme_font_override("normal_font",R.font(true));speech.add_theme_font_size_override("normal_font_size",25)
+ speech.add_theme_color_override("default_color",INK);speech.add_theme_constant_override("line_separation",-4);speech.scroll_active=true
  speech.mouse_filter=Control.MOUSE_FILTER_STOP;add_child(speech)
- # Bell and trading goods are independent, clickable assets.
- bell_art=_image(self,A.region("bell.png",Rect2(250,300,750,660)),Rect2(363,486,99,77))
- var bell_button=_button(self,"",Rect2(363,486,99,77),func():desk._bell_clicked())
- bell_button.tooltip_text="接客铃 · 接待下一位来客"
- for state in ["normal","hover","pressed","focus"]:bell_button.add_theme_stylebox_override(state,StyleBoxEmpty.new())
- table=Control.new();table.position=Vector2.ZERO;table.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(table)
- # Stock tray: exactly six columns, with scrolling only for real overflow.
- _panel(Rect2(7,577,413,273))
- _panel(Rect2(10,580,407,45),GREEN,true,7)
- _image(self,A.icon("box-archive"),Rect2(29,588,31,30),PAPER)
- stock_count=_label(self,"在库 33",Rect2(78,588,190,35),27,PAPER,true)
- _button(self,"整理",Rect2(289,589,111,27),func():desk.shell.go("warehouse"),"list").add_theme_font_size_override("font_size",19)
- stock_scroll=ScrollContainer.new();stock_scroll.position=Vector2(17,639);stock_scroll.size=Vector2(397,193)
- stock_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
- stock_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;add_child(stock_scroll)
- stock=GridContainer.new();stock.columns=6;stock.add_theme_constant_override("h_separation",4)
- stock.add_theme_constant_override("v_separation",7);stock_scroll.add_child(stock)
- # Right paper folio: measured from the approved source image.
- _panel(Rect2(1187,69,479,789),PAPER,true,16).name="StrictTradePaper"
- selected=_image(self,null,Rect2(1215,112,117,139))
- _panel(Rect2(1214,112,119,140),GREEN,true,10)
- move_child(selected,-1)
- item_name=_label(self,"",Rect2(1347,111,286,43),28,INK,true)
- item_meta=_label(self,"",Rect2(1378,174,105,30),21,INK,false)
- price_band=_label(self,"",Rect2(1519,174,135,30),21,INK,false)
- evidence=_label(self,"",Rect2(1378,216,113,30),21,INK,false)
- rounds=_label(self,"",Rect2(1525,216,128,30),21,INK,false)
- _image(self,A.icon("link"),Rect2(1490,176,21,21),INK)
- _image(self,A.icon("check"),Rect2(1490,218,21,21),INK)
- var evidence_key=_button(self,"",Rect2(1343,210,140,36),_open_evidence)
- evidence_key.name="StrictEvidence";evidence_key.tooltip_text="选择用于议价的检验记录"
- for state in ["normal","hover","pressed","focus"]:evidence_key.add_theme_stylebox_override(state,StyleBoxEmpty.new())
- _image(self,A.icon("gear"),Rect2(1350,176,21,21),INK)
- _image(self,A.icon("box-archive"),Rect2(1350,218,21,21),INK)
- _panel(Rect2(1204,285,450,54),RED,false,8)
- _image(self,A.icon("tag"),Rect2(1217,299,29,29),INK)
- _label(self,"要价",Rect2(1256,292,110,41),27,INK,true)
- ask=_label(self,"170 Cr",Rect2(1460,292,183,42),30,Color("fff1d6"),true)
- ask.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
- quote_controls.append(_label(self,"出价",Rect2(1244,366,65,36),24,INK,true))
- quote_controls.append(_image(self,A.icon("coins"),Rect2(1215,370,26,27),INK))
- quote=LineEdit.new();quote.position=Vector2(1310,357);quote.size=Vector2(130,50)
- quote.add_theme_constant_override("minimum_character_width",1)
- quote.alignment=HORIZONTAL_ALIGNMENT_LEFT;quote.add_theme_font_override("font",UIKit.mono)
- quote.add_theme_font_size_override("font_size",31);quote.add_theme_color_override("font_color",INK)
- var quote_style=_style();quote_style.set_content_margin(SIDE_LEFT,12);quote_style.set_content_margin(SIDE_RIGHT,42)
- var quote_focus=_style(PAPER,RED);quote_focus.set_content_margin(SIDE_LEFT,12);quote_focus.set_content_margin(SIDE_RIGHT,42)
- quote.add_theme_stylebox_override("normal",quote_style);quote.add_theme_stylebox_override("focus",quote_focus)
- _label(quote,"Cr",Rect2(88,9,37,32),23,INK,true)
+ bell_art=_image(self,R.bell(),Rect2(366,489,95,77));bell_art.stretch_mode=TextureRect.STRETCH_SCALE
+ var bell_button=_hit(self,"",Rect2(366,489,95,77),func():desk._bell_clicked());bell_button.tooltip_text="接客铃 · 接待下一位来客"
+ table=Control.new();table.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(table)
+ _image(self,R.stock_frame(),Rect2(5,575,418,278)).stretch_mode=TextureRect.STRETCH_SCALE
+ stock_count=_label(self,"",Rect2(79,585,132,40),27,PAPER,true)
+ _hit(self,"整理",Rect2(287,588,113,32),func():desk.shell.go("warehouse"))
+ stock_scroll=ScrollContainer.new();stock_scroll.position=Vector2(20,640);stock_scroll.size=Vector2(393,185)
+ stock_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;stock_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;add_child(stock_scroll)
+ stock=GridContainer.new();stock.columns=6;stock.add_theme_constant_override("h_separation",2);stock.add_theme_constant_override("v_separation",3);stock_scroll.add_child(stock)
+ var paper=Panel.new();paper.name="StrictTradePaper";paper.position=Vector2(1186,68);paper.size=Vector2(485,791)
+ paper.mouse_filter=Control.MOUSE_FILTER_IGNORE;paper.add_theme_stylebox_override("panel",_source_style(R.folio(),0));add_child(paper)
+ meta_cover=_image(self,R.blank_area("empty-meta",Rect2i(1342,165,312,90)),Rect2(1342,165,312,90))
+ selected=_image(self,null,Rect2(1231,119,83,122));selected.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+ item_name=_label(self,"",Rect2(1345,103,299,47),32,INK,true)
+ item_name.add_theme_font_override("font",R.latin(true))
+ item_meta=_label(self,"",Rect2(1384,168,108,36),22,INK,true)
+ price_band=_label(self,"",Rect2(1531,168,120,36),22,INK,true)
+ evidence=_label(self,"",Rect2(1384,210,110,37),22,INK,true)
+ rounds=_label(self,"",Rect2(1530,210,122,37),22,INK,true)
+ var evidence_key=_hit(self,"",Rect2(1344,210,145,37),_open_evidence);evidence_key.name="StrictEvidence";evidence_key.tooltip_text="选择用于议价的检验记录"
+ ask_caption=_label(self,"",Rect2(1255,290,113,44),27,INK,true);ask_caption.name="StrictAskCaption"
+ ask=_label(self,"",Rect2(1498,284,137,46),32,Color("fff1d6"),false);ask.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT;ask.clip_text=true;ask.add_theme_font_override("font",R.latin())
+ quote_controls.append(_image(self,R.region("quote-label",Rect2i(1210,359,88,49)),Rect2(1210,359,88,49)))
+ quote=LineEdit.new();quote.position=Vector2(1298,355);quote.size=Vector2(144,57)
+ quote.add_theme_constant_override("minimum_character_width",1);quote.alignment=HORIZONTAL_ALIGNMENT_LEFT
+ quote.add_theme_font_override("font",R.latin(true));quote.add_theme_font_size_override("font_size",32);quote.add_theme_color_override("font_color",INK)
+ var quote_style=_source_style(R.quote_skin(),8);quote_style.set_content_margin(SIDE_LEFT,17);quote_style.set_content_margin(SIDE_RIGHT,47)
+ quote.add_theme_stylebox_override("normal",quote_style);quote.add_theme_stylebox_override("focus",quote_style)
+ _label(quote,"Cr",Rect2(88,8,47,39),32,INK,true).add_theme_font_override("font",R.latin(true))
  quote.text_changed.connect(func(_value):
   if not quote_syncing:quote_dirty=true)
  quote.text_submitted.connect(func(_value):
   if _commit_quote():quote.release_focus())
  add_child(quote);quote_controls.append(quote)
- var x=1449.0
- for amount in [-10,-1,1,10]:
-  var step: int=amount
-  quote_controls.append(_button(self,("+" if amount>0 else "")+str(amount),Rect2(x,364,48,39),func():_nudge(step)))
-  x+=52
- cost=_label(self,"",Rect2(1216,427,434,34),20,INK,true)
- _panel(Rect2(1204,466,450,2),INK,false,0)
+ for index in 4:
+  var step:int=[-10,-1,1,10][index]
+  var nudge_rect=Rect2(1448+index*51,361,51,44)
+  var b=_hit(self,str(step),nudge_rect,func():_nudge(step))
+  _image(b,R.region("nudge-"+str(index),Rect2i(nudge_rect)),Rect2(0,0,51,44));quote_controls.append(b)
+ cost_cover=_image(self,R.blank_area("empty-cost",Rect2i(1207,419,443,44)),Rect2(1207,419,443,44))
+ cost=_label(self,"",Rect2(1253,420,394,41),22,INK,true)
+ var rects=[Rect2(1201,489,96,108),Rect2(1297,490,91,106),Rect2(1389,490,90,106),Rect2(1480,490,88,106),Rect2(1569,490,90,106)]
  for index in 5:
-  var slot: int=index
+  var slot:int=index
   var captions=["出价","接受","鉴定","抵押","送客"]
   var icons=["gavel","handshake","magnifying-glass","file-lines","right-from-bracket"]
-  var b=_button(self,captions[index],Rect2(1205+index*91,492,86,99),func():_trade_action(slot),icons[index],RED if index==0 else PAPER,true)
-  b.name="StrictTradeAction_"+str(index)
-  trade_buttons.append(b)
- secondary=_button(self,"这件先不买",Rect2(1253,612,365,49),func():
-  var b=desk.dialogue_put_aside
-  if not b.disabled:b.pressed.emit(),"arrow-rotate-left")
- secondary.icon=null
- for color_key in ["font_color","font_hover_color","font_pressed_color","font_disabled_color","font_focus_color"]:secondary.add_theme_color_override(color_key,Color.TRANSPARENT)
- _image(secondary,A.icon("arrow-rotate-left"),Rect2(84,11,27,27),INK)
- _label(secondary,"这件先不买",Rect2(122,7,220,35),23,INK,true).name="SecondaryCaption"
+  var b=_button(self,captions[index],rects[index],func():_trade_action(slot),icons[index],PAPER,true);b.name="StrictTradeAction_"+str(index)
+  for state in ["normal","hover","pressed","disabled","focus"]:b.add_theme_stylebox_override(state,StyleBoxEmpty.new())
+  var art=_image(b,R.source_button(index),Rect2(Vector2.ZERO,R.source_button(index).get_size()));art.stretch_mode=TextureRect.STRETCH_SCALE;art.name="ActionSkin";b.move_child(art,0)
+  b.get_node("ActionCaption").hide();b.get_node("ActionIcon").hide();trade_buttons.append(b)
+ secondary=_hit(self,"",Rect2(1248,610,368,57),func():
+  if not desk.dialogue_put_aside.disabled:desk.dialogue_put_aside.pressed.emit())
+ _image(secondary,R.region("secondary",Rect2i(1248,610,368,57)),Rect2(0,0,368,57)).name="SecondarySkin"
+ _label(secondary,"",Rect2(140,7,218,40),24,INK,true).name="SecondaryCaption"
+ _image(secondary,R.region("secondary-icon",Rect2i(1334,623,40,31)),Rect2(86,13,40,31)).name="SecondaryIcon"
  stage_hint=_label(self,"",Rect2(1210,670,430,25),16,Color("70604a"))
- _panel(Rect2(1203,686,450,2),INK,false,0)
- var orders=_button(self,"",Rect2(1205,715,224,105),func():desk.shell.go("orders"));orders.name="StrictOrders"
- _image(orders,A.icon("clipboard-list"),Rect2(15,21,39,54),INK)
- _label(orders,"委托订单",Rect2(66,15,153,36),25,INK,true)
- order_count=_label(orders,"0 待办",Rect2(66,56,151,32),22)
- var people=_button(self,"",Rect2(1438,715,217,105),func():desk.shell.open_people());people.name="StrictPeople"
- _image(people,A.icon("address-book"),Rect2(17,24,43,50),INK)
- _label(people,"人物档案",Rect2(70,33,142,37),25,INK,true)
- _panel(Rect2(1,867,1670,72),PAPER,false,1)
- _nav("日结打烊","sun",39,220,func():desk.shell.go("report"))
- _nav("报警","bell",321,174,func():desk.alarm_button.pressed.emit())
- _nav("仓储隔离","box-archive",563,220,func():desk.shell.go("warehouse"))
- _nav("鉴定仪","gauge-high",839,209,func():desk._open_instrument("inspect"))
- _nav("维修台","screwdriver-wrench",1105,236,func():desk._open_instrument("repair"))
- var back=_button(self,"返回",Rect2(1590,878,76,45),func():desk.shell.go("counter"))
- for state in ["normal","hover","pressed","focus"]:back.add_theme_stylebox_override(state,StyleBoxEmpty.new())
- for divider_x in [300,544,816,1080,1520]:_panel(Rect2(divider_x,883,1,43),INK,false,0)
- for hint in [["1",252],["2",488],["3",755],["Esc",1532]]:
-  var key_hint=_label(self,hint[0],Rect2(hint[1],883,32,31),18,INK,true)
-  key_hint.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-  key_hint.add_theme_stylebox_override("normal",_style())
+ var orders=_hit(self,"",Rect2(1198,711,233,113),func():desk.shell.go("orders"));orders.name="StrictOrders"
+ _image(orders,R.orders_skin(),Rect2(0,0,233,113))
+ order_count=_label(orders,"",Rect2(70,52,145,40),25,INK,true)
+ var people=_hit(self,"人物档案",Rect2(1437,711,223,113),func():desk.shell.open_people());people.name="StrictPeople"
+ _image(people,R.region("people",Rect2i(1437,711,223,113)),Rect2(0,0,223,113))
+ _image(self,R.region("footer",Rect2i(0,866,1671,75)),Rect2(0,866,1671,75)).stretch_mode=TextureRect.STRETCH_SCALE
+ _source_nav("日结打烊","sun",Rect2(35,875,250,53),func():desk.shell.go("report"))
+ _source_nav("报警","bell",Rect2(335,875,197,53),func():desk.alarm_button.pressed.emit())
+ _source_nav("仓储隔离","box-archive",Rect2(568,875,243,53),func():desk.shell.go("warehouse"))
+ _source_nav("鉴定仪","gauge-high",Rect2(856,875,184,53),func():desk._open_instrument("inspect"))
+ _source_nav("维修台","screwdriver-wrench",Rect2(1104,875,194,53),func():desk._open_instrument("repair"))
+ _hit(self,"返回",Rect2(1510,875,144,53),func():desk.shell.go("counter"))
  own=Control.new();own.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(own)
- detail_tools=VBoxContainer.new();detail_tools.position=Vector2(1210,360);detail_tools.size=Vector2(430,310)
- detail_tools.add_theme_constant_override("separation",10);own.add_child(detail_tools)
+ detail_tools=VBoxContainer.new();detail_tools.position=Vector2(1210,360);detail_tools.size=Vector2(430,310);detail_tools.add_theme_constant_override("separation",10);own.add_child(detail_tools)
  for spec in [["放大镜 · 查看标识","TOL-001"],["紫外灯 · 核对编号","TOL-002"],["电子秤 · 称量手表","TOL-005"]]:
-  var tool: String=spec[1]
-  var key=UIKit.button(spec[0],"secondary",Vector2(425,47),23)
-  key.pressed.connect(func():desk.showroom.open_tool(tool));detail_tools.add_child(key)
- var ret=UIKit.button("放回原位","primary",Vector2(425,47),23)
- ret.pressed.connect(func():desk.showroom.return_original();dirty=true);detail_tools.add_child(ret)
- var arrange=UIKit.button("整理 / 调价","secondary",Vector2(425,47),23)
- arrange.pressed.connect(func():desk.shell.go("warehouse",desk.showroom.selected_uid));detail_tools.add_child(arrange)
+  var tool:String=spec[1];var key=UIKit.button(spec[0],"secondary",Vector2(425,47),23);key.pressed.connect(func():desk.showroom.open_tool(tool));detail_tools.add_child(key)
+ var ret=UIKit.button("放回原位","primary",Vector2(425,47),23);ret.pressed.connect(func():desk.showroom.return_original();dirty=true);detail_tools.add_child(ret)
+ var arrange=UIKit.button("整理 / 调价","secondary",Vector2(425,47),23);arrange.pressed.connect(func():desk.shell.go("warehouse",desk.showroom.selected_uid));detail_tools.add_child(arrange)
 
 func _trade_action(index: int) -> void:
  var keys=desk.actions.get_children()
@@ -323,51 +302,68 @@ func _process(delta: float) -> void:
  if old!=null:old.hide()
  desk.stage_root.hide();desk.back_root.hide()
  desk.shell.hint_label.hide()
- position=desk.shell.counter_offset()
+ position=Vector2.ZERO # The page_host already owns desktop letterboxing.
+ letterbox.position=-desk.shell.counter_offset()/scale
+ letterbox.size=get_viewport().get_visible_rect().size/scale
  clock+=delta;period+=delta
  if is_instance_valid(desk.bell) and not Game.prefs.reduced_motion:
   bell_art.pivot_offset=bell_art.size*.5
   bell_art.rotation=desk.bell.rotation
  if dirty or period>.10:
   _refresh(dirty);dirty=false;period=0.0
- if face.visible and not Game.prefs.reduced_motion:
-  face.position.y=91+sin(clock*1.7)*.65
+ if face.visible and not Game.prefs.reduced_motion and last_npc!="CHR-021":
+  face.position.y=94+sin(clock*1.7)*.3
   if is_instance_valid(desk.customer):
    face.position.y+=float(desk.customer.gesture.get("nod",0))*2.0-float(desk.customer.gesture.get("lean",0))*1.5
+ else:face.position.y=94
  speech.visible_ratio=desk.bubble_label.visible_ratio
 
 func _refresh(force := false) -> void:
  if desk==null:return
  var s=Game.state;var t=s.trade
  day.text="第%d天"%int(s.day)
- rent.text="租期余%d天"%(7-(int(s.day)%7))
+ muted_paper.visible=not Game.prefs.sound;muted_symbol.visible=not Game.prefs.sound
+ business_label.text="营业" if s.phase=="open" else "休息" if s.phase=="closed" else "结束"
+ if int(s.day)%7==0:rent.text="租金待交" if Landlord.outstanding(s)>0 else "租金已交"
+ else:rent.text="租期余%d天"%(7-(int(s.day)%7))
  money.text=Model.jnum(s.cash)+" Cr";ap.text="AP %d"%int(s.ap);risk.text="关注 %d"%int(s.risk)
  var current=Model.trade_item(s) if t!=null else null
  var ordinary=t!=null and t.get("kind","") in ["buy","sell"]
  var preview=Game.item(desk.showroom.selected_uid) if t==null else null
  var it=preview if preview!=null else current
  own.visible=preview!=null
+ for button in detail_tools.get_children():button.disabled=desk.busy or desk._scene_blocked()
  for child in trade_buttons:child.visible=preview==null
  for control in quote_controls:control.visible=preview==null and ordinary
- selected.texture=A.watch(it)
+ selected.texture=A.watch(it,false,"selected") if it!=null else A.icon("store" if t!=null and t.kind=="merchant" else "shield-halved" if t!=null and t.kind=="police" else "coins" if t!=null and t.kind=="landlord" else "bell")
+ selected.modulate=Color.WHITE if it!=null else PAPER
+ meta_cover.visible=it==null;cost_cover.visible=not ordinary and preview==null
+ get_node("StrictEvidence").visible=it!=null and ordinary
  var fullname=GameData.def(it.defId).name if it!=null else ""
  var parts=fullname.split(" ")
  item_name.text=(parts[0]+" "+parts[1]) if parts.size()>1 else fullname if it!=null else desk.scr.head.text if t!=null else "等待来客"
  item_name.tooltip_text=fullname;item_name.clip_text=true
  price_band.visible=it!=null;evidence.visible=it!=null;rounds.visible=it!=null
  if it!=null:
+  item_meta.tooltip_text=""
   var estimate=Model.estimate(it)
   item_meta.text=(parts[2]+"表") if parts.size()>2 else "手表"
-  item_meta.size=Vector2(105,30)
+  item_meta.position=Vector2(1384,168);item_meta.size=Vector2(108,36);item_meta.autowrap_mode=TextServer.AUTOWRAP_OFF;item_meta.max_lines_visible=-1
   price_band.text="%s–%s"%[Model.jnum(estimate.low),Model.jnum(estimate.high)]
   evidence.text="物证 %d"%Model.evidence_count(it)
   rounds.text="已商谈 %d次"%int(t.get("rounds",0) if t!=null else 0)
   selected.tooltip_text=fullname+" · 品相 "+UIKit.pct(it.condition)
   selected.mouse_filter=Control.MOUSE_FILTER_STOP
  else:
-  item_meta.text=(desk.scr.line1.text+"\n"+desk.scr.line2.text) if t!=null else "整理货物 · 接待来客"
-  item_meta.size=Vector2(270,72)
- ask.text=Model.jnum(t.get("price",0))+" Cr" if ordinary else desk.scr.price.text
+  item_meta.text=(desk.scr.line1.text+"\n"+desk.scr.line2.text) if t!=null else "整理货物\n按服务铃接待来客"
+  item_meta.position=Vector2(1347,168);item_meta.size=Vector2(296,76);item_meta.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;item_meta.max_lines_visible=2
+  item_meta.tooltip_text=item_meta.text;selected.tooltip_text="";selected.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ ask_caption.text="挂牌" if preview!=null else "要价" if ordinary and t.kind=="buy" else "报价" if ordinary else "租金" if t!=null and t.kind=="landlord" else "商品" if t!=null and t.kind=="merchant" else "协查" if t!=null and t.kind=="police" else "今日接待"
+ ask.text=(Model.jnum(preview.listPrice)+" Cr" if float(preview.get("listPrice",0))>0 else "未定价") if preview!=null else Model.jnum(t.get("price",0))+" Cr" if ordinary else desk.scr.price.text
+ var ask_width=R.latin().get_string_size(ask.text,HORIZONTAL_ALIGNMENT_LEFT,-1,32).x
+ ask.add_theme_font_size_override("font_size",mini(32,maxi(17,int(32*132/maxf(132,ask_width)))))
+ var cash_width=R.font(true).get_string_size(money.text,HORIZONTAL_ALIGNMENT_LEFT,-1,25).x
+ money.add_theme_font_size_override("font_size",mini(25,maxi(15,int(25*150/maxf(150,cash_width)))))
  quote.editable=ordinary and not t.get("locked",false) and not desk.busy
  for control in quote_controls:
   if control is Button:control.disabled=not ordinary or t.get("locked",false) or desk.busy
@@ -376,25 +372,39 @@ func _refresh(force := false) -> void:
   quoted_uid=draft_key;quote_dirty=false
  if not quote.has_focus() and not quote_dirty:
   quote_syncing=true;quote.text=str(int(desk.dial.value));quote_syncing=false
- cost.text=desk.scr.line3.text if desk.scr.line3.visible else ""
+ var draft_width=R.latin(true).get_string_size(quote.text,HORIZONTAL_ALIGNMENT_LEFT,-1,32).x
+ quote.add_theme_font_size_override("font_size",mini(32,maxi(18,int(32*76/maxf(76,draft_width)))))
+ cost.position=Vector2(1253,420) if ordinary else Vector2(1213,364)
+ cost.text=desk.scr.line3.text.replace(" · ","  •  ") if desk.scr.line3.visible else ""
+ cost.clip_text=true;cost.tooltip_text=cost.text
+ cost.autowrap_mode=TextServer.AUTOWRAP_OFF if ordinary else TextServer.AUTOWRAP_WORD_SMART
+ cost.max_lines_visible=1 if ordinary else 2;cost.size=Vector2(394,41) if ordinary else Vector2(434,90)
+ var cost_width=R.font(true).get_string_size(cost.text,HORIZONTAL_ALIGNMENT_LEFT,-1,22).x
+ var cost_font=mini(22,maxi(16,int(22*394/maxf(394,cost_width)))) if ordinary else 20
+ cost.add_theme_font_size_override("font_size",cost_font)
  stage_hint.text=desk.footer.text
  stage_hint.visible=false
  secondary.tooltip_text=desk.footer.text+" · "+desk.dialogue_put_aside.text
  secondary.text=desk.dialogue_put_aside.text
+ var same_secondary=secondary.text=="这件先不买"
+ secondary.get_node("SecondaryCaption").visible=not same_secondary
+ secondary.get_node("SecondaryIcon").visible=not same_secondary
  secondary.get_node("SecondaryCaption").text=secondary.text
+ secondary.get_node("SecondarySkin").texture=R.region("secondary",Rect2i(1248,610,368,57)) if same_secondary else R.secondary_blank()
  secondary.visible=t!=null and CounterDialogue.active(s)
  secondary.disabled=desk.dialogue_put_aside.disabled
  order_count.text="%d 待办"%s.orders.filter(func(o):return o.status=="active").size()
- face.visible=t!=null;name_key.visible=t!=null
+ face.visible=t!=null;name_key.visible=t!=null;get_node("StrictNamePaper").visible=t!=null
  var bubble=get_node("StrictSpeechBubble");bubble.visible=t!=null;speech.visible=t!=null
  if t!=null:
   if str(t.npcId)!=last_npc:
-   last_npc=str(t.npcId);face.texture=A.portrait(last_npc)
+   last_npc=str(t.npcId);face.texture=R.elder_scene() if last_npc=="CHR-021" else A.portrait(last_npc)
    if not Game.prefs.reduced_motion:
     face.modulate.a=0.0;create_tween().tween_property(face,"modulate:a",1.0,.25)
   name_key.text=GameData.npc(t.npcId).name
   var raw=desk.bubble_label.get_parsed_text()
-  speech.text=("这只表，%s Cr。\n你看看。"%Model.jnum(t.get("price",0))) if "我想出手" in raw and "开价" in raw else raw
+  var boilerplate="这只%s我想出手，开价%s Cr。你先看看，价钱咱们可以谈。"%[fullname,Model.jnum(t.get("price",0))]
+  speech.text=("这只表，%s Cr。\n你看看。"%Model.jnum(t.get("price",0))) if raw==boilerplate else raw
   speech.tooltip_text=""
  for i in trade_buttons.size():
   var keys=desk.actions.get_children();trade_buttons[i].disabled=i>=keys.size() or keys[i].disabled or desk.busy
@@ -405,9 +415,16 @@ func _refresh(force := false) -> void:
    trade_buttons[i].text=keys[i].text
    var caption="交割" if "交割" in source_text else "出价" if source_text.begins_with("出价") else "接受" if source_text.begins_with("接受") else "鉴定" if "鉴定" in source_text else "抵押" if "抵押" in source_text else "送客" if "送客" in source_text else "取消" if "取消" in source_text or "先不算" in source_text else "商品" if "商品" in source_text else "缴租" if "缴纳" in source_text else "稍后" if "筹钱" in source_text else "检查" if "检查" in source_text else "名单" if "名单" in source_text else "接待" if "接待" in source_text else "打烊" if "打烊" in source_text else source_text.left(4)
    trade_buttons[i].get_node("ActionCaption").text=caption
+   var source_caption=["出价","接受","鉴定","抵押","送客"][i]
+   var original_skin=caption==source_caption
+   trade_buttons[i].get_node("ActionSkin").texture=R.source_button(i) if original_skin else R.blank_button(i)
+   trade_buttons[i].get_node("ActionCaption").visible=not original_skin
+   trade_buttons[i].get_node("ActionIcon").visible=not original_skin
+   trade_buttons[i].get_node("ActionCaption").add_theme_color_override("font_color",Color("fff1d6") if i==0 else INK)
+   trade_buttons[i].get_node("ActionIcon").modulate=Color("fff1d6") if i==0 else INK
    var glyph={"交割":"handshake","出价":"gavel","接受":"handshake","鉴定":"magnifying-glass","抵押":"file-lines","送客":"right-from-bracket","取消":"arrow-rotate-left","选货":"box-archive","商品":"store","缴租":"coins","检查":"shield-halved","名单":"clipboard-list","接待":"bell","打烊":"sun"}
    trade_buttons[i].get_node("ActionIcon").texture=A.icon(glyph.get(caption,"file-lines"))
-  trade_buttons[i].modulate.a=.45 if trade_buttons[i].disabled else 1.0
+  trade_buttons[i].modulate.a=.82 if trade_buttons[i].disabled else 1.0
  var inv_key=JSON.stringify([s.inventory,s.get("showroomLayout",{}),WantedCases.has_notice(s)])
  if inv_key!=stock_signature:
   stock_signature=inv_key;_inventory()
@@ -430,15 +447,20 @@ func _inventory() -> void:
   var it=Game.item(layout.uid_at(Game.state,"warehouse",index))
   if it==null:
    var empty=preload("res://scripts/ui/showroom_slot.gd").new();empty.showroom=desk.showroom;empty.location="warehouse";empty.slot=index
-   empty.name="strict_empty_warehouse_"+str(index);empty.custom_minimum_size=Vector2(61,87)
+   empty.name="strict_empty_warehouse_"+str(index);empty.custom_minimum_size=Vector2(63,91)
    for state in ["normal","hover","pressed","focus"]:empty.add_theme_stylebox_override(state,StyleBoxEmpty.new())
    stock.add_child(empty)
   else:
-   var key=_stock_button(it,false,Vector2(61,87));stock.add_child(key);UIKit.decorate_item(key,it,16)
+   var key=_stock_button(it,false,Vector2(63,91));stock.add_child(key);UIKit.decorate_item(key,it,16)
+   var crest=key.find_child("tier_crest",true,false)
+   if crest!=null:crest.hide()
  if WantedCases.has_notice(Game.state):
-  var document=UIKit.button("","secondary",Vector2(61,87),16,"orders")
+  var document=UIKit.button("","secondary",Vector2(63,91),16,"orders")
   document.name="strict_wanted_inventory";document.tooltip_text="库存档案 · 取出或收起通缉名单"
   document.pressed.connect(func():desk.shell.toggle_wanted_notice());stock.add_child(document)
+ var last_display=-1
+ for slot in Game.state.showroomLayout.display.values():last_display=maxi(last_display,int(slot))
+ shelves.custom_minimum_size=Vector2(304,_display_position(last_display).y+130 if last_display>=0 else 0)
  for index in layout.capacity(Game.state,"display"):
   var uid=layout.uid_at(Game.state,"display",index)
   var it=Game.item(uid)
@@ -448,23 +470,34 @@ func _inventory() -> void:
    for v in Game.state.showroomLayout.display.values():last=maxi(last,int(v))
    if index>last:break
    var empty=preload("res://scripts/ui/showroom_slot.gd").new();empty.showroom=desk.showroom;empty.location="display";empty.slot=index
-   empty.name="strict_empty_display_"+str(index);empty.custom_minimum_size=Vector2(85,108)
+   empty.name="strict_empty_display_"+str(index);empty.custom_minimum_size=Vector2(90,130);empty.size=Vector2(90,130);empty.position=_display_position(index)
    for state in ["normal","hover","pressed","focus"]:empty.add_theme_stylebox_override(state,StyleBoxEmpty.new())
    shelves.add_child(empty)
   else:
-   var key=_stock_button(it,true,Vector2(85,108));shelves.add_child(key);UIKit.decorate_item(key,it,16)
+   var key=_stock_button(it,true,Vector2(90,130));shelves.add_child(key);key.position=_display_position(index);key.size=Vector2(90,130);UIKit.decorate_item(key,it,16)
+
+func _display_position(index: int) -> Vector2:
+ var measured=[Vector2(3,0),Vector2(115,0),Vector2(219,0),Vector2(35,153),Vector2(162,153)]
+ if index<5:return measured[index]
+ return Vector2(((index-5)%3)*104,306+floori((index-5)/3.0)*153)
 
 func _stock_button(it,display: bool,extent: Vector2) -> Button:
  var b=preload("res://scripts/ui/showroom_slot.gd").new()
  b.name="strict_stock_"+str(it.uid);b.showroom=desk.showroom;b.uid=it.uid;b.location=it.location
  b.slot=int(Game.state.showroomLayout.get(it.location,{}).get(it.uid,-1));b.custom_minimum_size=extent
  for state in ["normal","hover","pressed","focus","disabled"]:
-  b.add_theme_stylebox_override(state,StyleBoxEmpty.new() if display else _style(PAPER,INK,7))
- _image(b,A.watch(it),Rect2(8,0,extent.x-16,extent.y-(23 if display else 6)))
+  b.add_theme_stylebox_override(state,StyleBoxEmpty.new() if display else _source_style(R.stock_slot(),5))
+ var texture=A.watch(it,false,"display" if display else "stock")
+ var picture_rect=Rect2(5,5,52,80)
+ if display:
+  picture_rect=Rect2(14,5,70,87)
+  if texture.has_meta("approved_art"):picture_rect=Rect2(Vector2(14+maxf(0,(70-texture.get_width())*.5),5),texture.get_size())
+ _image(b,texture,picture_rect)
  b.tooltip_text=GameData.def(it.defId).name+" · "+UIKit.pct(it.condition)
  if display:
-  var price=_label(b,Model.jnum(it.get("listPrice",0))+" Cr",Rect2(0,extent.y-24,extent.x,24),16,INK,true)
-  price.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;price.add_theme_stylebox_override("normal",_style())
+  var price=_label(b,Model.jnum(it.get("listPrice",0))+" Cr",Rect2(7,90,86,39),20,INK,true)
+  price.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;var price_style=_source_style(R.price_tag(false,true),6);price_style.set_content_margin_all(0)
+  price.add_theme_stylebox_override("normal",price_style)
  b.pressed.connect(func():
   if desk.busy or desk._scene_blocked():return
   var t=Game.state.trade
@@ -484,14 +517,15 @@ func _table() -> void:
   for index in group.size():
    var info=group[index];var it=TradeSession.item(Game.state,info.uid)
    if it==null:continue
-   var x=700.0 if group.size()==1 and info.direction=="buy" else 500.0+index*(640.0/maxi(group.size()-1,6))
-   var y=504.0 if info.direction=="buy" else 625.0
+   var xs=[510.0,608.0,708.0,804.0,902.0,1005.0,1107.0]
+   var x=700.0 if group.size()==1 and info.direction=="buy" else xs[index] if index<7 else 510.0+index*(594.0/maxi(group.size()-1,6))
+   var y=501.0 if info.direction=="buy" else 625.0
    var slots=CounterDialogue._table_slots(info.direction,group.size())
    var saved=TradeSession.session(Game.state).get("table_positions",{}).get(info.uid,[])
    if saved is Array and saved.size()==2:
     var unit=slots[1].x-slots[0].x
-    var target_unit=120.0 if group.size()==1 and info.direction=="buy" else 640.0/maxi(group.size()-1,6)
-    x=(700.0 if group.size()==1 and info.direction=="buy" else 500.0)+(float(saved[0])-slots[0].x)/unit*target_unit
+    var target_unit=120.0 if group.size()==1 and info.direction=="buy" else 594.0/maxi(group.size()-1,6)
+    x=(700.0 if group.size()==1 and info.direction=="buy" else 510.0)+(float(saved[0])-slots[0].x)/unit*target_unit
    _table_watch(it,Vector2(x,y),info.price,info.focused,func():
     Game.dispatch({"type":"COUNTER_FOCUS","tradeId":Game.state.trade.id,"uid":info.uid});dirty=true)
  if Game.state.trade==null and desk.showroom.selected_uid!="":
@@ -500,11 +534,17 @@ func _table() -> void:
 
 func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable) -> void:
  var b=TradeWatch.new();b.mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND;b.controller=self;b.uid=it.uid;b.name="strict_table_"+str(it.uid)
- b.position=center-Vector2(30,42);b.size=Vector2(60,108)
+ b.position=center-Vector2(32,43);b.size=Vector2(64,130)
  for state in ["normal","hover","pressed","focus"]:b.add_theme_stylebox_override(state,StyleBoxEmpty.new())
  table.add_child(b)
  var is_back=desk.showroom.preview_back if Game.state.trade==null else desk.counter_table.sprites.has(it.uid) and desk.counter_table.sprites[it.uid].back
- var art=_image(b,A.watch(it,is_back),Rect2(5,0,50,77))
+ var texture=A.watch(it,is_back,"visitor" if center.y<560 else "table")
+ var art_rect=Rect2(4,0,56,84)
+ if not is_back and texture.has_meta("native_anchor"):
+  art_rect=Rect2(Vector2(32,43)-texture.get_meta("native_anchor"),texture.get_size())
+ var shadow=R.shadow_for(it,center.y<560)
+ if shadow!=null:_image(b,shadow,Rect2(Vector2(32,43)-shadow.get_meta("native_anchor"),shadow.get_size()))
+ var art=_image(b,texture,art_rect)
  if watch_sides.has(it.uid) and watch_sides[it.uid]!=is_back and not Game.prefs.reduced_motion:
   art.pivot_offset=art.size*.5;art.scale.x=.04
   art.create_tween().tween_property(art,"scale:x",1.0,.18).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
@@ -516,15 +556,25 @@ func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable) -> v
     if desk.counter_table.sprites.has(it.uid):desk.counter_table.sprites[it.uid].flip()
    else:desk.showroom.flip_original()
    dirty=true;b.accept_event())
- var tag_width=112 if center.y<560 else 86
- var tag=_label(b,Model.jnum(price)+" Cr",Rect2((60-tag_width)/2.0,80 if center.y<560 else 95,tag_width,26),17,Color("f7e7c6"))
- UIKit.decorate_item(b,it,17)
+ var tag_width=120 if center.y<560 else 90
+ var tag=_label(b,"未定价" if Game.state.trade==null and price<=0 else Model.jnum(price)+" Cr",Rect2((64-tag_width)/2.0,78 if center.y<560 else 93,tag_width,36 if center.y<560 else 37),24 if center.y<560 else 20,Color("f7e7c6"))
+ _decorate_original(b,it)
  tag.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
- tag.add_theme_stylebox_override("normal",_style(GREEN,Color("e8b75c") if focus else Color("6c7960"),0))
- b.mouse_entered.connect(func():tag.add_theme_stylebox_override("normal",_style(GREEN,Color("e8b75c"),0)))
- b.mouse_exited.connect(func():tag.add_theme_stylebox_override("normal",_style(GREEN,Color("e8b75c") if focus else Color("6c7960"),0)))
+ var normal_tag=_source_style(R.visitor_tag() if center.y<560 else R.price_tag(false),4);normal_tag.set_content_margin_all(0)
+ tag.add_theme_stylebox_override("normal",normal_tag)
+ var arrow=_image(b,R.region("selection-arrow",Rect2i(996,565,18,11)),Rect2(23,-17,18,11));arrow.hide()
+ b.mouse_entered.connect(func():
+  var hover_tag=_source_style(R.price_tag(true),4);hover_tag.set_content_margin_all(0)
+  tag.add_theme_stylebox_override("normal",hover_tag);tag.add_theme_color_override("font_color",Color("efb34f"));arrow.visible=center.y>560)
+ b.mouse_exited.connect(func():
+  tag.add_theme_stylebox_override("normal",normal_tag);tag.add_theme_color_override("font_color",Color("f7e7c6"));arrow.hide())
  b.pressed.connect(func():
   if not desk.busy and not desk._scene_blocked():fn.call())
+
+func _decorate_original(button: Control,it) -> void:
+ if UIKit.presentation_tier(it) in ["luxury","ultra"]:
+  _image(button,R.crest(),Rect2(41,0,27,28)).name="tier_crest"
+ if UIKit.is_modified(it):_image(button,R.modified(),Rect2(-18,39,33,31)).name="modified_badge"
 
 func _unhandled_key_input(event: InputEvent) -> void:
  if not visible or quote.has_focus() or desk.busy or desk._scene_blocked():return
@@ -550,14 +600,18 @@ func _drop_data(at_position: Vector2,data) -> void:
   var info=shown.filter(func(entry):return entry.uid==uid)[0]
   var count=shown.filter(func(entry):return entry.direction==info.direction).size()
   var slots=CounterDialogue._table_slots(info.direction,count)
-  var origin=700.0 if count==1 and info.direction=="buy" else 500.0
-  var spacing=120.0 if count==1 and info.direction=="buy" else 640.0/maxi(count-1,6)
+  var origin=700.0 if count==1 and info.direction=="buy" else 510.0
+  var spacing=120.0 if count==1 and info.direction=="buy" else 594.0/maxi(count-1,6)
   var x=slots[0].x+(at_position.x-origin)/spacing*(slots[1].x-slots[0].x)
   Game.dispatch({"type":"COUNTER_MOVE","tradeId":Game.state.trade.id,"uid":uid,"position":[x,slots[0].y]})
  elif at_position.x>430:
   desk.showroom.select_original(uid)
  elif at_position.y<500:
-  var index=clampi(floori((at_position.y-160)/135)*3+floori((at_position.x-34)/105),0,preload("res://scripts/model/showroom_layout.gd").capacity(Game.state,"display")-1)
+  var local=at_position-display_scroll.position+Vector2(0,display_scroll.scroll_vertical)
+  var index=0;var best=INF
+  for candidate in preload("res://scripts/model/showroom_layout.gd").capacity(Game.state,"display"):
+   var distance=local.distance_squared_to(_display_position(candidate)+Vector2(45,65))
+   if distance<best:best=distance;index=candidate
   desk.showroom.place_original(uid,"display",index)
  else:
   var layout=preload("res://scripts/model/showroom_layout.gd")

@@ -35,7 +35,7 @@ def main():
         page = browser.new_page(viewport={'width': 1920, 'height': 1080})
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
-        page.on('console', lambda msg: errors.append(msg.text) if 'SCRIPT ERROR' in msg.text else None)
+        page.on('console', lambda msg: errors.append(msg.text) if 'SCRIPT ERROR' in msg.text or msg.type=='error' and 'browser metadata' not in msg.text else None)
         def cmd(data): page.evaluate('d=>orbitalTouchSend(JSON.stringify(d))', data)
         def status(): return page.evaluate('OrbitalTouch.state')
         def saved(): return page.evaluate(service.READ_SAVE)['state']
@@ -77,6 +77,13 @@ def main():
         page.reload(); page.wait_for_function('window.OrbitalTouch?.state?.ready', timeout=120000)
         cmd({'type': 'start'}); settle(); page.wait_for_timeout(900)
         snap('main')
+        # Match the source's hover on the shop's 95 Cr original without changing
+        # focus/price or dispatching a transaction.
+        hover_uid=next(row['uid'] for row in status()['table_items'] if row['direction']=='sell' and row['price']==95)
+        hover=phone.locate(page,'@strict_table_'+hover_uid)
+        page.mouse.move(hover['x'],hover['y']);page.wait_for_timeout(250)
+        page.screenshot(path=str(OUT/'main-reference.png'))
+        page.mouse.move(1900,1060)
         original = status()
         uid = original['trade_session']['focus']
         table_key = '@strict_table_' + uid
@@ -100,8 +107,8 @@ def main():
                             ('手册', 'handbook'), ('设置', 'settings')]:
             click(label); snap(name); close()
         # Enter a price without Enter, then click the real offer button.
-        ratio = 1920 / 1672
-        page.mouse.click(1362 * ratio, 382 * ratio)
+        ratio = 1920 / 1671
+        page.mouse.click(1362 * ratio, 382 * 1080 / 941)
         page.keyboard.press('Control+a'); page.keyboard.type('173')
         click('@StrictTradeAction_0')
         se = status()['trade_session']
@@ -139,8 +146,15 @@ def main():
         selected = saved()
         assert selected['counterPreviewUid']==display_uid
         click('放大镜 · 查看标识');phone.wait(page,'s.workspace==="inspect"',timeout=10000)
-        close();click('放回原位')
-        assert saved()['counterPreviewUid']==''
+        close();phone.wait(page,'s.workspace===""&&!s.busy',timeout=10000)
+        click('放回原位')
+        # Browser filesystem sync is asynchronous; check the rendered original
+        # disappears as well as the durable state, rather than assuming a delay.
+        for _ in range(40):
+            if saved()['counterPreviewUid']=='':break
+            page.wait_for_timeout(150)
+        snap('returned')
+        assert saved()['counterPreviewUid']=='',status()
         layout=saved()['showroomLayout']
         page.reload();page.wait_for_function('window.OrbitalTouch?.state?.ready',timeout=120000)
         cmd({'type':'start'});settle()

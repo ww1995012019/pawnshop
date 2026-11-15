@@ -8,7 +8,7 @@ func run() -> void:
  var page=shell.page;var view=page.strict_view
  check(view.visible and not page.find_child("DesktopCounter",true,false).visible,"PC uses the measured comic counter")
  var paper=view.get_node("StrictTradePaper")
- check(paper.position==Vector2(1187,69) and paper.size==Vector2(479,789),"transaction folio retains source coordinates")
+ check(paper.position==Vector2(1186,68) and paper.size==Vector2(485,791),"transaction folio retains source coordinates")
  check(view.get_node("StrictSpeechBubble") is TextureRect,"dialogue uses the independent tailed bubble asset")
  var stock_button=view.find_child("strict_stock_"+str(game.state.inventory[0].uid),true,false)
  page._refresh();await frames()

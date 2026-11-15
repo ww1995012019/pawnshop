@@ -1,5 +1,6 @@
 extends RefCounted
 ## Authored, independent comic assets. UI can change without changing item facts.
+const R = preload("res://scripts/ui/reference_atlas.gd")
 const ROOT := "res://assets/comic/"
 static var cache := {}
 static func tex(name: String) -> Texture2D:
@@ -10,8 +11,11 @@ static func region(name: String,rect: Rect2) -> Texture2D:
  var key=name+str(rect)
  if cache.has(key): return cache[key]
  var a=AtlasTexture.new();a.atlas=tex(name);a.region=rect;cache[key]=a;return a
-static func watch(it,back := false) -> Texture2D:
+static func watch(it,back := false,context := "") -> Texture2D:
  if it==null:return null
+ if not back:
+  var exact=R.watch_for(it,context)
+  if exact!=null:return exact
  # Detailed technical faces retain their model-authored evidence artwork.
 
  var d=GameData.def(WatchForgery.appearance_id(it))
@@ -40,11 +44,12 @@ static func watch(it,back := false) -> Texture2D:
  b.position+=Vector2(idx%4,idx/4)*cell
  return region(asset,b)
 static func prewarm() -> void:
+ R.elder()
  # Decode before the first input so a new visitor cannot stall the bell tween.
  for asset in ["elder.png","residents.png","residents_new.png","residents_extra.png","landlord.png","watch_fronts.png","watch_backs.png","watch_shapes.png"]:tex(asset)
 
 static func portrait(id: String) -> Texture2D:
- if id=="CHR-021":return region("elder.png",Rect2(50,43,1170,1150))
+ if id=="CHR-021":return R.elder()
  var n=maxi(int(id.trim_prefix("CHR-"))-1,0)
  var name="residents.png";var cols=3;var rows=3
  if n>=13 and n<33:name="residents_new.png";cols=5;rows=4;n-=13
