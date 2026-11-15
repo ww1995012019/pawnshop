@@ -33,11 +33,11 @@ new tests/quick_trade_list_test.gd, scripts/test-godot-native.py.
 Interfaces: list.setup(view), list.refresh(state); action requests carry
 verb, UID, trade ID and rendered session version. The view validates and
 focuses before invoking existing inspection, offer, consent, cancel or deliver.
-- [ ] Add failing actual-node tests for list rows, selection/cancel, exact UID
+- [x] Add failing actual-node tests for list rows, selection/cancel, exact UID
   inspection, stale events and two-original checkout charging exactly 1 AP.
-- [ ] Implement stable list rows, compact details/quote popup, fixed summary and
+- [x] Implement stable list rows, compact details/quote popup, fixed summary and
   checkout, and fallback view visibility. Guard busy/workspace and stale events.
-- [ ] Run new and relevant counter/payment/native regressions; commit.
+- [x] Run new and relevant counter/payment/native regressions; commit.
 
 ### Task 3: Browser and whole-change review
 Files: browser regression, design-qa.md, presentation documentation.

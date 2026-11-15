@@ -27,9 +27,13 @@ func run() -> void:
  game.state=Fixture.resale_state();shell.go("counter");await frames()
  var lost_uid: String=Model.trade_item(game.state).uid
  game.state=CounterDialogue.begin(game.state);shell.go("counter");await frames()
+ var quick=shell.page.strict_view.quick_list
+ await click(quick.find_child("quick_more_"+lost_uid,true,false));await frames()
  check(button(shell,"失物报警")==null,"batch list does not disclose lost-original report before serial evidence")
+ quick.close_popup();await frames()
  game.dispatch({"type":"CHECK","uid":lost_uid,"tool":"TOL-002"});await frames()
  before=game.state.cash
+ await click(quick.find_child("quick_more_"+lost_uid,true,false));await frames()
  await click(button(shell,"失物报警"));await click(button(shell,"核对原编号并报警"));await idle(shell.page)
  check(game.state.trade==null and Model.find_inventory(game.state,lost_uid)!=null and game.state.cash==before,"batch list reports serial-qualified original without purchase or duplication")
  shell.queue_free();await frames()

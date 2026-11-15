@@ -171,6 +171,8 @@ func run() -> void:
 	var recovered_uid: String=Model.trade_item(game.state).uid
 	check(button(shell,"失物报警")==null, "model match does not reveal lost-item report before serial evidence")
 	game.dispatch({"type":"CHECK","uid":recovered_uid,"tool":"TOL-002"}); await frames()
+	if CounterDialogue.active(game.state):
+		await click(shell.page.strict_view.quick_list.find_child("quick_more_"+recovered_uid,true,false)); await frames()
 	check(button(shell,"失物报警")!=null, "serial evidence unlocks real lost-original report control")
 	before=game.state.cash
 	await click(button(shell,"失物报警")); await click(button(shell,"核对原编号并报警")); await idle(shell.page)

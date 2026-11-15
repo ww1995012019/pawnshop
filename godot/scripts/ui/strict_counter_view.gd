@@ -9,6 +9,8 @@ const GREEN = Color("243a30")
 const REFERENCE_SIZE := Vector2(1671,941)
 const PRESENTATION_SIZE := Vector2(1920,1080)
 var desk
+var detail_layer: Control
+var quick_list: Control
 var face: TextureRect
 var speech: RichTextLabel
 var name_key: Label
@@ -225,18 +227,19 @@ func _build() -> void:
  stock=GridContainer.new();stock.columns=6;stock.add_theme_constant_override("h_separation",2);stock.add_theme_constant_override("v_separation",3);stock_scroll.add_child(stock)
  var paper=Panel.new();paper.name="StrictTradePaper";paper.position=Vector2(1186,68);paper.size=Vector2(485,791)
  paper.mouse_filter=Control.MOUSE_FILTER_IGNORE;paper.add_theme_stylebox_override("panel",_source_style(R.folio(),0));add_child(paper)
- meta_cover=_image(self,R.blank_area("empty-meta",Rect2i(1342,165,312,90)),Rect2(1342,165,312,90))
- selected=_image(self,null,Rect2(1231,119,83,122));selected.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
- item_name=_label(self,"",Rect2(1345,103,299,47),32,INK,true)
+ detail_layer=Control.new();detail_layer.name="TradeDetails";detail_layer.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(detail_layer)
+ meta_cover=_image(detail_layer,R.blank_area("empty-meta",Rect2i(1342,165,312,90)),Rect2(1342,165,312,90))
+ selected=_image(detail_layer,null,Rect2(1231,119,83,122));selected.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+ item_name=_label(detail_layer,"",Rect2(1345,103,299,47),32,INK,true)
  item_name.add_theme_font_override("font",R.latin(true))
- item_meta=_label(self,"",Rect2(1384,168,108,36),22,INK,true)
- price_band=_label(self,"",Rect2(1531,168,120,36),22,INK,true)
- evidence=_label(self,"",Rect2(1384,210,110,37),22,INK,true)
- rounds=_label(self,"",Rect2(1530,210,122,37),22,INK,true)
- var evidence_key=_hit(self,"",Rect2(1344,210,145,37),_open_evidence);evidence_key.name="StrictEvidence";evidence_key.tooltip_text="选择用于议价的检验记录"
- ask_caption=_label(self,"",Rect2(1255,290,113,44),27,INK,true);ask_caption.name="StrictAskCaption"
- ask=_label(self,"",Rect2(1498,284,137,46),32,Color("fff1d6"),false);ask.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT;ask.clip_text=true;ask.add_theme_font_override("font",R.latin())
- quote_controls.append(_image(self,R.region("quote-label",Rect2i(1210,359,88,49)),Rect2(1210,359,88,49)))
+ item_meta=_label(detail_layer,"",Rect2(1384,168,108,36),22,INK,true)
+ price_band=_label(detail_layer,"",Rect2(1531,168,120,36),22,INK,true)
+ evidence=_label(detail_layer,"",Rect2(1384,210,110,37),22,INK,true)
+ rounds=_label(detail_layer,"",Rect2(1530,210,122,37),22,INK,true)
+ var evidence_key=_hit(detail_layer,"",Rect2(1344,210,145,37),_open_evidence);evidence_key.name="StrictEvidence";evidence_key.tooltip_text="选择用于议价的检验记录"
+ ask_caption=_label(detail_layer,"",Rect2(1255,290,113,44),27,INK,true);ask_caption.name="StrictAskCaption"
+ ask=_label(detail_layer,"",Rect2(1498,284,137,46),32,Color("fff1d6"),false);ask.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT;ask.clip_text=true;ask.add_theme_font_override("font",R.latin())
+ quote_controls.append(_image(detail_layer,R.region("quote-label",Rect2i(1210,359,88,49)),Rect2(1210,359,88,49)))
  quote=LineEdit.new();quote.position=Vector2(1298,355);quote.size=Vector2(144,57)
  quote.add_theme_constant_override("minimum_character_width",1);quote.alignment=HORIZONTAL_ALIGNMENT_LEFT
  quote.add_theme_font_override("font",R.latin(true));quote.add_theme_font_size_override("font_size",32);quote.add_theme_color_override("font_color",INK)
@@ -250,29 +253,30 @@ func _build() -> void:
   if not quote_syncing:quote_dirty=true)
  quote.text_submitted.connect(func(_value):
   if _commit_quote():quote.release_focus())
- add_child(quote);quote_controls.append(quote)
+ detail_layer.add_child(quote);quote_controls.append(quote)
  for index in 4:
   var step:int=[-10,-1,1,10][index]
   var nudge_rect=Rect2(1448+index*51,361,51,44)
-  var b=_hit(self,str(step),nudge_rect,func():_nudge(step))
+  var b=_hit(detail_layer,str(step),nudge_rect,func():_nudge(step))
   _image(b,R.region("nudge-"+str(index),Rect2i(nudge_rect)),Rect2(0,0,51,44));quote_controls.append(b)
- cost_cover=_image(self,R.blank_area("empty-cost",Rect2i(1207,419,443,44)),Rect2(1207,419,443,44))
- cost=_label(self,"",Rect2(1253,420,394,41),22,INK,true)
+ cost_cover=_image(detail_layer,R.blank_area("empty-cost",Rect2i(1207,419,443,44)),Rect2(1207,419,443,44))
+ cost=_label(detail_layer,"",Rect2(1253,420,394,41),22,INK,true)
  var rects=[Rect2(1201,489,96,108),Rect2(1297,490,91,106),Rect2(1389,490,90,106),Rect2(1480,490,88,106),Rect2(1569,490,90,106)]
  for index in 5:
   var slot:int=index
   var captions=["出价","接受","鉴定","抵押","送客"]
   var icons=["gavel","handshake","magnifying-glass","file-lines","right-from-bracket"]
-  var b=_button(self,captions[index],rects[index],func():_trade_action(slot),icons[index],PAPER,true);b.name="StrictTradeAction_"+str(index)
+  var b=_button(detail_layer,captions[index],rects[index],func():_trade_action(slot),icons[index],PAPER,true);b.name="StrictTradeAction_"+str(index)
   for state in ["normal","hover","pressed","disabled","focus"]:b.add_theme_stylebox_override(state,StyleBoxEmpty.new())
   var art=_image(b,R.source_button(index),Rect2(Vector2.ZERO,R.source_button(index).get_size()));art.stretch_mode=TextureRect.STRETCH_SCALE;art.name="ActionSkin";b.move_child(art,0)
   b.get_node("ActionCaption").hide();b.get_node("ActionIcon").hide();trade_buttons.append(b)
- secondary=_hit(self,"",Rect2(1248,610,368,57),func():
+ secondary=_hit(detail_layer,"",Rect2(1248,610,368,57),func():
   if not desk.dialogue_put_aside.disabled:desk.dialogue_put_aside.pressed.emit())
  _image(secondary,R.region("secondary",Rect2i(1248,610,368,57)),Rect2(0,0,368,57)).name="SecondarySkin"
  _label(secondary,"",Rect2(140,7,218,40),24,INK,true).name="SecondaryCaption"
  _image(secondary,R.region("secondary-icon",Rect2i(1334,623,40,31)),Rect2(86,13,40,31)).name="SecondaryIcon"
- stage_hint=_label(self,"",Rect2(1210,670,430,25),16,Color("70604a"))
+ stage_hint=_label(detail_layer,"",Rect2(1210,670,430,25),16,Color("70604a"))
+ quick_list=preload("res://scripts/ui/quick_trade_list.gd").new();add_child(quick_list);quick_list.setup(self)
  var orders=_hit(self,"",Rect2(1198,711,233,113),func():desk.shell.go("orders"));orders.name="StrictOrders"
  _image(orders,R.orders_skin(),Rect2(0,0,233,113))
  order_count=_label(orders,"",Rect2(70,52,145,40),25,INK,true)
@@ -297,6 +301,48 @@ func _trade_action(index: int) -> void:
  if index<keys.size() and not keys[index].disabled:
   if keys[index].text.begins_with("出价") and not _commit_quote():return
   keys[index].pressed.emit()
+
+func _quick_valid(uid: String,trade_id: String,version: int,price: float) -> bool:
+ if desk.busy or desk._scene_blocked() or not CounterDialogue.active(Game.state):return false
+ if str(Game.state.trade.id)!=trade_id or int(TradeSession.session(Game.state).version)!=version:return false
+ if uid=="":return is_equal_approx(TradeSession.summary(Game.state).net,price)
+ if not CounterDialogue.table_items(Game.state).any(func(info):return info.uid==uid):return false
+ var row=TradeSession.row(Game.state,uid)
+ return not row.is_empty() and is_equal_approx(float(row.context.price),price)
+
+func _quick_focus(uid: String) -> void:
+ desk._focus_table(uid);desk._refresh();dirty=true
+
+func _quick_action(verb: String,uid: String,trade_id: String,version: int,price: float) -> void:
+ if not _quick_valid(uid,trade_id,version,price):dirty=true;return
+ if verb=="checkout":
+  if TradeSession.summary(Game.state).buy_count+TradeSession.summary(Game.state).sell_count>0:
+   Game.dispatch(CounterDialogue.action_for(Game.state,"DELIVER"))
+  return
+ if verb=="send":Game.dispatch({"type":"REFUSE"});return
+ _quick_focus(uid)
+ var context={"uid":uid,"trade_id":trade_id,"version":int(TradeSession.session(Game.state).version),"price":float(TradeSession.row(Game.state,uid).context.price)}
+ match verb:
+  "toggle":
+   if TradeSession.row(Game.state,uid).selected:Game.dispatch(CounterDialogue.action_for(Game.state,"COUNTER_CANCEL"))
+   else:desk._accept_with_source_risk()
+  "inspect":desk.shell.go("inspect",uid)
+  "offer":quick_list.offer_popup(context)
+  "more":quick_list.more_popup(context)
+ dirty=true
+
+func _quick_offer(context: Dictionary,amount: int) -> void:
+ if not _quick_valid(context.uid,context.trade_id,context.version,context.price):dirty=true;return
+ _quick_focus(context.uid)
+ if amount<desk.dial.min_value or amount>desk.dial.max_value:return
+ desk.dial.set_value(amount)
+ desk._offer(context.uid,int(TradeSession.session(Game.state).version));dirty=true
+
+func _quick_source(context: Dictionary,caption: String) -> void:
+ if not _quick_valid(context.uid,context.trade_id,context.version,context.price):dirty=true;return
+ _quick_focus(context.uid)
+ for source in desk.actions.get_children():
+  if source.text==caption and not source.disabled:source.pressed.emit();dirty=true;return
 
 func _process(delta: float) -> void:
  visible=not desk.shell.mobile_mode()
@@ -341,7 +387,7 @@ func _refresh(force := false) -> void:
  selected.texture=A.watch(it,false,"selected") if it!=null else A.icon("store" if t!=null and t.kind=="merchant" else "shield-halved" if t!=null and t.kind=="police" else "coins" if t!=null and t.kind=="landlord" else "bell")
  selected.modulate=Color.WHITE if it!=null else PAPER
  meta_cover.visible=it==null;cost_cover.visible=not ordinary and preview==null
- get_node("StrictEvidence").visible=it!=null and ordinary
+ detail_layer.get_node("StrictEvidence").visible=it!=null and ordinary
  var fullname=GameData.def(it.defId).name if it!=null else ""
  var parts=fullname.split(" ")
  item_name.text=(parts[0]+" "+parts[1]) if parts.size()>1 else fullname if it!=null else desk.scr.head.text if t!=null else "等待来客"
@@ -431,6 +477,9 @@ func _refresh(force := false) -> void:
  var inv_key=JSON.stringify([s.inventory,s.get("showroomLayout",{}),WantedCases.has_notice(s)])
  if inv_key!=stock_signature:
   stock_signature=inv_key;_inventory()
+ var list_active=CounterDialogue.active(s) and ordinary
+ detail_layer.visible=not list_active;quick_list.visible=list_active
+ if list_active:quick_list.refresh(s)
  var backs=""
  for uid in desk.counter_table.sprites:backs+=str(desk.counter_table.sprites[uid].back)
  var table_key=str(CounterDialogue.table_items(s))+str(TradeSession.session(s).get("table_positions",{}))+str(desk.showroom.selected_uid)+str(desk.showroom.preview_back)+backs
@@ -581,14 +630,15 @@ func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visit
  tag.add_theme_font_size_override("font_size",mini(tag_font,maxi(14,int(tag_font*(tag_width-8)/maxf(tag_width-8,text_width)))))
  _decorate_original(b,it,tag_width<90)
  tag.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
- var normal_tag=_source_style(R.visitor_tag() if visitor else R.price_tag(false),4);normal_tag.set_content_margin_all(0)
+ var normal_tag=_source_style(R.price_tag(true) if focus else R.visitor_tag() if visitor else R.price_tag(false),4);normal_tag.set_content_margin_all(0)
  tag.add_theme_stylebox_override("normal",normal_tag)
- var arrow=_image(b,R.region("selection-arrow",Rect2i(996,565,18,11)),Rect2(tag_width/2-9,-17,18,11));arrow.hide()
+ if focus:tag.add_theme_color_override("font_color",Color("efb34f"))
+ var arrow=_image(b,R.region("selection-arrow",Rect2i(996,565,18,11)),Rect2(tag_width/2-9,-17,18,11));arrow.visible=focus and not visitor
  b.mouse_entered.connect(func():
   var hover_tag=_source_style(R.price_tag(true),4);hover_tag.set_content_margin_all(0)
   tag.add_theme_stylebox_override("normal",hover_tag);tag.add_theme_color_override("font_color",Color("efb34f"));arrow.visible=center.y>560)
  b.mouse_exited.connect(func():
-  tag.add_theme_stylebox_override("normal",normal_tag);tag.add_theme_color_override("font_color",Color("f7e7c6"));arrow.hide())
+  tag.add_theme_stylebox_override("normal",normal_tag);tag.add_theme_color_override("font_color",Color("efb34f") if focus else Color("f7e7c6"));arrow.visible=focus and not visitor)
  b.pressed.connect(func():
   if not desk.busy and not desk._scene_blocked():fn.call())
 

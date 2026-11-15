@@ -7,13 +7,13 @@ func run():
  var page=shell.page;var view=page.strict_view
  check(view.get_node_or_null("StrictLetterbox")!=null,"desktop letterboxing has its own comic canvas rather than the legacy room")
  check(view.muted_paper.visible and view.muted_symbol.visible,"muted preference has a matching visible sound indicator")
- check(view.meta_cover.visible and not view.get_node("StrictEvidence").visible,"empty desk hides item-only icons and inactive evidence target")
+ check(view.meta_cover.visible and not view.detail_layer.get_node("StrictEvidence").visible,"empty desk hides item-only icons and inactive evidence target")
  var business=view.get_node_or_null("StrictBusinessState")
  check(business!=null and business.text=="休息","closed counter does not retain painted open status")
  game.state.phase="open";game.state.day=3
  var uid:String=game.state.inventory[0].uid;game.item(uid).listPrice=321;game.item(uid).sourceVerified=true
  page._refresh();await frames();page.showroom.select_original(uid);await frames()
- var caption=view.get_node_or_null("StrictAskCaption")
+ var caption=view.detail_layer.get_node_or_null("StrictAskCaption")
  check(caption!=null and caption.text=="挂牌" and view.ask.text=="321 Cr","own-original ribbon shows the real list price rather than arrival count")
  var preview_tag=view.table.get_child(0).find_children("*","Label",true,false)[0]
  check(preview_tag.get_visible_line_count()>=1 and preview_tag.size.y>=preview_tag.get_theme_font("font").get_height(preview_tag.get_theme_font_size("font_size")),"single-original price has room for its complete text line")

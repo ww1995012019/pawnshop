@@ -4,6 +4,7 @@ func run() -> void:
  var game=root.get_node("Game");game.prefs.reduced_motion=true;game.prefs.sound=false
  game.new_game("STRICT-QUOTE")
  game.state.trade={"id":"strict-quote","npcId":"CHR-002","kind":"buy","item":Model.new_item(game.state,"WCH-002",{"owner":"npc","sourceVerified":true}),"price":100,"rounds":0,"locked":false,"evidenceUsed":[],"line":"请报价。"}
+ game.state=CounterDialogue.begin(game.state)
  var shell=load("res://main.tscn").instantiate();root.add_child(shell);await frames();shell._close_title();await frames()
  var page=shell.page;var view=page.strict_view
  check(view.visible and not page.find_child("DesktopCounter",true,false).visible,"PC uses the measured comic counter")
@@ -23,8 +24,10 @@ func run() -> void:
  var price=clampi(int(page.dial.value)+11,int(page.dial.min_value),int(page.dial.max_value))
  if price==page.dial.value:price=maxi(int(page.dial.min_value),price-11)
  var cash:float=game.state.cash;var ap:float=game.state.ap
- view.quote.text=str(price);view.quote.text_changed.emit(view.quote.text)
- await click(view.trade_buttons[0]);await frames()
+ await click(view.quick_list.find_child("quick_offer_"+str(TradeSession.session(game.state).focus),true,false));await frames()
+ var editor=view.quick_list.find_child("QuickOfferValue",true,false)
+ editor.text=str(price)
+ await click(view.quick_list.find_child("QuickOfferSubmit",true,false));await frames()
  var sent=actions.filter(func(action):return action.get("type","")=="OFFER")
  check(not sent.is_empty() and int(sent.back().get("price",-1))==price,"typing then clicking Offer submits the typed amount without Enter")
  check(game.state.cash==cash and game.state.ap==ap,"quoting does not transfer cash or consume AP")
