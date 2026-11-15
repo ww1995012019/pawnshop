@@ -712,11 +712,23 @@ static func business_hours_problem(s: Dictionary) -> String:
 	return "店铺已打烊，当前不能办理业务。请先开始下一营业日。"
 
 static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
+	if a.get("type", "") == "SHOWROOM_PLACE":
+		return preload("res://scripts/model/showroom_layout.gd").place(previous, a)
 	GameData.ensure()
 	var s: Dictionary = previous.duplicate(true)
 	StoreCosts.ensure(s)
 	NightCrime.ensure(s)
 	var type: String = a.type
+	if type == "COUNTER_PREVIEW":
+		var uid: String = str(a.get("uid", ""))
+		if uid == "":
+			s.counterPreviewUid = ""
+			return s
+		var original = find_inventory(s, uid)
+		if s.trade != null or original == null or not owns(original) or original.sealed or original.location not in ["warehouse", "display"] or original.has("orderId") or original.get("service", {}).get("opened", false):
+			return previous
+		s.counterPreviewUid = uid
+		return s
 	if type == "NEXT":
 		if s.phase != "report":
 			return previous

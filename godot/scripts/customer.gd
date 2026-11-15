@@ -109,29 +109,34 @@ func say(seconds: float) -> void:
 	talking = seconds
 
 func nod() -> void:
+	if Game.prefs.reduced_motion: return
 	var tw := create_tween()
 	for i in 2:
 		tw.tween_method(func(v): gesture.nod = v, 0.0, 11.0, 0.14).set_trans(Tween.TRANS_SINE)
 		tw.tween_method(func(v): gesture.nod = v, 11.0, 0.0, 0.18).set_trans(Tween.TRANS_SINE)
 
 func shake_head() -> void:
+	if Game.prefs.reduced_motion: return
 	var tw := create_tween()
 	for v in [12.0, -12.0, 9.0, -6.0, 0.0]:
 		tw.tween_method(func(x): gesture.turn = x; gesture.tilt = x * -0.004, gesture.turn, v, 0.11).set_trans(Tween.TRANS_SINE)
 
 func lean_back() -> void:
+	if Game.prefs.reduced_motion: return
 	var tw := create_tween()
 	tw.tween_method(func(v): gesture.lean = v, gesture.lean, -16.0, 0.22).set_trans(Tween.TRANS_BACK)
 	tw.tween_interval(0.6)
 	tw.tween_method(func(v): gesture.lean = v, -16.0, 0.0, 0.5).set_trans(Tween.TRANS_SINE)
 
 func lean_in() -> void:
+	if Game.prefs.reduced_motion: return
 	var tw := create_tween()
 	tw.tween_method(func(v): gesture.lean = v; gesture.nod = v * 0.4, 0.0, 14.0, 0.25).set_trans(Tween.TRANS_SINE)
 	tw.tween_interval(0.7)
 	tw.tween_method(func(v): gesture.lean = v; gesture.nod = v * 0.4, 14.0, 0.0, 0.45).set_trans(Tween.TRANS_SINE)
 
 func cheer() -> void:
+	if Game.prefs.reduced_motion: return
 	var tw := create_tween()
 	tw.tween_method(func(v): gesture.shrug = v; gesture.flash = v / 10.0, 0.0, 10.0, 0.12)
 	tw.tween_method(func(v): gesture.shrug = v; gesture.flash = v / 10.0, 10.0, 0.0, 0.35).set_trans(Tween.TRANS_BOUNCE)

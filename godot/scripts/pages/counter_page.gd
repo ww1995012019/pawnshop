@@ -59,6 +59,8 @@ var board_rent: Label
 var crate: PanelContainer
 var stock_grid: GridContainer
 var stock_count: Label
+var props: Control
+var showroom: Control
 var display_goods: ScrollContainer
 var orders_readout: Label
 var status_panel: Control
@@ -203,6 +205,12 @@ func enter() -> void:
 	_build_crate()
 	_build_equipment()
 	_build_police_controls()
+	showroom = preload("res://scripts/ui/counter_showroom.gd").new()
+	add_child(showroom)
+	showroom.setup(self)
+	props = preload("res://scripts/ui/counter_props.gd").new()
+	add_child(props)
+	props.setup(self)
 	Game.prefs_changed.connect(_refresh_utility_icons)
 	_refresh_utility_icons()
 	# The till stands in front of the counter fixtures, like the illustration.
@@ -347,6 +355,7 @@ func _fixture(key: String, rect: Rect2, caption: String, fn: Callable, permanent
 		if _scene_blocked() or busy:
 			return
 		shell.sound("click", -6)
+		if is_instance_valid(props): props.activate(key)
 		fn.call())
 	add_child(b)
 	fixture_buttons[key] = b
@@ -611,7 +620,16 @@ func _stock_slot(it: Dictionary, picking: bool, display := false) -> Button:
 	var why = Model.sale_eligibility(it, t.npcId) if picking and it.owner == "shop" else null
 	if picking and it.owner != "shop":
 		why = "不是店铺自有货"
-	var slot := UIKit.button("", "chip", Vector2(76, 78) if display else Vector2(58, 58), 14)
+	var slot: Button
+	if display:
+		slot = preload("res://scripts/ui/showroom_slot.gd").new()
+		slot.custom_minimum_size = Vector2(76,78)
+		slot.showroom = showroom
+		slot.uid = it.uid
+		slot.location = String(it.location)
+		slot.slot = int(Game.state.get("showroomLayout",{}).get(it.location,{}).get(it.uid,-1))
+	else:
+		slot = UIKit.button("", "chip", Vector2(58,58),14)
 	slot.icon = UIKit.physical_icon(it)
 	slot.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	slot.expand_icon = true
@@ -630,11 +648,27 @@ func _stock_slot(it: Dictionary, picking: bool, display := false) -> Button:
 	UIKit.decorate_item(slot, it)
 	slot.tooltip_text = "%s · 品相 %s%s" % [def.name, UIKit.pct(it.condition), " · 陈列中" if it.location == "display" else ""]
 	if UIKit.is_modified(it): slot.tooltip_text += " · 改装 / 已加工"
-	slot.tooltip_text += ("\n点击推荐给顾客" if why == null else "\n" + String(why)) if picking else "\n点击在仓储查看"
+	slot.tooltip_text += ("\n点击推荐给顾客" if why == null else "\n" + String(why)) if picking else "\n点击取到柜台查看" if not shell.mobile_mode() else "\n点击在仓储查看"
 	var uid: String = it.uid
 	slot.name="stock_recommend_"+uid
 	var reason = why
 	slot.pressed.connect(func(): _stock_clicked(uid, picking, reason))
+	if display:
+		var price := UIKit.label(Model.jnum(it.get("listPrice",0))+" Cr",12,UIKit.TEXT)
+		price.name = "PhysicalPriceTag"
+		price.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+		price.offset_top = -18
+		price.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		price.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		slot.add_child(price)
+		slot.add_theme_constant_override("outline_size",0)
+		slot.add_theme_constant_override("icon_max_width",60)
+		slot.mouse_entered.connect(func():
+			if slot.disabled: return
+			if not Game.prefs.reduced_motion:
+				var tw := slot.create_tween()
+				tw.tween_property(slot,"self_modulate",Color(1.2,1.12,.93),.12))
+		slot.mouse_exited.connect(func(): slot.self_modulate=Color.WHITE)
 	return slot
 
 func _refresh_desk() -> void:
@@ -645,6 +679,7 @@ func _refresh_desk() -> void:
 	UIKit.clear(stock_grid)
 	UIKit.clear(display_goods)
 	var s := Game.state
+	preload("res://scripts/model/showroom_layout.gd").ensure(s)
 	var items: Array = s.inventory
 	stock_count.text = "%d 件 · 点击选货" % (items.size()+ (1 if WantedCases.has_notice(s) else 0))
 	var t = s.trade
@@ -667,7 +702,6 @@ func _refresh_desk() -> void:
 			empty.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			stock_grid.add_child(empty)
 	# The physical display holds only originals actually placed on display.
-	var shown:Array=items.filter(func(original):return original.location=="display")
 	var margin:=MarginContainer.new()
 	margin.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	margin.add_theme_constant_override("margin_left",30)
@@ -680,12 +714,20 @@ func _refresh_desk() -> void:
 	stream.add_theme_constant_override("h_separation",42)
 	stream.add_theme_constant_override("v_separation",25)
 	margin.add_child(stream)
-	for original in shown:stream.add_child(_stock_slot(original,picking,true))
-	if shown.is_empty():
-		var empty:=UIKit.label("陈列架暂空\n整理仓储后拖入上架",18,UIKit.MUTED,false,true)
-		empty.custom_minimum_size=Vector2(280,150)
-		empty.mouse_filter=Control.MOUSE_FILTER_IGNORE
-		stream.add_child(empty)
+	var layout = preload("res://scripts/model/showroom_layout.gd")
+	for index in layout.capacity(s,"display"):
+		var uid: String = layout.uid_at(s,"display",index)
+		var original = Model.find_inventory(s,uid)
+		if original == null:
+			if is_instance_valid(showroom): stream.add_child(showroom.empty_slot("display",index,Vector2(76,78)))
+			continue
+		var key := _stock_slot(original,picking,true)
+		if t == null and not shell.mobile_mode() and original.uid == s.get("counterPreviewUid", "") and is_instance_valid(showroom) and showroom.available(original):
+			key.icon = null
+			key.text = "鉴定中"
+			key.set_meta("held_original",true)
+			key.disabled = true
+		stream.add_child(key)
 	if busy and t == null:
 		return
 	var it = Model.trade_item(s) if t != null else null
@@ -700,11 +742,16 @@ func _refresh_desk() -> void:
 	else:
 		idle_label.text = ("租金已交 · 收好回执，送房东离开" if Landlord.paid(s) else "房东到店 · 核对本期账单后缴租") if t.kind == "landlord" else "警官等你确认 · 可先去仓储整理，隔离箱不查" if t.kind == "police" and t.get("inspectionVisit",false) else "巡警到店 · 领取协查名单，听巡警说明" if t.kind == "police" else "商人到店 · 在报价台查看商品" if t.kind == "merchant" else "请从陈列柜或下方抽屉选货"
 
+	if is_instance_valid(showroom): showroom.refresh()
+
 func _stock_clicked(uid: String, picking: bool, why) -> void:
 	if busy or _scene_blocked():
 		return
 	if not picking:
-		shell.go("warehouse", uid)
+		if is_instance_valid(showroom) and not shell.mobile_mode() and Game.state.trade == null and showroom.available(Game.item(uid)):
+			showroom.select_original(uid)
+		else:
+			shell.go("warehouse", uid)
 		return
 	if why != null:
 		shell.toast(String(why))
@@ -734,10 +781,10 @@ func _build_terminal() -> void:
 	cash_tray.size = Vector2(116, 64)
 	cash_tray.mouse_filter = Control.MOUSE_FILTER_STOP
 	cash_tray.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	cash_tray.tooltip_text = "查看本局总流水"
+	cash_tray.tooltip_text = "查看本局总流水 · 钱箱按钮开关抽屉"
 	cash_tray.gui_input.connect(func(event: InputEvent):
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and not busy and not _scene_blocked():
-			shell.open_campaign_ledger()
+		if event is InputEventMouseButton and event.pressed and not busy and not _scene_blocked():
+			if event.button_index in [MOUSE_BUTTON_LEFT,MOUSE_BUTTON_RIGHT]: shell.open_campaign_ledger()
 			cash_tray.accept_event())
 	content.add_child(cash_tray)
 	# Live readouts sit in the painted LCD, not on an extra rectangular plate.
@@ -1069,6 +1116,7 @@ func _refresh() -> void:
 	# The tray occupies the empty payment space. During active negotiation the
 	# existing price/evidence controls retain their full touch targets.
 	cash_tray.visible = not dial_on
+	if is_instance_valid(props): props.refresh_controls()
 	if not busy: cash_tray.set_cash(float(s.cash))
 	offer_panel.visible = dial_on
 	evidence_box.visible = dial_on
@@ -1503,6 +1551,7 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 		"CHECK":
 			if nt != null and customer != null:
 				customer.set_mood("focused")
+				customer.lean_in()
 	_refresh()
 
 func _leave_with_goods(t: Dictionary, mood: String) -> void:
@@ -1554,8 +1603,10 @@ func _deal(t: Dictionary, pawn: bool, item_name: String, stay := false) -> void:
 		busy = false
 		_refresh()
 		return
+	if is_instance_valid(props): props.payment_started()
 	customer.cheer()
 	_say("痛快！东西归你了。" if buy else "好东西，钱给你点清。", true, "happy")
+	if is_instance_valid(props) and not Game.prefs.reduced_motion: await get_tree().create_timer(.28).timeout
 	var till := _cash_point()
 	var hand: Vector2 = shell.world_to_ui(customer.hands())
 	if not Game.prefs.reduced_motion and price>0:
@@ -1566,6 +1617,7 @@ func _deal(t: Dictionary, pawn: bool, item_name: String, stay := false) -> void:
 			last_bill = _bill(till if buy else hand, hand if buy else till, i, balance)
 		await last_bill.finished
 	cash_tray.set_cash(float(Game.state.cash))
+	if is_instance_valid(props): props.payment_finished()
 	# The receipt can print while the goods change hands. Departure waits for
 	# the actual item tween, rather than a shorter, unrelated timer.
 	_receipt(t, price, pawn, item_name)
@@ -1789,6 +1841,7 @@ func _unhandled_input(e: InputEvent) -> void:
 				shell.sound("click", -10, 0.8)
 				return
 			if customer != null and is_instance_valid(customer) and Game.state.trade != null and _over_customer(p):
+				customer.nod()
 				shell.open_people(Game.state.trade.npcId)
 		elif mb.button_index == MOUSE_BUTTON_RIGHT:
 			if CounterDialogue.active(Game.state):

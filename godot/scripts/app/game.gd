@@ -105,6 +105,7 @@ func new_game(seed := "") -> void:
 ## Apply an action. Returns true when the state actually changed.
 func ensure_shop_state(s: Dictionary, include_journal := true) -> void:
 	WarehouseExpansion.ensure(s)
+	preload("res://scripts/model/showroom_layout.gd").ensure(s)
 	Life.ensure(s)
 	Market.ensure(s)
 	Extensions.ensure(s)

@@ -92,7 +92,7 @@ func run():
  var hidden:=Model.new_item(game.state,"WCH-008");Model.put_in(game.state,hidden)
  shell.go("counter");await frames()
  var stream=shell.page.display_goods.find_child("CounterDisplayGrid",true,false)
- check(stream!=null and stream.get_child_count()==25,"counter cabinet shows all25 displayed originals and excludes warehouse stock")
+ check(stream!=null and stream.get_children().filter(func(key):return String(key.name).begins_with("stock_recommend_")).size()==25,"counter cabinet shows all25 displayed originals and excludes warehouse stock")
  check(shell.page.display_goods is ScrollContainer and shell.page.display_goods.get_v_scroll_bar().max_value>shell.page.display_goods.size.y,"counter display has its own scrolling beyond20 visible originals")
  shell.go("warehouse");await frames()
  page=shell.active_shell().page
