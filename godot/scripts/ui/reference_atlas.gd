@@ -267,6 +267,15 @@ static func paper_skin() -> Texture2D:
  patch(img,Rect2i(1208,92,442,743),Rect2i(1344,90,296,18),r.position)
  return pack_texture("paper-skin",img)
 
+static func quick_list_paper() -> Texture2D:
+ if cache.has("quick-list-paper"):return cache["quick-list-paper"]
+ var origin=Vector2i(1186,68)
+ var img=source().get_region(Rect2i(origin,Vector2i(485,791)))
+ # The original folio has action/ribbon edges outside the modal paper donor.
+ # Clear the whole interior while retaining the illustrated outer paper rim.
+ patch(img,Rect2i(1199,89,463,748),Rect2i(1344,90,296,18),origin)
+ return pack_texture("quick-list-paper",img)
+
 static func name_skin() -> Texture2D:
  if cache.has("name"):return cache.name
  var r=Rect2i(496,99,100,55);var img=source().get_region(r)

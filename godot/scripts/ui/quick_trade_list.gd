@@ -45,7 +45,7 @@ func setup(controller) -> void:
  view=controller;name="QuickTradeList";position=Vector2(1186,68);size=Vector2(485,791)
  mouse_filter=Control.MOUSE_FILTER_STOP
  var paper=Panel.new();paper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
- paper.add_theme_stylebox_override("panel",view._source_style(R.paper_skin(),22));paper.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(paper)
+ paper.add_theme_stylebox_override("panel",view._source_style(R.quick_list_paper(),10));paper.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(paper)
  view._image(self,A.icon("clipboard-list"),Rect2(20,20,28,32),INK)
  heading=view._label(self,"本次物品",Rect2(58,17,245,38),26,INK,true)
  subtitle=view._label(self,"",Rect2(22,54,441,23),16,Color("70604a"))
@@ -133,7 +133,7 @@ func close_popup() -> void:
 
 func make_popup() -> VBoxContainer:
  close_popup();popup=PopupPanel.new();popup.theme=UIKit.build_theme();popup.wrap_controls=true
- popup.add_theme_stylebox_override("panel",view._source_style(R.paper_skin(),18));add_child(popup)
+ popup.add_theme_stylebox_override("panel",view._source_style(R.quick_list_paper(),10));add_child(popup)
  var margin=MarginContainer.new()
  for side in ["margin_left","margin_top","margin_right","margin_bottom"]:margin.add_theme_constant_override(side,14)
  popup.add_child(margin)

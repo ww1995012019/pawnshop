@@ -97,7 +97,7 @@ def main():
         assert uid in saved()['trade']['session']['table_positions']
         snap('table-moved')
         # Actual tool entry and the remaining page/navigation routes.
-        for key, workspace in [('@StrictTradeAction_2', 'inspect'),
+        for key, workspace in [('@quick_inspect_'+uid, 'inspect'),
                                ('@StrictNav_box-archive', 'warehouse'),
                                ('@StrictNav_screwdriver-wrench', 'repair'),
                                ('@StrictOrders', 'orders'), ('@StrictNav_sun', 'report')]:
@@ -107,18 +107,17 @@ def main():
                             ('手册', 'handbook'), ('设置', 'settings')]:
             click(label); snap(name); close()
         # Enter a price without Enter, then click the real offer button.
-        ratio = 1920 / 1671
-        page.mouse.click(1362 * ratio, 382 * 1080 / 941)
+        click('@quick_offer_'+uid)
         page.keyboard.press('Control+a'); page.keyboard.type('173')
         snap('quote-editable')
         page.keyboard.press('Control+a'); snap('quote-selected')
-        click('@StrictTradeAction_0')
+        click('@QuickOfferSubmit')
         se = status()['trade_session']
         line = next(r for r in se['lines'] if r['uid'] == uid)
         assert line['context']['price'] == 173 and line['status'] == 'confirmed', line
         assert saved()['cash'] == fixture['cash'] and saved()['ap'] == fixture['ap']
         snap('agreed')
-        click('@StrictTradeAction_0'); settle()
+        click('@QuickCheckout'); settle()
         after = saved()
         assert after['cash'] == fixture['cash'] - 173 and after['ap'] == fixture['ap'] - 1
         assert len([it for it in after['inventory'] if it['uid'] == uid]) == 1
