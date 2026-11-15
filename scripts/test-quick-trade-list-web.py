@@ -77,7 +77,7 @@ def main():
   snap('batch-complete')
   page.reload();start();assert saved()['cash']==after['cash'] and saved()['ap']==after['ap']
   print('PASS two selections, cancel, typed row negotiation, exact-UID inspection and one-AP checkout/reload',flush=True)
-  for name,path,count in [('one',OUT/'one.json',1),('empty',OUT/'empty.json',0),('maximum',ROOT/'work/multi-counter/maximum.json',16),('seven-hole',ROOT/'work/multi-counter/seven-hole.json',15)]:
+  for name,path,count in [('four',OUT/'four.json',4),('one',OUT/'one.json',1),('empty',OUT/'empty.json',0),('maximum',ROOT/'work/multi-counter/maximum.json',16),('seven-hole',ROOT/'work/multi-counter/seven-hole.json',15)]:
    load(path);assert len(state()['table_items'])==count;snap(name+'-1920')
    if count>8:
     last=state()['table_items'][-1]['uid'];click('@strict_table_'+last)
@@ -91,12 +91,32 @@ def main():
     snap(name+'-'+str(w))
    page.set_viewport_size({'width':1920,'height':1080});page.wait_for_timeout(300)
    print('PASS list/table focus and desktop layouts',name,count,flush=True)
+  fixture=load(OUT/'shop.json')
+  own=[r['uid'] for r in fixture['trade']['session']['lines'] if r['direction']=='sell']
+  first,rejected,other=own[:3]
+  before=saved();position=before['trade']['session']['table_positions'][first]
+  for uid in [other,first]:
+   click('@strict_table_'+uid);click('@quick_select_'+uid)
+  phone.wait(page,'s.trade_session.lines.filter(r=>r.selected).length===2',timeout=10000)
+  click('@quick_select_'+first)
+  phone.wait(page,'s.trade_session.lines.filter(r=>r.selected).length===1',timeout=10000)
+  assert len(state()['table_items'])==16
+  assert state()['trade_session']['table_positions'][first]==position
+  snap('shop-unselected')
+  click('@strict_table_'+rejected);click('@quick_more_'+rejected);snap('shop-more')
+  click('收回本件')
+  phone.wait(page,'s.table_items.length===15',timeout=10000)
+  assert not any(r['uid']==rejected for r in state()['table_items'])
+  assert next(r for r in state()['trade_session']['lines'] if r['uid']==other)['selected']
+  assert state()['cash']==before['cash'] and state()['ap']==before['ap']
+  snap('shop-withdrawn')
+  print('PASS shop unselect retains table slot and explicit withdrawal frees full eight-item presentation',flush=True)
   for name in ['closed','merchant','landlord']:
    load(ROOT/'work/strict-reference'/('fixture-'+name+'.json'))
    assert not state()['workspace'];snap(name)
    if name!='closed':assert saved()['trade']['kind']==name
    print('PASS fallback',name,flush=True)
   assert not errors,errors
-  (OUT/'browser-results.json').write_text(json.dumps({'passed':True,'errors':errors,'batch_ap':1,'originals':ids,'paid':due,'counts':[0,1,2,15,16],'viewports':[[1920,1080],[1778,974],[1440,900]]},indent=2)+'\n')
+  (OUT/'browser-results.json').write_text(json.dumps({'passed':True,'errors':errors,'batch_ap':1,'originals':ids,'paid':due,'counts':[0,1,2,4,15,16],'viewports':[[1920,1080],[1778,974],[1440,900]]},indent=2)+'\n')
   browser.close()
 if __name__=='__main__':main()

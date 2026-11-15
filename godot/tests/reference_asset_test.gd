@@ -12,6 +12,13 @@ func run():
  if portrait.get_size()==Vector2i(383,362):
   for p in [Vector2i(180,90),Vector2i(200,140),Vector2i(150,300)]:check(portrait.get_pixelv(p)==source.get_pixelv(p+Vector2i(474,94)),"source artwork pixels are preserved at "+str(p))
  var ref=load("res://scripts/ui/reference_atlas.gd")
+ var paper=ref.paper_skin().get_image()
+ var fragments=0
+ for y in range(180,600):
+  for x in [16,17,18,19,20,466,467,468,469,470]:
+   var c=paper.get_pixel(x,y)
+   if c.r>c.g*1.4 and c.r>.35:fragments+=1
+ check(fragments==0,"reusable paper interior contains no old red action or ribbon fragments")
  var environment=ref.environment().get_image()
  check(environment.get_pixel(83,213)!=source.get_pixel(83,213),"room does not retain a painted cabinet original behind the live original")
  check(environment.get_pixel(500,696)!=source.get_pixel(500,696),"room does not retain painted tabletop prices")

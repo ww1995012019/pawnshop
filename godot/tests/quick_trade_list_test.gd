@@ -75,4 +75,32 @@ func run():
  check(shell.modal_open() and not TradeSession.row(game.state,risk_uid).selected,"unverified source still requires the existing per-original risk consent")
  await click(button(shell,"承担风险并锁价"));await frames()
  check(TradeSession.row(game.state,risk_uid).selected and game.state.cash==cash and game.state.ap==ap,"source consent only locks this price and never settles automatically")
+ # Shop originals distinguish unselecting a settlement from withdrawing a presentation.
+ game.state=preload("res://tests/strict_multi_counter_fixture.gd").build(false)
+ var shop_lines=TradeSession.session(game.state).lines.filter(func(line):return line.direction=="sell")
+ var shop_uid:String=shop_lines[0].uid;var other_uid:String=shop_lines[1].uid
+ for line in shop_lines:line.context.price=1
+ shell.page._refresh();await frames()
+ var before_position=TradeSession.session(game.state).table_positions[shop_uid].duplicate()
+ cash=game.state.cash;ap=game.state.ap
+ await click(named(list,"quick_select_"+other_uid));await click(named(list,"quick_select_"+shop_uid));await frames()
+ check(TradeSession.row(game.state,shop_uid).selected and TradeSession.row(game.state,other_uid).selected,"shop originals can join the same selected settlement")
+ await click(named(list,"quick_select_"+shop_uid));await frames()
+ check(TradeSession.row(game.state,shop_uid).included and not TradeSession.row(game.state,shop_uid).selected and CounterDialogue.table_items(game.state).any(func(info):return info.uid==shop_uid) and TradeSession.session(game.state).table_positions.get(shop_uid,[])==before_position,"unselecting preserves the shop original, list row and exact table position")
+ check(TradeSession.row(game.state,other_uid).selected and game.state.cash==cash and game.state.ap==ap,"shop unselection preserves other agreements, money and AP")
+ if named(list,"quick_select_"+shop_uid)!=null:
+  await click(named(list,"quick_select_"+shop_uid));await frames()
+  check(TradeSession.row(game.state,shop_uid).selected,"an unselected shop original can be reselected in place")
+  await click(named(list,"quick_select_"+shop_uid));await frames()
+ # Force the unselected original's real reducer status to rejected; withdrawal is
+ # still available even though the selection button cannot be used as a workaround.
+ var rejected_uid:String=shop_lines[2].uid
+ var rejected=TradeSession.row(game.state,rejected_uid);rejected.status="rejected";rejected.selected=false;rejected.reason="本次先不收。"
+ shell.page._refresh();await frames()
+ check(CounterDialogue.table_items(game.state).filter(func(info):return info.direction=="sell").size()==8,"withdrawal fixture presents the full eight shop originals")
+ await click(named(list,"quick_more_"+rejected_uid));await frames()
+ var withdraw=button(list,"收回本件")
+ check(withdraw!=null and not withdraw.disabled,"rejected and unselected originals retain explicit withdrawal in More")
+ await click(withdraw);await frames()
+ check(not TradeSession.row(game.state,rejected_uid).included and not CounterDialogue.table_items(game.state).any(func(info):return info.uid==rejected_uid) and TradeSession.row(game.state,other_uid).selected and game.state.cash==cash and game.state.ap==ap,"explicit withdrawal frees a full presentation slot without paying or canceling other selections")
  shell.queue_free();await frames();print("QUICK LIST failures=",failures);quit(1 if failures else 0)

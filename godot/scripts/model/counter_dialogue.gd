@@ -1,7 +1,7 @@
 class_name CounterDialogue
 extends Object
 ## Ordinary counter verbs talk about one original; agreed originals stay remembered.
-const VERBS := ["SELECT_TRADE","OFFER","ACCEPT","DELIVER","REFUSE","COUNTER_NEXT","COUNTER_CANCEL","COUNTER_FOCUS","COUNTER_MOVE","PAWN"]
+const VERBS := ["SELECT_TRADE","OFFER","ACCEPT","DELIVER","REFUSE","COUNTER_NEXT","COUNTER_CANCEL","COUNTER_UNSELECT","COUNTER_FOCUS","COUNTER_MOVE","PAWN"]
 static func active(s: Dictionary) -> bool:
  return s.get("trade")!=null and not s.trade.get("inspectionVisit",false) and bool(TradeSession.session(s).get("dialogue",false))
 static func current(s: Dictionary) -> Dictionary:
@@ -186,8 +186,13 @@ static func reduce(previous: Dictionary,a: Dictionary):
    focused=TradeSession.row(s,uid)
   _reply(s,focused)
   return s
- if type in ["OFFER","ACCEPT","PAWN","COUNTER_CANCEL"]:
+ if type in ["OFFER","ACCEPT","PAWN","COUNTER_CANCEL","COUNTER_UNSELECT"]:
   if a.get("uid","")!=String(se.focus) or a.get("version",-1)!=se.version: return Model.notice(s,"刚才商谈的货物已变化，请按当前这一件重新确认。")
+ if type=="COUNTER_UNSELECT":
+  if a.get("tradeId","")!=s.trade.id or line.is_empty() or not line.included or not line.selected or line.status!="confirmed":return previous
+  line.selected=false;line.status="ready";se.version+=1
+  _reply(s,line)
+  return Model.notice(s,"已取消本件选择，原物仍留在柜台，钱货未变动。")
  if type=="COUNTER_CANCEL":
   if not line.is_empty():
    s=_call(s,"TRADE_REMOVE",{"uid":line.uid})

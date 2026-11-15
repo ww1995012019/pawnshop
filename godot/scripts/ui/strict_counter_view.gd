@@ -324,7 +324,7 @@ func _quick_action(verb: String,uid: String,trade_id: String,version: int,price:
  var context={"uid":uid,"trade_id":trade_id,"version":int(TradeSession.session(Game.state).version),"price":float(TradeSession.row(Game.state,uid).context.price)}
  match verb:
   "toggle":
-   if TradeSession.row(Game.state,uid).selected:Game.dispatch(CounterDialogue.action_for(Game.state,"COUNTER_CANCEL"))
+   if TradeSession.row(Game.state,uid).selected:Game.dispatch(CounterDialogue.action_for(Game.state,"COUNTER_UNSELECT"))
    else:desk._accept_with_source_risk()
   "inspect":desk.shell.go("inspect",uid)
   "offer":quick_list.offer_popup(context)
@@ -341,7 +341,7 @@ func _quick_offer(context: Dictionary,amount: int) -> void:
 func _quick_source(context: Dictionary,caption: String) -> void:
  if not _quick_valid(context.uid,context.trade_id,context.version,context.price):dirty=true;return
  _quick_focus(context.uid)
- for source in desk.actions.get_children():
+ for source in desk.actions.get_children()+[desk.dialogue_put_aside]:
   if source.text==caption and not source.disabled:source.pressed.emit();dirty=true;return
 
 func _process(delta: float) -> void:

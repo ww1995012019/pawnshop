@@ -60,6 +60,8 @@ def main():
             page.screenshot(path=str(OUT / (name + '.png')))
         def close():
             cmd({'type': 'close'}); page.wait_for_timeout(450)
+            phone.wait(page,'!s.blocked&&!s.busy&&s.workspace===""',timeout=20000)
+            page.wait_for_timeout(250)
         page.goto('http://127.0.0.1:4174/')
         page.wait_for_function('window.OrbitalTouch?.state?.ready', timeout=120000)
         cmd({'type': 'start'}); settle(); cmd({'type': 'arrive'}); settle()

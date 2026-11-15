@@ -1518,7 +1518,7 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 					await get_tree().create_timer(0.6).timeout
 				busy = false
 				_say(nt.line)
-		"SELECT_TRADE", "COUNTER_NEXT", "COUNTER_FOCUS", "COUNTER_CANCEL":
+		"SELECT_TRADE", "COUNTER_NEXT", "COUNTER_FOCUS", "COUNTER_CANCEL", "COUNTER_UNSELECT":
 			var it = Model.trade_item(next)
 			if CounterDialogue.active(next):
 				_sync_table(a.type=="SELECT_TRADE",_crate_point())

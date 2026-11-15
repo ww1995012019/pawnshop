@@ -24,3 +24,9 @@ and open compact per-item negotiation/details on demand. This meets direct
 list operation without squeezing every editor into every row. The portrait
 fix trims transparent atlas padding and aligns the painted base to the counter;
 original artwork is retained.
+
+User follow-up: remove painted red-button/old-control fragments from warehouse
+cards and right-hand empty states. Clean the shared paper interior so all pages
+retain the same source rim without stray control shapes. Preserve the current
+warehouse organization and original comic artwork. Empty ordinary visitors use
+the list's empty state, with no meaningless quote editor.

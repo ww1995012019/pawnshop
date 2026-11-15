@@ -31,15 +31,15 @@ func key(parent: Node,text: String,rect: Rect2,fn: Callable,icon:="",primary:=fa
 
 func skin(b: Button,primary: bool,selected: bool) -> void:
  for state in ["normal","hover","pressed","disabled","focus"]:
-  var st=view._source_style(R.blank_button(0 if primary else 1),8)
+  var st=view._source_style(R.blank_button(0 if primary and state!="disabled" else 1),8)
   st.set_content_margin_all(5)
   if selected:st.modulate_color=Color(.15,.26,.26)
-  elif state=="disabled":st.modulate_color=Color(.78,.75,.69)
   elif state=="hover":st.modulate_color=Color(1,.97,.9)
   elif state=="pressed":st.modulate_color=Color(.92,.9,.84)
   b.add_theme_stylebox_override(state,st)
  for color in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_disabled_color","icon_normal_color","icon_hover_color","icon_pressed_color","icon_focus_color","icon_disabled_color"]:
   b.add_theme_color_override(color,PAPER if primary or selected else INK)
+ b.add_theme_color_override("font_disabled_color",Color("867866"));b.add_theme_color_override("icon_disabled_color",Color("867866"))
 
 func setup(controller) -> void:
  view=controller;name="QuickTradeList";position=Vector2(1186,68);size=Vector2(485,791)
@@ -198,11 +198,12 @@ func sync_evidence(box: Control) -> void:
 func more_popup(context: Dictionary) -> void:
  var box=make_popup();box.add_child(UIKit.label("这件物品 · 更多操作",23,INK))
  var count=0
- for source in view.desk.actions.get_children():
+ for source in view.desk.actions.get_children()+[view.desk.dialogue_put_aside]:
   var caption:String=source.text
   if caption.begins_with("出价 ") or caption.begins_with("接受 ") or "拿去鉴定" in caption or caption=="送客":continue
   count+=1
-  var b=key(box,caption,Rect2(0,0,390,44),func():close_popup();view._quick_source(context,caption),"list")
+  var display_caption="收回本件" if source==view.desk.dialogue_put_aside and TradeSession.row(Game.state,context.uid).direction=="sell" else caption
+  var b=key(box,display_caption,Rect2(0,0,390,44),func():close_popup();view._quick_source(context,caption),"arrow-rotate-left" if source==view.desk.dialogue_put_aside else "list")
   b.custom_minimum_size=Vector2(390,44);b.disabled=source.disabled;b.tooltip_text=source.tooltip_text
  if count==0:box.add_child(UIKit.label("当前没有额外操作",18,INK))
  show_popup()

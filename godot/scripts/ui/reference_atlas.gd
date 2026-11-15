@@ -262,10 +262,7 @@ static func price_tag(selected: bool=false,display: bool=false) -> Texture2D:
  return pack_texture(key,img)
 
 static func paper_skin() -> Texture2D:
- if cache.has("paper-skin"):return cache["paper-skin"]
- var r=Rect2i(1186,68,485,791);var img=source().get_region(r)
- patch(img,Rect2i(1208,92,442,743),Rect2i(1344,90,296,18),r.position)
- return pack_texture("paper-skin",img)
+ return quick_list_paper()
 
 static func quick_list_paper() -> Texture2D:
  if cache.has("quick-list-paper"):return cache["quick-list-paper"]
