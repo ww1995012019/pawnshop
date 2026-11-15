@@ -3,9 +3,6 @@ extends Control
 ## A lifted original retains its storage address until a real trade/move commits.
 var desk
 var selected_uid := ""
-var door_open := true
-var door_progress := 1.0
-var door_tween: Tween
 var preview_tween: Tween
 var preview: TextureRect
 var preview_back := false
@@ -14,8 +11,6 @@ var preview_pad: Panel
 var tray: HBoxContainer
 var details: PanelContainer
 var info: VBoxContainer
-var door: Button
-var glass: Control
 var signature := ""
 var stock_page := 0
 var paging: HBoxContainer
@@ -30,18 +25,6 @@ class LiftedWatch extends TextureRect:
   ghost.size=Vector2(100,100);ghost.position=-ghost.size*.5
   var holder:=Control.new();holder.add_child(ghost);set_drag_preview(holder)
   return {"kind":"showroom_original","uid":showroom.selected_uid}
-
-class Glass extends Control:
- var openness := 1.0
- func _draw():
-  var width := size.x * (1.0 - openness) * .5
-  if width < 1: return
-  for x in [0.0, size.x-width]:
-   var r := Rect2(x,0,width,size.y)
-   draw_rect(r,Color(.35,.65,.64,.16))
-   draw_rect(r,Color("b7a071"),false,2)
-   draw_line(Vector2(x+6,12),Vector2(x+width-6,size.y-12),Color(1,1,1,.12),5)
-   draw_rect(Rect2(x+width*.5-2,size.y*.45,4,36),Color("d0b882"))
 
 func setup(page) -> void:
  desk = page
@@ -83,16 +66,6 @@ func setup(page) -> void:
  add_child(details)
  info = UIKit.vbox(8)
  details.add_child(info)
- glass = Glass.new()
- glass.position = Vector2(170,220)
- glass.size = Vector2(386,314)
- glass.mouse_filter = Control.MOUSE_FILTER_IGNORE
- add_child(glass)
- door = UIKit.button("关闭柜门", "chip", Vector2(140,28),16)
- door.name = "ShowroomDoor"
- door.position = Vector2(286,535)
- door.pressed.connect(toggle_door)
- add_child(door)
  refresh()
 
 func available(it) -> bool:
@@ -100,24 +73,6 @@ func available(it) -> bool:
 
 func allowed() -> bool:
  return is_visible_in_tree() and not desk.busy and not desk._scene_blocked()
-
-func toggle_door() -> void:
- if not allowed(): return
- door_open = not door_open
- door.text = "关闭柜门" if door_open else "打开柜门"
- if is_instance_valid(door_tween): door_tween.kill()
- var target := 1.0 if door_open else 0.0
- if Game.prefs.reduced_motion: _door_frame(target)
- else:
-  door_tween = create_tween()
-  door_tween.tween_method(_door_frame,door_progress,target,.32).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
- desk.shell.sound("page",-12)
- _set_cabinet_enabled(desk.display_goods,door_open)
-
-func _door_frame(value: float) -> void:
- door_progress = value
- glass.openness = value
- glass.queue_redraw()
 
 func _set_cabinet_enabled(node: Node, enabled: bool) -> void:
  for child in node.get_children():
@@ -129,9 +84,6 @@ func select_original(uid: String) -> void:
  if not available(Game.item(uid)):
   desk.shell.toast("受托、隔离、封存或正在维修的手表不能取出。")
   return
- if Game.item(uid).location=="display" and not door_open and selected_uid!=uid:
-  desk.shell.toast("请先打开陈列柜门。")
-  return
  if Game.dispatch({"type":"COUNTER_PREVIEW","uid":uid}):
   desk.shell.sound("click",-10)
   refresh()
@@ -140,8 +92,6 @@ func return_original() -> void:
  if not allowed(): return
  var uid := selected_uid
  if uid == "": return
- var original=Game.item(uid)
- if original!=null and original.location=="display" and not door_open: toggle_door()
  if is_instance_valid(preview_tween): preview_tween.kill()
  if not Game.prefs.reduced_motion:
   var ghost := TextureRect.new()
@@ -210,7 +160,7 @@ func refresh() -> void:
  if idle and not desk.shell.mobile_mode():
   desk.idle_label.visible = false
   desk.idle_jobs.visible = uid==""
- _set_cabinet_enabled(desk.display_goods,door_open)
+ _set_cabinet_enabled(desk.display_goods,true)
  var rows: Array = Game.state.inventory.filter(func(original):return available(original) and original.location=="warehouse")
  var next_signature: String = JSON.stringify([uid,rows,Game.state.get("showroomLayout",{}),Game.state.trade!=null,stock_page])
  if next_signature != signature:
@@ -288,9 +238,7 @@ func can_place(data,location: String,index: int) -> bool:
  if not allowed() or Game.state.trade!=null or not data is Dictionary: return false
  if data.get("kind","")!="showroom_original" or not available(Game.item(str(data.get("uid","")))): return false
  if location not in ["warehouse","display"] or index<0 or index>=Layout.capacity(Game.state,location): return false
- var original=Game.item(str(data.uid))
- if original.location=="display" and str(data.uid)!=selected_uid and not door_open: return false
- return door_open if location=="display" else true
+ return true
 
 func place_original(uid: String,location: String,index: int) -> void:
  if not can_place({"kind":"showroom_original","uid":uid},location,index): return
@@ -317,9 +265,6 @@ func place_original(uid: String,location: String,index: int) -> void:
 
 func move_selected(location: String) -> void:
  if selected_uid=="" or not allowed(): return
- if location=="display" and not door_open:
-  desk.shell.toast("请先打开陈列柜门。")
-  return
  for index in Layout.capacity(Game.state,location):
   if Layout.uid_at(Game.state,location,index)=="":
    place_original(selected_uid,location,index)

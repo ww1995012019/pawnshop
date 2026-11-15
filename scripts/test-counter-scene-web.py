@@ -48,11 +48,6 @@ with sync_playwright() as p:
    page.mouse.move(x+(tx-x)*step/12,y+(ty-y)*step/12);page.wait_for_timeout(100)
   page.mouse.up();page.wait_for_timeout(1600)
  uid=fixture['inventory'][0]['uid']
- click('台灯 · 开');page.screenshot(path=str(out/'pc-lamp-off.png'));click('台灯 · 关')
- click('@CounterDrawerToggle');page.screenshot(path=str(out/'pc-drawer-open.png'));click('@CounterDrawerToggle')
- click('关闭柜门');drag(240,275,805,540)
- assert next(i for i in saved()['inventory'] if i['uid']==uid)['location']=='display'
- page.screenshot(path=str(out/'pc-closed.png'));click('打开柜门')
  drag(240,275,805,540)
  state=saved_when(lambda s:next(i for i in s['inventory'] if i['uid']==uid)['location']=='warehouse')
  assert state['showroomLayout']['warehouse'][uid]==1,state['showroomLayout']
@@ -63,7 +58,7 @@ with sync_playwright() as p:
  state=saved_when(lambda s:s['showroomLayout']['display'].get(uid)==1)
  assert state['cash']==5000 and state['ap']==12
  page.screenshot(path=str(out/'pc-dragged.png'))
- print('PASS real drag: closed guard, cabinet→counter→cabinet, swap, no cash/AP change',flush=True)
+ print('PASS real drag: cabinet→counter→cabinet, swap, no cash/AP change',flush=True)
  # Counter world is letterboxed from a 1920x1080 coordinate system.
  page.mouse.click(240,275);page.mouse.move(1370,940);page.wait_for_timeout(800)
  page.screenshot(path=str(out/'pc-selected.png'))

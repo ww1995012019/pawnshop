@@ -59,7 +59,6 @@ var board_rent: Label
 var crate: PanelContainer
 var stock_grid: GridContainer
 var stock_count: Label
-var props: Control
 var showroom: Control
 var display_goods: ScrollContainer
 var orders_readout: Label
@@ -208,9 +207,6 @@ func enter() -> void:
 	showroom = preload("res://scripts/ui/counter_showroom.gd").new()
 	add_child(showroom)
 	showroom.setup(self)
-	props = preload("res://scripts/ui/counter_props.gd").new()
-	add_child(props)
-	props.setup(self)
 	Game.prefs_changed.connect(_refresh_utility_icons)
 	_refresh_utility_icons()
 	# The till stands in front of the counter fixtures, like the illustration.
@@ -355,7 +351,6 @@ func _fixture(key: String, rect: Rect2, caption: String, fn: Callable, permanent
 		if _scene_blocked() or busy:
 			return
 		shell.sound("click", -6)
-		if is_instance_valid(props): props.activate(key)
 		fn.call())
 	add_child(b)
 	fixture_buttons[key] = b
@@ -1116,7 +1111,6 @@ func _refresh() -> void:
 	# The tray occupies the empty payment space. During active negotiation the
 	# existing price/evidence controls retain their full touch targets.
 	cash_tray.visible = not dial_on
-	if is_instance_valid(props): props.refresh_controls()
 	if not busy: cash_tray.set_cash(float(s.cash))
 	offer_panel.visible = dial_on
 	evidence_box.visible = dial_on
@@ -1603,10 +1597,8 @@ func _deal(t: Dictionary, pawn: bool, item_name: String, stay := false) -> void:
 		busy = false
 		_refresh()
 		return
-	if is_instance_valid(props): props.payment_started()
 	customer.cheer()
 	_say("痛快！东西归你了。" if buy else "好东西，钱给你点清。", true, "happy")
-	if is_instance_valid(props) and not Game.prefs.reduced_motion: await get_tree().create_timer(.28).timeout
 	var till := _cash_point()
 	var hand: Vector2 = shell.world_to_ui(customer.hands())
 	if not Game.prefs.reduced_motion and price>0:
@@ -1617,7 +1609,6 @@ func _deal(t: Dictionary, pawn: bool, item_name: String, stay := false) -> void:
 			last_bill = _bill(till if buy else hand, hand if buy else till, i, balance)
 		await last_bill.finished
 	cash_tray.set_cash(float(Game.state.cash))
-	if is_instance_valid(props): props.payment_finished()
 	# The receipt can print while the goods change hands. Departure waits for
 	# the actual item tween, rather than a shorter, unrelated timer.
 	_receipt(t, price, pawn, item_name)

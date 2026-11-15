@@ -57,13 +57,7 @@ func run():
   check(room.selected_uid==uid,"workspace blocks counter actions")
   shell.close_workspace(true)
   for i in 8: await process_frame
-  room.toggle_door()
-  check(not room.door_open,"cabinet door closes")
-  room.toggle_door()
-  check(room.door_open,"cabinet door opens")
-  room.toggle_door()
   room.return_original()
-  check(room.door_open,"returning a held shelf watch opens its cabinet before landing")
   for i in 4: await process_frame
   check(room.selected_uid=="" and not room.preview.visible,"return restores empty inspection mat")
   game.item(uid).sealed = true
@@ -77,10 +71,8 @@ func run():
   room.select_original(uid)
   check(room.selected_uid==uid,"animated selection begins on original")
   room.select_original(uid)
-  room.toggle_door()
-  room.toggle_door()
   await create_timer(.5).timeout
-  check(room.preview.position.is_equal_approx(Vector2(1100,490)) and is_equal_approx(room.door_progress,1.0),"rapid input settles watch and cabinet animation")
+  check(room.preview.position.is_equal_approx(Vector2(1100,490)),"rapid input settles watch animation")
   room.flip_original()
   room.flip_original()
   await create_timer(.4).timeout
