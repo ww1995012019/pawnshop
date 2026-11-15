@@ -240,8 +240,11 @@ func _build() -> void:
  quote=LineEdit.new();quote.position=Vector2(1298,355);quote.size=Vector2(144,57)
  quote.add_theme_constant_override("minimum_character_width",1);quote.alignment=HORIZONTAL_ALIGNMENT_LEFT
  quote.add_theme_font_override("font",R.latin(true));quote.add_theme_font_size_override("font_size",32);quote.add_theme_color_override("font_color",INK)
+ quote.add_theme_color_override("font_uneditable_color",INK)
+ quote.add_theme_color_override("font_selected_color",PAPER);quote.add_theme_color_override("selection_color",GREEN)
+ quote.add_theme_color_override("caret_color",INK)
  var quote_style=_source_style(R.quote_skin(),8);quote_style.set_content_margin(SIDE_LEFT,17);quote_style.set_content_margin(SIDE_RIGHT,47)
- quote.add_theme_stylebox_override("normal",quote_style);quote.add_theme_stylebox_override("focus",quote_style)
+ for state in ["normal","focus","read_only"]:quote.add_theme_stylebox_override(state,quote_style)
  _label(quote,"Cr",Rect2(88,8,47,39),32,INK,true).add_theme_font_override("font",R.latin(true))
  quote.text_changed.connect(func(_value):
   if not quote_syncing:quote_dirty=true)

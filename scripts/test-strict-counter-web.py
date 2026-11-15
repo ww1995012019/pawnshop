@@ -110,6 +110,8 @@ def main():
         ratio = 1920 / 1671
         page.mouse.click(1362 * ratio, 382 * 1080 / 941)
         page.keyboard.press('Control+a'); page.keyboard.type('173')
+        snap('quote-editable')
+        page.keyboard.press('Control+a'); snap('quote-selected')
         click('@StrictTradeAction_0')
         se = status()['trade_session']
         line = next(r for r in se['lines'] if r['uid'] == uid)

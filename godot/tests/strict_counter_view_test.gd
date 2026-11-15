@@ -10,6 +10,11 @@ func run() -> void:
  var paper=view.get_node("StrictTradePaper")
  check(paper.position==Vector2(1186,68) and paper.size==Vector2(485,791),"transaction folio retains source coordinates")
  check(view.get_node("StrictSpeechBubble") is TextureRect,"dialogue uses the independent tailed bubble asset")
+ var quote_paper=Color("f7e5c3")
+ check(contrast(view.quote.get_theme_color("font_uneditable_color"),quote_paper)>=4.5,"confirmed quote digits remain readable on paper")
+ var selection=quote_paper.blend(view.quote.get_theme_color("selection_color"))
+ check(contrast(view.quote.get_theme_color("font_selected_color"),selection)>=4.5,"selected quote digits retain readable contrast")
+ check(contrast(view.quote.get_theme_color("caret_color"),quote_paper)>=3.0,"quote caret remains visible on paper")
  var stock_button=view.find_child("strict_stock_"+str(game.state.inventory[0].uid),true,false)
  page._refresh();await frames()
  check(is_instance_valid(stock_button),"quote refresh retains inventory button identity during pointer gestures")
@@ -70,3 +75,9 @@ func run() -> void:
  check(view.table.get_node("strict_table_"+moving_uid).position!=before_position and TradeSession.session(game.state).get("table_positions",{}).has(moving_uid),"table dragging immediately renders the saved canonical position")
  check(game.state.cash==cash and game.state.ap==ap,"table placement preserves cash, AP and ownership")
  shell.queue_free();await frames();print("STRICT UI failures=",failures);quit(1 if failures else 0)
+
+func contrast(front: Color,back: Color) -> float:
+ var shown=back.blend(front).srgb_to_linear();var background=back.srgb_to_linear()
+ var a=.2126*shown.r+.7152*shown.g+.0722*shown.b
+ var b=.2126*background.r+.7152*background.g+.0722*background.b
+ return (maxf(a,b)+.05)/(minf(a,b)+.05)

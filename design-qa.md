@@ -121,3 +121,23 @@ final result: passed
 Publication verification is separate from this local design gate: the runtime
 proxy rejects the public Pages domain (HTTP tunnel 403), and the cloud browser
 is unavailable. Do not report live-site testing as completed from Git pushes.
+
+## Follow-up: confirmed quote readability
+
+The user reported pale digits after confirming a bargain. The editable input
+was styled, but its read-only theme retained the engine default pale text and
+gray background. Native contrast regressions reproduced failures for read-only
+text, selected text and the caret before the fix. The local input now retains
+the source paper skin in read-only mode, dark ink for amounts/caret and a dark
+green selection with light text. Native regressions pass. Real Chromium captures show all three states with
+readable digits and the original paper border. The same actual 173 Cr quote
+is visible before and after confirmation; checkout deducts exactly 173 Cr
+and 1 AP and transfers the original UID once.
+
+Evidence: `work/quote-readability/comparison.png` (same-state before/after),
+`work/quote-readability/states.png` (editable/selected/confirmed),
+`native-before.log` (three contrast failures), `native-after.log` (zero
+failures), plus quote-console/payment/reference-state/mobile-quote regressions.
+Final quote-fix build: `4bd752a6dc83bbc5` /
+`workbench-bf4dd41678520ab8.pck`. No remaining actionable P0/P1/P2 for this
+reported defect. Other presentation assets and game rules are unchanged.
