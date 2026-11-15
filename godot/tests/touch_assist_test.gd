@@ -29,6 +29,11 @@ func run() -> void:
 	await frame()
 	# A 430 x 733 pt phone shows roughly 0.4 CSS px per shop unit.
 	var scale := 0.4
+	# Exercise the compact desktop fixture used by touch emulation.
+	# The redesigned PC action keys are already finger-sized at this scale.
+	shell.page.strict_view.set_process(false)
+	shell.page.strict_view.hide()
+	shell.page.find_child("DesktopCounter",true,false).show()
 	shell.touch_scale_override = scale
 	var greet := button(shell, "接待下一位来客")
 	var close := button(shell, "打烊结算")

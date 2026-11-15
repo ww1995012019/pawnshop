@@ -20,15 +20,15 @@ func run() -> void:
    check(card.tag_rect().size.y<=24 and card.tag_rect().size.x<=102,"desk tag stays compact below the original")
  check(table.sprites.size()==3,"all three NPC originals are already laid out without asking next")
  var first: String=game.state.inventory[0].uid;var second: String=game.state.inventory[1].uid
- await click(button_named(page,"stock_recommend_"+first));await click(button_named(page,"stock_recommend_"+second))
+ await click(button_named(page,"strict_stock_"+first));await click(button_named(page,"strict_stock_"+second))
  check(table.sprites.size()==5 and table.sprites.has(first) and table.sprites.has(second),"two player originals join three NPC originals on the same desk")
  var old_sprite=table.sprites[first]
  var before: float=game.state.cash
- await point(table.sprites[first].global_position)
+ await point(page.strict_view.table.get_node("strict_table_"+first).get_global_rect().get_center())
  check(TradeSession.session(game.state).focus==first and table.sprites[first]==old_sprite and table.sprites.size()==5 and game.state.cash==before,"click focuses an existing physical original without replacing or buying others")
  var first_back: bool=table.sprites[first].back
  var second_back: bool=table.sprites[second].back
- await point(table.sprites[second].global_position,MOUSE_BUTTON_RIGHT)
+ await point(page.strict_view.table.get_node("strict_table_"+second).get_global_rect().get_center(),MOUSE_BUTTON_RIGHT)
  check(table.sprites[second].back!=second_back and table.sprites[first].back==first_back,"right-click flips the pointed original without changing the other one")
  check(page.find_child("dialogue_next_goods",true,false)==null,"normal table needs no next-item dialogue button")
  shell.go("inspect",first);await frames();shell.close_workspace();await frames()
@@ -45,7 +45,7 @@ func run() -> void:
  # Focus and confirm only two of the nine; the rest stay on the desk.
  game.dispatch({"type":"COUNTER_FOCUS","tradeId":game.state.trade.id,"uid":first});await frames()
  game.dispatch(CounterDialogue.action_for(game.state,"ACCEPT"));await frames()
- await point(table.sprites[second].global_position)
+ await point(page.strict_view.table.get_node("strict_table_"+second).get_global_rect().get_center())
  var npc_uid: String=TradeSession.session(game.state).goods[0].uid
  game.dispatch({"type":"COUNTER_FOCUS","tradeId":game.state.trade.id,"uid":npc_uid});await frames()
  game.dispatch(CounterDialogue.action_for(game.state,"ACCEPT"));await frames()
@@ -72,7 +72,7 @@ func button_named(node: Node,key: String) -> Button:
   if b.name==key and b.is_visible_in_tree(): return b
  return null
 func point(position: Vector2,mouse_button:=MOUSE_BUTTON_LEFT) -> void:
- var p=root.get_screen_transform()*root.get_canvas_transform()*position
+ var p=root.get_final_transform()*position
  var motion=InputEventMouseMotion.new();motion.position=p;Input.parse_input_event(motion)
  for pressed in [true,false]:
   var event=InputEventMouseButton.new();event.position=p;event.global_position=p;event.button_index=mouse_button;event.pressed=pressed;Input.parse_input_event(event);await frames()

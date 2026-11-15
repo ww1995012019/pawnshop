@@ -591,7 +591,7 @@ class StorageGrid extends Control:
 				continue
 			var tr := TextureRect.new()
 			tr.texture = UIKit.physical_icon(it)
-			tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			tr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 			tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			tr.mouse_filter = Control.MOUSE_FILTER_IGNORE

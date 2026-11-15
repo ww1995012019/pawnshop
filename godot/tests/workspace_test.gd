@@ -101,7 +101,7 @@ func audit() -> void:
 	down.position = root.get_final_transform() * dial_point
 	Input.parse_input_event(down)
 	await frame()
-	var origin: Button = home.fixture_buttons.inspect
+	var origin: Button = home.strict_view.get_node("StrictNav_gauge-high")
 	origin.grab_focus()
 	shell.go("inspect")
 	await frame()

@@ -35,13 +35,15 @@ static var mobile_wide := false
 
 static func ensure() -> void:
 	if font == null:
-		font = load("res://assets/fonts/orbital-sans.ttf")
-		# The digital face has Latin glyphs only. Fall back to the sans face so
-		# receipts, instrument read-outs and UV marks never render CJK as boxes.
-		var digits := FontVariation.new()
-		digits.base_font = load("res://assets/fonts/orbital-mono.ttf")
-		digits.fallbacks = [font]
-		mono = digits
+		var comic_face := FontVariation.new()
+		comic_face.base_font=load("res://assets/fonts/orbital-sans.ttf")
+		comic_face.variation_embolden=.45
+		font=comic_face
+		# Shared CJK face keeps amounts and native labels in the same comic typography.
+		var strong_face := FontVariation.new()
+		strong_face.base_font=load("res://assets/fonts/orbital-sans.ttf")
+		strong_face.variation_embolden=.8
+		mono=strong_face
 
 # ---------------------------------------------------------------- styles
 
@@ -76,8 +78,12 @@ const SKIN_RIM := {"glass": [49, 50, 41, 63], "strip": [27, 32, 27, 53], "amber"
 	"paper": [9, 9, 9, 9], "screen": [41, 41, 41, 49]}
 
 static func skin(name: String, size := "lg", pad := -1.0, tint := Color.WHITE) -> StyleBox:
-	var fills := {"paper": PAPER, "screen": Color("e4d3ae"), "socket": Color("dfcba5"), "amber": Color("bb5039"), "glass": Color("d9d6b1")}
-	var surface := box(fills.get(name,PAPER),INK,5,2,18 if pad < 0 else int(pad),2)
+	if mobile_ui:return box(PAPER,INK,8,2,8 if pad<0 else pad,0)
+	var surface = load("res://scripts/ui/comic_paper.gd").new()
+	surface.paper=tex("res://assets/comic/paper.png")
+	surface.bg_color=PAPER;surface.border_color=INK
+	surface.set_border_width_all(2);surface.set_corner_radius_all(8)
+	surface.set_content_margin_all(18 if pad<0 else pad)
 	return surface
 
 static func plate_style() -> StyleBox:
@@ -240,7 +246,7 @@ static func button(text: String, kind := "secondary", min_size := Vector2(0, 58)
 		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	b.focus_mode = Control.FOCUS_ALL
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	b.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	b.add_theme_font_size_override("font_size", mini(size,14) if phone_landscape() else mini(size,17) if mobile_ui else size)
 	var compact := text == ""
 	for st in ["normal", "hover", "pressed", "disabled"]:
@@ -296,7 +302,7 @@ static func switch_row(text: String, on: bool, fn: Callable) -> Button:
 	b.custom_minimum_size = Vector2(0, 36 if phone_landscape() else 44 if mobile_ui else 62)
 	b.focus_mode = Control.FOCUS_ALL
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	b.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	b.add_theme_font_size_override("font_size", 14 if phone_landscape() else 16 if mobile_ui else 21)
 	for st in ["normal", "hover", "pressed", "disabled", "hover_pressed"]:
 		var base := "hover" if st == "hover" or st == "hover_pressed" else "normal"
@@ -444,10 +450,14 @@ static func icon(name: String) -> AtlasTexture:
 	var key := "icon:" + name
 	if _cache.has(key):
 		return _cache[key]
-	var i := HUD_ICONS.find(name)
 	var a := AtlasTexture.new()
-	a.atlas = tex("res://assets/ui/orbital-hud.png")
-	a.region = Rect2((i % 8) * 128, (i / 8) * 128, 128, 128)
+	var path="res://assets/comic/icons_ink/"+name+".svg"
+	if ResourceLoader.exists(path):
+		a.atlas=tex(path);a.region=Rect2(Vector2.ZERO,a.atlas.get_size())
+	else:
+		var i := HUD_ICONS.find(name)
+		a.atlas=tex("res://assets/ui/orbital-hud.png")
+		a.region=Rect2((i%8)*128,(i/8)*128,128,128)
 	_cache[key] = a
 	return a
 
@@ -465,6 +475,8 @@ static func item_cell(def_id: String, back := false) -> Dictionary:
 	return {"key": key, "region": Rect2(x + cw * inset, y + ch * inset, cw * (1 - inset * 2), ch * (1 - inset * 2))}
 
 static func item_icon(def_id: String, back := false) -> AtlasTexture:
+	if not back and GameData.def(def_id).get("category","")=="watch":
+		return load("res://scripts/ui/comic_assets.gd").watch({"defId":def_id,"watch":{}})
 	var key := "item:%s:%s" % [def_id, back]
 	if _cache.has(key):
 		return _cache[key]
@@ -552,20 +564,21 @@ static func npc_cell(npc_id: String, _mood := "neutral") -> Dictionary:
 ## Square headshot from the top of the portrait (always drawn square, so
 ## containers never stretch it).
 static func npc_icon(npc_id: String) -> AtlasTexture:
-	var key := "npc_icon:" + npc_id
-	if _cache.has(key):
-		return _cache[key]
-	var c := npc_cell(npc_id)
-	var a := AtlasTexture.new()
-	a.atlas = tex("res://assets/atlas/%s.png" % c.key)
-	var r: Rect2 = c.region
-	var side := r.size.x * 0.56
-	a.region = Rect2(r.position + Vector2((r.size.x - side) * 0.5, r.size.y * 0.03), Vector2(side, side))
-	_cache[key] = a
-	return a
+	var key="npc_icon:"+npc_id
+	if _cache.has(key):return _cache[key]
+	var portrait=npc_portrait(npc_id)
+	var a=AtlasTexture.new();a.atlas=portrait.atlas
+	var size=portrait.get_size();var side=minf(size.x,size.y*.65)
+	a.region=Rect2(portrait.region.position+Vector2((size.x-side)/2,size.y*.03),Vector2(side,side))
+	_cache[key]=a;return a
 
 ## The whole painted portrait of a resident.
 static func npc_portrait(npc_id: String) -> AtlasTexture:
+	var t=load("res://scripts/ui/comic_assets.gd").portrait(npc_id)
+	if t is AtlasTexture:return t
+	var a=AtlasTexture.new();a.atlas=t;a.region=Rect2(Vector2.ZERO,t.get_size());return a
+
+static func legacy_npc_portrait(npc_id: String) -> AtlasTexture:
 	var c := npc_cell(npc_id)
 	var a := AtlasTexture.new()
 	a.atlas = tex("res://assets/atlas/%s.png" % c.key)
@@ -655,8 +668,9 @@ static func wanted_portrait(profile: Dictionary) -> AtlasTexture:
 	if profile.get("npcId", "") != "": return npc_icon(profile.npcId)
 	var index := int(profile.get("faceIndex",0))
 	var face := AtlasTexture.new()
-	face.atlas = tex("res://assets/atlas/wanted-faces.png")
-	face.region = Rect2(index % 8 * 160,index / 8 * 160,160,160)
+	face.atlas = tex("res://assets/comic/wanted_faces.png")
+	var cell=face.atlas.get_width()/8.0
+	face.region = Rect2(index % 8 * cell,index / 8 * cell,cell,cell)
 	return face
 
 ## A target's shell and a separately painted mark never replace the true item ID.
@@ -696,6 +710,7 @@ static func physical_texture(it: Dictionary, back := false) -> CanvasTexture:
 	return result
 
 static func physical_icon(it: Dictionary, back := false) -> Texture2D:
+	if not back and GameData.def(it.defId).get("category","")=="watch":return load("res://scripts/ui/comic_assets.gd").watch(it)
 	if WatchForgery.target_id(it)=="": return item_icon(it.defId,back)
 	var result := AtlasTexture.new()
 	result.atlas=physical_texture(it,back).diffuse_texture

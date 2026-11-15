@@ -82,7 +82,7 @@ func run()->void:
  game.state=fixtures.arrest.duplicate(true);game.state.trade.id="different-next-visitor";page._refresh();page._process(30)
  check(game.state.trade!=null and game.state.trade.id=="different-next-visitor","stale timer cannot close a different visitor")
  # Actual motion over both text and note margin must not create a tooltip or world hover.
- var point=page.bubble.get_global_rect().get_center()
+ var point=page.strict_view.get_node("StrictSpeechBubble").get_global_rect().get_center()
  var motion=InputEventMouseMotion.new();motion.position=root.get_final_transform()*point;motion.global_position=motion.position
  Input.parse_input_event(motion);await frames();await create_timer(.7).timeout
  page._process(.1)

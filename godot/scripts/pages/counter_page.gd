@@ -59,6 +59,7 @@ var board_rent: Label
 var crate: PanelContainer
 var stock_grid: GridContainer
 var stock_count: Label
+var strict_view: Control
 var showroom: Control
 var display_goods: ScrollContainer
 var orders_readout: Label
@@ -221,6 +222,9 @@ func enter() -> void:
 		var portrait := preload("res://scripts/ui/portrait_counter.gd").new()
 		add_child(portrait)
 		portrait.setup(self)
+		strict_view=preload("res://scripts/ui/strict_counter_view.gd").new()
+		add_child(strict_view)
+		strict_view.setup(self)
 
 func _align_stage() -> void:
 	var inv := get_viewport().get_canvas_transform().affine_inverse() * Transform2D(0.0, shell.counter_offset())
@@ -919,6 +923,7 @@ func _act(text: String, kind: String, fn: Callable, enabled := true, _wide := fa
 	return b
 
 func _refresh() -> void:
+	if is_instance_valid(strict_view):strict_view.dirty=true
 	_refresh_desk()
 	preload("res://scripts/ui/comic_counter.gd").refresh(self)
 	var s := Game.state
@@ -1281,6 +1286,7 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 			target.call_deferred("grab_focus")
 
 func _update_offer_value(value: int) -> void:
+	if is_instance_valid(strict_view):strict_view.dirty=true
 	_last_offer_value = value
 	offer_label.text = UIKit.money(value)
 	if is_instance_valid(offer_button):
@@ -1831,6 +1837,8 @@ func _stamp(paper: Control, pawn: bool, t: Dictionary, animate: bool) -> void:
 # ---------------------------------------------------------------- input & frame
 
 func _dialogue_owns_pointer() -> bool:
+	if is_instance_valid(strict_view) and strict_view.visible:
+		return strict_view.speech.visible and strict_view.get_node("StrictSpeechBubble").get_global_rect().has_point(get_global_mouse_position())
 	return is_instance_valid(bubble) and bubble.is_visible_in_tree() and bubble.modulate.a > 0.01 and bubble.get_global_rect().has_point(get_global_mouse_position())
 
 func world_cursor_shape(p: Vector2) -> int:

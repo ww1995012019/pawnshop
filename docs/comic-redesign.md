@@ -1,9 +1,34 @@
-# Comic presentation redesign
+# Comic presentation implementation
 
-Visual reference: `exec-cb94836f-d9e8-4983-928f-8509c343c80a.png`.
+Approved reference: `exec-cb94836f-d9e8-4983-928f-8509c343c80a.png` (1672×941).
 
-Keep all existing gameplay and saves. PC uses a warm paper/ink/brick palette, generated independent room illustration, left shelves and stock tray, central multi-item counter, right quotation workspace, bottom commands. Text and game values remain native live controls, never baked into background. Long real dialogue retains scroll and context actions. Existing watch/NPC atlases remain canonical to preserve item evidence, modifications and expressions; they are not replaced with a full-screen mock image.
+PC now uses `strict_counter_view.gd`: a native 1672×941 scene scaled into the
+existing Godot viewport. The measured HUD, shelves, stock tray, counter,
+tailed speech bubble, transaction folio and bottom commands are independent
+controls. The original counter remains the transaction controller; visible
+buttons invoke its existing guards and reducer actions. Mobile keeps its
+existing adaptive layouts and shares the paper/ink palette.
 
-All workspaces, documents, orders, warehouse, reports and settings share UIKit paper surfaces, dark ink and muted olive work mats. Mobile retains its functional adaptive layouts with the same palette. Fixture animations previously removed stay removed.
+`comic_assets.gd` provides independent room, portrait, watch, bell and paper
+artwork. Interface icons use Lucide outlines and a few retained Font Awesome
+icons; their licenses are in the asset directory. Technical watch specimens,
+markings and counterfeit clues retain the canonical renderer. UI illustration
+redraws differ in details from the reference; this is not a pixel-identical
+asset reproduction. See `design-qa.md` and the running-game comparison.
 
-Validation: native gameplay/UI regressions, Chromium captures of counter and all six main screens, actual navigation and back/close input, console error inspection. No live deployment until current regression and visual checks are resolved.
+Inventory and table controls refresh on their actual content and canonical
+layout signatures, so an unchanged inventory button survives quote updates.
+Click-time eligibility resolves the current UID, not a captured item snapshot.
+Quote drafts commit before Offer or nudges. All movement and checkout use the
+same persisted model; browsing, flipping and placement do not spend cash/AP.
+
+Animations are tied to existing actions: the service bell, visitor gestures,
+watch flip and completed handover. Reduced-motion preferences are respected.
+The removed cabinet-door, lamp and cash-box fixture animations stay removed.
+
+Verification: 125 native groups (full run plus focused reruns), seven packaging
+checks, font coverage, and actual Chromium pointer/keyboard input through
+quote, payment, page navigation, flip, table drag, cabinet swaps, own-item tools
+and reload persistence. `python3 scripts/test-counter-scene-web.py` runs the
+browser checks against the preview on port 4174 and writes screenshots to
+`work/strict-reference`. The current revision has not been published.

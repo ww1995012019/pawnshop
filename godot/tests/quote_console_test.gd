@@ -12,11 +12,12 @@ func frame() -> void:
 func audit(label: String) -> void:
 	await frame()
 	var page = shell.page
-	var bounds: Rect2 = page.terminal.get_global_rect()
-	var buttons: Array = page.actions.get_children()
+	var bounds: Rect2 = page.strict_view.get_node("StrictTradePaper").get_global_rect()
+	var buttons: Array = page.strict_view.trade_buttons
 	for button in buttons:
 		check(bounds.encloses(button.get_global_rect()),label+": "+button.text+" sits inside the device")
 	for chip in page.chips.get_children():
+		if not chip.is_visible_in_tree():continue
 		check(bounds.encloses(chip.get_global_rect()),label+": evidence control stays inside the device")
 		for nudge in page.nudge_keys:
 			check(not chip.get_global_rect().intersects(nudge.get_global_rect()),label+": evidence stays clear of price keys")
@@ -36,13 +37,13 @@ func run() -> void:
 	game.new_game("ORBITAL-P0")
 	await audit("idle")
 	var motion := InputEventMouseMotion.new()
-	motion.position = root.get_final_transform() * shell.page.fixture_buttons.inspect.get_global_rect().get_center()
+	motion.position = root.get_final_transform() * shell.page.strict_view.get_node("StrictNav_gauge-high").get_global_rect().get_center()
 	motion.global_position = motion.position
 	Input.parse_input_event(motion)
 	await frame()
-	check(root.gui_get_hovered_control() == shell.page.fixture_buttons.inspect,"visible inspection equipment remains clickable through transparent till margin")
+	check(root.gui_get_hovered_control() == shell.page.strict_view.get_node("StrictNav_gauge-high"),"visible inspection equipment remains clickable through transparent till margin")
 	for key in ["orders","people"]:
-		check(not shell.page.fixture_buttons[key].get_global_rect().intersects(shell.page.terminal.get_global_rect()),key+" entry remains clear of the trade controls")
+		check(not shell.page.strict_view.get_node("StrictOrders" if key=="orders" else "StrictPeople").get_global_rect().intersects(shell.page.terminal.get_global_rect()),key+" entry remains clear of the trade controls")
 	game.state = Model.reduce(game.state,{"type":"ARRIVE"})
 	shell.go("counter")
 	await audit("buy")

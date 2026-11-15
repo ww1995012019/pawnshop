@@ -72,7 +72,7 @@ func available(it) -> bool:
  return it != null and Model.owns(it) and not it.sealed and it.location in ["warehouse","display"] and not it.has("orderId") and not it.get("service",{}).get("opened",false)
 
 func allowed() -> bool:
- return is_visible_in_tree() and not desk.busy and not desk._scene_blocked()
+ return (is_visible_in_tree() or is_instance_valid(desk.strict_view) and desk.strict_view.visible) and not desk.busy and not desk._scene_blocked()
 
 func _set_cabinet_enabled(node: Node, enabled: bool) -> void:
  for child in node.get_children():

@@ -134,6 +134,7 @@ func run() -> void:
 	var terms := Model.trade_terms(game.state,game.state.trade,Model.trade_item(game.state))
 	var selected_price := int(maxf(100,terms.floor))
 	shell.page.dial.set_value(selected_price,false); shell.page._update_offer_value(selected_price)
+	await frames()
 	before=game.state.cash; risk=game.state.risk
 	await click(button(shell,"出价 "+(Model.jnum(selected_price)+" Cr")))
 	check(shell.modal_open() and not game.state.trade.locked, "native OFFER prompts source risk before lock")
@@ -156,12 +157,12 @@ func run() -> void:
 	await click(button(shell,"承担风险并选货")); await frames()
 	check(game.state.trade.get("selectedUid","")==sale_item.uid and not shell.workspace_open(), "per-item consent selects original and returns to counter")
 	var accept: Button=null
-	for b in shell.page.actions.get_children():
-		if b.text.begins_with("接受 "): accept=b
+	for b in shell.page.strict_view.trade_buttons:
+		if b.text.begins_with("接受 ") and b.is_visible_in_tree(): accept=b
 	await click(accept); await frames()
 	var delivery: Button=null
-	for b in shell.page.actions.get_children():
-		if b.text.begins_with("收款 "): delivery=b
+	for b in shell.page.strict_view.trade_buttons:
+		if b.text.begins_with("收款 ") and b.is_visible_in_tree(): delivery=b
 	await click(delivery); await idle(shell.page)
 	check(game.state.trade==null and Model.find_inventory(game.state,sale_item.uid)==null and game.state.cash>before and game.state.risk==risk+8, "native warehouse gray sale completes actual payment and transfer")
 	game.state=Fixture.resale_state()

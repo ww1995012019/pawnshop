@@ -25,7 +25,7 @@ func run() -> void:
 		await frame()
 		var page = shell.active_shell().page
 		var bell = page.bell
-		check(bell.is_visible_in_tree(), method + " animates a visible bell")
+		check(page.strict_view.bell_art.is_visible_in_tree(), method + " animates a visible bell")
 		var original: Transform2D = bell.transform
 		var before_count := arrivals
 		if method == "_bell_clicked":

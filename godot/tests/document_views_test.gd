@@ -84,7 +84,8 @@ func run() -> void:
 	if guide != null: guide.close_document()
 	paper.close_document()
 	await frames()
-	var cash_point: Vector2 = root.get_final_transform() * shell.page.cash_tray.get_global_rect().get_center()
+	var cash_control=shell.page.strict_view.get_node("StrictCashLedger")
+	var cash_point: Vector2 = root.get_final_transform() * cash_control.get_global_rect().get_center()
 	for pressed in [true,false]:
 		var event := InputEventMouseButton.new()
 		event.position = cash_point
