@@ -58,3 +58,26 @@ static func portrait(id: String) -> Texture2D:
  if not ResourceLoader.exists(ROOT+name):return UIKit.legacy_npc_portrait(id)
  var t=tex(name);var cell=Vector2(t.get_width()/float(cols),t.get_height()/float(rows))
  return region(name,Rect2(Vector2(n%cols,n/cols)*cell,cell))
+
+static func counter_portrait(id: String) -> Texture2D:
+ if id=="CHR-021":return R.elder_scene()
+ var key="counter-portrait-"+id
+ if cache.has(key):return cache[key]
+ var base=portrait(id);var pixels=base.get_image()
+ if pixels.is_compressed():pixels.decompress()
+ # Imported alpha can contain near-transparent compression speckles. Locate
+ # the painted lower edge, rather than treating a single faint pixel as feet.
+ var end=pixels.get_height()
+ var needed=maxi(8,int(pixels.get_width()*.03))
+ for y in range(pixels.get_height()-1,-1,-1):
+  var opaque=0
+  for x in pixels.get_width():
+   if pixels.get_pixel(x,y).a>.5:opaque+=1
+   if opaque>=needed:break
+  if opaque>=needed:end=mini(pixels.get_height(),y+2);break
+ var cut=AtlasTexture.new()
+ if base is AtlasTexture:
+  cut.atlas=base.atlas;cut.region=Rect2(base.region.position,Vector2(base.region.size.x,base.region.size.y*end/pixels.get_height()))
+ else:
+  cut.atlas=base;cut.region=Rect2(0,0,pixels.get_width(),end)
+ cache[key]=cut;return cut

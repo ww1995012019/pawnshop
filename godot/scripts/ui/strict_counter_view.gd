@@ -401,7 +401,7 @@ func _refresh(force := false) -> void:
  var bubble=get_node("StrictSpeechBubble");bubble.visible=t!=null;speech.visible=t!=null
  if t!=null:
   if str(t.npcId)!=last_npc:
-   last_npc=str(t.npcId);face.texture=R.elder_scene() if last_npc=="CHR-021" else A.portrait(last_npc)
+   last_npc=str(t.npcId);face.texture=A.counter_portrait(last_npc)
    if not Game.prefs.reduced_motion:
     face.modulate.a=0.0;create_tween().tween_property(face,"modulate:a",1.0,.25)
   name_key.text=GameData.npc(t.npcId).name

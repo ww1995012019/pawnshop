@@ -28,4 +28,16 @@ func run():
  check(view.cost.get_minimum_size().x<=434 and view.cost.get_global_rect().end.x<=view.get_global_rect().end.x-20,"long special-visit explanation stays inside the transaction folio")
  game.dispatch({"type":"PAY_RENT","tradeId":game.state.trade.id});await frames()
  check(view.rent.text.contains("已交"),"rent receipt updates the actual HUD state")
+ for id in ["CHR-008","CHR-019","CHR-034"]:
+  game.state.trade.npcId=id;page._refresh();await frames()
+  var painted=view.face.texture.get_image()
+  if painted.is_compressed():painted.decompress()
+  var contact=painted.get_height()-1
+  for y in range(painted.get_height()-1,-1,-1):
+   var opaque=0
+   for x in painted.get_width():
+    if painted.get_pixel(x,y).a>.5:opaque+=1
+   if opaque>=maxi(8,int(painted.get_width()*.03)):contact=y;break
+  var base=view.face.position.y+float(contact+1)/painted.get_height()*view.face.size.y
+  check(absf(base-456)<2.0,"painted visitor base meets the counter without transparent foot padding: "+id)
  shell.queue_free();await frames();quit(1 if failures else 0)
