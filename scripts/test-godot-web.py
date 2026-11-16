@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """Check an actual Web release, including audible output after a user gesture."""
 import argparse
+import importlib.util
 import json
 import os
 from pathlib import Path
 import shutil
 from playwright.sync_api import sync_playwright
+
+spec = importlib.util.spec_from_file_location('phone', Path(__file__).with_name('test-godot-phone.py'))
+phone = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(phone)
 
 
 PROBE = """mute => {
@@ -71,11 +76,13 @@ def main():
             assert audio['state'] == 'running', 'AudioContext did not resume after the user gesture'
             assert audio['samples'] >= 10 and audio['max'] > 0.0001, 'Audio output is silent (RMS <= 0.0001)'
             page.screenshot(path=str(args.screenshots / '02-desktop-shop.png'))
-            page.mouse.click(450,525)
+            bell = phone.locate(page, '接客铃')
+            page.mouse.click(bell['x'], bell['y'])
             page.wait_for_function("window.OrbitalTouch.state.trade && !window.OrbitalTouch.state.busy",timeout=15000)
             page.mouse.move(800,650)
             page.screenshot(path=str(args.screenshots / '03-desktop-quote.png'))
-            page.mouse.click(1370,532)
+            inspection = phone.locate(page, '@StrictNav_gauge-high')
+            page.mouse.click(inspection['x'], inspection['y'])
             page.wait_for_function("window.OrbitalTouch.state.workspace === 'inspect'",timeout=10000)
             page.screenshot(path=str(args.screenshots / '04-desktop-inspection.png'))
             page.keyboard.press('Escape')
