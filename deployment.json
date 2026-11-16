@@ -1,8 +1,8 @@
 {
-  "source_commit": "c62eeeac9558f10b19dab264518728d3df7d8d6a",
-  "release_id": "6ad861053df3bfb7",
-  "pack": "workbench-2013c0ed8d88d24f.pck",
-  "html_sha256": "2c6dcb306ca38490b4b3e0e72109705f21e9cecec6c48c7c617ecca107b41fde",
+  "source_commit": "d62ee5df15e31a39ff8e656af47bdf408cef7238",
+  "release_id": "609a3a5303dc7179",
+  "pack": "workbench-0aaa6fe1c4b3256a.pck",
+  "html_sha256": "9874a8ae0216994e8dc7990ffc3e5aee8afc5ce2cb490960be8db9e72521911e",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 128,
+  "native_regression_groups": 129,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -209,7 +209,7 @@
       800
     ]
   ],
-  "live_browser_verification": "blocked: runtime proxy rejects public Pages domain; cloud browser unavailable",
+  "live_browser_verification": "Not performed: Cloud proxy denies public Pages domain (CONNECT 403). Exact Pages deployment must be confirmed separately.",
   "quote_readability_version": 1,
   "dense_counter_layout_version": 1,
   "desktop_dialogue_font_size": 18,
@@ -269,6 +269,46 @@
     [
       1420,
       800
+    ]
+  ],
+  "comic_loading_version": 1,
+  "desktop_full_frame_version": 1,
+  "loading_art_bytes": 700020,
+  "desktop_framing_verified_viewports": [
+    [
+      2048,
+      1018,
+      1
+    ],
+    [
+      1920,
+      900,
+      1
+    ],
+    [
+      2560,
+      1080,
+      1
+    ],
+    [
+      1440,
+      900,
+      1
+    ],
+    [
+      1280,
+      720,
+      1
+    ],
+    [
+      1920,
+      1080,
+      1
+    ],
+    [
+      1024,
+      640,
+      2
     ]
   ]
 }

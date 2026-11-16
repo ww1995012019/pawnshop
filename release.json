@@ -1,6 +1,6 @@
 {
-  "release_id": "6ad861053df3bfb7",
-  "pack": "workbench-2013c0ed8d88d24f.pck",
+  "release_id": "609a3a5303dc7179",
+  "pack": "workbench-0aaa6fe1c4b3256a.pck",
   "engine": "engine-309843874cfdebe8",
   "current_files": [
     ".nojekyll",
@@ -18,8 +18,8 @@
     "engine-309843874cfdebe8.wasm.gz",
     "godot-license.txt",
     "index.html",
-    "loading-cast-304d0dab753f9614.webp",
-    "loading-shop-c50ece6927cc5cbd.png",
+    "loading-cast-540b16169cb57419.webp",
+    "loading-shop-d9b8ed13138c04fa.webp",
     "music-30ff78a0e0f53f91.ogg",
     "music-73c915ee8894b734.ogg",
     "music-8ad9f8f323428f98.ogg",
@@ -28,12 +28,14 @@
     "touch-c2513fb49458e6da.css.gz",
     "touch-e745285a9d758957.js",
     "touch-e745285a9d758957.js.gz",
-    "workbench-2013c0ed8d88d24f.pck",
-    "workbench-2013c0ed8d88d24f.pck.gz"
+    "workbench-0aaa6fe1c4b3256a.pck",
+    "workbench-0aaa6fe1c4b3256a.pck.gz"
   ],
   "previous_files": [
-    "workbench-db55ebe189a03e00.pck",
-    "workbench-db55ebe189a03e00.pck.gz"
+    "loading-cast-304d0dab753f9614.webp",
+    "loading-shop-c50ece6927cc5cbd.png",
+    "workbench-2013c0ed8d88d24f.pck",
+    "workbench-2013c0ed8d88d24f.pck.gz"
   ],
   "files": {
     ".nojekyll": {
@@ -93,16 +95,24 @@
       "sha256": "05a526849e266fb2a134ec06fac0cfa4e40b9f9eb68ef6bcb9280dd1156a0ce8"
     },
     "index.html": {
-      "bytes": 14523,
-      "sha256": "2c6dcb306ca38490b4b3e0e72109705f21e9cecec6c48c7c617ecca107b41fde"
+      "bytes": 14471,
+      "sha256": "9874a8ae0216994e8dc7990ffc3e5aee8afc5ce2cb490960be8db9e72521911e"
     },
     "loading-cast-304d0dab753f9614.webp": {
       "bytes": 484134,
       "sha256": "304d0dab753f96147798ab46577e4946ab5fa47fcfd32343a5d51a371cde9b1c"
     },
+    "loading-cast-540b16169cb57419.webp": {
+      "bytes": 460906,
+      "sha256": "540b16169cb57419091c982a90d25f92e049c0f607dfb3c1d9f7f727b620d19c"
+    },
     "loading-shop-c50ece6927cc5cbd.png": {
       "bytes": 266052,
       "sha256": "c50ece6927cc5cbd66e2f29ecdba955452ee2aa2d7654822aec7feb99ddb45fa"
+    },
+    "loading-shop-d9b8ed13138c04fa.webp": {
+      "bytes": 239114,
+      "sha256": "d9b8ed13138c04fad3b6a370dfde22f6f6c580a3f4f69fe975fa73a96b4d0aae"
     },
     "music-30ff78a0e0f53f91.ogg": {
       "bytes": 397829,
@@ -136,6 +146,14 @@
       "bytes": 2166,
       "sha256": "5604b62e01ff391974089a8cae419d3118b5de63e4fad2a58a0f39cd9533e536"
     },
+    "workbench-0aaa6fe1c4b3256a.pck": {
+      "bytes": 20688408,
+      "sha256": "0aaa6fe1c4b3256a2f83cd1ea9546e4b3eec1546963b7bb86d5e418635062fd1"
+    },
+    "workbench-0aaa6fe1c4b3256a.pck.gz": {
+      "bytes": 20104482,
+      "sha256": "8b3312524deab4ebe6219e35b9565cebfb48d00f8b7bf17ef14a4691d2689ae7"
+    },
     "workbench-2013c0ed8d88d24f.pck": {
       "bytes": 20688920,
       "sha256": "2013c0ed8d88d24f2aa7c6141b2284b473b969c1171b83faf9cc8e871db691e0"
@@ -143,23 +161,15 @@
     "workbench-2013c0ed8d88d24f.pck.gz": {
       "bytes": 20107775,
       "sha256": "67d4384640b808e04cd7fc4431479c4cd694bcc69e8cccb1ce12e60c6c2b6d82"
-    },
-    "workbench-db55ebe189a03e00.pck": {
-      "bytes": 20688616,
-      "sha256": "db55ebe189a03e004326d8634a4380f269aef43d56987db12da7710e1758f486"
-    },
-    "workbench-db55ebe189a03e00.pck.gz": {
-      "bytes": 20105128,
-      "sha256": "a7061bb247657303de66bf3805f735997a09e2317672d7dd7551dcd47d33bcdc"
     }
   },
   "transport": {
-    "workbench-2013c0ed8d88d24f.pck": {
-      "sha256": "2013c0ed8d88d24f2aa7c6141b2284b473b969c1171b83faf9cc8e871db691e0",
-      "bytes": 20688920,
+    "workbench-0aaa6fe1c4b3256a.pck": {
+      "sha256": "0aaa6fe1c4b3256a2f83cd1ea9546e4b3eec1546963b7bb86d5e418635062fd1",
+      "bytes": 20688408,
       "type": "application/octet-stream",
-      "gzip": "workbench-2013c0ed8d88d24f.pck.gz",
-      "gzipBytes": 20107775
+      "gzip": "workbench-0aaa6fe1c4b3256a.pck.gz",
+      "gzipBytes": 20104482
     },
     "engine-309843874cfdebe8.wasm": {
       "sha256": "26b61ce95247012ab3dca3ff51e96d1cdbff44ee91a8c20a83e150afca83f1b6",
@@ -204,13 +214,13 @@
     "ledger": "music-30ff78a0e0f53f91.ogg"
   },
   "previous_assets": [
-    "workbench-db55ebe189a03e00.pck",
+    "workbench-2013c0ed8d88d24f.pck",
     "engine-309843874cfdebe8.wasm",
     "music-8ad9f8f323428f98.ogg",
     "music-73c915ee8894b734.ogg",
     "music-f06ef4243f86b03f.ogg",
     "music-30ff78a0e0f53f91.ogg"
   ],
-  "initial_raw_bytes": 58389586,
-  "initial_gzip_bytes": 29490057
+  "initial_raw_bytes": 58389074,
+  "initial_gzip_bytes": 29486764
 }
