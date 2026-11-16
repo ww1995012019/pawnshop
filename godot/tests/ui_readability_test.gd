@@ -14,9 +14,17 @@ func run() -> void:
  root.size=Vector2i(1440,900)
  var shell=load("res://main.tscn").instantiate()
  root.add_child(shell);await frames();shell._close_title();await frames()
+ var kit=load("res://scripts/app/ui_kit.gd")
  for dimensions in [Vector2i(1440,900),Vector2i(844,390),Vector2i(390,844)]:
   shell.phone_override=dimensions.x<1000
   root.size=dimensions;await frames()
+  for kind in ["primary","secondary","chip","danger"]:
+   var key=kit.button("选择这项",kind,Vector2(180,52),20,"lock")
+   shell.root_ui.add_child(key);key.disabled=true
+   var background:Color=key.get_theme_stylebox("disabled").bg_color
+   check(contrast(key.get_theme_color("font_disabled_color"),background)>=4.5,"disabled "+kind+" text stays readable at "+str(dimensions))
+   check(contrast(key.get_theme_color("icon_disabled_color"),background)>=3.0,"disabled "+kind+" icon stays visible at "+str(dimensions))
+   key.free()
   shell.go("warehouse");await frames()
   var page=shell.active_shell().page
   page.cabinet_buttons.materials.pressed.emit();await frames()
@@ -45,3 +53,9 @@ func run() -> void:
  shell.queue_free();await frames()
  print("READABILITY failures=",failures)
  quit(1 if failures else 0)
+
+func contrast(front:Color,back:Color) -> float:
+ var a=back.blend(front).srgb_to_linear();var b=back.srgb_to_linear()
+ var first=.2126*a.r+.7152*a.g+.0722*a.b
+ var second=.2126*b.r+.7152*b.g+.0722*b.b
+ return (maxf(first,second)+.05)/(minf(first,second)+.05)
