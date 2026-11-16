@@ -70,7 +70,9 @@ func run() -> void:
 	shell.go("warehouse", game.state.inventory[0].uid)
 	await frame()
 	var warehouse = shell.workspace_shell.page
-	var forge := button_with_text(warehouse.detail, "送到修表台 · 加工")
+	warehouse.open_item_menu(warehouse.selected,warehouse.grid.get_global_rect().get_center())
+	await frame()
+	var forge := button_with_text(warehouse.item_menu, "送到修表台 · 加工")
 	check(forge != null, "the warehouse exposes forgery on eligible owned goods")
 	if forge != null:
 		check(not forge.disabled, "forgery is actionable when the player has materials and AP")

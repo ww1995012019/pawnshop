@@ -199,9 +199,11 @@ func run() -> void:
 	shell.go("warehouse", game.state.inventory[0].uid)
 	await settle()
 	page = shell.active_shell().page
+	page.open_item_menu(page.selected,page.grid.get_global_rect().get_center())
+	await settle()
 	var prices_disabled := true
 	var scan_disabled := false
-	for button in page.detail.find_children("*", "Button", true, false):
+	for button in page.item_menu.find_children("*", "Button", true, false):
 		if button.text.begins_with("挂牌 "): prices_disabled = prices_disabled and button.disabled
 		if button.text == "安检扫描": scan_disabled = button.disabled
 	check(prices_disabled and scan_disabled and all_text(page).contains("停机维修"), "stopped quote/scanner devices disable listing and scanning with visible reasons")

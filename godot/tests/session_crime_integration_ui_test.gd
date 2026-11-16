@@ -20,6 +20,7 @@ func run() -> void:
  game.state.trade={"id":"batch-warehouse","npcId":"CHR-004","kind":"sell","item":null,"price":0,"rounds":0,"locked":false,"evidenceUsed":[],"line":"请推荐商品"}
  game.state=CounterDialogue.begin(game.state)
  shell.go("warehouse",uid);await frames()
+ shell.active_shell().page.open_item_menu(uid,shell.active_shell().page.grid.get_global_rect().get_center());await frames()
  await click(button(shell,"灰色收售"))
  if button(shell,"承担风险并选货")!=null: await click(button(shell,"承担风险并选货"))
  check(not TradeSession.row(game.state,uid).is_empty(),"warehouse gray recommendation joins active batch session")

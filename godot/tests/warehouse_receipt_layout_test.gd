@@ -82,6 +82,8 @@ func run():
 			await frames()
 			receipt_geometry(page, "desktop %s %s" % [dimensions, it.defId])
 	# Rebuilt records must not discard a suspended workspace's scroll positions.
+	# Desktop actions now live in a context menu; make the receipt itself long.
+	game.item(luxury.uid).source="原物来源及保管交接记录。".repeat(16)
 	for location in ["display", "isolation"]:
 		for index in 120:
 			var stored := Model.new_item(game.state, "WCH-001", {"owner":"shop", "location":location})

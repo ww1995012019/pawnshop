@@ -1,6 +1,5 @@
 extends Page
-## Back room: an expandable storage grid you drag goods around (right-click rotates),
-## the display shelf, the isolation locker and pawn safe, and item actions.
+## Back room with nearby item menus and unclipped physical drag previews.
 
 const CELL := 56.0
 const DETAIL_WIDTH := 440.0
@@ -33,6 +32,9 @@ var scroll_positions := {}
 var expand_button: Button
 var cabinet_drag_uid := ""
 var cabinet_drag_preview:TextureRect
+var cabinet_drag_point := Vector2.ZERO
+var context_layer: Control
+var item_menu: PanelContainer
 
 func scene_name() -> String:
 	return "warehouse"
@@ -47,7 +49,7 @@ func hint_text() -> String:
 		return "饶静预约核验：来源待核的货要扫描并登记，或放进隔离柜。"
 	if shell._landscape_phone():
 		return "拖动货物换格位；点选后在右侧详情里点「旋转方向」。"
-	return "拖动货物换格位，拖动时右键旋转；点选查看详情与操作。"
+	return "左键查看档案，右键手表打开操作菜单；拖动换位，拖动时右键旋转。"
 
 ## Notices drop in at the bottom of the room, under the storage plates
 ## (the left margin was only ~200 px wide and wrapped every notice).
@@ -110,6 +112,7 @@ func enter() -> void:
 	set_process(true);_refresh();relayout()
 
 func _refresh() -> void:
+	dismiss_context_menu()
 	var title:String={"warehouse":"手表后仓","materials":"工具材料","isolation":"隔离保管","pawn":"抵押保管"}[cabinet_mode]
 	UIKit.clear(storage_header)
 	var caption: String="%d × %d · 拖动换位"%[WarehouseExpansion.columns(Game.state),WarehouseExpansion.rows(Game.state)] if cabinet_mode=="warehouse" else "独立仓位 · 点击查看原物"
@@ -140,6 +143,7 @@ func switch_cabinet(mode: String) -> void:
 
 func relayout() -> void:
 	if not is_instance_valid(holder):return
+	dismiss_context_menu()
 	_resize_panels()
 
 func _resize_panels() -> void:
@@ -227,6 +231,8 @@ func store_original(uid: String,location: String,point: Variant=null,rotated: Va
 	Game.dispatch(action)
 
 func begin_cabinet_drag(uid: String) -> void:
+	dismiss_context_menu()
+	if is_instance_valid(cabinet_drag_preview):cabinet_drag_preview.queue_free()
 	cabinet_drag_uid=uid
 	cabinet_drag_preview=TextureRect.new()
 	cabinet_drag_preview.texture=UIKit.physical_icon(Game.item(uid))
@@ -239,11 +245,13 @@ func begin_cabinet_drag(uid: String) -> void:
 	add_child(cabinet_drag_preview)
 
 func update_cabinet_drag(point: Vector2) -> void:
-	if is_instance_valid(cabinet_drag_preview):cabinet_drag_preview.position=point-Vector2(24,32)
+	cabinet_drag_point=point
+	if is_instance_valid(cabinet_drag_preview):cabinet_drag_preview.position=get_global_transform_with_canvas().affine_inverse()*point-Vector2(24,32)
 
 func finish_cabinet_drag(uid: String,point: Vector2) -> void:
 	cabinet_drag_uid=""
 	if is_instance_valid(cabinet_drag_preview):cabinet_drag_preview.queue_free()
+	cabinet_drag_preview=null
 	if grid_scroll.visible and warehouse_drop_rect().has_point(point):
 		var local:Vector2=grid.get_global_transform_with_canvas().affine_inverse()*point
 		store_original(uid,"warehouse",grid._cell(local))
@@ -263,7 +271,7 @@ func _process(delta: float) -> void:
 	if grid==null:return
 	var manual:bool=grid.drag_uid!="" and grid.moved
 	if not manual and cabinet_drag_uid=="":return
-	var pointer:=get_global_mouse_position()
+	var pointer:Vector2=grid.drag_screen_pos if manual else cabinet_drag_point
 	for scroller in [grid_scroll,display_scroll,cabinet_scroll]:
 		if not scroller.visible or not scroller.get_global_rect().has_point(pointer):continue
 		var box:Rect2=scroller.get_global_rect()
@@ -271,7 +279,7 @@ func _process(delta: float) -> void:
 		elif pointer.x>box.end.x-24:scroller.scroll_horizontal+=ceili(180*delta)
 		if pointer.y<box.position.y+24:scroller.scroll_vertical-=ceili(180*delta)
 		elif pointer.y>box.end.y-24:scroller.scroll_vertical+=ceili(180*delta)
-	if manual:grid._update_ghost(grid.get_local_mouse_position())
+	if manual:grid._update_ghost(grid.get_global_transform_with_canvas().affine_inverse()*pointer)
 
 func _document_inventory() -> void:
 	if not WantedCases.has_notice(Game.state): return
@@ -299,6 +307,70 @@ func select(uid: String) -> void:
 	_lists()
 	_detail()
 	call_deferred("_resize_panels")
+
+func dismiss_context_menu() -> bool:
+	if not is_instance_valid(context_layer):return false
+	context_layer.hide()
+	context_layer.queue_free()
+	context_layer=null
+	item_menu=null
+	return true
+
+func _context_input(event: InputEvent) -> void:
+	if not event is InputEventMouseButton or not event.pressed:return
+	var point:Vector2=context_layer.get_global_transform_with_canvas()*event.position
+	var uid:=""
+	if event.button_index==MOUSE_BUTTON_RIGHT:
+		if grid_scroll.visible and warehouse_drop_rect().has_point(point):
+			uid=grid._uid_at(grid.get_global_transform_with_canvas().affine_inverse()*point)
+		else:
+			for pair in [[display_scroll,display_grid],[cabinet_scroll,cabinet_grid]]:
+				if not pair[0].is_visible_in_tree() or not pair[1].is_visible_in_tree() or not cabinet_content_rect(pair[0],pair[1]).has_point(point):continue
+				for slot in pair[1].get_children():
+					if slot.uid!="" and slot.get_global_rect().has_point(point):uid=slot.uid;break
+	context_layer.accept_event()
+	dismiss_context_menu()
+	if uid!="":open_item_menu.call_deferred(uid,point)
+
+func open_item_menu(uid: String, point: Vector2) -> void:
+	dismiss_context_menu()
+	if Game.item(uid)==null or shell.mobile_mode():return
+	select(uid)
+	context_layer=Control.new()
+	context_layer.name="WarehouseContextLayer"
+	context_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	context_layer.mouse_filter=Control.MOUSE_FILTER_STOP
+	context_layer.z_index=220
+	add_child(context_layer)
+	context_layer.gui_input.connect(_context_input)
+	item_menu=UIKit.plate(UIKit.paper_style(12))
+	item_menu.name="WarehouseItemMenu"
+	item_menu.mouse_filter=Control.MOUSE_FILTER_STOP
+	context_layer.add_child(item_menu)
+	var body:=UIKit.vbox(8)
+	item_menu.add_child(body)
+	var header:=UIKit.hbox(6)
+	body.add_child(header)
+	var title:=UIKit.label(GameData.def(Game.item(uid).defId).name,19,UIKit.INK,false,true)
+	title.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	var close:=UIKit.button("关闭","chip",Vector2(48,32),14)
+	close.pressed.connect(dismiss_context_menu)
+	header.add_child(close)
+	var scroller:=ScrollContainer.new()
+	scroller.name="ItemActionScroll"
+	scroller.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	scroller.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	body.add_child(scroller)
+	var actions:=UIKit.vbox(7)
+	actions.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	scroller.add_child(actions)
+	_item_actions(actions,Game.item(uid))
+	var area:Rect2=shell.content_rect().grow(-6)
+	item_menu.size=Vector2(minf(380,area.size.x),minf(560,area.size.y))
+	var at:Vector2=get_global_transform_with_canvas().affine_inverse()*point+Vector2(12,-18)
+	if at.x+item_menu.size.x>area.end.x:at.x-=item_menu.size.x+24
+	item_menu.position=Vector2(clampf(at.x,area.position.x,area.end.x-item_menu.size.x),clampf(at.y,area.position.y,area.end.y-item_menu.size.y))
 
 func selected_rotation() -> bool:
 	var it = Model.find_inventory(Game.state, selected)
@@ -356,6 +428,7 @@ func _act(g: GridContainer, text: String, kind: String, a, enabled := true, tip 
 	b.tooltip_text = tip
 	# Deferred: the action rebuilds this panel, freeing the pressed button.
 	b.pressed.connect(func():
+		dismiss_context_menu()
 		if a is Callable:
 			a.call_deferred()
 		else:
@@ -375,11 +448,7 @@ func _detail() -> void:
 		detail.add_child(UIKit.note_card("库存登记簿", "选中一件货物查看详情。"))
 		_stock_summary()
 		return
-	var known_crime: bool = it.get("crimeRevealed", false)
-	for case in NightCrime.public_report(s).cases:
-		if case.revealed:
-			for row in case.items:
-				if row.uid == it.uid: known_crime = true
+	var known_crime := _known_crime(it)
 	var def := GameData.def(it.defId)
 	var docket := UIKit.plate(UIKit.paper_style(16))
 	var record := UIKit.vbox(8)
@@ -439,7 +508,27 @@ func _detail() -> void:
 			detail.move_child(docket,preview.get_index()+(1 if open else 2))
 			preview.text = "%s\n品相 %s · %s物品档案" % [def.name,UIKit.pct(it.condition),"收起" if open else "展开"])
 	detail.add_child(docket)
-	if not shell.mobile_mode(): detail.add_child(UIKit.module_header("出入库操作", "按保管权属办理", "CONTROL"))
+	if shell.mobile_mode():
+		var common_actions:=_item_actions(detail,it)
+		detail.move_child(common_actions,preview.get_index()+1)
+	else:
+		detail.add_child(UIKit.label("右键手表打开操作菜单",16,UIKit.MUTED,false,true))
+	_stock_summary()
+
+func _known_crime(it: Dictionary) -> bool:
+	if it.get("crimeRevealed",false):return true
+	for case in NightCrime.public_report(Game.state).cases:
+		if case.revealed:
+			for row in case.items:
+				if row.uid==it.uid:return true
+	return false
+
+func _item_actions(target: VBoxContainer, it: Dictionary) -> GridContainer:
+	var s:=Game.state
+	var t=s.trade
+	var def:=GameData.def(it.defId)
+	var known_crime:=_known_crime(it)
+	if not shell.mobile_mode():target.add_child(UIKit.module_header("出入库操作","按保管权属办理","CONTROL"))
 	var g := UIKit.grid(2, 10)
 	if t != null and (t.kind == "sell" or CounterDialogue.active(s)) and it.owner == "shop":
 		if not TradeSession.session(s).is_empty():
@@ -471,21 +560,21 @@ func _detail() -> void:
 	_act(g, "去鉴定", "secondary", func(): shell.go("inspect", it.uid))
 	_act(g, "去维修", "secondary", func(): shell.go("repair", it.uid))
 	var common_actions := g
-	detail.add_child(common_actions)
-	detail.add_child(UIKit.module_header("调价与来源", "扫描、登记及保管操作", "RECORDS"))
+	target.add_child(common_actions)
+	target.add_child(UIKit.module_header("调价与来源", "扫描、登记及保管操作", "RECORDS"))
 	g = UIKit.grid(2,10)
 	var quote_problem := StoreCosts.device_problem(s, "quote_terminal")
 	var price_ok: bool = it.owner == "shop" and not it.has("orderId") and not reserved and quote_problem == ""
-	if quote_problem != "": detail.add_child(UIKit.label(quote_problem, 16, UIKit.DANGER, false, true))
+	if quote_problem != "": target.add_child(UIKit.label(quote_problem, 16, UIKit.DANGER, false, true))
 	_act(g, "挂牌 −10", "chip", {"type": "PRICE", "uid": it.uid, "price": maxf(1, it.listPrice - 10)}, price_ok and it.listPrice > 1, quote_problem)
 	_act(g, "挂牌 +10", "chip", {"type": "PRICE", "uid": it.uid, "price": it.listPrice + 10}, price_ok, quote_problem)
 	var scanner_problem := StoreCosts.device_problem(s, "scanner")
 	_act(g, "已扫描 · 复查" if s.scanned.has(it.uid) else "安检扫描", "secondary", {"type": "SCAN", "uid": it.uid}, scanner_problem == "", scanner_problem)
 	if scanner_problem != "":
-		detail.add_child(UIKit.label(scanner_problem, 16, UIKit.DANGER, false, true))
+		target.add_child(UIKit.label(scanner_problem, 16, UIKit.DANGER, false, true))
 	else:
 		var charge := StoreCosts.usage_quote(s, "scanner", 0.5)
-		detail.add_child(UIKit.label("新的有效来源扫描预计电费 +%s Cr，日结统一收取；查看旧结果不收费。" % Model.jnum(charge) if charge > 0 else "本日沿用旧版能源维护，不另计来源扫描电费。", 16, UIKit.CYAN, false, true))
+		target.add_child(UIKit.label("新的有效来源扫描预计电费 +%s Cr，日结统一收取；查看旧结果不收费。" % Model.jnum(charge) if charge > 0 else "本日沿用旧版能源维护，不另计来源扫描电费。", 16, UIKit.CYAN, false, true))
 	var reg_why := ""
 	if known_crime:
 		reg_why = "疑似赃物不能办理普通来源登记"
@@ -527,13 +616,12 @@ func _detail() -> void:
 		_act(g, "主动归还原主", "danger", func():
 			shell.confirm("主动归还原主", "「%s」：%s" % [item_name, return_text], "确认归还", func():
 				Game.dispatch({"type": "RETURN_ITEM", "uid": uid})), it.owner != "pawn" and not reserved, "正在柜台交易中" if reserved else "")
-	detail.add_child(g)
-	if shell.mobile_mode(): detail.move_child(common_actions,preview.get_index()+1)
+	target.add_child(g)
 	if shelf_why != "" and it.owner == "shop":
-		detail.add_child(UIKit.label("上架条件：" + shelf_why, 16, UIKit.DANGER, false, true))
+		target.add_child(UIKit.label("上架条件：" + shelf_why, 16, UIKit.DANGER, false, true))
 	elif reg_why != "" and not it.sourceVerified:
-		detail.add_child(UIKit.label("登记条件：" + reg_why, 16, UIKit.DANGER, false, true))
-	_stock_summary()
+		target.add_child(UIKit.label("登记条件：" + reg_why, 16, UIKit.DANGER, false, true))
+	return common_actions
 
 ## Mirrors the DISPLAY rule so the shelf key explains why it is unavailable.
 func _shelf_block(it: Dictionary, reserved: bool) -> String:
@@ -570,6 +658,7 @@ class StorageGrid extends Control:
 	var prepared_rot := false
 	var drag_offset := Vector2.ZERO
 	var press_pos := Vector2.ZERO
+	var drag_screen_pos := Vector2.ZERO
 	var moved := false
 	var ghost: TextureRect
 	var scroll_touch := -1
@@ -599,6 +688,7 @@ class StorageGrid extends Control:
 			tr.position = Vector2(it.x, it.y) * page.cell_size + Vector2(4, 4)
 			tr.size = Vector2(d[0], d[1]) * page.cell_size - Vector2(8, 8)
 			UIKit.decorate_item(tr, it, 20.0)
+			if it.uid==drag_uid and moved:tr.modulate.a=0.3
 			add_child(tr)
 			tiles[it.uid] = tr
 		queue_redraw()
@@ -644,6 +734,7 @@ class StorageGrid extends Control:
 			if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
 				var uid := _uid_at(mb.position)
 				if uid != "":
+					page.dismiss_context_menu()
 					handled = true
 					drag_uid = uid
 					var it = Game.item(uid)
@@ -652,6 +743,7 @@ class StorageGrid extends Control:
 						page.shell.hint(page.hint_text())
 					drag_rot = prepared_rot if prepared_uid == uid else it.rotated
 					press_pos = mb.position
+					drag_screen_pos=get_global_transform_with_canvas()*mb.position
 					drag_offset = mb.position - Vector2(it.x, it.y) * page.cell_size
 					moved = false
 			elif mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed and drag_uid != "":
@@ -687,10 +779,16 @@ class StorageGrid extends Control:
 				drag_rot = not drag_rot
 				page.shell.sound("click", -8)
 				_update_ghost(mb.position)
+			elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
+				var uid:=_uid_at(mb.position)
+				if uid!="":
+					handled=true
+					page.open_item_menu(uid,get_global_transform_with_canvas()*mb.position)
 			if handled:
 				accept_event()
 		elif e is InputEventMouseMotion and drag_uid != "":
 			var mm := e as InputEventMouseMotion
+			drag_screen_pos=get_global_transform_with_canvas()*mm.position
 			if not moved and mm.position.distance_to(press_pos) > 6:
 				moved = true
 				ghost = TextureRect.new()
@@ -700,8 +798,9 @@ class StorageGrid extends Control:
 				ghost.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 				ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				ghost.modulate = Color(1, 1, 1, 0.85)
+				ghost.z_index=200
 				UIKit.decorate_item(ghost, Game.item(drag_uid), 20.0)
-				add_child(ghost)
+				page.add_child(ghost)
 				tiles[drag_uid].modulate.a = 0.3
 			if moved:
 				_update_ghost(mm.position)
@@ -716,7 +815,7 @@ class StorageGrid extends Control:
 		var it = Game.item(drag_uid)
 		var d := Model.dimensions(it, drag_rot)
 		ghost.size = Vector2(d[0], d[1]) * page.cell_size - Vector2(8, 8)
-		ghost.position = pos - drag_offset + Vector2(4, 4)
+		ghost.position = page.get_global_transform_with_canvas().affine_inverse() * (get_global_transform_with_canvas() * (pos - drag_offset + Vector2(4, 4)))
 		queue_redraw()
 
 	func _draw() -> void:
@@ -740,7 +839,8 @@ class StorageGrid extends Control:
 		if drag_uid != "" and moved and ghost != null:
 			var it = Game.item(drag_uid)
 			var d := Model.dimensions(it, drag_rot)
-			var tl: Vector2 = ((ghost.position - Vector2(4, 4)) / cs).round()
+			var local_ghost:Vector2=get_global_transform_with_canvas().affine_inverse()*(ghost.get_global_transform_with_canvas()*Vector2.ZERO)
+			var tl: Vector2 = ((local_ghost - Vector2(4, 4)) / cs).round()
 			var ok := Model.can_place(Game.state, drag_uid, int(tl.x), int(tl.y), drag_rot)
 			draw_rect(Rect2(tl * cs + Vector2(2, 2), Vector2(d[0], d[1]) * cs - Vector2(4, 4)), Color(0.4, 0.9, 0.6, 0.25) if ok else Color(0.95, 0.4, 0.3, 0.25))
 

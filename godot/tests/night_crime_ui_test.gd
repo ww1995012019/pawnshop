@@ -151,6 +151,7 @@ func run() -> void:
 	shell.queue_free(); await frames()
 	shell=load("res://main.tscn").instantiate(); root.add_child(shell); await frames(); shell._close_title(); await frames()
 	shell.go("warehouse",sale_item.uid); await frames()
+	shell.active_shell().page.open_item_menu(sale_item.uid,shell.active_shell().page.grid.get_global_rect().get_center());await frames()
 	check(not text_of(shell.active_shell().page).contains("疑似赃物"), "unknown warehouse goods do not print hidden stolen verdict")
 	await click(button(shell,"灰色收售"))
 	check(shell.active_shell().modal_open(), "warehouse gray selection has actual risk dialog")

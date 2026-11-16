@@ -131,6 +131,10 @@ func leave() -> void:
 func on_changed(_prev: Dictionary, _next: Dictionary, _action: Dictionary) -> void:
 	pass
 
+## Let a page dismiss its transient menu before Escape closes the workspace.
+func dismiss_context_menu() -> bool:
+	return false
+
 ## Cursor over world-space objects; controls supply their own cursor shapes.
 func world_cursor_shape(_world_point: Vector2) -> int:
 	return Input.CURSOR_ARROW
