@@ -1,8 +1,8 @@
 {
-  "source_commit": "179c199df0e61a360f28e3ddadf4c1f14e38d05a",
-  "release_id": "edbe6100e19f4d7c",
-  "pack": "workbench-253400a59da1ecdd.pck",
-  "html_sha256": "79e3122048686ff95819be004ee704ef7f06a39e6b2c3d77f792b997024391b6",
+  "source_commit": "7c3672291aa01d97982e77d3f762a2f875c0027c",
+  "release_id": "e89894b047815d98",
+  "pack": "workbench-dc19b92b08732cea.pck",
+  "html_sha256": "2744f8f4c186f62c0537713980d53a6b247c43d71a7db00c82a9ea1a48f8b284",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 130,
+  "native_regression_groups": 131,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -209,7 +209,7 @@
       800
     ]
   ],
-  "live_browser_verification": "Local browser checks passed on the exact published artifact. Exact GitHub Pages deployment status verified separately.",
+  "live_browser_verification": "Local browser checks passed on the exact release artifact; hosting is verified against its GitHub Pages deployment.",
   "quote_readability_version": 1,
   "dense_counter_layout_version": 1,
   "desktop_dialogue_font_size": 18,
@@ -316,5 +316,18 @@
   "warehouse_panel_cleanup_version": 2,
   "responsive_table_slot_version": 1,
   "paper_blank_max_band_delta": 0.695,
-  "responsive_drag_reload_verified": true
+  "responsive_drag_reload_verified": true,
+  "warehouse_context_menu_version": 1,
+  "warehouse_drag_preview_version": 1,
+  "warehouse_context_menu_scroll_version": 1,
+  "warehouse_context_menu_verified_viewports": [
+    [
+      1440,
+      900
+    ],
+    [
+      1160,
+      700
+    ]
+  ]
 }
