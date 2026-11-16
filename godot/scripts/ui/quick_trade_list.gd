@@ -38,7 +38,7 @@ func skin(b: Button,primary: bool,selected: bool) -> void:
   b.add_theme_stylebox_override(state,st)
  for color in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_disabled_color","icon_normal_color","icon_hover_color","icon_pressed_color","icon_focus_color","icon_disabled_color"]:
   b.add_theme_color_override(color,PAPER if primary or selected else INK)
- b.add_theme_color_override("font_disabled_color",Color("867866"));b.add_theme_color_override("icon_disabled_color",Color("867866"))
+ b.add_theme_color_override("font_disabled_color",PAPER if selected else UIKit.DISABLED_TEXT);b.add_theme_color_override("icon_disabled_color",PAPER if selected else UIKit.DISABLED_TEXT)
 
 func setup(controller) -> void:
  view=controller;name="QuickTradeList";position=Vector2(1186,68);size=Vector2(485,791)

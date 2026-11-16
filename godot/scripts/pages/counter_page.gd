@@ -887,7 +887,7 @@ func _till_key(button: Button, kind: String) -> void:
 		button.add_theme_stylebox_override(state, cap)
 	for state in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
 		button.add_theme_color_override(state, UIKit.INK)
-	button.add_theme_color_override("font_disabled_color", Color("858975"))
+	button.add_theme_color_override("font_disabled_color", UIKit.DISABLED_TEXT)
 	button.add_theme_constant_override("outline_size", 0)
 
 func _terminal_label(parent: Control, pos: Vector2, extent: Vector2, font_size: int, color: Color, mono := false) -> Label:

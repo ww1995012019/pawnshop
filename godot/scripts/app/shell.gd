@@ -1499,11 +1499,13 @@ func open_events() -> void:
 		cv.add_child(UIKit.label("得到：" + c.rewardText, 18, UIKit.GOOD, false, true))
 		cv.add_child(UIKit.spacer())
 		var why = CrimeEvents.availability(Game.state, c)
-		var b := UIKit.button("已选择" if chosen == c.id else "选择这项", "primary" if chosen == c.id else "secondary", Vector2(0, 52), 20)
+		var caption := "已选择" if chosen == c.id else "今日已处理" if done else "暂不可选" if why != null else "选择这项"
+		var b := UIKit.button(caption, "primary" if chosen == c.id else "secondary", Vector2(0, 52), 20)
+		b.name="event_choice_"+String(c.id)
 		b.disabled = done or why != null
 		if why != null and not done:
 			b.tooltip_text = why
-			cv.add_child(UIKit.label(why, 16, UIKit.MUTED, false, true))
+			cv.add_child(UIKit.label(why, 18, UIKit.AMBER, false, true))
 		var cid: String = c.id
 		b.pressed.connect(func():
 			if Game.dispatch({"type": "CHOOSE_EVENT", "eventId": event.id, "choiceId": cid}):
