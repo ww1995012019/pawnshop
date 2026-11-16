@@ -1227,15 +1227,17 @@ func _input(e: InputEvent) -> void:
 	if e is InputEventMouse:
 		last_screen = (e as InputEventMouse).position
 	elif e is InputEventKey and e.pressed and not e.echo and (e as InputEventKey).keycode == KEY_ESCAPE:
+		# The root owns Escape; an embedded viewport can receive the same key.
+		if workspace_mode:return
 		if modal_open():
 			close_top_modal()
+		elif active_shell().page != null and not active_shell().modal_open() and active_shell().page.dismiss_context_menu():
+			pass
 		elif workspace_open():
 			if workspace_shell.modal_open():
 				workspace_shell.close_top_modal()
 			else:
 				close_workspace()
-		elif workspace_mode:
-			workspace_parent.close_workspace()
 		else:
 			return
 		get_viewport().set_input_as_handled()

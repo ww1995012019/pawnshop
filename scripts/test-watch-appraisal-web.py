@@ -84,11 +84,20 @@ def main():
 
                 uid=page.evaluate('OrbitalTouch.state.inspection_uid')
                 cmd({'type':'page','page':'warehouse'});phone.wait(page,"s.workspace==='warehouse'")
+                if not mobile:
+                    page.wait_for_timeout(500)
+                    original=next(item for item in page.evaluate('OrbitalTouch.state.warehouse_targets') if item['uid']==uid)
+                    page.mouse.click(original['x']+original['width']/2,original['y']+original['height']/2,button='right')
+                    page.wait_for_timeout(250)
                 for _ in range(8):
-                    target=phone.locate(page,'送到修表台 · 加工')
+                    try:target=phone.locate(page,'送到修表台 · 加工')
+                    except AssertionError:
+                        snapshot('failed-warehouse-actions')
+                        print('Warehouse action state:',page.evaluate('({selected:OrbitalTouch.state.warehouse_uid, targets:OrbitalTouch.state.warehouse_targets, workspace:OrbitalTouch.state.workspace})'),flush=True)
+                        raise
                     # A visible node can still lie below its ScrollContainer clip.
                     if height*.16<target['y']<height*.72:break
-                    page.mouse.move(width*.74,height*.62)
+                    page.mouse.move(width*.74 if mobile else target['x'],height*.62)
                     page.mouse.wheel(0,500 if target['y']>=height*.72 else -500)
                     page.wait_for_timeout(200)
                 print('Forgery navigation target:',phone.locate(page,'送到修表台 · 加工'),flush=True)

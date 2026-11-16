@@ -58,6 +58,10 @@ class Slot extends Button:
  var dragging:=false
  func _gui_input(event: InputEvent) -> void:
   if uid=="":return
+  if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_RIGHT and event.pressed:
+   cabinet.page.open_item_menu.call_deferred(uid,get_global_transform_with_canvas()*event.position)
+   accept_event()
+   return
   if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT:
    if event.pressed:
     held=true;dragging=false;press_point=event.position

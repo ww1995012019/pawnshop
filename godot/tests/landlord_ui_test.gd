@@ -57,6 +57,8 @@ func run() -> void:
 	shell._close_title()
 	shell.go("warehouse",game.state.inventory[0].uid)
 	await frames()
+	shell.workspace_shell.page.open_item_menu(game.state.inventory[0].uid,shell.workspace_shell.page.grid.get_global_rect().get_center())
+	await frames()
 	var clear_stock := button(shell.workspace_shell.page,"应急清仓")
 	check(clear_stock != null and not clear_stock.disabled, "landlord fundraising exposes legal stock clearance at zero AP")
 	shell.queue_free()

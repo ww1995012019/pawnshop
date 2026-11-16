@@ -55,6 +55,8 @@ func run() -> void:
 	check(game.state.cash == 200 and game.state.inventory.size() == 4 and game.state.nightCrime.lastInspection.is_empty(),"entering the warehouse does not auto-inspect")
 	shell.workspace_shell.page.select(hidden_uid)
 	await frames()
+	shell.workspace_shell.page.open_item_menu(hidden_uid,shell.workspace_shell.page.grid.get_global_rect().get_center())
+	await frames()
 	var isolate := button(shell.workspace_shell.page,"放入隔离柜")
 	check(isolate != null and not isolate.disabled,"a real isolation action is available at zero AP")
 	if isolate != null: isolate.pressed.emit()

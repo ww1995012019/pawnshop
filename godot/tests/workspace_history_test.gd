@@ -73,6 +73,9 @@ func run() -> void:
 		var grid_scroll: int = warehouse.grid_scroll.scroll_vertical
 		var detail_position: int = detail_scroll.scroll_vertical
 		check(grid_scroll > 0, str(dimensions) + " starts from scrolled expanded storage")
+		if not warehouse.shell.mobile_mode():
+			warehouse.open_item_menu(uid,warehouse.grid_scroll.get_global_rect().get_center())
+			await frames()
 		var origin := button(warehouse, "去维修")
 		check(origin != null, "selected warehouse item has repair navigation")
 		if origin == null: continue
@@ -97,7 +100,10 @@ func run() -> void:
 			check(warehouse.selected == uid and warehouse.grid_scroll.scroll_vertical == grid_scroll and detail_scroll.scroll_vertical == detail_position, "changed repair state preserves warehouse selection and both scroll positions")
 			check(warehouse.can_process() and warehouse.is_visible_in_tree(), "return resumes only the restored warehouse")
 			var restored_focus: Control = warehouse_shell.get_viewport().gui_get_focus_owner()
-			check(restored_focus is Button and restored_focus.text == "去维修", "return restores the originating warehouse action focus")
+			if warehouse.shell.mobile_mode():
+				check(restored_focus is Button and restored_focus.text == "去维修", "return restores the originating touch action focus")
+			else:
+				check(warehouse.item_menu==null,"return keeps the original selected without reopening the context menu")
 		shell.go("counter")
 		await frames()
 		check(not shell.workspace_open() and shell.page == counter, "counter navigation closes the complete workspace history")

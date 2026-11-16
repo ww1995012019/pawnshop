@@ -60,6 +60,9 @@ def main():
             if mobile: click('展开物品档案')
             page.screenshot(path=str(OUT/f'{width}-receipt.png'))
             if mobile: click('收起物品档案')
+            else:
+                page.mouse.click(*point,button='right')
+                page.wait_for_timeout(200)
             click('去维修');wait('s.workspace==="repair"&&s.repair_uid==="item-8"')
             page.wait_for_timeout(700)
             if mobile: click('关闭并返回货物抽屉')
