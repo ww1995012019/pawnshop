@@ -89,6 +89,10 @@ func run():
 		var a: Vector2 = active.ui_to_world(page.mat_rect.get_center()+Vector2(-90,40))
 		var b: Vector2 = active.ui_to_world(page.mat_rect.get_center()+Vector2(90,40))
 		var c: Vector2 = active.ui_to_world(page.mat_rect.get_center()+Vector2(-40,-70))
+		if id == "TOL-001":
+			a = node.global_position
+			b = a+Vector2(70,0)
+			c = a+Vector2(30,25)
 		await contact(a,true)
 		await drag(a,b)
 		check(node.global_position.distance_to(b)<2,id+" follows the finger during the same touch gesture")

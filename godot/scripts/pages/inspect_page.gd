@@ -38,6 +38,7 @@ var scale_attempt_revision := ""
 var optical_fixed := false
 var optical_position := Vector2.ZERO
 var optical_dragging := false
+var optical_grab := Vector2.ZERO
 var optical_pinned := false
 var optical_pin_button: Button
 var optical_attempt_revision := ""
@@ -143,7 +144,10 @@ func relayout() -> void:
 	else:
 		mat_rect = _desktop_layout()
 	for optic in [lens,wand]:
-		if is_instance_valid(optic): optic.scale = Vector2.ONE*(.5 if shell.landscape_mode() else 1.0)
+		if is_instance_valid(optic): optic.scale = Vector2.ONE*(.5 if shell.landscape_mode() else minf(1.0,(mat_rect.size.y-16)/340.0) if optic == lens else 1.0)
+	if is_instance_valid(lens):
+		optical_position = _clamp_lens_position(optical_position)
+		lens.global_position = optical_position
 	if is_instance_valid(uv_light): uv_light.scale = Vector2(.62,.38)*(.5 if shell.landscape_mode() else 1.0)
 	var guide_button := get_node_or_null("watch_manual") as Button
 	if guide_button != null:
@@ -156,7 +160,11 @@ func relayout() -> void:
 		records.position = Vector2(shell.content_rect().end.x-208,shell.content_rect().position.y) if shell.landscape_mode() else mat_rect.position+Vector2(12,12)
 	if is_instance_valid(item):
 		var fitting := mat_rect
-		if shell.landscape_mode() and tool == "TOL-005": fitting.size.y -= 48
+		if is_instance_valid(scale_pan):
+			var scale_size := minf(1.0,(mat_rect.size.x-16)/scale_pan.body_rect().size.x)
+			scale_pan.scale = Vector2.ONE * scale_size
+			scale_pan.position = shell.ui_to_world(Vector2(mat_rect.get_center().x,mat_rect.end.y-8-scale_pan.body_rect().end.y*scale_size))
+			fitting.size.y = maxf(40,shell.world_to_ui(scale_pan.to_global(scale_pan.pan_position())).y-mat_rect.position.y)
 		var next_home := fit_workbench_item(item,fitting)
 		var offset := next_home-item_home
 		item.position += offset
@@ -165,13 +173,8 @@ func relayout() -> void:
 		scale_target = next_home + Vector2(35,20)
 		item_home = next_home
 		if is_instance_valid(scale_pan):
-			if shell.landscape_mode():
-				scale_pan.scale = Vector2.ONE*minf(1.0,(mat_rect.size.x-8)/310.0)
-				scale_pan.position = shell.ui_to_world(Vector2(mat_rect.get_center().x,mat_rect.end.y-50))
-				scale_target = scale_pan.position-Vector2(0,item.tex_size().y*item.display_scale*.5-4)
-			else:
-				scale_pan.scale = Vector2.ONE
-				scale_pan.position = scale_target + Vector2(0,90)
+			scale_target = scale_pan.to_global(scale_pan.pan_position())-Vector2(0,item.tex_size().y*item.display_scale*.5)
+		if optical_pinned: optical_position = _optical_target()
 
 func _desktop_layout() -> Rect2:
 	var r: Rect2 = shell.content_rect()
@@ -213,6 +216,11 @@ func _desktop_layout() -> Rect2:
 func prepare_close_workspace() -> void:
 	optical_dragging = false
 	if is_instance_valid(item) and item.dragging: item.end_drag()
+
+func toast_rect() -> Rect2:
+	if shell.mobile_mode() or not mat_rect.has_area(): return Rect2()
+	# Keep the larger status banner left of the manual at the mat's top right.
+	return Rect2(mat_rect.position+Vector2(12,12),Vector2(maxf(1,mat_rect.size.x-182),100))
 
 func _landscape_layout() -> Rect2:
 	var r: Rect2 = shell.content_rect()
@@ -503,20 +511,52 @@ func _optical(id: String) -> void:
 		uv_light.scale = Vector2(.62,.38)
 		add_world(uv_light,"top")
 	add_world(node,"top")
-	bench_body.add_child(UIKit.label("移动镜片观察表盘标识；停住记录细节。" if id == "TOL-001" else "移动紫外灯照亮后盖编号；停住记录字符。",18,UIKit.TEXT,false,true))
+	if id == "TOL-001":
+		optical_fixed = true
+		optical_position = shell.ui_to_world(mat_rect.get_center()+Vector2(-95,-25))
+		node.global_position = _clamp_lens_position(optical_position)
+		optical_position = node.global_position
+	bench_body.add_child(UIKit.label("按住镜片或手柄拖动；松开停住，观察表盘标识。" if id == "TOL-001" else "移动紫外灯照亮后盖编号；停住记录字符。",18,UIKit.TEXT,false,true))
 	var fixed := UIKit.button("定位并固定标识" if id == "TOL-001" else "定位并固定编号","primary",Vector2(0,48),18)
 	optical_pin_button = fixed
 	fixed.pressed.connect(func():
 		optical_pinned = not optical_pinned
-		optical_fixed = optical_pinned
+		optical_fixed = id == "TOL-001" or optical_pinned
 		optical_dragging = false
-		optical_position = _optical_target()
+		if optical_pinned: optical_position = _optical_target()
 		fixed.text = "解除固定" if optical_pinned else "定位并固定观察点")
 	bench_body.add_child(fixed)
 	if id == "TOL-002": bench_body.add_child(UIKit.label(_power_copy(id), 16, UIKit.CYAN, false, true))
 
 func _optical_target() -> Vector2:
 	return item.logo_world_position() if tool == "TOL-001" else item.reveal_center()
+
+func _clamp_lens_position(point: Vector2) -> Vector2:
+	if not is_instance_valid(lens) or mat_rect.size == Vector2.ZERO: return point
+	var frame := Rect2(-136,-136,328,328)
+	var inset := lens.scale.x
+	var at: Vector2 = shell.world_to_ui(point)
+	at.x = clampf(at.x,mat_rect.position.x-frame.position.x*inset,mat_rect.end.x-frame.end.x*inset)
+	at.y = clampf(at.y,mat_rect.position.y-frame.position.y*inset,mat_rect.end.y-frame.end.y*inset)
+	return shell.ui_to_world(at)
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		optical_dragging = false
+
+## Visible instrument geometry for the existing accessible web companion.
+## Screen pixels avoid a JavaScript/DPR read on each companion refresh.
+func snapshot() -> Dictionary:
+	var transform: Transform2D = get_viewport().get_screen_transform()
+	var a: Vector2 = transform*mat_rect.position
+	var b: Vector2 = transform*mat_rect.end
+	var out := {"inspection_mat":{"x":a.x,"y":a.y,"width":b.x-a.x,"height":b.y-a.y},"inspection_lens":{}}
+	if is_instance_valid(lens):
+		var optical_transform: Transform2D = transform*lens.get_global_transform_with_canvas()
+		var center := optical_transform*Vector2.ZERO
+		var handle := optical_transform*Vector2(155,155)
+		out.inspection_lens = {"x":center.x,"y":center.y,"handle_x":handle.x,"handle_y":handle.y,"radius":(optical_transform*Vector2(128,0)).distance_to(center),"dragging":optical_dragging}
+	return out
 
 func _scale() -> void:
 	scale_pan = ScalePan.new()
@@ -584,6 +624,7 @@ func _scale_controls() -> void:
 	place_button.disabled = not tared or _tool_problem(tool) != ""
 	place_button.text = "重新称量" if scale_occupied else "放到秤上"
 	scale_label.text = "%.1f g · %s" % [scale_reading,"稳定 ✓" if scale_stable else "正在稳定…" if scale_occupied else "空秤已归零" if tared else "请先空秤归零"]
+	if is_instance_valid(scale_pan): scale_pan.set_reading(scale_reading,tared,scale_occupied,scale_stable)
 
 func _record() -> void:
 	if _tool_problem(tool) != "": return
@@ -611,7 +652,10 @@ func on_changed(_p: Dictionary,_n: Dictionary,_a: Dictionary) -> void:
 func world_cursor_shape(p: Vector2) -> int:
 	if not is_instance_valid(item) or shell.modal_open(): return Input.CURSOR_ARROW
 	if item.dragging: return Input.CURSOR_DRAG
-	if tool == "TOL-001" or tool == "TOL-002": return Input.CURSOR_CROSS
+	if tool == "TOL-001":
+		if optical_dragging: return Input.CURSOR_DRAG
+		return Input.CURSOR_CAN_DROP if lens_ring.contains_point(lens.to_local(p)) else Input.CURSOR_ARROW
+	if tool == "TOL-002": return Input.CURSOR_CROSS
 	if item.draggable and item.contains(p): return Input.CURSOR_CAN_DROP
 	return Input.CURSOR_ARROW
 
@@ -626,7 +670,13 @@ func _unhandled_input(e: InputEvent) -> void:
 					if item.contains(p):
 						drag_origin = item.position
 						item.begin_drag(p)
-				elif (tool == "TOL-001" or tool == "TOL-002") and mat_rect.has_point(shell.world_to_ui(p)):
+				elif tool == "TOL-001" and lens_ring.contains_point(lens.to_local(p)):
+					optical_fixed = true
+					optical_pinned = false
+					optical_dragging = true
+					optical_grab = optical_position-p
+					if is_instance_valid(optical_pin_button): optical_pin_button.text = "定位并固定标识"
+				elif tool == "TOL-002" and mat_rect.has_point(shell.world_to_ui(p)):
 					optical_fixed = true
 					optical_pinned = false
 					optical_dragging = true
@@ -649,6 +699,7 @@ func _process(delta: float) -> void:
 	if tool == "TOL-001" or tool == "TOL-002":
 		var optical: Node2D = lens if tool == "TOL-001" else wand
 		var available: bool = not modal_blocked and (optical_pinned or shell.world_pointer_available())
+		if modal_blocked or not shell.world_pointer_available(): optical_dragging = false
 		optical.visible = available
 		if is_instance_valid(uv_light): uv_light.visible = available
 		if not available:
@@ -676,6 +727,7 @@ func _process(delta: float) -> void:
 		var mass := WatchRules.mass(it)
 		scale_reading = mass if scale_stable else maxf(0.0,mass * (1.0 + .08*sin(f*23.0)*(1.0-f)))
 		scale_pan.depression = 6.0*f
+		scale_target = scale_pan.to_global(scale_pan.pan_position())-Vector2(0,item.tex_size().y*item.display_scale*.5)
 		scale_pan.queue_redraw()
 		if scale_stable:
 			var revision := Model.appraisal_revision(it)+":"+str(Game.state.ap)
@@ -688,7 +740,7 @@ func _process(delta: float) -> void:
 	elif tool == "TOL-001" or tool == "TOL-002":
 		var node: Node2D = lens if tool == "TOL-001" else wand
 		if optical_dragging:
-			if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): optical_position = p
+			if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): optical_position = _clamp_lens_position(p+optical_grab) if tool == "TOL-001" else p
 			else: optical_dragging = false
 		var at := optical_position if optical_fixed else p
 		node.global_position = at
@@ -719,18 +771,56 @@ func _process(delta: float) -> void:
 
 class ScalePan extends Node2D:
 	var depression := 0.0
+	var reading := 0.0
+	var tared := false
+	var occupied := false
+	var stable := false
+	func body_rect() -> Rect2: return Rect2(-166,-16,332,116)
+	func pan_position() -> Vector2: return Vector2(0,-8+depression)
+	func display_state() -> String:
+		return "STABLE" if stable else "SETTLING" if occupied else "ZERO" if tared else "ZERO REQUIRED"
+	func set_reading(value: float, zeroed: bool, loaded: bool, settled: bool) -> void:
+		reading = value
+		tared = zeroed
+		occupied = loaded
+		stable = settled
+		queue_redraw()
 	func _draw() -> void:
-		draw_style_box(UIKit.inset_style(12),Rect2(-155,10,310,38))
-		draw_rect(Rect2(-135,depression,270,16),Color("b6b6a4"))
-		draw_line(Vector2(-135,depression),Vector2(135,depression),Color("f3e6cc"),3)
+		# Cast feet and a deep front apron make the pan read as an instrument.
+		for x in [-132,104]:
+			draw_style_box(UIKit.key_style("secondary","normal"),Rect2(x,82,28,18))
+		draw_style_box(UIKit.key_style("secondary","normal"),Rect2(-166,17,332,75))
+		draw_style_box(UIKit.screen_style(4),Rect2(-158,18,316,63))
+		draw_rect(Rect2(-72,1,144,22),Color("574d42"))
+		draw_rect(Rect2(-57,1,114,16),Color("8b8e7b"))
+		var pan := Rect2(-153,-12+depression,306,17)
+		draw_style_box(UIKit.key_style("secondary","normal"),pan)
+		draw_rect(Rect2(-145,-10+depression,290,8),Color("c3c5b2"))
+		draw_line(Vector2(-143,-9+depression),Vector2(143,-9+depression),Color("fff1d2"),2)
+		for x in range(-132,140,24): draw_line(Vector2(x,-7+depression),Vector2(x+13,-7+depression),Color("a2aa98"),1)
+		draw_style_box(UIKit.inset_style(3),Rect2(-141,30,190,46))
+		draw_rect(Rect2(-134,35,176,34),Color("b6c4a4"))
+		draw_string(UIKit.mono,Vector2(-126,59),"%6.1f g" % reading,HORIZONTAL_ALIGNMENT_LEFT,150,23,Color("223c34"))
+		draw_circle(Vector2(32,41),3,Color("426f58") if stable or tared and not occupied else Color("a15d35"))
+		draw_style_box(UIKit.key_style("primary","normal"),Rect2(67,34,74,32))
+		draw_string(UIKit.mono,Vector2(76,56),"TARE",HORIZONTAL_ALIGNMENT_LEFT,65,16,Color("3e3228"))
+		draw_string(UIKit.mono,Vector2(-134,87),display_state(),HORIZONTAL_ALIGNMENT_LEFT,220,9,Color("e2dcc4"))
+		draw_string(UIKit.mono,Vector2(83,84),"0.1 g",HORIZONTAL_ALIGNMENT_LEFT,65,10,Color("e2dcc4"))
 
 class Ring extends Node2D:
 	var ultraviolet := false
 	var radius := 128.0
 	var progress := 0.0
+	func contains_point(point: Vector2) -> bool:
+		return point.length() <= radius+8 or point.distance_to(Geometry2D.get_closest_point_to_segment(point,Vector2(91,91),Vector2(178,178))) <= 18
 	func _draw() -> void:
 		if ultraviolet:
 			draw_texture_rect(Util.radial(256,.22),Rect2(-150,-92,300,184),false,Color(.55,.28,.94,.24))
 			return
-		draw_arc(Vector2.ZERO,radius,0,TAU,64,Color("ab9267"),3)
+		draw_line(Vector2(91,91),Vector2(178,178),Color("332f29"),32,true)
+		draw_line(Vector2(101,101),Vector2(178,178),Color("8c6544"),23,true)
+		draw_line(Vector2(107,102),Vector2(178,173),Color("c69c68"),5,true)
+		draw_arc(Vector2.ZERO,radius,0,TAU,96,Color("39382f"),11,true)
+		draw_arc(Vector2.ZERO,radius,0,TAU,96,Color("baa379"),6,true)
+		draw_arc(Vector2.ZERO,radius-5,-PI*.83,-PI*.25,32,Color("eddfb5"),2,true)
 		if progress>0: draw_arc(Vector2.ZERO,radius+6,-PI/2,-PI/2+TAU*progress,64,Color("91dab7"),5)

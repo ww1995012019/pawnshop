@@ -6,12 +6,28 @@ func check(ok: bool, label: String) -> void:
  if not ok: failures += 1
 func frames(n := 6) -> void:
  for i in n: await process_frame
-func pointer(point: Vector2) -> void:
+func pointer(point: Vector2, held := false) -> void:
  var event := InputEventMouseMotion.new()
  event.position = root.get_final_transform()*point
  event.global_position = event.position
+ event.button_mask = MOUSE_BUTTON_MASK_LEFT if held else 0
  Input.parse_input_event(event)
  await frames()
+func button(point: Vector2, pressed: bool) -> void:
+ var event := InputEventMouseButton.new()
+ event.position = root.get_final_transform()*point
+ event.global_position = event.position
+ event.button_index = MOUSE_BUTTON_LEFT
+ event.pressed = pressed
+ event.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+ Input.parse_input_event(event)
+ await frames()
+func drag_lens(active, page, destination: Vector2) -> void:
+ var start: Vector2 = root.get_screen_transform().affine_inverse()*active.get_viewport().get_screen_transform()*active.world_to_ui(page.lens.global_position)
+ await pointer(start)
+ await button(start,true)
+ await pointer(destination,true)
+ await button(destination,false)
 func run() -> void:
  root.size = Vector2i(1920,1080)
  var game = root.get_node("Game")
@@ -50,16 +66,26 @@ func run() -> void:
  await frames(25)
  var target: Vector2 = page.item.logo_world_position()
  var root_target: Vector2 = root.get_screen_transform().affine_inverse()*active.get_viewport().get_screen_transform()*active.world_to_ui(target)
- await pointer(root_target)
+ await drag_lens(active,page,root_target)
  await frames(8)
  print("OPTICAL POINTER target=",target," root=",root_target," actual=",page.lens.global_position," mouse=",active.world_mouse())
- check(page.lens.visible and page.lens.global_position.distance_to(target)<3,"outside paper follows actual pointer")
+ check(page.lens.visible and page.lens.global_position.distance_to(target)<3,"outside paper held drag places the physical lens")
  shell.open_watch_manual(page.item.def_id)
  await frames()
  var paper = shell.root_ui.find_child("inspection_guide",true,false)
  paper.set_document_zoom(.45,false)
  paper.move_document(Vector2(20,20))
  await frames()
+ var paper_point: Vector2 = paper.position+Vector2(160,220)*paper.scale
+ var held_pose: Vector2 = page.lens.global_position
+ await pointer(root_target)
+ await button(root_target,true)
+ await pointer(paper_point,true)
+ check(not page.optical_dragging,"root paper takes pointer ownership and cancels a held magnifier grab")
+ await pointer(root_target+Vector2(15,0),true)
+ check(page.lens.global_position.is_equal_approx(held_pose),"returning from paper while held cannot revive the cancelled grab")
+ await button(root_target+Vector2(15,0),false)
+ await pointer(paper_point)
  var before: String = JSON.stringify(game.item(page.it_uid).evidence)
  var ap: int = game.state.ap
  var power: String = JSON.stringify(game.state.storeCosts)
@@ -74,8 +100,8 @@ func run() -> void:
  for offset in [Vector2(-55,85),Vector2(0,85),Vector2(55,85)]:
   var moving_target: Vector2 = target+offset
   var root_moving: Vector2 = root.get_screen_transform().affine_inverse()*active.get_viewport().get_screen_transform()*active.world_to_ui(moving_target)
-  await pointer(root_moving)
-  check(paper.visible and not shell.modal_open() and page.lens.visible and page.lens.global_position.distance_to(moving_target)<3,"continuous outside-paper motion follows actual input with paper open")
+  await drag_lens(active,page,root_moving)
+  check(paper.visible and not shell.modal_open() and page.lens.visible and page.lens.global_position.distance_to(moving_target)<3,"held physical lens drag works outside an open paper")
  page.optical_pin_button.pressed.emit()
  await pointer(paper.position+Vector2(160,220)*paper.scale)
  await create_timer(1.1).timeout

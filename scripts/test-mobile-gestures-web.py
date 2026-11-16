@@ -2,6 +2,7 @@
 """Real finger scrolling, tap cancellation, scroll-thumb dragging and optical tools."""
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -46,7 +47,7 @@ def main():
                 page.goto('http://127.0.0.1:4174/')
                 page.wait_for_function('window.OrbitalTouch?.state?.ready',timeout=90000)
                 command({'type':'start'});phone.wait(page,'!s.title&&!s.busy')
-                command({'type':'settings'});phone.wait(page,'s.blocked');tap('全图鉴 · 全部手表')
+                command({'type':'settings'});phone.wait(page,'s.blocked');tap('全图鉴')
                 first=locate('北辰 N01');assert first['found'],first
                 page.screenshot(path=str(out/f'{label}-scroll-before.png'))
                 drag([(first['x'],first['y']+25-i*12) for i in range(9)])
@@ -74,7 +75,15 @@ def main():
                 for tool,pin,count in [('TOL-001','定位并固定标识',1),('TOL-002','定位并固定编号',2)]:
                     command({'type':'tool','tool':tool})
                     page.wait_for_function('t=>OrbitalTouch.state.inspection_current===t&&!OrbitalTouch.state.inspection_busy',arg=tool)
-                    drag([(360+i*16,155+i*4) for i in range(11)],tool)
+                    if tool=='TOL-001':
+                        page.wait_for_function('OrbitalTouch.state.inspection_lens?.handle_x!==undefined')
+                        before=page.evaluate('OrbitalTouch.state.inspection_lens')
+                        start=(before['handle_x']/2,before['handle_y']/2)
+                        drag([(start[0]+i*4,start[1]-i) for i in range(11)],tool)
+                        after=page.evaluate('OrbitalTouch.state.inspection_lens')
+                        assert math.hypot(after['x']-before['x']-80,after['y']-before['y']+20)<5,(label,'held physical handle drag did not move magnifier',before,after)
+                        assert not after['dragging'],(label,'released touch retained magnifier grab',after)
+                    else:drag([(360+i*16,155+i*4) for i in range(11)],tool)
                     tap(pin)
                     page.wait_for_function('n=>OrbitalTouch.state.appraisal?.count>=n',arg=count,timeout=12000)
                 assert not errors,errors

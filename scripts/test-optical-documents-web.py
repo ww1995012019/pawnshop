@@ -8,6 +8,7 @@ import argparse
 import importlib.util
 import io
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -73,6 +74,7 @@ def main():
     parser.add_argument('--phone-only',action='store_true')
     parser.add_argument('--desktop-only',action='store_true')
     parser.add_argument('--landscape-only',action='store_true')
+    parser.add_argument('--colour-only',action='store_true',help='Check measured desktop lens colours without the paper/idle scenarios')
     parser.add_argument('--output',type=Path,default=ROOT/'work/watch-expansion/optical/web')
     args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)
     (ROOT/'work/watch-expansion/optical').mkdir(parents=True,exist_ok=True)
@@ -87,7 +89,7 @@ def main():
     with sync_playwright() as p:
         browser=p.chromium.launch(executable_path=os.environ.get('CHROMIUM_EXECUTABLE') or shutil.which('chromium'),args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
         try:
-            for view,width,height,mobile in ([('portrait',390,844,True)] if args.phone_only else [('landscape',844,390,True)] if args.landscape_only else [('desktop',1440,900,False)] if args.desktop_only else [('desktop',1440,900,False),('landscape',844,390,True),('portrait',390,844,True)]):
+            for view,width,height,mobile in ([('desktop',1440,900,False)] if args.colour_only else [('portrait',390,844,True)] if args.phone_only else [('landscape',844,390,True)] if args.landscape_only else [('desktop',1440,900,False)] if args.desktop_only else [('desktop',1440,900,False),('landscape',844,390,True),('portrait',390,844,True)]):
                 context=browser.new_context(viewport={'width':width,'height':height},has_touch=True,is_mobile=mobile,device_scale_factor=2 if mobile else 1)
                 # Install before Godot binds WebGL methods; this is test-side only.
                 context.add_init_script('('+PROBE+')()')
@@ -96,33 +98,145 @@ def main():
                 page.on('console',lambda m:errors.append(m.text) if any(e in m.text for e in ['SCRIPT ERROR','SHADER ERROR','Error compiling shader']) else None)
                 def cmd(data):page.evaluate('d=>orbitalTouchSend(JSON.stringify(d))',data)
                 def loc(text):
-                    page.evaluate('window.__orbitalLocated=null');cmd({'type':'locate','text':text});page.wait_for_function('window.__orbitalLocated!==null');return page.evaluate('__orbitalLocated')
-                def physical(x,y):return (width-y,x) if mobile and height>width else (x,y)
+                    page.evaluate('window.__orbitalLocated=null');cmd({'type':'locate','text':text});wait('window.__orbitalLocated!==null');return page.evaluate('__orbitalLocated')
+                # Both upright and landscape phones use native, unrotated UI.
+                def physical(x,y):return (x,y)
                 def move(x,y):
-                    (page.touchscreen.tap if mobile else page.mouse.move)(*physical(x,y))
+                    # Hover must not activate document contents on a phone.
+                    # Real finger gestures use the explicit CDP touch path.
+                    page.mouse.move(*physical(x,y))
                 def click(text):
                     r=loc(text);assert r['found'] and not r['disabled'],(text,r)
                     (page.touchscreen.tap if mobile else page.mouse.click)(*physical(r['x'],r['y']));page.wait_for_timeout(350);return r
+                def wait_wanted_visible(expected):
+                    # The real document owns input. Its visible close key is
+                    # authoritative for this gesture fixture, not a saved pref.
+                    for attempt in range(20):
+                        hit=loc('@wanted_close')
+                        if bool(hit['found'])==expected:return
+                        page.wait_for_timeout(150)
+                    raise AssertionError(('wanted document visibility',expected,hit,page.evaluate('OrbitalTouch.state')))
+                phase={'name':'boot'}
+                def progress(name):
+                    phase['name']=name
+                    print(view+' '+name,flush=True)
+                def wait(condition,**options):
+                    try:return page.wait_for_function(condition,**options)
+                    except Exception:
+                        name=phase['name'].replace(' ','-')
+                        try:
+                            snap('wait-timeout-'+name)
+                            print('OPTICAL WAIT TIMEOUT',json.dumps({'phase':phase['name'],'condition':condition,'state':page.evaluate('OrbitalTouch.state')}),flush=True)
+                        except Exception as diagnostic_error:print('OPTICAL TIMEOUT DIAGNOSTIC ERROR',str(diagnostic_error),flush=True)
+                        raise
                 def snap(name):
                     data=page.screenshot(path=str(args.output/f'{view}-{name}.png'))
                     return Image.open(io.BytesIO(data)).convert('RGB')
-                def boot():page.goto('http://127.0.0.1:4174/');page.wait_for_function('OrbitalTouch?.state?.ready',timeout=90000)
-                boot();cmd({'type':'start'});page.wait_for_function('!OrbitalTouch.state.title && !OrbitalTouch.state.busy');cmd({'type':'arrive'});page.wait_for_timeout(1500)
+                def lens_geometry():
+                    # Geometry uses framebuffer pixels; image samples and input
+                    # use CSS pixels, with the context's known DPR.
+                    page.wait_for_timeout(220)
+                    row=page.evaluate('OrbitalTouch.state.inspection_lens')
+                    assert row and 'handle_x' in row,row
+                    ratio=2 if mobile else 1
+                    return {k:(v/ratio if isinstance(v,(int,float)) and not isinstance(v,bool) else v) for k,v in row.items()}
+                def drag_lens_to(destination):
+                    geometry=lens_geometry()
+                    start=(geometry['handle_x'],geometry['handle_y'])
+                    finish=(start[0]+destination[0]-geometry['x'],start[1]+destination[1]-geometry['y'])
+                    page.mouse.move(*physical(*start));page.mouse.down()
+                    page.mouse.move(*physical(*finish),steps=8);page.mouse.up()
+                    return lens_geometry()
+                def check_lens_drag():
+                    # Companion geometry is in framebuffer pixels; native phone
+                    # input uses those same upright axes after DPR conversion.
+                    ratio=2 if mobile else 1
+                    lens=lens_geometry
+                    def unchanged(a,b):return math.hypot(a['x']-b['x'],a['y']-b['y'])<1.5
+                    initial=lens();mat=page.evaluate('OrbitalTouch.state.inspection_mat')
+                    blank=(mat['x']/ratio+8,mat['y']/ratio+8)
+                    move(*blank)
+                    hovered=lens()
+                    check(unchanged(initial,hovered),f'{view} ordinary hover never moves the magnifier')
+                    (page.touchscreen.tap if mobile else page.mouse.click)(*physical(*blank))
+                    check(unchanged(initial,lens()),f'{view} blank-mat press never teleports the magnifier')
+                    start=(initial['handle_x'],initial['handle_y']);delta=(18,-8)
+                    finish=(start[0]+delta[0],start[1]+delta[1])
+                    if mobile:
+                        cdp=context.new_cdp_session(page)
+                        x,y=physical(*start);cdp.send('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[{'x':x,'y':y,'id':0}]})
+                    else:
+                        page.mouse.move(*physical(*start));page.mouse.down()
+                    check(unchanged(initial,lens()),f'{view} handle grab preserves its pointer offset')
+                    if mobile:
+                        x,y=physical(*finish);cdp.send('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':[{'x':x,'y':y,'id':0}]})
+                    else:page.mouse.move(*physical(*finish),steps=5)
+                    held=lens()
+                    drag_ok=math.hypot(held['x']-initial['x']-delta[0],held['y']-initial['y']-delta[1])<2.5 and held['dragging']
+                    if not drag_ok:
+                        print('LENS DRAG GEOMETRY',json.dumps({'view':view,'initial':initial,'held':held,'expected':{'x':initial['x']+delta[0],'y':initial['y']+delta[1]},'mat':mat,'css_delta':delta}),flush=True)
+                    check(drag_ok,f'{view} held real handle drag moves the lens')
+                    if mobile:cdp.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]})
+                    else:page.mouse.up()
+                    released=lens();move(start[0]-20,start[1]-25)
+                    check(unchanged(released,lens()),f'{view} release freezes the lens during later pointer movement')
+                    snap('physical-lens-drag')
+                def settle_phone_view():
+                    # Command-based fixture startup has no user gesture. Match
+                    # a player's first touch before measuring controls, since
+                    # landscape touch-up may enter fullscreen and resize.
+                    page.touchscreen.tap(2,height-2)
+                    previous=None
+                    for attempt in range(12):
+                        page.wait_for_timeout(200)
+                        geometry=page.evaluate('''()=>{const r=document.querySelector('#canvas').getBoundingClientRect();return {fullscreen:!!document.fullscreenElement,hidden:document.hidden,width:innerWidth,height:innerHeight,canvas:{x:r.x,y:r.y,width:r.width,height:r.height}}}''')
+                        if geometry==previous:
+                            print('PHONE VIEW READY',json.dumps(geometry),flush=True)
+                            return
+                        previous=geometry
+                    raise AssertionError(('phone fullscreen/layout did not settle',previous))
+                def boot():page.goto('http://127.0.0.1:4174/');wait('OrbitalTouch?.state?.ready',timeout=90000)
+                boot();cmd({'type':'start'});wait('!OrbitalTouch.state.title && !OrbitalTouch.state.busy');cmd({'type':'arrive'});page.wait_for_timeout(1500)
                 row=page.evaluate(service.READ_SAVE);assert row
                 for model in (['WCH-020'] if mobile else fixtures):
                     page.goto('http://127.0.0.1:4174/godot-license.txt');page.evaluate(WRITE_SAVE,{'key':row['key'],'state':fixtures[model]});boot()
-                    page.wait_for_function('OrbitalTouch.state.has_save');cmd({'type':'start'});page.wait_for_function('!OrbitalTouch.state.title && !OrbitalTouch.state.busy');cmd({'type':'page','page':'inspect'});page.wait_for_function("OrbitalTouch.state.workspace==='inspect'")
-                    page.wait_for_function('([uid,title])=>OrbitalTouch.state.inspection_uid===uid && OrbitalTouch.state.detail_title===title',arg=[fixtures[model]['inventory'][0]['uid'],names[model]]);print(view,model,page.evaluate('OrbitalTouch.state.detail_title'),flush=True)
+                    wait('OrbitalTouch.state.has_save');cmd({'type':'start'});wait('!OrbitalTouch.state.title && !OrbitalTouch.state.busy')
                     assert page.evaluate('OrbitalTouch.state.notice_owned && OrbitalTouch.state.notice_visible'),'wanted fixture must be owned and open'
-                    cmd({'type':'tool','tool':'TOL-001'});page.wait_for_function("OrbitalTouch.state.inspection_current==='TOL-001' && !OrbitalTouch.state.inspection_busy")
-                    # Park outside the watch while preserving the selected tool's layout.
-                    button=loc('定位并固定标识');move(button['x']+90,button['y']-160);page.wait_for_timeout(300)
+                    if mobile:
+                        # Close the existing paper before opening a new drawer;
+                        # a newly appended overlay can cover its visible key.
+                        settle_phone_view()
+                        page.wait_for_timeout(600)
+                        close_hit=click('@wanted_close')
+                        try:wait_wanted_visible(False)
+                        except Exception:
+                            snap('wanted-close-failure')
+                            print('WANTED CLOSE FAILURE',json.dumps({'hit':close_hit,'state':page.evaluate('OrbitalTouch.state'),'document':page.evaluate('({hidden:document.hidden,visibility:document.visibilityState,fullscreen:!!document.fullscreenElement})'),'close_still_visible':loc('@wanted_close')}),flush=True)
+                            raise
+                        progress('paper closed')
+                        if page.evaluate('OrbitalTouch.state.notice_visible'):
+                            print('WANTED VISIBILITY DIAGNOSTIC: close key hidden while saved visibility still true',flush=True)
+                    cmd({'type':'page','page':'inspect'});wait("OrbitalTouch.state.workspace==='inspect'")
+                    wait('([uid,title])=>OrbitalTouch.state.inspection_uid===uid && OrbitalTouch.state.detail_title===title',arg=[fixtures[model]['inventory'][0]['uid'],names[model]]);print(view,model,page.evaluate('OrbitalTouch.state.detail_title'),flush=True)
+                    progress('inspect opened')
+                    cmd({'type':'tool','tool':'TOL-001'});wait("OrbitalTouch.state.inspection_current==='TOL-001' && !OrbitalTouch.state.inspection_busy")
+                    button=loc('定位并固定标识')
                     if not mobile:
-                        source=snap(model+'-source');click('定位并固定标识');move(button['x']+160,button['y']-160);page.wait_for_timeout(300);lens=snap(model+'-lens')
+                        # Move the actual held handle away before taking the
+                        # unmagnified reference. Hovering no longer parks it.
+                        geometry=lens_geometry();mat=page.evaluate('OrbitalTouch.state.inspection_mat')
+                        parked=drag_lens_to((mat['x']+geometry['radius']*1.08,mat['y']+geometry['radius']*1.08))
+                        # The wanted paper owns this pointer location and hides
+                        # the unpinned loupe, keeping every source sample clear
+                        # even in a narrow mat that limits the parking distance.
+                        paper_close=loc('@wanted_close');paper_unit=paper_close['width']/44.0
+                        move(paper_close['x']-100*paper_unit,paper_close['y']+100*paper_unit)
+                        page.wait_for_timeout(300);source=snap(model+'-source')
+                        click('定位并固定标识');geometry=lens_geometry();lens=snap(model+'-lens')
                         # Interior below the masked source-logo band, away from rim and glass sheen.
-                        # Derive the center from the fixed bench geometry and use matching
-                        # source coordinates under 2.2x GPU magnification.
-                        unit=button['width']/523.0;cx=button['x'];cy=button['y']-354*unit
+                        # Use the actual pinned centre/radius and matching source
+                        # coordinates under the shader's 2.2x magnification.
+                        unit=geometry['radius']/128.0;cx=geometry['x'];cy=geometry['y']
                         comparisons=[]
                         for dx,dy in [(-47,58),(-37,58),(-27,58),(27,58),(43,58)]:
                             sx=round(cx+dx*unit/2.2);sy=round(cy+dy*unit/2.2)
@@ -131,12 +245,28 @@ def main():
                         saturated=sum(min(r['lens'])>=250 for r in comparisons)
                         source_saturated=sum(min(r['source'])>=250 for r in comparisons)
                         error=statistics.median(sum(abs(a-b) for a,b in zip(r['source'],r['lens']))/3 for r in comparisons)
-                        report[model]={'samples':comparisons,'median_channel_error':error,'saturated':saturated}
+                        report[model]={'samples':comparisons,'median_channel_error':error,'saturated':saturated,'pinned_geometry':geometry,'parked_geometry':parked}
                         check(saturated<=source_saturated and error<28,f'{model} magnified dial retains source colour (error={error:.1f}, white={saturated}/5)')
-                        if model!='WCH-020':continue
+                        if args.colour_only or model!='WCH-020':continue
                         click('解除固定')
                     else:
-                        click('定位并固定标识');page.wait_for_function('OrbitalTouch.state.appraisal.count===1',timeout=15000);page.wait_for_timeout(3200);snap(model+'-touch-lens');click('解除固定')
+                        click('定位并固定标识');wait('OrbitalTouch.state.appraisal.count===1',timeout=15000);progress('pin observed');page.wait_for_timeout(3200);snap(model+'-touch-lens');click('解除固定')
+                    check_lens_drag()
+                    progress('drag checked')
+                    if mobile:
+                        # Restore the owned/open wanted fixture through its real
+                        # inventory control before paper and idle regressions.
+                        cmd({'type':'page','page':'warehouse'});wait("OrbitalTouch.state.workspace==='warehouse'")
+                        for attempt in range(2):
+                            if loc('@wanted_close')['found']:break
+                            click('通缉名单 · 取出 / 收起')
+                        wait_wanted_visible(True)
+                        progress('paper restored')
+                        # Return to the suspended inspector rather than append
+                        # another overlay above the newly opened wanted paper.
+                        cmd({'type':'close'});wait("OrbitalTouch.state.workspace==='inspect'");progress('history returned')
+                        cmd({'type':'tool','tool':'TOL-001'});wait("OrbitalTouch.state.inspection_current==='TOL-001' && !OrbitalTouch.state.inspection_busy")
+                        button=loc('定位并固定标识')
                     # Measure each paper while it stays open; do not depend on FPS.
                     for mode in ['wanted','closed','manual']:
                         if mode=='closed':click('@wanted_close')
@@ -157,12 +287,12 @@ def main():
                         snap(mode+'-moving')
                     # Guide remains non-modal; pointer over its content cannot earn
                     # a new UV record or usage charge at a stale nested coordinate.
-                    click('@document_close');cmd({'type':'tool','tool':'TOL-002'});page.wait_for_function("OrbitalTouch.state.inspection_current==='TOL-002' && !OrbitalTouch.state.inspection_busy")
+                    click('@document_close');cmd({'type':'tool','tool':'TOL-002'});wait("OrbitalTouch.state.inspection_current==='TOL-002' && !OrbitalTouch.state.inspection_busy")
                     before=page.evaluate('OrbitalTouch.state.ap');cmd({'type':'manual'});page.wait_for_timeout(350)
                     close=loc('@document_close');unit=close['width']/44
                     move(close['x']-200*unit,close['y']+180*unit);page.wait_for_timeout(1100)
-                    check(page.evaluate('OrbitalTouch.state.appraisal.count')==1 and page.evaluate('OrbitalTouch.state.ap')==before,f'{view} paper hover does not collect hidden UV evidence or AP')
-                    snap('paper-owns-pointer');click('@document_close');click('定位并固定编号');page.wait_for_function('n=>OrbitalTouch.state.appraisal.count===n',arg=2,timeout=15000)
+                    check(not page.evaluate('OrbitalTouch.state.blocked') and page.evaluate('OrbitalTouch.state.appraisal.count')==1 and page.evaluate('OrbitalTouch.state.ap')==before,f'{view} non-modal paper hover does not collect hidden UV evidence or AP')
+                    snap('paper-owns-pointer');click('@document_close');click('定位并固定编号');wait('n=>OrbitalTouch.state.appraisal.count===n',arg=2,timeout=15000)
                     check(True,f'{view} observation resumes outside paper and explicit pin works')
                 check(not errors,view+' no shader/script/browser errors '+str(errors[:3]));context.close()
         finally:browser.close()

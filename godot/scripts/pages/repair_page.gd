@@ -38,6 +38,7 @@ var mode_bar: HBoxContainer
 var guidance: PanelContainer
 var guidance_scroll: ScrollContainer
 var guidance_body: VBoxContainer
+var notice_slot: Control
 var instruction: Label
 var refresh_pending := false
 var pending_operation := {}
@@ -104,6 +105,12 @@ func enter() -> void:
 	guidance_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	guidance_scroll.add_child(guidance_body)
 	guidance_stack.add_child(guidance_scroll)
+	# Notices occupy their own row; they must never paint over instructions.
+	notice_slot = Control.new()
+	notice_slot.name = "repair_notice_slot"
+	notice_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	notice_slot.custom_minimum_size.y = 72
+	guidance_stack.add_child(notice_slot)
 	add_child(guidance)
 	bench = UIKit.plate()
 	add_child(bench)
@@ -385,13 +392,12 @@ func _stage_ui() -> void:
 	if mode == "refurb": title = WatchRefurbishment.LABELS.get(task.trim_prefix("refurb_"),"独立翻新")
 	if task == "": title = "本次工单已完成" if not Service.tasks(it).is_empty() and Service.finished(it) else "本件无需维修"
 	var mode_title := "独立翻新" if mode == "refurb" else ("伪装加工" if mode == "forge" else "维修保养")
-	guidance_body.add_child(UIKit.label(mode_title + "  /  " + title,22,UIKit.AMBER))
+	guidance_body.add_child(UIKit.label(mode_title + "  /  " + title,22,UIKit.AMBER,false,true))
 	if mode=="forge" and WatchForgery.target_id(it)!="":
 		var summary := UIKit.label("原表：%s → 冒充：%s · %s" % [Game.def_name(it.defId),Game.def_name(WatchForgery.target_id(it)),WatchForgery.quality_text(it)],16,UIKit.CYAN,false,true)
 		summary.name="counterfeit_summary"
 		guidance_body.add_child(summary)
 	instruction = UIKit.label("",18,UIKit.TEXT,false,true)
-	instruction.custom_minimum_size.y=52
 	instruction.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	guidance_body.add_child(instruction)
 	var row := UIKit.hbox(10)
@@ -697,15 +703,21 @@ func relayout() -> void:
 	if not is_instance_valid(bench) or not is_instance_valid(art): return
 	if shell.mobile_mode() and not can_close_workspace(): return
 	if list_landscape != shell.landscape_mode(): _fill_list()
+	if not shell.landscape_mode(): list_box.columns = maxi(2,floori((shell.content_rect().size.x-40)/100.0)) if shell.portrait_mode() else 2
 	list_panel.get_child(0).get_child(0).visible = not shell.landscape_mode()
 	list_panel.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",8) if shell.landscape_mode() else UIKit.plate_style())
 	mat_rect = layout_workbench(list_panel,detail_panel,bench,260,350)
 	if shell.landscape_mode():
 		_layout_landscape()
 		return
+	if shell.portrait_mode() and portrait_section != 1:
+		# Selection and records also keep an unobstructed notice strip below.
+		for panel in [list_panel,detail_panel]: panel.size.y -= 80
 	art.wide_layout = false
 	mode_bar.show()
-	guidance_scroll.custom_minimum_size.y = 100
+	notice_slot.show()
+	notice_slot.custom_minimum_size.y = 72
+	guidance_scroll.custom_minimum_size.y = maxf(80,guidance_body.get_combined_minimum_size().y)
 	guidance_body.show()
 	guidance.visible = not shell.portrait_mode() or portrait_section == 1
 	art.visible = not (mode == "service" and task == "dust") and task != "" and guidance.visible
@@ -721,6 +733,7 @@ func relayout() -> void:
 		item.visible = (task == "dust" or task == "") and (not shell.portrait_mode() or portrait_section == 1)
 		item_home = fit_workbench_item(item,working)
 		item.position = item_home
+	shell._place_toasts()
 	queue_redraw()
 
 func _layout_landscape() -> void:
@@ -734,6 +747,8 @@ func _layout_landscape() -> void:
 	list_box.columns = maxi(1,floori((area.size.x-16)/100.0))
 	var sidebar := clampf(area.size.x*.27,180,240)
 	guidance_scroll.custom_minimum_size.y = 0
+	notice_slot.visible = operation
+	notice_slot.custom_minimum_size.y = 52
 	guidance.add_theme_stylebox_override("panel",UIKit.screen_style(6))
 	guidance.position = Vector2(area.end.x-sidebar,area.position.y)
 	guidance.size = Vector2(sidebar,area.size.y-58)
@@ -756,6 +771,8 @@ func _layout_landscape() -> void:
 		list_panel.position.y = area.position.y+62
 		list_panel.size.y = area.size.y-62
 	else: guidance_body.show()
+	if not operation:
+		for panel in [list_panel,detail_panel]: panel.size.y -= 64
 	var working := Rect2(area.position,Vector2(area.size.x-sidebar-8,area.size.y))
 	mat_rect = working
 	art.position = working.position
@@ -765,6 +782,7 @@ func _layout_landscape() -> void:
 		item_home = fit_workbench_item(item,working)
 		item.position = item_home
 	shell.work_surface.set_mat(working)
+	shell._place_toasts()
 	queue_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -840,8 +858,11 @@ func world_cursor_shape(point: Vector2) -> int:
 	return Input.CURSOR_CROSS if task == "dust" and is_instance_valid(item) and item.contains(point) and _cleaning_problem() == "" else Input.CURSOR_ARROW
 
 func toast_rect() -> Rect2:
-	if not is_instance_valid(guidance): return Rect2()
-	return Rect2(Vector2(guidance.position.x+12,guidance.get_rect().end.y-64),Vector2(maxf(1,guidance.size.x-24),52))
+	if shell.mobile_mode() and portrait_section != 1:
+		var panel: Control = list_panel if portrait_section == 0 else detail_panel
+		return Rect2(Vector2(panel.position.x,panel.get_rect().end.y+8),Vector2(panel.size.x,52 if shell.landscape_mode() else 72))
+	if not is_instance_valid(notice_slot) or not notice_slot.is_visible_in_tree(): return Rect2()
+	return notice_slot.get_global_rect()
 
 func on_changed(_prev: Dictionary,_next: Dictionary,action: Dictionary) -> void:
 	if action.type in ["SERVICE_PROGRESS","SERVICE_BEGIN","REFURB_PROGRESS"]: return

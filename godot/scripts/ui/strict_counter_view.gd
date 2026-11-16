@@ -67,6 +67,18 @@ var stock_art: NinePatchRect
 var layout_rects := {}
 var layout_extent := Vector2.ZERO
 var extra_space := Vector2.ZERO
+var last_visit := ""
+var visitor_phase := "standing"
+var face_offset := Vector2.ZERO
+var visitor_tween: Tween
+var departing_face: TextureRect
+var departure_tween: Tween
+var departure_started := false
+var motion_ready := false
+var watch_sources := {}
+var drag_feedback := {}
+var store_motion_versions := {}
+var motion_serial := 0
 
 class TradeWatch extends Button:
  var controller
@@ -76,9 +88,10 @@ class TradeWatch extends Button:
   var it=TradeSession.item(Game.state,uid) if Game.state.trade!=null else Game.item(uid)
   if it==null:return null
   var ghost=TextureRect.new();ghost.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
-  ghost.texture=A.watch(it);ghost.size=Vector2(56,80)
+  ghost.texture=controller._watch_texture(uid,it);ghost.size=Vector2(56,80)
   ghost.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
   var holder=Control.new();holder.add_child(ghost);ghost.position=-ghost.size*.5;set_drag_preview(holder)
+  ghost.position.y-=9;ghost.rotation=-.035
   return {"kind":"strict_trade" if Game.state.trade!=null else "showroom_original","uid":uid}
 
 func setup(page) -> void:
@@ -95,6 +108,7 @@ func setup(page) -> void:
  Game.prefs_changed.connect(func():dirty=true)
  desk.dial.changed.connect(func(_value):dirty=true)
  _refresh(true)
+ motion_ready=true
 
 func _style(fill: Color=PAPER,edge: Color=INK,radius := 7) -> StyleBox:
  var st=preload("res://scripts/ui/comic_paper.gd").new() if fill==PAPER else StyleBoxFlat.new()
@@ -413,11 +427,12 @@ func _process(delta: float) -> void:
   bell_art.rotation=desk.bell.rotation
  if dirty or period>.10:
   _refresh(dirty);dirty=false;period=0.0
- if face.visible and not Game.prefs.reduced_motion and last_npc!="CHR-021":
-  face.position.y=94+sin(clock*1.7)*.3
+ face.position=_face_anchor()+face_offset
+ if face.visible and visitor_phase=="standing" and not Game.prefs.reduced_motion and last_npc!="CHR-021":
+  face.position.y+=sin(clock*1.7)*.3
   if is_instance_valid(desk.customer):
    face.position.y+=float(desk.customer.gesture.get("nod",0))*2.0-float(desk.customer.gesture.get("lean",0))*1.5
- else:face.position.y=94
+ _advance_visible_departure()
  speech.visible_ratio=desk.bubble_label.visible_ratio
 
 func _refresh(force := false) -> void:
@@ -496,13 +511,11 @@ func _refresh(force := false) -> void:
  secondary.visible=t!=null and CounterDialogue.active(s)
  secondary.disabled=desk.dialogue_put_aside.disabled
  order_count.text="%d 待办"%s.orders.filter(func(o):return o.status=="active").size()
- face.visible=t!=null;name_key.visible=t!=null;get_node("StrictNamePaper").visible=t!=null
- var bubble=get_node("StrictSpeechBubble");bubble.visible=t!=null;speech.visible=t!=null
+ _sync_visitor(t)
+ var speaking=t!=null and visitor_phase=="standing"
+ name_key.visible=speaking;get_node("StrictNamePaper").visible=speaking
+ var bubble=get_node("StrictSpeechBubble");bubble.visible=speaking;speech.visible=speaking
  if t!=null:
-  if str(t.npcId)!=last_npc:
-   last_npc=str(t.npcId);face.texture=A.counter_portrait(last_npc)
-   if not Game.prefs.reduced_motion:
-    face.modulate.a=0.0;create_tween().tween_property(face,"modulate:a",1.0,.25)
   name_key.text=GameData.npc(t.npcId).name
   var raw=desk.bubble_label.get_parsed_text()
   var boilerplate="这只%s我想出手，开价%s Cr。你先看看，价钱咱们可以谈。"%[fullname,Model.jnum(t.get("price",0))]
@@ -626,6 +639,11 @@ func _table_points(direction: String,count: int) -> Array[Vector2]:
  return points
 
 func _table() -> void:
+ var previous := {}
+ for child in table.get_children():
+  if child is TradeWatch:
+   var visual=child.get_node("WatchVisual")
+   previous[child.uid]=child.position+visual.position
  for c in table.get_children():c.free()
  var shown=CounterDialogue.table_items(Game.state)
  var buys=shown.filter(func(info):return info.direction=="buy")
@@ -645,17 +663,22 @@ func _table() -> void:
    if saved is Array and saved.size()==2:
     var found=slots.find(Vector2(float(saved[0]),float(saved[1])))
     if found>=0:slot_index=found
-   _table_watch(it,points[clampi(slot_index,0,points.size()-1)],info.price,info.focused,func():
+   var key=_table_watch(it,points[clampi(slot_index,0,points.size()-1)],info.price,info.focused,func():
     Game.dispatch({"type":"COUNTER_FOCUS","tradeId":Game.state.trade.id,"uid":info.uid});dirty=true,visitor,tag_width)
+   _animate_table_watch(key,previous,visitor)
  if Game.state.trade==null and desk.showroom.selected_uid!="":
   var it=Game.item(desk.showroom.selected_uid)
-  if it!=null:_table_watch(it,_table_project(Vector2(700,505)),it.get("listPrice",0),true,func():desk.showroom.flip_original();dirty=true,true,120)
+  if it!=null:
+   var key=_table_watch(it,_table_project(Vector2(700,505)),it.get("listPrice",0),true,func():desk.showroom.flip_original();dirty=true,true,120)
+   _animate_table_watch(key,previous,false)
+ watch_sources.clear()
 
-func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visitor:=false,tag_width:=90.0) -> void:
+func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visitor:=false,tag_width:=90.0) -> Button:
  var b=TradeWatch.new();b.mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND;b.controller=self;b.uid=it.uid;b.name="strict_table_"+str(it.uid)
  b.position=center-Vector2(tag_width/2,43);b.size=Vector2(tag_width,118 if visitor else 130)
  for state in ["normal","hover","pressed","focus"]:b.add_theme_stylebox_override(state,StyleBoxEmpty.new())
  table.add_child(b)
+ var visual=Control.new();visual.name="WatchVisual";visual.mouse_filter=Control.MOUSE_FILTER_IGNORE;visual.size=b.size;b.add_child(visual)
  var is_back=desk.showroom.preview_back if Game.state.trade==null else desk.counter_table.sprites.has(it.uid) and desk.counter_table.sprites[it.uid].back
  var texture=A.watch(it,is_back,"visitor" if visitor else "table")
  var art_rect=Rect2((tag_width-56)/2,0,56,78 if visitor else 84)
@@ -664,11 +687,14 @@ func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visit
   if visitor and art_rect.size.y>78:
    art_rect.size*=78.0/art_rect.size.y;art_rect.position=Vector2((tag_width-art_rect.size.x)/2,0)
  var shadow=R.shadow_for(it,visitor)
- if shadow!=null:_image(b,shadow,Rect2(Vector2(tag_width/2,43)-shadow.get_meta("native_anchor"),shadow.get_size()))
- var art=_image(b,texture,art_rect)
- if watch_sides.has(it.uid) and watch_sides[it.uid]!=is_back and not Game.prefs.reduced_motion:
-  art.pivot_offset=art.size*.5;art.scale.x=.04
-  art.create_tween().tween_property(art,"scale:x",1.0,.18).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+ if shadow!=null:_image(visual,shadow,Rect2(Vector2(tag_width/2,43)-shadow.get_meta("native_anchor"),shadow.get_size()))
+ var art=_image(visual,texture,art_rect);art.name="WatchArt"
+ if watch_sides.has(it.uid) and watch_sides[it.uid]!=is_back:
+  if Game.prefs.reduced_motion:
+   art.modulate.a=.55;art.create_tween().tween_property(art,"modulate:a",1.0,.16)
+  else:
+   art.pivot_offset=art.size*.5;art.scale.x=.04
+   art.create_tween().tween_property(art,"scale:x",1.0,.18).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
  watch_sides[it.uid]=is_back
  b.gui_input.connect(func(event):
   if event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_RIGHT and not desk.busy and not desk._scene_blocked():
@@ -695,6 +721,7 @@ func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visit
   tag.add_theme_stylebox_override("normal",normal_tag);tag.add_theme_color_override("font_color",Color("efb34f") if focus else Color("f7e7c6"));arrow.visible=focus and not visitor)
  b.pressed.connect(func():
   if not desk.busy and not desk._scene_blocked():fn.call())
+ return b
 
 func _decorate_original(button: Control,it,compact:=false) -> void:
  var inset=Vector2((button.size.x-64)/2,0)
@@ -747,20 +774,203 @@ func _drop_data(at_position: Vector2,data) -> void:
     desk.showroom.place_original(uid,"warehouse",index);break
  dirty=true
 
+func _face_anchor() -> Vector2:
+ return layout_rects.get(face,Rect2(474,94,383,362)).position+Vector2(extra_space.x*.5,0)
+
+func _sync_visitor(trade) -> void:
+ face.visible=trade!=null
+ if trade==null:return
+ var visit=str(trade.get("id",""))
+ if visit==last_visit:
+  if visitor_phase=="settling" and not desk.busy:visitor_phase="standing"
+  return
+ last_visit=visit;last_npc=str(trade.npcId)
+ if is_instance_valid(visitor_tween):visitor_tween.kill()
+ _clear_departure()
+ face.texture=A.counter_portrait(last_npc);face.modulate.a=1.0;face_offset=Vector2.ZERO
+ visitor_phase="standing"
+ if not motion_ready:return
+ visitor_phase="entering";face.modulate.a=.2 if Game.prefs.reduced_motion else 0.0
+ face_offset=Vector2.ZERO if Game.prefs.reduced_motion else Vector2(84,0)
+ visitor_tween=create_tween().set_parallel(true)
+ var duration=.16 if Game.prefs.reduced_motion else .42
+ visitor_tween.tween_property(face,"modulate:a",1.0,duration)
+ visitor_tween.tween_property(self,"face_offset",Vector2.ZERO,duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+ visitor_tween.chain().tween_callback(func():visitor_phase="settling";dirty=true)
+ face.position=_face_anchor()+face_offset
+
+func _clear_departure() -> void:
+ if is_instance_valid(departure_tween):departure_tween.kill()
+ if is_instance_valid(departing_face):departing_face.queue_free()
+ departing_face=null;departure_started=false
+
+func _start_visible_departure() -> void:
+ _clear_departure()
+ if face.texture==null:return
+ departing_face=_image(self,face.texture,Rect2(face.position,face.size))
+ departing_face.name="DepartingVisitor";departing_face.stretch_mode=face.stretch_mode
+ departing_face.modulate.a=face.modulate.a
+ # This painted copy cannot retain the departed visit's click handlers.
+ move_child(departing_face,face.get_index())
+ if is_instance_valid(visitor_tween):visitor_tween.kill()
+ face_offset=Vector2.ZERO
+
+func _advance_visible_departure() -> void:
+ if not is_instance_valid(departing_face) or departure_started:return
+ # The reducer has already completed the transaction. Keep the painted
+ # visitor through the existing goodbye/handovers, then follow its walk out.
+ if desk.busy and is_instance_valid(desk.customer) and not desk.customer.walking:return
+ departure_started=true
+ var outgoing=departing_face
+ departure_tween=create_tween().set_parallel(true)
+ var duration=.16 if Game.prefs.reduced_motion else .42
+ if not Game.prefs.reduced_motion:
+  departure_tween.tween_property(outgoing,"position",outgoing.position+Vector2(-110,0),duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+ departure_tween.tween_property(outgoing,"modulate:a",0.0,duration)
+ departure_tween.chain().tween_callback(func():
+  outgoing.queue_free()
+  if departing_face==outgoing:departing_face=null)
+
+func _watch_center(uid: String) -> Vector2:
+ var key=table.get_node_or_null("strict_table_"+uid)
+ if key!=null:
+  return key.position+key.get_node("WatchVisual").position+Vector2(key.size.x*.5,43)
+ key=find_child("strict_stock_"+uid,true,false)
+ if key!=null:return get_global_transform().affine_inverse()*key.get_global_rect().get_center()
+ var it=Game.item(uid)
+ return Vector2(170,300) if it!=null and it.location=="display" else Vector2(200,720)
+
+func _watch_texture(uid: String,it) -> Texture2D:
+ var art=table.get_node_or_null("strict_table_"+uid+"/WatchVisual/WatchArt")
+ return art.texture if art!=null else A.watch(it)
+
+func _animate_table_watch(key: Button,previous: Dictionary,visitor: bool) -> void:
+ if not motion_ready:return
+ var visual=key.get_node("WatchVisual")
+ var start:Vector2=key.position
+ var moved=false
+ if watch_sources.has(key.uid):
+  start=watch_sources[key.uid]-Vector2(key.size.x*.5,43);moved=true
+ elif previous.has(key.uid):
+  start=previous[key.uid];moved=start.distance_to(key.position)>1.0
+ else:
+  start=(_face_anchor()+Vector2(190,300) if visitor else _watch_center(key.uid))-Vector2(key.size.x*.5,43)
+  moved=true
+ if not moved:return
+ if Game.prefs.reduced_motion:
+  visual.modulate.a=.48
+  var tween=visual.create_tween();visual.set_meta("motion_tween",tween)
+  tween.tween_property(visual,"modulate:a",1.0,.16)
+ else:
+  visual.position=start-key.position;visual.pivot_offset=Vector2(key.size.x*.5,43)
+  visual.scale=Vector2(1.06,1.06)
+  var tween=visual.create_tween().set_parallel(true);visual.set_meta("motion_tween",tween)
+  tween.tween_property(visual,"position",Vector2.ZERO,.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+  tween.tween_property(visual,"scale",Vector2.ONE,.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _watch_ghost(texture: Texture2D,from: Vector2,to: Vector2,invalid:=false) -> void:
+ var ghost=_image(self,texture,Rect2(from-Vector2(28,42),Vector2(56,84)))
+ motion_serial+=1;ghost.name="WatchMotionGhost_"+str(motion_serial);ghost.pivot_offset=ghost.size*.5
+ var duration=.16 if Game.prefs.reduced_motion else .3
+ var tween=ghost.create_tween().set_parallel(true)
+ if not Game.prefs.reduced_motion:
+  tween.tween_property(ghost,"position",to-ghost.size*.5,duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+  tween.tween_property(ghost,"scale",Vector2.ONE*.92,duration)
+ tween.tween_property(ghost,"modulate:a",0.0,duration).from(.8)
+ if invalid:
+  var label=_label(ghost,"已归位",Rect2(-16,78,90,30),17,Color("243a30"),true)
+  label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+  label.add_theme_stylebox_override("normal",_style(Color("d8e8df"),Color("345c53"),5))
+ tween.chain().tween_callback(ghost.queue_free)
+
+func _store_motion(uid: String,texture: Texture2D,from: Vector2) -> void:
+ # GridContainer establishes its new canonical hit rectangles next frame.
+ # Waiting here only affects the mouse-ignoring picture, never the reducer.
+ var version=int(store_motion_versions.get(uid,0))+1;store_motion_versions[uid]=version
+ _refresh()
+ await get_tree().process_frame
+ if not is_inside_tree() or store_motion_versions.get(uid)!=version:return
+ _watch_ghost(texture,from,_watch_center(uid))
+
+func _notification(what: int) -> void:
+ if what==NOTIFICATION_EXIT_TREE or what==NOTIFICATION_VISIBILITY_CHANGED and not is_visible_in_tree():
+  _end_drag_feedback(false,false)
+  return
+ if not is_instance_valid(table):return
+ # A native drag may end after the desktop is hidden by a portrait resize.
+ # Restoration belongs to the drag lifecycle, independently of visibility.
+ if what==NOTIFICATION_DRAG_BEGIN and is_visible_in_tree():
+  _begin_drag_feedback(get_viewport().gui_get_drag_data())
+ elif what==NOTIFICATION_DRAG_END:
+  _end_drag_feedback(get_viewport().gui_is_drag_successful(),is_visible_in_tree())
+
+func _begin_drag_feedback(data) -> void:
+ if not data is Dictionary or data.get("kind","") not in ["strict_trade","showroom_original"]:return
+ var uid=str(data.get("uid",""))
+ var it=TradeSession.item(Game.state,uid) if Game.state.trade!=null else Game.item(uid)
+ if it==null:return
+ drag_feedback={"uid":uid,"from":_watch_center(uid),"texture":_watch_texture(uid,it)}
+ var key=table.get_node_or_null("strict_table_"+uid)
+ if key!=null:
+  var visual=key.get_node("WatchVisual")
+  var tween=visual.get_meta("motion_tween") if visual.has_meta("motion_tween") else null
+  if tween is Tween and tween.is_valid():tween.kill()
+  visual.position=Vector2.ZERO;visual.scale=Vector2.ONE;visual.modulate.a=.38
+  drag_feedback.from=key.position+Vector2(key.size.x*.5,43)
+
+func _end_drag_feedback(success: bool,animate:=true) -> void:
+ if drag_feedback.is_empty():return
+ var feedback=drag_feedback;drag_feedback={}
+ var key=table.get_node_or_null("strict_table_"+feedback.uid) if is_instance_valid(table) else null
+ if key!=null:
+  var visual=key.get_node("WatchVisual");visual.modulate.a=1.0
+  if not animate:
+   var tween=visual.get_meta("motion_tween") if visual.has_meta("motion_tween") else null
+   if tween is Tween and tween.is_valid():tween.kill()
+   visual.position=Vector2.ZERO;visual.scale=Vector2.ONE
+ if not animate:return
+ if key!=null:
+  var visual=key.get_node("WatchVisual")
+  if success:
+   var settle=visual.create_tween();visual.set_meta("motion_tween",settle)
+   if Game.prefs.reduced_motion:
+    visual.modulate.a=.48;settle.tween_property(visual,"modulate:a",1.0,.16)
+   else:
+    visual.scale=Vector2(1.07,.94);settle.tween_property(visual,"scale",Vector2.ONE,.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+ if not success:
+  var from=get_local_mouse_position() if not Game.prefs.reduced_motion else feedback.from
+  _watch_ghost(feedback.texture,from,feedback.from,true)
+
 func _model_changed(previous: Dictionary,next: Dictionary,action: Dictionary) -> void:
  dirty=true
- if not visible or Game.prefs.reduced_motion or action.get("type","") not in ["DELIVER","TRADE_CHECKOUT"]:return
+ if not visible:return
+ var verb=str(action.get("type",""))
+ if previous.get("trade")!=null and next.get("trade")==null:_start_visible_departure()
+ if verb=="COUNTER_PREVIEW":
+  var before=str(previous.get("counterPreviewUid",""));var after=str(next.get("counterPreviewUid",""))
+  if before!=after:
+   if after!="":watch_sources[after]=_watch_center(after)
+   elif before!="":
+    var item=Model.find_inventory(previous,before)
+    if item!=null:_store_motion.call_deferred(before,A.watch(item),_watch_center(before))
+ if verb=="SELECT_TRADE":
+  var uid=str(action.get("uid",""))
+  if not CounterDialogue.table_items(previous).any(func(info):return info.uid==uid) and CounterDialogue.table_items(next).any(func(info):return info.uid==uid):
+   watch_sources[uid]=_watch_center(uid)
+ if verb=="SHOWROOM_PLACE":
+  var uid=str(action.get("uid",""));var item=Model.find_inventory(previous,uid)
+  if item!=null and int(next.get("showroomLayout",{}).get(str(action.get("location","")),{}).get(uid,-1))==int(action.get("slot",-2)):
+   _store_motion.call_deferred(uid,A.watch(item),_watch_center(uid))
+ if verb not in ["DELIVER","TRADE_CHECKOUT","PAWN","REFUSE","TRADE_END","COUNTER_CANCEL"]:return
  var remaining=CounterDialogue.table_items(next).map(func(info):return info.uid)
  for child in table.get_children():
   if not child is TradeWatch or child.uid in remaining:continue
   var it=TradeSession.item(previous,child.uid)
   if it==null:continue
-  var ghost=_image(self,A.watch(it),Rect2(child.position+Vector2((child.size.x-60)/2,0),Vector2(60,85)))
-  var target=Vector2(150,705) if it.owner=="npc" else Vector2(690,250)
-  var tw=create_tween().set_parallel(true)
-  tw.tween_property(ghost,"position",target,.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-  tw.tween_property(ghost,"modulate:a",0.0,.4)
-  tw.chain().tween_callback(ghost.queue_free)
+  var buying=it.owner=="npc"
+  if verb in ["REFUSE","TRADE_END","COUNTER_CANCEL"]:buying=not buying
+  var target=Vector2(180,720) if buying else _face_anchor()+Vector2(190,260)
+  _watch_ghost(A.watch(it),_watch_center(child.uid),target)
 
 func _open_evidence() -> void:
  var popup=PopupPanel.new();popup.name="StrictEvidencePopup";popup.theme=UIKit.build_theme()

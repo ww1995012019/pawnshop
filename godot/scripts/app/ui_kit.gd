@@ -16,6 +16,12 @@ const INK := Color("302b25")
 const RUST := Color("b44c36")
 const DANGER := Color("a33b2d")
 const GOOD := Color("3d684c")
+const AUX_PAPER := Color("dcebe5")
+const AUX_INK := Color("213f38")
+const AUX_EDGE := Color("4d776b")
+const AUX_HEADER := Color("284f45")
+const AUX_LIGHT := Color("fff3d8")
+const NOTICE_ERROR := Color("87382d")
 const GAP := 12
 const PAD := 20
 
@@ -97,6 +103,41 @@ static func paper_style(pad := 18) -> StyleBox:
 
 static func screen_style(pad := 10) -> StyleBox:
 	return skin("screen", "sm", minf(pad,6) if mobile_ui else pad)
+
+## Temporary controls use a cool auxiliary palette over the warm shop paper.
+static func context_style() -> StyleBoxFlat:
+	var s:=box(AUX_PAPER,AUX_EDGE,6,2,12,9)
+	s.bg_color=AUX_PAPER
+	s.shadow_color=Color(0.08,0.17,0.14,.28)
+	return s
+
+static func context_header_style() -> StyleBoxFlat:
+	var s:=box(AUX_HEADER,AUX_EDGE,4,1,6,0)
+	s.bg_color=AUX_HEADER
+	return s
+
+static func context_button(b: Button,kind := "secondary") -> void:
+	for state in ["normal","hover","pressed","disabled"]:
+		var fill:Color={"normal":Color("c7ddd3"),"hover":Color("edf8f1"),"pressed":Color("a9c8ba"),"disabled":Color("d2ded7")}[state]
+		var edge:=AUX_EDGE
+		if kind in ["primary","header"] and state!="disabled":
+			fill=Color("416f5f") if state=="hover" else Color("1d4037") if state=="pressed" else AUX_HEADER
+		elif kind=="danger" and state!="disabled":
+			fill=Color("ffe8db") if state=="hover" else Color("ddb5a5") if state=="pressed" else Color("f0d7c9")
+			edge=Color("975345")
+		var style:=box(fill,edge,2,2,6,0)
+		style.bg_color=fill
+		b.add_theme_stylebox_override(state,style)
+	var ink:=AUX_LIGHT if kind in ["primary","header"] else Color("783b31") if kind=="danger" else AUX_INK
+	for state in ["font_color","font_hover_color","font_pressed_color","font_focus_color"]:b.add_theme_color_override(state,ink)
+	b.add_theme_color_override("font_disabled_color",Color("67756d"))
+
+static func notice_style(tone: String,pad := 12) -> StyleBoxFlat:
+	var urgent:=tone in ["error","danger","warning","warn"]
+	var s:=box(NOTICE_ERROR if urgent else AUX_PAPER,Color("f5c174") if urgent else AUX_EDGE,6,2,pad,6)
+	s.bg_color=NOTICE_ERROR if urgent else AUX_PAPER
+	s.border_width_left=8
+	return s
 
 const KEY_SKIN := {"primary": "amber", "secondary": "graphite", "danger": "graphite", "good": "glass", "chip": "socket"}
 const KEY_TINT := {"primary": Color(1, 1, 1), "secondary": Color(0.92, 0.95, 1.0), "danger": Color(1.25, 0.72, 0.66), "good": Color(0.8, 1.2, 0.95), "chip": Color(1, 1, 1)}

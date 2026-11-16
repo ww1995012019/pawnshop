@@ -346,18 +346,22 @@ func open_item_menu(uid: String, point: Vector2) -> void:
 	context_layer.z_index=220
 	add_child(context_layer)
 	context_layer.gui_input.connect(_context_input)
-	item_menu=UIKit.plate(UIKit.paper_style(12))
+	item_menu=UIKit.plate(UIKit.context_style())
 	item_menu.name="WarehouseItemMenu"
 	item_menu.mouse_filter=Control.MOUSE_FILTER_STOP
 	context_layer.add_child(item_menu)
 	var body:=UIKit.vbox(8)
 	item_menu.add_child(body)
+	var heading:=UIKit.plate(UIKit.context_header_style())
+	body.add_child(heading)
 	var header:=UIKit.hbox(6)
-	body.add_child(header)
-	var title:=UIKit.label(GameData.def(Game.item(uid).defId).name,19,UIKit.INK,false,true)
+	heading.add_child(header)
+	var title:=UIKit.label(GameData.def(Game.item(uid).defId).name,19,UIKit.AUX_INK,false,true)
+	title.add_theme_color_override("font_color",UIKit.AUX_LIGHT)
 	title.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 	var close:=UIKit.button("关闭","chip",Vector2(48,32),14)
+	UIKit.context_button(close,"header")
 	close.pressed.connect(dismiss_context_menu)
 	header.add_child(close)
 	var scroller:=ScrollContainer.new()
@@ -426,6 +430,7 @@ func rotate_selected() -> void:
 
 func _act(g: GridContainer, text: String, kind: String, a, enabled := true, tip := "") -> void:
 	var b := UIKit.button(text, kind, Vector2(0, 44), 15 if shell.mobile_mode() else 17)
+	if not shell.mobile_mode() and is_instance_valid(item_menu):UIKit.context_button(b,kind)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.disabled = not enabled
 	b.tooltip_text = tip
@@ -765,7 +770,7 @@ class StorageGrid extends Control:
 				elif page.cabinet_content_rect(page.display_scroll,page.display_grid).has_point(get_global_transform_with_canvas()*mb.position):
 					page.store_original(uid,"display")
 				elif not page.warehouse_drop_rect().has_point(get_global_transform_with_canvas()*mb.position):
-					page.shell.toast("未放入可见仓格，原物已保留原位。")
+					page.shell.toast("未放入可见仓格，原物已保留原位。","error")
 				else:
 					var tl: Vector2 = ((mb.position - drag_offset) / page.cell_size).round()
 					var it = Game.item(uid)
@@ -773,7 +778,7 @@ class StorageGrid extends Control:
 					var placed = Game.item(uid)
 					if placed == null or placed.x != int(tl.x) or placed.y != int(tl.y) or placed.rotated != drag_rot:
 						var closed := Model.business_hours_problem(Game.state)
-						page.shell.toast(closed if closed != "" else "放置会重叠或越界，货物已回到原位。")
+						page.shell.toast(closed if closed != "" else "放置会重叠或越界，货物已回到原位。","error")
 					else:
 						prepared_uid = ""
 						page.shell.sound("drop", -6, 1.1)

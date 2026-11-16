@@ -9,6 +9,7 @@ var elapsed := 0.0
 var last_json := ""
 var opening_until := 0
 var visibility_callback: JavaScriptObject
+var resize_callback: JavaScriptObject
 var background_paused := false
 var _merchant_quote_state: Dictionary = {}
 var _merchant_quote_trade := ""
@@ -31,6 +32,13 @@ func setup(owner_shell: Node) -> void:
 	visibility_callback = JavaScriptBridge.create_callback(_visibility_changed)
 	window.orbitalVisibility = visibility_callback
 	JavaScriptBridge.eval("if (!window.orbitalVisibilityListener) { window.orbitalVisibilityListener = () => window.orbitalVisibility?.(document.hidden); document.addEventListener('visibilitychange',window.orbitalVisibilityListener); }")
+	resize_callback = JavaScriptBridge.create_callback(_browser_resized)
+	window.addEventListener("resize",resize_callback)
+
+func _browser_resized(_args: Array) -> void:
+	# Browser zoom can change CSS pixels/DPR without changing backing pixels.
+	# Refresh the cached layout values on that event, never on idle frames.
+	if is_instance_valid(shell): shell._fit.call_deferred()
 
 func _visibility_changed(args: Array) -> void:
 	if args.is_empty() or not is_instance_valid(shell): return
@@ -48,9 +56,11 @@ func _visibility_changed(args: Array) -> void:
 
 func _exit_tree() -> void:
 	if window != null:
+		if resize_callback != null: window.removeEventListener("resize",resize_callback)
 		window.orbitalTouchSend = null
 		window.orbitalTouchPlace = null
 		window.orbitalVisibility = null
+	resize_callback = null
 	if background_paused: get_tree().paused = false
 
 ## A finger went down at this canvas position (CSS pixels). Answer at once
@@ -127,6 +137,7 @@ func snapshot() -> Dictionary:
 				"inspection_busy": is_instance_valid(active.page.item) and active.page.item.busy,
 				"scale_stable": active.page.scale_stable,
 				"scale_occupied": active.page.scale_occupied})
+		result.merge(active.page.snapshot())
 	elif active.page_name == "repair":
 		result.merge(active.page.snapshot())
 		var current = Game.item(active.page.it_uid)
@@ -212,7 +223,8 @@ func _merchant_inventory_quotes(state: Dictionary) -> Array:
 	return _merchant_quotes
 
 func _screen_rect(control: Control) -> Dictionary:
-	var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1",true)) if OS.has_feature("web") else 1.0
+	# The shell refreshes this with the window layout; idle snapshots need no JS query.
+	var ratio: float = shell.presentation_pixel_ratio
 	var transform := control.get_viewport().get_screen_transform() * control.get_global_transform_with_canvas()
 	var rect := transform * Rect2(Vector2.ZERO,control.size)
 	return {"x":rect.position.x/ratio,"y":rect.position.y/ratio,"width":rect.size.x/ratio,"height":rect.size.y/ratio}

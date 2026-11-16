@@ -13,40 +13,50 @@ static func region(name: String,rect: Rect2) -> Texture2D:
  var a=AtlasTexture.new();a.atlas=tex(name);a.region=rect;cache[key]=a;return a
 static func watch(it,back := false,context := "") -> Texture2D:
  if it==null:return null
- if not back:
+ var id:String=WatchForgery.appearance_id(it)
+ # These unique exemplars retain the exact approved painting/context crops.
+ # C01 previously reused H01's gray crop; it now receives its own illustration.
+ if not back and id!="WCH-016":
   var exact=R.watch_for(it,context)
   if exact!=null:return exact
- # Detailed technical faces retain their model-authored evidence artwork.
+ # Model-specific comic illustrations preserve the separate technical evidence atlas.
+ var index:int=int(GameData.def(id).get("sprite",0))
+ var texture=region("watch_variants_back.png" if back else "watch_variants_front.png",Rect2(index%8*128,index/8*192,128,192))
+ texture.set_meta("body_axis",64.0)
+ return texture
 
- var d=GameData.def(WatchForgery.appearance_id(it))
- var name: String=d.get("name","")
- var idx=posmod(int(d.get("sprite",0)),8)
- if "玄汐" in name or "潜" in name:idx=7
- elif "纪念" in name or "旧航" in name:idx=6
- elif "金" in name:idx=0
- elif "计时" in name:idx=1
- var shape=WatchLogo.art(d.id).get("shape","square" if WatchForgery.template(d.id)==6 else "round")
- var shape_names=["square","octagon","oval","cushion","tonneau","sun","crescent"]
- if shape in shape_names and ResourceLoader.exists(ROOT+"watch_shapes.png"):
-  var column={"square":0,"octagon":2,"oval":3,"cushion":4,"tonneau":5,"sun":6,"crescent":7}[shape]
-  if shape=="square" and d.get("tier","") in ["luxury","ultra"]:column=1
-  var sheet=tex("watch_shapes.png");var unit=Vector2(sheet.get_width()/8.0,sheet.get_height()/2.0)
-  var fronts=[Rect2(60,144,124,223),Rect2(57,144,123,223),Rect2(50,140,130,230),Rect2(56,141,116,229),Rect2(43,148,140,216),Rect2(53,139,125,232),Rect2(39,141,141,229),Rect2(43,144,134,224)]
-  var backs=[Rect2(61,109,123,222),Rect2(59,113,123,216),Rect2(52,105,129,228),Rect2(56,108,116,225),Rect2(44,114,141,214),Rect2(54,107,125,227),Rect2(40,108,140,223),Rect2(44,110,134,221)]
-  var r:Rect2=backs[column] if back else fronts[column]
-  r.position+=Vector2(column,1 if back else 0)*unit
-  return region("watch_shapes.png",r)
- var bounds=[Rect2(74,76,249,393),Rect2(65,80,259,382),Rect2(101,78,191,386),Rect2(70,79,253,384),Rect2(71,77,252,382),Rect2(71,77,253,381),Rect2(70,77,253,382),Rect2(61,77,273,383)]
- var asset="watch_backs.png" if back else "watch_fronts.png"
- var t=tex(asset)
- var cell=Vector2(t.get_width()/4.0,t.get_height()/2.0)
- var b:Rect2=bounds[idx]
- b.position+=Vector2(idx%4,idx/4)*cell
- return region(asset,b)
+static func cabinet_icon(it: Dictionary) -> Texture2D:
+ var id:String=WatchForgery.appearance_id(it)
+ var key="cabinet-watch-"+id
+ if cache.has(key):return cache[key]
+ var texture=watch(it)
+ var image:Image=texture.get_image()
+ if image.is_compressed():image.decompress()
+ image.convert(Image.FORMAT_RGBA8)
+ # Ignore faint importer matte residue when fitting the actual painted body.
+ for y in image.get_height():
+  for x in image.get_width():
+   var color=image.get_pixel(x,y)
+   if color.a<.1:image.set_pixel(x,y,Color.TRANSPARENT)
+ var used:Rect2i=image.get_used_rect()
+ var axis:float=texture.get_meta("body_axis",image.get_width()*.5)
+ if R.STYLE_IDS.has(id) and id!="WCH-016":
+  var measured:Array=R.WATCHES[R.STYLE_IDS[id]]
+  # Slightly asymmetric painted straps are balanced with the dial, never the crown.
+  axis=(float(measured[1].x)+float(measured[2].get_center().x))*.5
+ var factor=178.0/maxi(1,used.size.y)
+ image.resize(maxi(1,roundi(image.get_width()*factor)),maxi(1,roundi(image.get_height()*factor)),Image.INTERPOLATE_LANCZOS)
+ var canvas=Image.create(192,192,false,Image.FORMAT_RGBA8)
+ canvas.blit_rect(image,Rect2i(Vector2i.ZERO,image.get_size()),Vector2i(roundi(96-axis*factor),roundi(96-(used.position.y+used.size.y*.5)*factor)))
+ var result=AtlasTexture.new()
+ result.atlas=ImageTexture.create_from_image(canvas)
+ result.region=Rect2(0,0,192,192)
+ cache[key]=result
+ return result
 static func prewarm() -> void:
  R.elder()
  # Decode before the first input so a new visitor cannot stall the bell tween.
- for asset in ["elder.png","residents.png","residents_new.png","residents_extra.png","landlord.png","watch_fronts.png","watch_backs.png","watch_shapes.png"]:tex(asset)
+ for asset in ["elder.png","residents.png","residents_new.png","residents_extra.png","landlord.png","watch_fronts.png","watch_backs.png","watch_shapes.png","watch_variants_front.png","watch_variants_back.png"]:tex(asset)
 
 static func portrait(id: String) -> Texture2D:
  if id=="CHR-021":return R.elder()

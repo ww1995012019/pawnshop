@@ -25,17 +25,20 @@ func rebuild() -> void:
   key.cabinet=self
   key.custom_minimum_size=Vector2(cell_size,cell_size)
   key.size_flags_horizontal=Control.SIZE_SHRINK_BEGIN
+  key.icon_alignment=HORIZONTAL_ALIGNMENT_CENTER
+  key.vertical_icon_alignment=VERTICAL_ALIGNMENT_CENTER
   key.add_theme_constant_override("icon_max_width",maxi(8,int(cell_size)-8))
   key.add_theme_stylebox_override("normal",slot_style())
-  key.add_theme_stylebox_override("hover",UIKit.key_style("primary","hover",true))
+  for state in ["hover","pressed","hover_pressed","disabled"]:
+   key.add_theme_stylebox_override(state,interaction_style(state))
   if i<items.size():
    var it:Dictionary=items[i]
-   key.uid=it.uid;key.icon=UIKit.physical_icon(it);key.expand_icon=true
+   key.uid=it.uid;key.icon=load("res://scripts/ui/comic_assets.gd").cabinet_icon(it);key.expand_icon=true
    key.texture_filter=CanvasItem.TEXTURE_FILTER_NEAREST
    key.tooltip_text=GameData.def(it.defId).name+" · "+it.uid
    UIKit.decorate_item(key,it,12)
    key.pressed.connect(func():page.select(it.uid))
-   if page.selected==it.uid:key.add_theme_stylebox_override("normal",UIKit.key_style("primary","normal",true))
+   if page.selected==it.uid:key.add_theme_stylebox_override("normal",interaction_style("normal"))
   else:key.tooltip_text="空仓位 · 可拖入符合条件的原表"
   add_child(key)
 
@@ -43,6 +46,12 @@ func slot_style() -> StyleBoxFlat:
  var style:=StyleBoxFlat.new()
  style.bg_color=Color("d8c59f");style.border_color=Color("75654b")
  style.set_border_width_all(2)
+ style.set_content_margin_all(4)
+ return style
+
+func interaction_style(state: String) -> StyleBox:
+ var style=UIKit.key_style("primary",state,true)
+ style.set_content_margin_all(4)
  return style
 
 func _can_drop_data(_position: Vector2,data: Variant) -> bool:

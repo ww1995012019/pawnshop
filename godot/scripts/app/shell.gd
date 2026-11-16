@@ -433,6 +433,9 @@ const TouchAssist := preload("res://scripts/app/touch_assist.gd")
 
 var workspace_layout_deferred := false
 var presentation_orientation := ""
+var presentation_window_size := Vector2i.ZERO
+var presentation_phone_override := false
+var presentation_pixel_ratio := 1.0
 var counter_layout_deferred := false
 func _counter_layout_busy() -> bool:
 	return page != null and page_name == "counter" and (page.busy or is_instance_valid(page.mat_item) and page.mat_item.busy)
@@ -442,6 +445,8 @@ func portrait_mode() -> bool:
 		if workspace_parent.workspace_layout_deferred: return presentation_orientation == "portrait"
 		return workspace_parent.portrait_mode()
 	if _counter_layout_busy() and presentation_orientation != "": return presentation_orientation == "portrait"
+	if presentation_orientation!="" and get_window().size==presentation_window_size and phone_override==presentation_phone_override:
+		return presentation_orientation=="portrait"
 	return _physical_portrait()
 
 func _physical_portrait() -> bool:
@@ -453,6 +458,9 @@ func landscape_mode() -> bool:
 	if workspace_mode:
 		if workspace_parent.workspace_layout_deferred: return presentation_orientation == "landscape"
 		return workspace_parent.landscape_mode()
+	if _counter_layout_busy() and presentation_orientation!="":return presentation_orientation=="landscape"
+	if presentation_orientation!="" and get_window().size==presentation_window_size and phone_override==presentation_phone_override:
+		return presentation_orientation=="landscape"
 	return not portrait_mode() and _landscape_phone()
 
 func safe_area() -> Rect2:
@@ -469,6 +477,7 @@ func mobile_mode() -> bool:
 
 func _fit_view() -> void:
 	var window := get_window()
+	presentation_pixel_ratio = float(JavaScriptBridge.eval("devicePixelRatio || 1",true)) if OS.has_feature("web") else 1.0
 	var physical := "portrait" if _physical_portrait() else "landscape" if _landscape_phone() else "desktop"
 	if _counter_layout_busy() and presentation_orientation != "" and physical != presentation_orientation:
 		counter_layout_deferred = true
@@ -476,6 +485,8 @@ func _fit_view() -> void:
 		return
 	counter_layout_deferred = false
 	presentation_orientation = physical
+	presentation_window_size=window.size
+	presentation_phone_override=phone_override
 	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	if landscape_mode():
 		var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1", true)) if OS.has_feature("web") else 1.0
@@ -563,16 +574,17 @@ func _fit() -> void:
 ## Each page names a free spot for notices so they never cover its controls.
 func _place_toasts() -> void:
 	var r: Rect2 = page.toast_rect() if page != null else Rect2()
+	var repair_slot:=workspace_mode and page_name=="repair" and r.has_area()
 	if r.size != Vector2.ZERO and not workspace_mode and page_name == "counter":
 		r.position += counter_offset()
 	if r.size == Vector2.ZERO:
 		# Default: a strip under the HUD, over the room's back wall.
 		var vis := get_viewport().get_visible_rect().size
 		r = Rect2(vis.x * 0.5 - 330, 96, 660, 200)
-	if portrait_mode():
+	if portrait_mode() and not repair_slot:
 		var visible := get_viewport().get_visible_rect().size
 		r = Rect2(12,80,visible.x-24,120)
-	if landscape_mode():
+	if landscape_mode() and not repair_slot:
 		var visible := get_viewport().get_visible_rect().size
 		r = Rect2(visible.x*.28,4,visible.x*.45,36)
 	# Narrow existing notices first: a Control cannot shrink below its
@@ -1014,6 +1026,9 @@ func _clear_toasts() -> void:
 
 func toast(text: String, tone := "info") -> void:
 	var active := active_shell()
+	if not workspace_mode and workspace_open() and active.page_name=="repair":
+		active.toast(text,tone)
+		return
 	if active.page_name == "report" and active.page != null:
 		_clear_toasts()
 		active.page.show_status(text, tone)
@@ -1026,21 +1041,30 @@ func toast(text: String, tone := "info") -> void:
 		get_tree().create_timer(3.6).timeout.connect(func():
 			if workspace_open() and not workspace_close_pending and workspace_title.text == shown: _workspace_heading(workspace_shell.page_name))
 		return
-	if workspace_mode and landscape_mode():
+	if workspace_mode and landscape_mode() and page_name!="repair":
 		workspace_parent.toast(text,tone)
 		return
+	_place_toasts()
 	# The same notice twice in a row (e.g. arriving and then opening the
 	# workbench) only refreshes the one already shown.
 	if toast_box.get_child_count() > 0:
 		var last := toast_box.get_child(toast_box.get_child_count() - 1)
-		if not last.is_queued_for_deletion() and (last.get_child(0) as Label).text == text:
+		if not last.is_queued_for_deletion() and last.get_meta("message","") == text and last.get_meta("tone","")==tone:
 			return
-	var p := UIKit.plate(UIKit.paper_style(6 if landscape_mode() else 14))
+	var urgent:=tone in ["error","danger","warning","warn"]
+	var notice_skin:=UIKit.notice_style(tone,6 if mobile_mode() else 12)
+	if landscape_mode():
+		notice_skin.content_margin_top=2
+		notice_skin.content_margin_bottom=2
+	var p := UIKit.plate(notice_skin)
+	p.name="NoticeBanner"
+	p.set_meta("message",text);p.set_meta("tone",tone)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var l := UIKit.label(text, 14 if landscape_mode() else 18, UIKit.INK if tone == "info" else UIKit.RUST, false, true)
+	var l := UIKit.label(("！ " if urgent else "提示 · ")+text,14 if landscape_mode() else 16 if mobile_mode() else 20,UIKit.AUX_INK,true,true)
+	l.add_theme_color_override("font_color",UIKit.AUX_LIGHT if urgent else UIKit.AUX_INK)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.max_lines_visible = 1 if landscape_mode() else 2
+	l.max_lines_visible = 1 if landscape_mode() and page_name!="repair" else 2
 	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	l.tooltip_text = text
 	l.custom_minimum_size = Vector2(toast_box.size.x - 36, 0)
@@ -1052,13 +1076,13 @@ func toast(text: String, tone := "info") -> void:
 		old.queue_free()
 	if Game.prefs.reduced_motion:
 		var hold := p.create_tween()
-		hold.tween_interval(4.0)
+		hold.tween_interval(6.0 if urgent else 4.8)
 		hold.tween_callback(p.queue_free)
 		return
 	p.modulate.a = 0.0
 	var tw := p.create_tween()
 	tw.tween_property(p, "modulate:a", 1.0, 0.18)
-	tw.tween_interval(3.6)
+	tw.tween_interval(5.6 if urgent else 4.4)
 	tw.tween_property(p, "modulate:a", 0.0, 0.4)
 	tw.tween_callback(p.queue_free)
 

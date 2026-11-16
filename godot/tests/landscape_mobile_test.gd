@@ -73,7 +73,7 @@ func run():
  var inspector = shell.workspace_shell.page
  inspector._set_tool("TOL-005")
  await frames()
- var pan_rect: Rect2 = inspector.shell.get_viewport().get_canvas_transform() * inspector.scale_pan.global_transform * Rect2(-155,0,310,48)
+ var pan_rect: Rect2 = inspector.shell.get_viewport().get_canvas_transform() * inspector.scale_pan.global_transform * inspector.scale_pan.body_rect()
  check(inspector.mat_rect.encloses(pan_rect),"actual scale pan fits the live surface above its controls")
  var closed_shell = shell.workspace_shell
  shell.close_workspace()
