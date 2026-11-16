@@ -18,6 +18,7 @@
     "test:trading:web": "python3 scripts/test-multi-item-trade-web.py",
     "test:counterfeit:web": "python3 scripts/test-premium-counterfeit-web.py",
     "test:warehouse:web": "python3 scripts/test-warehouse-expansion-web.py",
-    "test:workspaces:web": "python3 scripts/test-compact-workspaces-web.py"
+    "test:workspaces:web": "python3 scripts/test-compact-workspaces-web.py",
+    "test:desktop-framing:web": "python3 scripts/test-desktop-framing-web.py"
   }
 }

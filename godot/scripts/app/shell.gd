@@ -426,12 +426,8 @@ func counter_offset() -> Vector2:
 		return Vector2.ZERO
 	return ((get_viewport().get_visible_rect().size - Vector2(1920, 1080)) * 0.5).floor() - view_shift
 
-## The shop is limited by the screen height on wide screens and leaves blank
-## wall at both sides, so the whole picture is enlarged there, hiding only the
-## ceiling and floor strips that carry no controls. Phones are small: they also
-## give up the bare wall beside the fixtures and frame just the working shop.
-const WIDE_VIEW := Rect2(0, 40, 1920, 1000)
-const PHONE_VIEW := Rect2(130, 45, 1755, 990)
+## The comic desktop uses both edges for its HUD and action bar. Fit its full
+## 1920×1080 canvas; the former pixel-room crop would cut through these controls.
 var view_shift := Vector2.ZERO
 const TouchAssist := preload("res://scripts/app/touch_assist.gd")
 
@@ -495,20 +491,8 @@ func _fit_view() -> void:
 		view_shift = Vector2.ZERO
 		return
 	if window.content_scale_size != Vector2i(1920,1080): window.content_scale_size = Vector2i(1920,1080)
-	var pixels := Vector2(window.size)
-	if pixels.x <= 0.0 or pixels.y <= 0.0:
-		return
-	var view := PHONE_VIEW if _landscape_phone() else WIDE_VIEW
-	var base := minf(pixels.x / 1920.0, pixels.y / 1080.0)
-	var factor := maxf(1.0, minf(pixels.x / view.size.x, pixels.y / view.size.y) / base)
-	if not is_equal_approx(window.content_scale_factor, factor):
-		window.content_scale_factor = factor
-	# Move the picture only as far as the framed part needs to stay on screen.
-	var half := pixels / (base * factor) * 0.5
-	var low := view.end - half - CENTER
-	var high := view.position + half - CENTER
-	view_shift = Vector2(clampf(0.0, minf(low.x, high.x), maxf(low.x, high.x)),
-		clampf(0.0, minf(low.y, high.y), maxf(low.y, high.y))).round()
+	if window.content_scale_factor != 1.0: window.content_scale_factor = 1.0
+	view_shift = Vector2.ZERO
 
 ## CSS pixels per unit of this shell's viewport, for finger-sized targets.
 var touch_scale_override := 0.0

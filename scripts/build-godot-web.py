@@ -63,11 +63,11 @@ def package_web(pack, runtime, output):
     cast, cast_image = loading_cast()
     cast_name = "loading-cast-" + digest(cast_image)[:16] + ".webp"
     assets[cast_name] = cast_image
-    loading = (ROOT / "godot/web/loading-shop.png").read_bytes()
-    loading_name = "loading-shop-" + digest(loading)[:16] + ".png"
+    loading = loading_background()
+    loading_name = "loading-shop-" + digest(loading)[:16] + ".webp"
     assets[loading_name] = loading
     # Resolve the background URL before hashing its CSS filename.
-    css_data = assets.pop(css_name).replace(b"loading-shop.png", loading_name.encode())
+    css_data = assets.pop(css_name).replace(b"loading-shop.webp", loading_name.encode())
     css_name = "touch-" + digest(css_data)[:16] + ".css"
     assets[css_name] = css_data
     previous_assets = old.get("previous_assets", []) if transport == old.get("transport") else list(old.get("transport", {}))
@@ -86,7 +86,7 @@ def package_web(pack, runtime, output):
                                "$GODOT_HEAD_INCLUDE": head}.items():
         html = html.replace(placeholder, value)
     html = html.replace('"web-ui.js"', f'"{js_name}"').replace('"web-ui.css"', f'"{css_name}"')
-    html = html.replace("loading-shop.png", loading_name)
+    html = html.replace("loading-shop.webp", loading_name)
     html = html.replace("loading-cast.webp", cast_name).replace("$LOADING_CAST", json.dumps(cast, ensure_ascii=False).replace("<", "\\u003c"))
     html = html.replace("asset-loader.js", loader_name)
     assets["index.html"] = html.encode()
@@ -120,32 +120,45 @@ def package_web(pack, runtime, output):
     return result
 
 
+def loading_background():
+    """Current comic shop, without the unused HUD/folio area or painted data."""
+    import io
+    from PIL import Image
+    scenery = Image.open(ROOT / "godot/assets/comic/reference-clean-room.png")
+    data = io.BytesIO()
+    scenery.crop((0, 60, 1187, 866)).convert("RGB").save(data, format="WEBP", quality=88, method=4)
+    return data.getvalue()
+
+
 def loading_cast():
-    """Small transparent sprite sheet, independent of the large game pack."""
+    """Lightweight comic portraits, independent of the large game pack."""
     import io
     from PIL import Image
     game = json.loads((ROOT / "godot/data/game_data.json").read_text())
     people = game["npcs"] + json.loads((ROOT / "godot/data/extra_residents.json").read_text()) + json.loads((ROOT / "godot/data/new_residents.json").read_text())
-    sheet = Image.new("RGBA", (6 * 128, 6 * 128))
+    tile = 192
+    sheet = Image.new("RGBA", (6 * tile, 6 * tile))
     atlases = {}
     cast = []
     for npc in people:
         number = int(npc["id"].split("-")[1]) - 1
         if number >= 13:
-            key, index, columns = "shop-residents-new", number - 13, 5
+            key, index, columns, rows = "residents_new", number - 13, 5, 4
         elif number >= 9:
-            key, index, columns = "shop-residents-extra", number - 9, 2
+            key, index, columns, rows = "residents_extra", number - 9, 2, 2
         else:
-            key, index, columns = "shop-residents", number, 3
+            key, index, columns, rows = "residents", number, 3, 3
         if key not in atlases:
-            atlases[key] = Image.open(ROOT / "godot/assets/atlas" / (key + ".png")).convert("RGBA")
-        x, y = index % columns * 256, index // columns * 256
-        portrait = atlases[key].crop((x,y,x+256,y+256)).resize((128,128),Image.Resampling.NEAREST)
+            atlases[key] = Image.open(ROOT / "godot/assets/comic" / (key + ".png")).convert("RGBA")
+        atlas = atlases[key]
+        width, height = atlas.width / columns, atlas.height / rows
+        x, y = index % columns, index // columns
+        portrait = atlas.crop((round(x * width), round(y * height), round((x + 1) * width), round((y + 1) * height))).resize((tile, tile), Image.Resampling.LANCZOS)
         slot = len(cast)
-        sheet.paste(portrait,(slot % 6 * 128,slot // 6 * 128))
+        sheet.paste(portrait,(slot % 6 * tile,slot // 6 * tile))
         cast.append({"id":npc["id"],"name":npc["name"],"line":npc["line"],"slot":slot})
     data = io.BytesIO()
-    sheet.save(data, format="WEBP", lossless=True, method=6)
+    sheet.save(data, format="WEBP", quality=80, method=4)
     return cast, data.getvalue()
 
 
