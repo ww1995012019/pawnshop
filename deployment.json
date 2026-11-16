@@ -1,8 +1,8 @@
 {
-  "source_commit": "013cdf952a3e230d65db2717321a46cb84624487",
-  "release_id": "88cf3085894f175d",
-  "pack": "workbench-0f6cc412778f4865.pck",
-  "html_sha256": "b1eaa662603a73e38faf87bce01edc4ca11008bc4dc7908a5e05767c4f3e1aaf",
+  "source_commit": "3684f3ee8079faf03fa00b82c29a8dce833fa0bc",
+  "release_id": "ab6c1c68167da88d",
+  "pack": "workbench-b71f8136124ea3e1.pck",
+  "html_sha256": "57ca7fb4e36bf30a13f4983c0fd8b7ae0020d66127c6cd1ad7477a22ab037a18",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 131,
+  "native_regression_groups": 136,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -333,5 +333,14 @@
   "disabled_controls_readability_version": 1,
   "disabled_text_contrast": 4.99,
   "daily_event_availability_caption_version": 1,
-  "event_choice_browser_errors": 0
+  "event_choice_browser_errors": 0,
+  "watch_ui_polish_version": 1,
+  "comic_watch_appearance_count": 78,
+  "cabinet_icon_centering_version": 1,
+  "hold_to_drag_magnifier_version": 1,
+  "complete_scale_instrument_version": 1,
+  "repair_notice_slot_version": 1,
+  "context_and_notice_palette_version": 2,
+  "visible_counter_motion_version": 1,
+  "visit_transition_version": 1
 }
