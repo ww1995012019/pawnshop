@@ -11,6 +11,9 @@ func run() -> void:
   var transform=root.get_screen_transform()*view.get_global_transform_with_canvas()
   var top=transform*Vector2.ZERO;var bottom=transform*view.size
   check(top.x>=-.5 and top.y>=-.5 and bottom.x<=extent.x+.5 and bottom.y<=extent.y+.5,"complete comic desktop fits "+str(extent)+": "+str(Rect2(top,bottom-top)))
+  check(top.distance_to(Vector2.ZERO)<=1 and bottom.distance_to(Vector2(extent))<=1,"desktop fills the viewport without side or top/bottom bars at "+str(extent))
+  var ribbon=view.detail_layer.get_node_or_null("StrictAskRibbon")
+  check(ribbon!=null and ribbon.get_global_rect().encloses(view.ask.get_global_rect()) and ribbon.get_global_rect().encloses(view.ask_caption.get_global_rect()),"live price caption and value stay within their independent ribbon after resize")
   for key in [view.day,view.get_node("StrictNav_gauge-high")]:
    var screen=root.get_screen_transform()*key.get_global_transform_with_canvas()
    var first=screen*Vector2.ZERO;var last=screen*key.size

@@ -2,6 +2,7 @@ extends Node2D
 ## The inside of the equipment drawer. All gauges, goods and tools stay live.
 var mat_rect := Rect2()
 var viewport_size := Vector2.ZERO
+var paper:Texture2D=preload("res://assets/comic/paper.png")
 
 func set_mat(rect: Rect2) -> void:
 	mat_rect = rect
@@ -15,11 +16,7 @@ func _process(_delta: float) -> void:
 		queue_redraw()
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, viewport_size), Color("e9d6b2"))
-	for y in range(0, int(viewport_size.y), 108):
-		draw_rect(Rect2(0, y, viewport_size.x, 3), Color("dfc8a0"))
-		for x in range(24, int(viewport_size.x), 216):
-			draw_rect(Rect2(x, y+18, 4, 4), Color("b19d79"))
+	draw_texture_rect(paper,Rect2(Vector2.ZERO,viewport_size),false)
 	if mat_rect.size == Vector2.ZERO:
 		return
 	draw_rect(mat_rect, Color("332d27"))

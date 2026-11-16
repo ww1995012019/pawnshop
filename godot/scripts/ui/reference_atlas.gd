@@ -236,7 +236,11 @@ static func quote_skin() -> Texture2D:
 static func stock_frame() -> Texture2D:
  if cache.has("stock-frame"):return cache["stock-frame"]
  var r=Rect2i(5,575,418,278);var img=source().get_region(r)
- patch(img,Rect2i(17,638,394,195),Rect2i(1344,90,296,18),r.position)
+ var grain=paper_skin().get_image()
+ if grain.is_compressed():grain.decompress()
+ grain.convert(img.get_format())
+ grain.resize(394,195,Image.INTERPOLATE_LANCZOS)
+ img.blit_rect(grain,Rect2i(0,0,394,195),Vector2i(17,638)-r.position)
  # Preserve the original cube, green header, sorting key and dropdown arrow.
  patch(img,Rect2i(79,589,118,32),Rect2i(211,588,65,33),r.position)
  return pack_texture("stock-frame",img)
@@ -262,16 +266,11 @@ static func price_tag(selected: bool=false,display: bool=false) -> Texture2D:
  return pack_texture(key,img)
 
 static func paper_skin() -> Texture2D:
- return quick_list_paper()
+ # A reusable surface contains grain only; each control owns its outline.
+ return UIKit.tex("res://assets/comic/paper.png")
 
 static func quick_list_paper() -> Texture2D:
- if cache.has("quick-list-paper"):return cache["quick-list-paper"]
- var origin=Vector2i(1186,68)
- var img=source().get_region(Rect2i(origin,Vector2i(485,791)))
- # The original folio has action/ribbon edges outside the modal paper donor.
- # Clear the whole interior while retaining the illustrated outer paper rim.
- patch(img,Rect2i(1199,89,463,748),Rect2i(1344,90,296,18),origin)
- return pack_texture("quick-list-paper",img)
+ return UIKit.tex("res://assets/comic/paper_frame.png")
 
 static func name_skin() -> Texture2D:
  if cache.has("name"):return cache.name

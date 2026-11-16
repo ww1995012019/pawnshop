@@ -82,7 +82,7 @@ static func skin(name: String, size := "lg", pad := -1.0, tint := Color.WHITE) -
 	var surface = load("res://scripts/ui/comic_paper.gd").new()
 	surface.paper=tex("res://assets/comic/paper.png")
 	surface.bg_color=PAPER;surface.border_color=INK
-	surface.set_border_width_all(2);surface.set_corner_radius_all(8)
+	surface.set_border_width_all(0 if name=="strip" else 1);surface.set_corner_radius_all(6)
 	surface.set_content_margin_all(18 if pad<0 else pad)
 	return surface
 

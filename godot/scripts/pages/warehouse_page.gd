@@ -368,6 +368,7 @@ func _detail() -> void:
 	var t = s.trade
 	if t != null and t.kind == "sell":
 		var banner := UIKit.plate(UIKit.paper_style(12))
+		if not shell.mobile_mode():banner.get_theme_stylebox("panel").set_border_width_all(0)
 		banner.add_child(UIKit.label("%s 在柜台等货：%s" % [GameData.npc(t.npcId).name, Model.customer_need(t.npcId)], 17, UIKit.INK, false, true))
 		detail.add_child(banner)
 	var it = Game.item(selected)
@@ -382,6 +383,7 @@ func _detail() -> void:
 				if row.uid == it.uid: known_crime = true
 	var def := GameData.def(it.defId)
 	var docket := UIKit.plate(UIKit.paper_style(16))
+	if not shell.mobile_mode():docket.get_theme_stylebox("panel").set_border_width_all(0)
 	var record := UIKit.vbox(8)
 	docket.add_child(record)
 	record.add_child(UIKit.label("保管凭单 / " + String(it.uid), 15, UIKit.RUST, true))

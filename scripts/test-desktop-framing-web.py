@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import sys
+from PIL import Image
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,7 +42,12 @@ def main(url):
                     for key, rect in keys.items():
                         assert rect['x']-rect['width']/2 >= -.5 and rect['x']+rect['width']/2 <= width+.5, (key, rect, width)
                         assert rect['y']-rect['height']/2 >= -.5 and rect['y']+rect['height']/2 <= height+.5, (key, rect, height)
-                    page.screenshot(path=str(OUT / f'desktop-{width}x{height}-dpr{dpr}.png'))
+                    screenshot=OUT / f'desktop-{width}x{height}-dpr{dpr}.png'
+                    page.screenshot(path=str(screenshot))
+                    with Image.open(screenshot) as rendered:
+                        for x in [12,width-12]:
+                            color=rendered.getpixel((round(x*dpr),round((height-25)*dpr)))
+                            assert color[0]>120 and color[1]>100, ('footer must reach both viewport edges without black bars',width,height,dpr,color)
                     cash, ap = page.evaluate('[OrbitalTouch.state.cash,OrbitalTouch.state.ap]')
                     # Click near the outer edges that were formerly cropped.
                     settings = keys['设置']

@@ -40,15 +40,18 @@ def main():
   def snap(name):
    page.mouse.move(1900,1060);page.screenshot(path=str(OUT/(prefix+name+'.png')))
   def transform():
-   key=phone.locate(page,'@StrictCashLedger');sx=key['width']/219;sy=key['height']/48
-   return key['x']-851.5*sx,key['y']-30*sy,sx,sy
+   # The responsive HUD spans the window; the unscaled physical bell measures
+   # the live artwork scale independently of that decorative header.
+   key=phone.locate(page,'接客铃');sx=key['width']/95;sy=key['height']/77
+   return key['x']-413.5*sx,key['y']-527.5*sy,sx,sy
   def geometry(rows):
    ox,oy,sx,sy=transform();rects=[]
+   extra_x=page.viewport_size['width']/sx-1671;extra_y=page.viewport_size['height']/sy-941
    for row in rows:
     hit=phone.locate(page,'@strict_table_'+row['uid'])
     box=(hit['x']-hit['width']/2,hit['y']-hit['height']/2,hit['x']+hit['width']/2,hit['y']+hit['height']/2)
-    assert box[0]>=ox+470*sx-1 and box[2]<=ox+1174*sx+1,(row,box,ox+1186*sx)
-    assert box[1]>=oy+451*sy-1 and box[3]<=oy+745*sy+1,(row,box)
+    assert box[0]>=ox+470*sx-1 and box[2]<=ox+(1174+extra_x)*sx+1,(row,box,ox+(1186+extra_x)*sx)
+    assert box[1]>=oy+451*sy-1 and box[3]<=oy+(745+extra_y)*sy+1,(row,box)
     for old in rects:assert box[2]<=old[0] or old[2]<=box[0] or box[3]<=old[1] or old[3]<=box[1],(box,old)
     rects.append(box)
   page.goto('http://127.0.0.1:4174/');start()
@@ -80,10 +83,12 @@ def main():
     geometry(status()['table_items']);snap(name+'-'+str(width))
    print('PASS visible, separated and focusable originals',name,count,flush=True)
    if name=='seven-hole':
-    page.set_viewport_size({'width':1920,'height':1080});page.wait_for_timeout(500)
+    page.set_viewport_size({'width':1920,'height':910});page.wait_for_timeout(500)
     incoming=[it for it in status()['table_items'] if it['direction']=='buy'];moving=incoming[4]['uid']
     assert saved()['trade']['session']['table_positions'][incoming[-1]['uid']]==[1264,508]
-    source=phone.locate(page,'@strict_table_'+moving);ox,oy,sx,sy=transform();tx,ty=ox+940*sx,oy+501*sy
+    source=phone.locate(page,'@strict_table_'+moving);ox,oy,sx,sy=transform()
+    extra_x=page.viewport_size['width']/sx-1671;extra_y=page.viewport_size['height']/sy-941
+    tx,ty=ox+(423+(940-423)*(763+extra_x)/763)*sx,oy+(501+extra_y*.18)*sy
     page.mouse.move(source['x'],source['y']);page.mouse.down();page.wait_for_timeout(180)
     for step in range(1,16):page.mouse.move(source['x']+(tx-source['x'])*step/15,source['y']+(ty-source['y'])*step/15);page.wait_for_timeout(60)
     page.mouse.up();page.wait_for_timeout(1000)

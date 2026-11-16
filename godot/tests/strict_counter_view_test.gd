@@ -1,6 +1,9 @@
 extends "res://tests/night_crime_ui_test.gd"
 ## Regressions for the measured comic UI, using real input and reducer actions.
 func run() -> void:
+ # Source-coordinate checks need the measured desktop resolution. Headless
+ # Godot otherwise starts at 64×64, which correctly gets a taller layout.
+ root.size=Vector2i(1920,1080)
  var game=root.get_node("Game");game.prefs.reduced_motion=true;game.prefs.sound=false
  game.new_game("STRICT-QUOTE")
  game.state.trade={"id":"strict-quote","npcId":"CHR-002","kind":"buy","item":Model.new_item(game.state,"WCH-002",{"owner":"npc","sourceVerified":true}),"price":100,"rounds":0,"locked":false,"evidenceUsed":[],"line":"请报价。"}

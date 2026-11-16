@@ -21,6 +21,7 @@ var empty_hint: Label
 var last_focus:=""
 var last_trade:=""
 var popup: PopupPanel
+var bottom_rects := {}
 
 func key(parent: Node,text: String,rect: Rect2,fn: Callable,icon:="",primary:=false) -> Button:
  var b=view._button(parent,text,rect,fn,icon)
@@ -31,11 +32,9 @@ func key(parent: Node,text: String,rect: Rect2,fn: Callable,icon:="",primary:=fa
 
 func skin(b: Button,primary: bool,selected: bool) -> void:
  for state in ["normal","hover","pressed","disabled","focus"]:
-  var st=view._source_style(R.blank_button(0 if primary and state!="disabled" else 1),8)
+  var st=view._style(Color("243a30") if selected else RED if primary and state!="disabled" else PAPER,INK,6)
   st.set_content_margin_all(5)
-  if selected:st.modulate_color=Color(.15,.26,.26)
-  elif state=="hover":st.modulate_color=Color(1,.97,.9)
-  elif state=="pressed":st.modulate_color=Color(.92,.9,.84)
+  if state=="hover":st.border_color=RED
   b.add_theme_stylebox_override(state,st)
  for color in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_disabled_color","icon_normal_color","icon_hover_color","icon_pressed_color","icon_focus_color","icon_disabled_color"]:
   b.add_theme_color_override(color,PAPER if primary or selected else INK)
@@ -45,7 +44,7 @@ func setup(controller) -> void:
  view=controller;name="QuickTradeList";position=Vector2(1186,68);size=Vector2(485,791)
  mouse_filter=Control.MOUSE_FILTER_STOP
  var paper=Panel.new();paper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
- paper.add_theme_stylebox_override("panel",view._source_style(R.quick_list_paper(),10));paper.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(paper)
+ paper.add_theme_stylebox_override("panel",view._style(PAPER,INK,8));paper.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(paper)
  view._image(self,A.icon("clipboard-list"),Rect2(20,20,28,32),INK)
  heading=view._label(self,"本次物品",Rect2(58,17,245,38),26,INK,true)
  subtitle=view._label(self,"",Rect2(22,54,441,23),16,Color("70604a"))
@@ -58,8 +57,15 @@ func setup(controller) -> void:
  balance=view._label(self,"",Rect2(22,552,441,24),16,Color("70604a"));balance.clip_text=true
  checkout=key(self,"统一结算",Rect2(18,582,310,52),func():request("checkout",""),"handshake",true);checkout.name="QuickCheckout"
  sendoff=key(self,"送客",Rect2(338,582,130,52),func():request("send",""),"right-from-bracket");sendoff.name="QuickSendOff"
+ for node in [summary,balance,checkout,sendoff]:bottom_rects[node]=node.position
  visibility_changed.connect(func():
   if not is_visible_in_tree():close_popup())
+
+func fit_height(height:float) -> void:
+ size.y=height
+ var extra=height-791.0
+ scroll.size.y=425.0+extra
+ for node in bottom_rects:node.position=bottom_rects[node]+Vector2(0,extra)
 
 func request(verb: String,uid: String) -> void:
  if snapshot.is_empty():return
@@ -133,7 +139,7 @@ func close_popup() -> void:
 
 func make_popup() -> VBoxContainer:
  close_popup();popup=PopupPanel.new();popup.theme=UIKit.build_theme();popup.wrap_controls=true
- popup.add_theme_stylebox_override("panel",view._source_style(R.quick_list_paper(),10));add_child(popup)
+ popup.add_theme_stylebox_override("panel",view._style(PAPER,INK,8));add_child(popup)
  var margin=MarginContainer.new()
  for side in ["margin_left","margin_top","margin_right","margin_bottom"]:margin.add_theme_constant_override(side,14)
  popup.add_child(margin)
@@ -141,7 +147,7 @@ func make_popup() -> VBoxContainer:
  return box
 
 func show_popup() -> void:
- var at=view.get_global_transform_with_canvas()*Vector2(1210,235)
+ var at=view.get_global_transform_with_canvas()*(position+Vector2(24,167))
  popup.popup(Rect2i(Vector2i(at),Vector2i(435,0)))
 
 func offer_popup(context: Dictionary) -> void:

@@ -60,6 +60,13 @@ var display_scroll: ScrollContainer
 var modal_bar: Control
 var bell_art: TextureRect
 var letterbox: ColorRect
+var scenery: Array[TextureRect]=[]
+var hud_art: TextureRect
+var footer_art: TextureRect
+var stock_art: NinePatchRect
+var layout_rects := {}
+var layout_extent := Vector2.ZERO
+var extra_space := Vector2.ZERO
 
 class TradeWatch extends Button:
  var controller
@@ -81,6 +88,9 @@ func setup(page) -> void:
  texture_filter=CanvasItem.TEXTURE_FILTER_LINEAR
  A.prewarm()
  _build()
+ for node in get_children():
+  if node is Control:layout_rects[node]=Rect2(node.position,node.size)
+ _layout_desktop()
  Game.changed.connect(_model_changed)
  Game.prefs_changed.connect(func():dirty=true)
  desk.dial.changed.connect(func(_value):dirty=true)
@@ -184,8 +194,10 @@ func _source_nav(text: String,key: String,rect: Rect2,fn: Callable) -> Button:
 func _build() -> void:
  letterbox=ColorRect.new();letterbox.name="StrictLetterbox";letterbox.color=INK
  letterbox.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(letterbox)
- _image(self,R.environment(),Rect2(0,0,1671,941)).stretch_mode=TextureRect.STRETCH_SCALE
- _image(self,R.hud(),Rect2(0,0,1671,61)).stretch_mode=TextureRect.STRETCH_SCALE
+ for rect in [Rect2(0,60,423,515),Rect2(423,60,763,403),Rect2(423,463,763,277),Rect2(423,740,763,126)]:
+  var slice=AtlasTexture.new();slice.atlas=R.environment();slice.region=rect
+  var art=_image(self,slice,rect);art.stretch_mode=TextureRect.STRETCH_SCALE;scenery.append(art)
+ hud_art=_image(self,R.hud(),Rect2(0,0,1671,61));hud_art.stretch_mode=TextureRect.STRETCH_SCALE
  day=_label(self,"",Rect2(49,7,127,44),32,INK,true)
  business_label=_label(self,"",Rect2(184,7,90,46),31,Color("fff0d6"),false);business_label.name="StrictBusinessState";business_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
  rent=_label(self,"",Rect2(325,10,132,39),24,INK,true)
@@ -219,16 +231,20 @@ func _build() -> void:
  bell_art=_image(self,R.bell(),Rect2(366,489,95,77));bell_art.stretch_mode=TextureRect.STRETCH_SCALE
  var bell_button=_hit(self,"",Rect2(366,489,95,77),func():desk._bell_clicked());bell_button.tooltip_text="接客铃 · 接待下一位来客"
  table=Control.new();table.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(table)
- _image(self,R.stock_frame(),Rect2(5,575,418,278)).stretch_mode=TextureRect.STRETCH_SCALE
+ stock_art=NinePatchRect.new();stock_art.texture=R.stock_frame();stock_art.position=Vector2(5,575);stock_art.size=Vector2(418,278)
+ stock_art.patch_margin_left=20;stock_art.patch_margin_right=20;stock_art.patch_margin_top=65;stock_art.patch_margin_bottom=20
+ stock_art.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(stock_art)
  stock_count=_label(self,"",Rect2(79,585,132,40),27,PAPER,true)
  _hit(self,"整理",Rect2(287,588,113,32),func():desk.shell.go("warehouse"))
  stock_scroll=ScrollContainer.new();stock_scroll.position=Vector2(20,640);stock_scroll.size=Vector2(393,185)
  stock_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;stock_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;add_child(stock_scroll)
  stock=GridContainer.new();stock.columns=6;stock.add_theme_constant_override("h_separation",2);stock.add_theme_constant_override("v_separation",3);stock_scroll.add_child(stock)
  var paper=Panel.new();paper.name="StrictTradePaper";paper.position=Vector2(1186,68);paper.size=Vector2(485,791)
- paper.mouse_filter=Control.MOUSE_FILTER_IGNORE;paper.add_theme_stylebox_override("panel",_source_style(R.folio(),0));add_child(paper)
+ paper.mouse_filter=Control.MOUSE_FILTER_IGNORE;paper.add_theme_stylebox_override("panel",_style(PAPER,INK,8));add_child(paper)
  detail_layer=Control.new();detail_layer.name="TradeDetails";detail_layer.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(detail_layer)
- meta_cover=_image(detail_layer,R.blank_area("empty-meta",Rect2i(1342,165,312,90)),Rect2(1342,165,312,90))
+ meta_cover=_image(detail_layer,null,Rect2(1342,165,312,90))
+ var item_plate=Panel.new();item_plate.position=Vector2(1218,108);item_plate.size=Vector2(110,146)
+ item_plate.mouse_filter=Control.MOUSE_FILTER_IGNORE;item_plate.add_theme_stylebox_override("panel",_style(GREEN,INK,6));detail_layer.add_child(item_plate)
  selected=_image(detail_layer,null,Rect2(1231,119,83,122));selected.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
  item_name=_label(detail_layer,"",Rect2(1345,103,299,47),32,INK,true)
  item_name.add_theme_font_override("font",R.latin(true))
@@ -237,7 +253,9 @@ func _build() -> void:
  evidence=_label(detail_layer,"",Rect2(1384,210,110,37),22,INK,true)
  rounds=_label(detail_layer,"",Rect2(1530,210,122,37),22,INK,true)
  var evidence_key=_hit(detail_layer,"",Rect2(1344,210,145,37),_open_evidence);evidence_key.name="StrictEvidence";evidence_key.tooltip_text="选择用于议价的检验记录"
- ask_caption=_label(detail_layer,"",Rect2(1255,290,113,44),27,INK,true);ask_caption.name="StrictAskCaption"
+ var ribbon=Panel.new();ribbon.name="StrictAskRibbon";ribbon.position=Vector2(1208,276);ribbon.size=Vector2(440,63)
+ ribbon.mouse_filter=Control.MOUSE_FILTER_IGNORE;ribbon.add_theme_stylebox_override("panel",_style(RED,INK,6));detail_layer.add_child(ribbon)
+ ask_caption=_label(detail_layer,"",Rect2(1255,290,113,44),27,PAPER,true);ask_caption.name="StrictAskCaption"
  ask=_label(detail_layer,"",Rect2(1498,284,137,46),32,Color("fff1d6"),false);ask.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT;ask.clip_text=true;ask.add_theme_font_override("font",R.latin())
  quote_controls.append(_image(detail_layer,R.region("quote-label",Rect2i(1210,359,88,49)),Rect2(1210,359,88,49)))
  quote=LineEdit.new();quote.position=Vector2(1298,355);quote.size=Vector2(144,57)
@@ -259,7 +277,7 @@ func _build() -> void:
   var nudge_rect=Rect2(1448+index*51,361,51,44)
   var b=_hit(detail_layer,str(step),nudge_rect,func():_nudge(step))
   _image(b,R.region("nudge-"+str(index),Rect2i(nudge_rect)),Rect2(0,0,51,44));quote_controls.append(b)
- cost_cover=_image(detail_layer,R.blank_area("empty-cost",Rect2i(1207,419,443,44)),Rect2(1207,419,443,44))
+ cost_cover=_image(detail_layer,null,Rect2(1207,419,443,44))
  cost=_label(detail_layer,"",Rect2(1253,420,394,41),22,INK,true)
  var rects=[Rect2(1201,489,96,108),Rect2(1297,490,91,106),Rect2(1389,490,90,106),Rect2(1480,490,88,106),Rect2(1569,490,90,106)]
  for index in 5:
@@ -282,7 +300,7 @@ func _build() -> void:
  order_count=_label(orders,"",Rect2(70,52,145,40),25,INK,true)
  var people=_hit(self,"人物档案",Rect2(1437,711,223,113),func():desk.shell.open_people());people.name="StrictPeople"
  _image(people,R.region("people",Rect2i(1437,711,223,113)),Rect2(0,0,223,113))
- _image(self,R.region("footer",Rect2i(0,866,1671,75)),Rect2(0,866,1671,75)).stretch_mode=TextureRect.STRETCH_SCALE
+ footer_art=_image(self,R.region("footer",Rect2i(0,866,1671,75)),Rect2(0,866,1671,75));footer_art.stretch_mode=TextureRect.STRETCH_SCALE
  _source_nav("日结打烊","sun",Rect2(35,875,250,53),func():desk.shell.go("report"))
  _source_nav("报警","bell",Rect2(335,875,197,53),func():desk.alarm_button.pressed.emit())
  _source_nav("仓储隔离","box-archive",Rect2(568,875,243,53),func():desk.shell.go("warehouse"))
@@ -295,6 +313,43 @@ func _build() -> void:
   var tool:String=spec[1];var key=UIKit.button(spec[0],"secondary",Vector2(425,47),23);key.pressed.connect(func():desk.showroom.open_tool(tool));detail_tools.add_child(key)
  var ret=UIKit.button("放回原位","primary",Vector2(425,47),23);ret.pressed.connect(func():desk.showroom.return_original();dirty=true);detail_tools.add_child(ret)
  var arrange=UIKit.button("整理 / 调价","secondary",Vector2(425,47),23);arrange.pressed.connect(func():desk.shell.go("warehouse",desk.showroom.selected_uid));detail_tools.add_child(arrange)
+
+func _layout_desktop() -> void:
+ if desk.shell.mobile_mode():return
+ var extent=get_viewport().get_visible_rect().size/scale
+ position=-desk.shell.counter_offset()
+ if extent.is_equal_approx(layout_extent):return
+ layout_extent=extent;size=extent;extra_space=extent-REFERENCE_SIZE
+ var wide=extent.x/REFERENCE_SIZE.x
+ for node in layout_rects:
+  if not is_instance_valid(node):continue
+  var rect:Rect2=layout_rects[node]
+  node.position=rect.position;node.size=rect.size
+  if node is TextureRect and node in scenery:continue
+  if node in [letterbox,hud_art,footer_art,stock_art,table]:continue
+  if node in [detail_layer,own]:node.position.x+=extra_space.x
+  elif rect.position.y>=866:
+   node.position+=Vector2(rect.position.x*(wide-1),extra_space.y);node.size.x*=wide
+  elif rect.position.x>=1186:
+   node.position.x+=extra_space.x
+   if node in [quick_list,get_node("StrictTradePaper")]:node.size.y+=extra_space.y
+   elif rect.position.y>=711:node.position.y+=extra_space.y
+  elif rect.position.y<61 and rect.size.x>0:
+   node.position.x*=wide;node.size.x*=wide
+  elif rect.position.x>=423:node.position.x+=extra_space.x*.5
+ letterbox.position=Vector2.ZERO;letterbox.size=extent
+ hud_art.size.x=extent.x
+ footer_art.position.y=866+extra_space.y;footer_art.size.x=extent.x
+ scenery[1].size.x=763+extra_space.x
+ scenery[2].size=Vector2(763+extra_space.x,277+extra_space.y)
+ scenery[3].position.y=740+extra_space.y;scenery[3].size.x=763+extra_space.x
+ stock_art.size.y=278+extra_space.y
+ stock_scroll.size.y=185+extra_space.y
+ quick_list.fit_height(791+extra_space.y)
+ signature="";dirty=true
+
+func _table_project(point:Vector2) -> Vector2:
+ return Vector2(423+(point.x-423)*(763+extra_space.x)/763,point.y+extra_space.y*(.18 if point.y<570 else .6))
 
 func _trade_action(index: int) -> void:
  var keys=desk.actions.get_children()
@@ -351,9 +406,7 @@ func _process(delta: float) -> void:
  if old!=null:old.hide()
  desk.stage_root.hide();desk.back_root.hide()
  desk.shell.hint_label.hide()
- position=Vector2.ZERO # The page_host already owns desktop letterboxing.
- letterbox.position=-desk.shell.counter_offset()/scale
- letterbox.size=get_viewport().get_visible_rect().size/scale
+ _layout_desktop()
  clock+=delta;period+=delta
  if is_instance_valid(desk.bell) and not Game.prefs.reduced_motion:
   bell_art.pivot_offset=bell_art.size*.5
@@ -479,6 +532,7 @@ func _refresh(force := false) -> void:
   stock_signature=inv_key;_inventory()
  var list_active=CounterDialogue.active(s) and ordinary
  detail_layer.visible=not list_active;quick_list.visible=list_active
+ get_node("StrictTradePaper").visible=not list_active
  if list_active:quick_list.refresh(s)
  var backs=""
  for uid in desk.counter_table.sprites:backs+=str(desk.counter_table.sprites[uid].back)
@@ -568,7 +622,7 @@ func _table_points(direction: String,count: int) -> Array[Vector2]:
  var start=700.0 if single else 524.0 if direction=="buy" else 510.0
  var spacing=120.0 if single else (1107.0-start)/maxi(capacity-1,1)
  var points:Array[Vector2]=[]
- for index in capacity:points.append(Vector2(start+index*spacing,501 if direction=="buy" else 625))
+ for index in capacity:points.append(_table_project(Vector2(start+index*spacing,501 if direction=="buy" else 625)))
  return points
 
 func _table() -> void:
@@ -595,7 +649,7 @@ func _table() -> void:
     Game.dispatch({"type":"COUNTER_FOCUS","tradeId":Game.state.trade.id,"uid":info.uid});dirty=true,visitor,tag_width)
  if Game.state.trade==null and desk.showroom.selected_uid!="":
   var it=Game.item(desk.showroom.selected_uid)
-  if it!=null:_table_watch(it,Vector2(700,505),it.get("listPrice",0),true,func():desk.showroom.flip_original();dirty=true,true,120)
+  if it!=null:_table_watch(it,_table_project(Vector2(700,505)),it.get("listPrice",0),true,func():desk.showroom.flip_original();dirty=true,true,120)
 
 func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visitor:=false,tag_width:=90.0) -> void:
  var b=TradeWatch.new();b.mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND;b.controller=self;b.uid=it.uid;b.name="strict_table_"+str(it.uid)
@@ -659,9 +713,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _can_drop_data(at_position: Vector2,data) -> bool:
  if desk.busy or desk._scene_blocked() or not data is Dictionary:return false
  if data.get("kind","")=="strict_trade":
-  return Game.state.trade!=null and Rect2(430,463,750,280).has_point(at_position) and not TradeSession.row(Game.state,str(data.get("uid",""))).is_empty()
+  return Game.state.trade!=null and Rect2(430,463,750+extra_space.x,280+extra_space.y).has_point(at_position) and not TradeSession.row(Game.state,str(data.get("uid",""))).is_empty()
  if data.get("kind","")=="showroom_original":
-  return Game.state.trade==null and desk.showroom.available(Game.item(str(data.get("uid","")))) and (Rect2(0,140,370,330).has_point(at_position) or Rect2(0,630,420,210).has_point(at_position) or Rect2(430,463,750,280).has_point(at_position))
+  return Game.state.trade==null and desk.showroom.available(Game.item(str(data.get("uid","")))) and (Rect2(0,140,370,330).has_point(at_position) or Rect2(0,630,420,210+extra_space.y).has_point(at_position) or Rect2(430,463,750+extra_space.x,280+extra_space.y).has_point(at_position))
  return false
 
 func _drop_data(at_position: Vector2,data) -> void:
