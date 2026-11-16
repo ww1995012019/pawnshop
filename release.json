@@ -1,6 +1,6 @@
 {
-  "release_id": "609a3a5303dc7179",
-  "pack": "workbench-0aaa6fe1c4b3256a.pck",
+  "release_id": "edbe6100e19f4d7c",
+  "pack": "workbench-253400a59da1ecdd.pck",
   "engine": "engine-309843874cfdebe8",
   "current_files": [
     ".nojekyll",
@@ -28,14 +28,12 @@
     "touch-c2513fb49458e6da.css.gz",
     "touch-e745285a9d758957.js",
     "touch-e745285a9d758957.js.gz",
-    "workbench-0aaa6fe1c4b3256a.pck",
-    "workbench-0aaa6fe1c4b3256a.pck.gz"
+    "workbench-253400a59da1ecdd.pck",
+    "workbench-253400a59da1ecdd.pck.gz"
   ],
   "previous_files": [
-    "loading-cast-304d0dab753f9614.webp",
-    "loading-shop-c50ece6927cc5cbd.png",
-    "workbench-2013c0ed8d88d24f.pck",
-    "workbench-2013c0ed8d88d24f.pck.gz"
+    "workbench-0aaa6fe1c4b3256a.pck",
+    "workbench-0aaa6fe1c4b3256a.pck.gz"
   ],
   "files": {
     ".nojekyll": {
@@ -96,19 +94,11 @@
     },
     "index.html": {
       "bytes": 14471,
-      "sha256": "9874a8ae0216994e8dc7990ffc3e5aee8afc5ce2cb490960be8db9e72521911e"
-    },
-    "loading-cast-304d0dab753f9614.webp": {
-      "bytes": 484134,
-      "sha256": "304d0dab753f96147798ab46577e4946ab5fa47fcfd32343a5d51a371cde9b1c"
+      "sha256": "79e3122048686ff95819be004ee704ef7f06a39e6b2c3d77f792b997024391b6"
     },
     "loading-cast-540b16169cb57419.webp": {
       "bytes": 460906,
       "sha256": "540b16169cb57419091c982a90d25f92e049c0f607dfb3c1d9f7f727b620d19c"
-    },
-    "loading-shop-c50ece6927cc5cbd.png": {
-      "bytes": 266052,
-      "sha256": "c50ece6927cc5cbd66e2f29ecdba955452ee2aa2d7654822aec7feb99ddb45fa"
     },
     "loading-shop-d9b8ed13138c04fa.webp": {
       "bytes": 239114,
@@ -154,22 +144,22 @@
       "bytes": 20104482,
       "sha256": "8b3312524deab4ebe6219e35b9565cebfb48d00f8b7bf17ef14a4691d2689ae7"
     },
-    "workbench-2013c0ed8d88d24f.pck": {
-      "bytes": 20688920,
-      "sha256": "2013c0ed8d88d24f2aa7c6141b2284b473b969c1171b83faf9cc8e871db691e0"
+    "workbench-253400a59da1ecdd.pck": {
+      "bytes": 20690520,
+      "sha256": "253400a59da1ecdde8f131d134e23160b8da3932efec5945685a1e14ac6eaacd"
     },
-    "workbench-2013c0ed8d88d24f.pck.gz": {
-      "bytes": 20107775,
-      "sha256": "67d4384640b808e04cd7fc4431479c4cd694bcc69e8cccb1ce12e60c6c2b6d82"
+    "workbench-253400a59da1ecdd.pck.gz": {
+      "bytes": 20107301,
+      "sha256": "d4c35023601d4762f492b740b0866028dd095b76c054274bc5f18fb955493cef"
     }
   },
   "transport": {
-    "workbench-0aaa6fe1c4b3256a.pck": {
-      "sha256": "0aaa6fe1c4b3256a2f83cd1ea9546e4b3eec1546963b7bb86d5e418635062fd1",
-      "bytes": 20688408,
+    "workbench-253400a59da1ecdd.pck": {
+      "sha256": "253400a59da1ecdde8f131d134e23160b8da3932efec5945685a1e14ac6eaacd",
+      "bytes": 20690520,
       "type": "application/octet-stream",
-      "gzip": "workbench-0aaa6fe1c4b3256a.pck.gz",
-      "gzipBytes": 20104482
+      "gzip": "workbench-253400a59da1ecdd.pck.gz",
+      "gzipBytes": 20107301
     },
     "engine-309843874cfdebe8.wasm": {
       "sha256": "26b61ce95247012ab3dca3ff51e96d1cdbff44ee91a8c20a83e150afca83f1b6",
@@ -214,13 +204,13 @@
     "ledger": "music-30ff78a0e0f53f91.ogg"
   },
   "previous_assets": [
-    "workbench-2013c0ed8d88d24f.pck",
+    "workbench-0aaa6fe1c4b3256a.pck",
     "engine-309843874cfdebe8.wasm",
     "music-8ad9f8f323428f98.ogg",
     "music-73c915ee8894b734.ogg",
     "music-f06ef4243f86b03f.ogg",
     "music-30ff78a0e0f53f91.ogg"
   ],
-  "initial_raw_bytes": 58389074,
-  "initial_gzip_bytes": 29486764
+  "initial_raw_bytes": 58391186,
+  "initial_gzip_bytes": 29489583
 }

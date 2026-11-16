@@ -1,8 +1,8 @@
 {
-  "source_commit": "d62ee5df15e31a39ff8e656af47bdf408cef7238",
-  "release_id": "609a3a5303dc7179",
-  "pack": "workbench-0aaa6fe1c4b3256a.pck",
-  "html_sha256": "9874a8ae0216994e8dc7990ffc3e5aee8afc5ce2cb490960be8db9e72521911e",
+  "source_commit": "179c199df0e61a360f28e3ddadf4c1f14e38d05a",
+  "release_id": "edbe6100e19f4d7c",
+  "pack": "workbench-253400a59da1ecdd.pck",
+  "html_sha256": "79e3122048686ff95819be004ee704ef7f06a39e6b2c3d77f792b997024391b6",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 129,
+  "native_regression_groups": 130,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -209,7 +209,7 @@
       800
     ]
   ],
-  "live_browser_verification": "Not performed: Cloud proxy denies public Pages domain (CONNECT 403). Exact Pages deployment must be confirmed separately.",
+  "live_browser_verification": "Local browser checks passed on the exact published artifact. Exact GitHub Pages deployment status verified separately.",
   "quote_readability_version": 1,
   "dense_counter_layout_version": 1,
   "desktop_dialogue_font_size": 18,
@@ -272,7 +272,7 @@
     ]
   ],
   "comic_loading_version": 1,
-  "desktop_full_frame_version": 1,
+  "desktop_full_frame_version": 2,
   "loading_art_bytes": 700020,
   "desktop_framing_verified_viewports": [
     [
@@ -310,5 +310,11 @@
       640,
       2
     ]
-  ]
+  ],
+  "desktop_full_bleed_version": 1,
+  "paper_surface_separation_version": 1,
+  "warehouse_panel_cleanup_version": 2,
+  "responsive_table_slot_version": 1,
+  "paper_blank_max_band_delta": 0.695,
+  "responsive_drag_reload_verified": true
 }
