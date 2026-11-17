@@ -31,14 +31,10 @@ func key(parent: Node,text: String,rect: Rect2,fn: Callable,icon:="",primary:=fa
  return b
 
 func skin(b: Button,primary: bool,selected: bool) -> void:
- for state in ["normal","hover","pressed","disabled","focus"]:
-  var st=view._style(Color("243a30") if selected else RED if primary and state!="disabled" else PAPER,INK,6)
+ UIKit.context_button(b,"primary" if primary or selected else "secondary")
+ for state in ["normal","hover","pressed","hover_pressed","disabled"]:
+  var st=b.get_theme_stylebox(state)
   st.set_content_margin_all(5)
-  if state=="hover":st.border_color=RED
-  b.add_theme_stylebox_override(state,st)
- for color in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_disabled_color","icon_normal_color","icon_hover_color","icon_pressed_color","icon_focus_color","icon_disabled_color"]:
-  b.add_theme_color_override(color,PAPER if primary or selected else INK)
- b.add_theme_color_override("font_disabled_color",PAPER if selected else UIKit.DISABLED_TEXT);b.add_theme_color_override("icon_disabled_color",PAPER if selected else UIKit.DISABLED_TEXT)
 
 func setup(controller) -> void:
  view=controller;name="QuickTradeList";position=Vector2(1186,68);size=Vector2(485,791)

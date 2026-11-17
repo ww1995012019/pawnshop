@@ -26,6 +26,8 @@ var active := false
 var landscape: Control
 var backdrop: TextureRect
 var refresh_time := 0.0
+var wanted_paper: Button
+var wanted_row: HBoxContainer
 
 func setup(controller) -> void:
 	desk = controller
@@ -151,6 +153,17 @@ func _build() -> void:
 	item_hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	item_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	mat_body.add_child(item_hint)
+	wanted_row=UIKit.hbox(8)
+	mat_body.add_child(wanted_row)
+	wanted_paper=preload("res://scripts/ui/wanted_desk_paper.gd").new()
+	wanted_row.add_child(wanted_paper)
+	wanted_paper.setup(shell)
+	wanted_paper.name="wanted_inventory"
+	var document_copy=UIKit.label("桌面文件\n点击核对六人线索",16,UIKit.TEXT,false,true)
+	document_copy.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	document_copy.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	wanted_row.add_child(document_copy)
+	wanted_row.visible=WantedCases.has_notice(Game.state)
 	tools = UIKit.hbox(6)
 	mat_body.add_child(tools)
 	tools.add_child(_key("鉴定工具",_tools_popup,"secondary","inspect"))
@@ -235,6 +248,8 @@ func _update_art() -> void:
 
 func _refresh() -> void:
 	var s: Dictionary = Game.state
+	wanted_paper.refresh()
+	wanted_row.visible=WantedCases.has_notice(s)
 	var t = s.trade
 	var item = Model.trade_item(s) if t != null else null
 	var uid: String = str(item.uid) if item != null else ""
@@ -346,7 +361,7 @@ func _goods_popup() -> void:
 	stock.name = "stock_goods_grid"
 	modal[0].add_child(stock)
 	for original in desk.stock_grid.get_children():
-		if not original is Button or not (String(original.name).begins_with("stock_recommend_") or original.name == "wanted_inventory"): continue
+		if not original is Button or not String(original.name).begins_with("stock_recommend_"): continue
 		var ref: WeakRef = weakref(original)
 		var key := _key(original.tooltip_text.get_slice("\n",0),func():
 			modal[1].call()

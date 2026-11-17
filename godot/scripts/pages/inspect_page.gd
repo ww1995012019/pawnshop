@@ -17,8 +17,10 @@ var instrument_panel: PanelContainer
 var instrument_header: VBoxContainer
 var instrument_list: VBoxContainer
 var detail_panel: PanelContainer
+var detail_scroll: ScrollContainer
 var info: VBoxContainer
 var bench: PanelContainer
+var bench_scroll: ScrollContainer
 var bench_body: VBoxContainer
 var instrument: Control
 var picker: OptionButton
@@ -32,6 +34,7 @@ var drag_origin := Vector2.ZERO
 var scale_target := Vector2.ZERO
 var scale_pan: ScalePan
 var scale_label: Label
+var scale_status: Label
 var tare_button: Button
 var place_button: Button
 var scale_attempt_revision := ""
@@ -87,8 +90,15 @@ func _build_panels() -> void:
 		records.pressed.connect(_portrait_records)
 		add_child(records)
 	detail_panel = side_panel(470)
+	detail_scroll = ScrollContainer.new()
+	detail_scroll.name = "inspection_detail_scroll"
+	detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	detail_scroll.follow_focus = true
+	detail_panel.add_child(detail_scroll)
 	var rv := UIKit.vbox(10)
-	detail_panel.add_child(rv)
+	rv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rv.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	detail_scroll.add_child(rv)
 	picker = UIKit.option_button()
 	picker.item_selected.connect(func(i):
 		Game.focus_uid = picker.get_item_metadata(i)
@@ -115,17 +125,19 @@ func _build_panels() -> void:
 	bench = UIKit.plate()
 	add_child(bench)
 	bench_body = UIKit.vbox(8)
-	if shell.landscape_mode():
-		var scroll := ScrollContainer.new()
-		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		bench.add_child(scroll)
-		bench_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		scroll.add_child(bench_body)
-	else: bench.add_child(bench_body)
+	bench_scroll = ScrollContainer.new()
+	bench_scroll.name = "inspection_instruction_scroll"
+	bench_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	bench.add_child(bench_scroll)
+	bench_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bench_scroll.add_child(bench_body)
 	bench_body.minimum_size_changed.connect(queue_relayout)
 
 func relayout() -> void:
 	if not is_instance_valid(instrument_panel): return
+	detail_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if shell.portrait_mode() else ScrollContainer.SCROLL_MODE_DISABLED
+	if not shell.portrait_mode():
+		bench_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if shell.landscape_mode() else ScrollContainer.SCROLL_MODE_DISABLED
 	var action_grid := find_child("inspection_actions",true,false) as GridContainer
 	if not shell.landscape_mode() and action_grid.get_parent() == self:
 		action_grid.reparent(action_grid.get_meta("home_parent"))
@@ -149,14 +161,19 @@ func relayout() -> void:
 		optical_position = _clamp_lens_position(optical_position)
 		lens.global_position = optical_position
 	if is_instance_valid(uv_light): uv_light.scale = Vector2(.62,.38)*(.5 if shell.landscape_mode() else 1.0)
+	var action_budget := maxf(0,mat_rect.size.x-32)
+	var guide_width := minf(150,action_budget*.54) if shell.portrait_mode() else 150.0
+	var records_width := minf(130,action_budget*.46) if shell.portrait_mode() else 130.0
 	var guide_button := get_node_or_null("watch_manual") as Button
 	if guide_button != null:
-		guide_button.position = Vector2(shell.content_rect().end.x-104,shell.content_rect().position.y) if shell.landscape_mode() else Vector2(mat_rect.end.x-158,mat_rect.position.y+12)
-		if shell.landscape_mode(): guide_button.custom_minimum_size = Vector2(104,30); guide_button.size = Vector2(104,30)
+		guide_button.position = Vector2(shell.content_rect().end.x-104,shell.content_rect().position.y) if shell.landscape_mode() else Vector2(mat_rect.end.x-12-guide_width,mat_rect.position.y+12)
+		guide_button.custom_minimum_size = Vector2(104,30) if shell.landscape_mode() else Vector2(guide_width,44)
+		guide_button.size = guide_button.custom_minimum_size
 	var records := get_node_or_null("portrait_records") as Button
 	if records != null:
 		records.visible = shell.mobile_mode()
-		if shell.landscape_mode(): records.custom_minimum_size = Vector2(98,30); records.size = Vector2(98,30)
+		records.custom_minimum_size = Vector2(98,30) if shell.landscape_mode() else Vector2(records_width,44)
+		records.size = records.custom_minimum_size
 		records.position = Vector2(shell.content_rect().end.x-208,shell.content_rect().position.y) if shell.landscape_mode() else mat_rect.position+Vector2(12,12)
 	if is_instance_valid(item):
 		var fitting := mat_rect
@@ -164,8 +181,11 @@ func relayout() -> void:
 			var scale_size := minf(1.0,(mat_rect.size.x-16)/scale_pan.body_rect().size.x)
 			scale_pan.scale = Vector2.ONE * scale_size
 			scale_pan.position = shell.ui_to_world(Vector2(mat_rect.get_center().x,mat_rect.end.y-8-scale_pan.body_rect().end.y*scale_size))
-			fitting.size.y = maxf(40,shell.world_to_ui(scale_pan.to_global(scale_pan.pan_position())).y-mat_rect.position.y)
-		var next_home := fit_workbench_item(item,fitting)
+			# The portrait paper actions occupy a real row above the watch.
+			# Fit the complete original below that row, rather than behind it.
+			if shell.portrait_mode(): fitting.position.y += 64
+			fitting.size.y = maxf(40,shell.world_to_ui(scale_pan.to_global(scale_pan.pan_position())).y-fitting.position.y)
+		var next_home := fit_workbench_item(item,fitting,28.0) if is_instance_valid(scale_pan) else fit_workbench_item(item,fitting)
 		var offset := next_home-item_home
 		item.position += offset
 		item.target += offset
@@ -175,6 +195,15 @@ func relayout() -> void:
 		if is_instance_valid(scale_pan):
 			scale_target = scale_pan.to_global(scale_pan.pan_position())-Vector2(0,item.tex_size().y*item.display_scale*.5)
 		if optical_pinned: optical_position = _optical_target()
+	_layout_scale_console()
+
+func _layout_scale_console() -> void:
+	if not is_instance_valid(instrument) or not is_instance_valid(scale_pan): return
+	# Keep real GUI controls in the page's keyboard/touch tree while their
+	# visible surface follows the same physical housing in the world layer.
+	var projection := get_global_transform_with_canvas().affine_inverse()*scale_pan.get_global_transform_with_canvas()
+	instrument.position = projection.origin
+	instrument.scale = projection.get_scale()
 
 func _desktop_layout() -> Rect2:
 	var r: Rect2 = shell.content_rect()
@@ -311,12 +340,19 @@ func _portrait_layout() -> Rect2:
 		PortraitSkin.button(b)
 	portrait_tools.position = r.position
 	portrait_tools.size = Vector2(r.size.x,54)
-	var bottom_height := maxf(100.0,bench.get_combined_minimum_size().y)
-	var mat := Rect2(r.position+Vector2(0,62),Vector2(r.size.x,220))
+	var mat := Rect2(r.position+Vector2(0,62),Vector2(r.size.x,280 if tool == "TOL-005" else 220))
 	bench.position = Vector2(r.position.x,mat.end.y+8)
+	var bottom_height := maxf(100,bench_body.get_combined_minimum_size().y+bench.get_theme_stylebox("panel").get_minimum_size().y)
+	var remaining := r.end.y-bench.position.y-8
+	var compact_notes := remaining-bottom_height < 80
+	if compact_notes:
+		# Keep a full action row reachable on a short phone. Only these two
+		# paper panels scroll; the physical watch and instrument stay fixed.
+		bottom_height = minf(bottom_height,maxf(24,remaining-80))
+	bench_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if compact_notes else ScrollContainer.SCROLL_MODE_DISABLED
 	bench.size = Vector2(r.size.x,bottom_height)
 	detail_panel.position = Vector2(r.position.x,bench.position.y+bottom_height+8)
-	detail_panel.size = Vector2(r.size.x,maxf(110,r.end.y-detail_panel.position.y))
+	detail_panel.size = Vector2(r.size.x,maxf(1,r.end.y-detail_panel.position.y))
 	# Controls below the notes use two rows on a phone.
 	for child in detail_panel.find_children("*","GridContainer",true,false): child.columns = 2
 	shell.work_surface.set_mat(mat)
@@ -472,6 +508,14 @@ func _set_tool(id: String) -> void:
 	wand = null
 	uv_light = null
 	scale_pan = null
+	if is_instance_valid(instrument):
+		instrument.hide()
+		instrument.queue_free()
+	instrument = null
+	scale_label = null
+	scale_status = null
+	tare_button = null
+	place_button = null
 	shell.ambient_target = shell.ambient_base
 	UIKit.clear(bench_body)
 	if id == "TOL-005":
@@ -563,19 +607,40 @@ func _scale() -> void:
 	scale_pan.position = item_home+Vector2(35,110)
 	scale_pan.z_index = -1
 	add_world(scale_pan,"fg")
-	scale_label = UIKit.label("0.0 g · 请先空秤归零",22,UIKit.CYAN)
-	bench_body.add_child(scale_label)
+	instrument = Control.new()
+	instrument.name = "scale_console"
+	instrument.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(instrument)
+	scale_label = UIKit.label("0.0 g",22,Color("223c34"),true)
+	scale_label.position = Vector2(-137,30)
+	scale_label.size = Vector2(104,28)
+	scale_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	scale_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	instrument.add_child(scale_label)
+	scale_status = UIKit.label("请先归零",11,Color("294b36"))
+	scale_status.position = Vector2(-137,58)
+	scale_status.size = Vector2(100,18)
+	scale_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	instrument.add_child(scale_status)
+	bench_body.add_child(UIKit.label("空秤归零后放表；读数稳定时自动记录。",15,UIKit.TEXT,false,true))
 	bench_body.add_child(UIKit.label(_power_copy("TOL-005"), 16, UIKit.CYAN, false, true))
 	var grid := UIKit.grid(2,8)
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for entry in [["空秤归零",_scale_tare],["放到秤上",_scale_place]]:
-		var b := UIKit.button(entry[0],"secondary",Vector2(0,44),18)
+	grid.position = Vector2(-16,28)
+	grid.size = Vector2(164,48)
+	grid.custom_minimum_size = grid.size
+	for entry in [["TARE\n归零",_scale_tare,76,"primary"],["放到秤上",_scale_place,80,"secondary"]]:
+		var b := UIKit.button(entry[0],entry[3],Vector2(entry[2],48),14)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		for state in ["normal","hover","pressed","disabled"]:
+			b.add_theme_stylebox_override(state,UIKit.key_style(entry[3],state,true))
 		b.pressed.connect(entry[1])
 		grid.add_child(b)
 	tare_button = grid.get_child(0)
+	tare_button.name = "scale_tare"
+	tare_button.tooltip_text = "空秤归零 · TARE"
 	place_button = grid.get_child(1)
-	bench_body.add_child(grid)
+	place_button.name = "scale_place"
+	instrument.add_child(grid)
 	_scale_controls()
 
 func _scale_tare() -> bool:
@@ -623,7 +688,8 @@ func _scale_controls() -> void:
 	tare_button.disabled = _tool_problem(tool) != ""
 	place_button.disabled = not tared or _tool_problem(tool) != ""
 	place_button.text = "重新称量" if scale_occupied else "放到秤上"
-	scale_label.text = "%.1f g · %s" % [scale_reading,"稳定 ✓" if scale_stable else "正在稳定…" if scale_occupied else "空秤已归零" if tared else "请先空秤归零"]
+	scale_label.text = "%.1f g" % scale_reading
+	scale_status.text = "稳定 ✓" if scale_stable else "正在稳定…" if scale_occupied else "空秤已归零" if tared else "请先归零"
 	if is_instance_valid(scale_pan): scale_pan.set_reading(scale_reading,tared,scale_occupied,scale_stable)
 
 func _record() -> void:
@@ -695,6 +761,9 @@ func _unhandled_input(e: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	if not is_instance_valid(item): return
+	# Page transitions move the GUI tree independently of the world instrument.
+	# Native canvas transforms keep its real controls on the housing throughout.
+	_layout_scale_console()
 	var modal_blocked: bool = shell.modal_open() or (shell.workspace_mode and shell.workspace_parent.modal_open())
 	if tool == "TOL-001" or tool == "TOL-002":
 		var optical: Node2D = lens if tool == "TOL-001" else wand
@@ -798,14 +867,9 @@ class ScalePan extends Node2D:
 		draw_rect(Rect2(-145,-10+depression,290,8),Color("c3c5b2"))
 		draw_line(Vector2(-143,-9+depression),Vector2(143,-9+depression),Color("fff1d2"),2)
 		for x in range(-132,140,24): draw_line(Vector2(x,-7+depression),Vector2(x+13,-7+depression),Color("a2aa98"),1)
-		draw_style_box(UIKit.inset_style(3),Rect2(-141,30,190,46))
-		draw_rect(Rect2(-134,35,176,34),Color("b6c4a4"))
-		draw_string(UIKit.mono,Vector2(-126,59),"%6.1f g" % reading,HORIZONTAL_ALIGNMENT_LEFT,150,23,Color("223c34"))
-		draw_circle(Vector2(32,41),3,Color("426f58") if stable or tared and not occupied else Color("a15d35"))
-		draw_style_box(UIKit.key_style("primary","normal"),Rect2(67,34,74,32))
-		draw_string(UIKit.mono,Vector2(76,56),"TARE",HORIZONTAL_ALIGNMENT_LEFT,65,16,Color("3e3228"))
-		draw_string(UIKit.mono,Vector2(-134,87),display_state(),HORIZONTAL_ALIGNMENT_LEFT,220,9,Color("e2dcc4"))
-		draw_string(UIKit.mono,Vector2(83,84),"0.1 g",HORIZONTAL_ALIGNMENT_LEFT,65,10,Color("e2dcc4"))
+		draw_style_box(UIKit.inset_style(3),Rect2(-146,27,122,52))
+		draw_rect(Rect2(-141,32,112,42),Color("b6c4a4"))
+		draw_circle(Vector2(-32,70),3,Color("426f58") if stable or tared and not occupied else Color("a15d35"))
 
 class Ring extends Node2D:
 	var ultraviolet := false

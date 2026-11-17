@@ -194,6 +194,10 @@ func snapshot() -> Dictionary:
 		result.dialogue=true
 		result.dialogue_line=state.trade.line
 		result.dialogue_uid=TradeSession.session(state).focus
+		if active.page_name == "counter" and is_instance_valid(active.page.strict_view) and is_instance_valid(active.page.strict_view.speech):
+			var speech: RichTextLabel = active.page.strict_view.speech
+			result.counter_speech = {"text":speech.text,"content_height":speech.get_content_height(),
+				"viewport_height":speech.size.y,"scroll_active":speech.scroll_active,"visible_ratio":speech.visible_ratio}
 		var line:=CounterDialogue.current(state)
 		result.can_accept=not line.is_empty() and line.status in ["ready","counter"] and not state.trade.locked
 		result.can_deliver=TradeSession.summary(state).sell_count+TradeSession.summary(state).buy_count>0 and TradeSession.checkout_problem(state)==""

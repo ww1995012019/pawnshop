@@ -320,6 +320,10 @@ func _build_ui() -> void:
 	modal_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	modal_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root_ui.add_child(modal_layer)
+	# Modal open/close is UI state, not a Game.changed action. Coordinate root
+	# paperwork through native lifecycle signals, including nested viewports.
+	modal_layer.child_entered_tree.connect(_modal_paper_state_changed)
+	modal_layer.child_exiting_tree.connect(_modal_paper_state_changed)
 
 func _build_hud() -> void:
 	hud = UIKit.hbox(10)
@@ -783,6 +787,7 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	workspace_shell.initial_page = name
 	viewport.add_child(workspace_shell)
 	_layout_workspace()
+	_sync_wanted_notice()
 	workspace_close.call_deferred("grab_focus")
 	sound("page", -8)
 	if not Game.prefs.reduced_motion:
@@ -934,6 +939,7 @@ func _restore_workspace(entry: Dictionary) -> void:
 		workspace_shell.page.on_changed(workspace_shell.workspace_suspended_state, Game.state, {"type":"WORKSPACE_RESUME"})
 		workspace_shell.workspace_dirty = false
 	workspace_shell.workspace_suspended_state = {}
+	_sync_wanted_notice()
 	call_deferred("_restore_workspace_focus", entry)
 
 func _restore_workspace_focus(entry: Dictionary) -> void:
@@ -2039,7 +2045,31 @@ class ShutterDoor extends Control:
 		draw_string(f, Vector2(plate.position.x, plate.position.y + 100), "第 %d 天" % day, HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 72, Color("ffc98f"))
 		draw_string(f, Vector2(plate.position.x, plate.position.y + 150), "回环九号 · 下层旧港", HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 24, Color("d9c4a2"))
 
-# The inventory paper stays in the outer viewport, above equipment drawers.
+# The expanded desk document stays above newly opened or restored drawers.
+func wanted_notice_blocked() -> bool:
+	if workspace_mode:return workspace_parent.wanted_notice_blocked()
+	if modal_open():return true
+	return workspace_open() and is_instance_valid(workspace_shell.modal_layer) and workspace_shell.modal_open()
+
+func _modal_paper_state_changed(_child: Node) -> void:
+	var host:Node=workspace_parent if workspace_mode else self
+	if not is_instance_valid(host) or host.is_queued_for_deletion():return
+	host._sync_wanted_notice_presentation()
+	# child_exiting_tree fires before removal. Restore only after the final
+	# modal has actually left, including its closing animation.
+	host.call_deferred("_sync_wanted_notice_presentation")
+
+func _sync_wanted_notice_presentation() -> void:
+	if workspace_mode:
+		workspace_parent._sync_wanted_notice_presentation()
+		return
+	if not is_instance_valid(wanted_notice):return
+	var title_open:=is_instance_valid(title) and not title.is_queued_for_deletion()
+	wanted_notice.visible=WantedCases.has_notice(Game.state) and bool(WantedCases.case_state(Game.state).paper.visible) and not title_open and not wanted_notice_blocked()
+	if wanted_notice.visible:
+		root_ui.move_child(wanted_notice,-1)
+		root_ui.move_child(modal_layer,-1)
+
 func _sync_wanted_notice() -> void:
 	if workspace_mode: return
 	if not WantedCases.has_notice(Game.state):
@@ -2050,10 +2080,7 @@ func _sync_wanted_notice() -> void:
 		root_ui.add_child(wanted_notice)
 		wanted_notice.setup(self)
 	wanted_notice.refresh()
-	if is_instance_valid(title) and not title.is_queued_for_deletion(): wanted_notice.hide()
-	if wanted_notice.visible:
-		root_ui.move_child(wanted_notice,-1)
-		root_ui.move_child(modal_layer,-1)
+	_sync_wanted_notice_presentation()
 
 func toggle_wanted_notice() -> void:
 	if workspace_mode:

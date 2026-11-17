@@ -42,7 +42,7 @@ func run():
  check(is_instance_valid(shell.wanted_notice) and shell.wanted_notice.visible,"debug edits refresh the wanted notice immediately")
  debug.apply("data",["wanted_profiles",0,"reward"],"777");await frames()
  var card=shell.wanted_notice.find_child("case_WNT-001",true,false)
- check(card!=null and card.get_child(0).get_children().any(func(node):return node is Label and node.text.contains("777 Cr")),"definition edits refresh the displayed reward")
+ check(card!=null and card.find_children("*","Label",true,false).any(func(node):return node.text.contains("777 Cr")),"definition edits refresh the displayed reward")
  debug.restore();await frames()
  check(not is_instance_valid(shell.wanted_notice) or not shell.wanted_notice.visible,"restoring the backup refreshes notice visibility")
  shell.open_settings();await frames()

@@ -101,9 +101,9 @@ func layout_workbench(left: Control, right: Control, bench: Control, left_width:
 	return mat
 
 ## Fit the complete sprite, including unusually wide goods, inside the mat.
-func fit_workbench_item(item: ItemSprite, mat: Rect2) -> Vector2:
+func fit_workbench_item(item: ItemSprite, mat: Rect2, margin_override := -1.0) -> Vector2:
 	var footprint := item.tex_size()
-	var margin := 28.0 if shell.landscape_mode() else 100.0
+	var margin := margin_override if margin_override >= 0 else (28.0 if shell.landscape_mode() else 100.0)
 	var height := maxf(20,minf(360.0, minf(mat.size.y - margin, (mat.size.x - 80.0 if shell.landscape_mode() else mat.size.x - 144.0) * footprint.y / footprint.x)))
 	var scale := height / footprint.y
 	if not is_equal_approx(item.display_scale, scale):
@@ -117,7 +117,13 @@ func fit_workbench_item(item: ItemSprite, mat: Rect2) -> Vector2:
 			item.body.scale = Vector2.ONE * item.display_scale
 		item.body.scale *= scale / item.display_scale
 		item.display_scale = scale
-	var half := footprint * scale * 0.5 + Vector2(32, 36)
+	var padding := Vector2(32,36)
+	if margin_override >= 0:
+		# Compact instrument bays reserve less shadow clearance while retaining
+		# a positive drag range around the complete fitted sprite.
+		var spare := (mat.size-footprint*scale).max(Vector2.ZERO)
+		padding = Vector2(minf(12,spare.x*.25),minf(8,spare.y*.25))
+	var half := footprint * scale * 0.5 + padding
 	var usable := Rect2(mat.position + half, mat.size - half * 2)
 	item.bounds = Rect2(shell.ui_to_world(usable.position), usable.size)
 	return shell.ui_to_world(mat.get_center())

@@ -6,6 +6,9 @@ const PAPER = Color("f7e5c3")
 const INK = Color("20241e")
 const RED = Color("b84e37")
 const GREEN = Color("243a30")
+const ORANGE = Color("9a5326")
+const ORANGE_LIGHT = Color("f4d5a4")
+const ORANGE_INK = Color("40271b")
 const REFERENCE_SIZE := Vector2(1671,941)
 const PRESENTATION_SIZE := Vector2(1920,1080)
 var desk
@@ -41,6 +44,7 @@ var stock_count: Label
 var trade_buttons: Array=[]
 var quote_controls: Array=[]
 var stock: GridContainer
+var wanted_paper: Button
 var shelves: Control
 var table: Control
 var detail_tools: VBoxContainer
@@ -92,7 +96,10 @@ class TradeWatch extends Button:
   ghost.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
   var holder=Control.new();holder.add_child(ghost);ghost.position=-ghost.size*.5;set_drag_preview(holder)
   ghost.position.y-=9;ghost.rotation=-.035
-  return {"kind":"strict_trade" if Game.state.trade!=null else "showroom_original","uid":uid}
+  var data={"kind":"strict_trade" if Game.state.trade!=null else "showroom_original","uid":uid}
+  if Game.state.trade!=null:
+   data.trade_id=Game.state.trade.id;data.version=TradeSession.session(Game.state).get("version",-1)
+  return data
 
 func setup(page) -> void:
  desk=page;name="StrictCounterView"
@@ -142,48 +149,83 @@ func _button(parent: Node,text: String,rect: Rect2,fn: Callable,icon_name := "",
  b.mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND
  b.add_theme_font_override("font",UIKit.mono)
  b.add_theme_font_size_override("font_size",22)
- for state in ["normal","hover","pressed","disabled","focus"]:
-  var style=_style(fill,INK,9)
+ var ink=UIKit.AUX_LIGHT if fill in [RED,ORANGE] else INK
+ for state in ["normal","hover","pressed","hover_pressed","disabled"]:
+  var style=_style(UIKit.AUX_DISABLED if state=="disabled" else fill,INK,9)
   if state=="hover":
-   style.border_color=RED
-   if style is StyleBoxTexture:style.modulate_color=Color(1.03,1.0,.94)
-  if state=="pressed":
+   style.border_color=UIKit.AUX_EDGE
+  if state in ["pressed","hover_pressed"]:
    style.bg_color=fill.darkened(.08)
-   if style is StyleBoxTexture:style.modulate_color=Color(.94,.9,.83)
   b.add_theme_stylebox_override(state,style)
-  b.add_theme_color_override("font_color" if state=="normal" else "font_"+state+"_color",Color("fff1d6") if fill==RED else INK)
+ for key in ["font_color","font_hover_color","font_pressed_color","font_hover_pressed_color","font_focus_color","icon_normal_color","icon_hover_color","icon_pressed_color","icon_hover_pressed_color","icon_focus_color"]:b.add_theme_color_override(key,ink)
+ b.add_theme_color_override("font_disabled_color",UIKit.DISABLED_TEXT)
+ b.add_theme_color_override("icon_disabled_color",UIKit.DISABLED_TEXT)
+ b.add_theme_stylebox_override("focus",UIKit.focus_style())
  parent.add_child(b)
- if fill==RED:_image(b,A.tex("red_paper.png"),Rect2(4,4,rect.size.x-8,rect.size.y-8)).stretch_mode=TextureRect.STRETCH_SCALE
+ if fill in [RED,ORANGE]:_image(b,UIKit.orange_art(A.tex("red_paper.png")) if fill==ORANGE else A.tex("red_paper.png"),Rect2(4,4,rect.size.x-8,rect.size.y-8)).stretch_mode=TextureRect.STRETCH_SCALE
  if vertical:
   b.tooltip_text=text
   b.clip_text=true
-  for color_key in ["font_color","font_hover_color","font_pressed_color","font_disabled_color","font_focus_color"]:b.add_theme_color_override(color_key,Color.TRANSPARENT)
-  _image(b,A.icon(icon_name),Rect2((rect.size.x-34)/2,12,34,34),Color("fff1d6") if fill==RED else INK).name="ActionIcon"
-  var caption=_label(b,text,Rect2(0,52,rect.size.x,34),23,Color("fff1d6") if fill==RED else INK,true)
+  for color_key in ["font_color","font_hover_color","font_pressed_color","font_hover_pressed_color","font_disabled_color","font_focus_color"]:b.add_theme_color_override(color_key,Color.TRANSPARENT)
+  _image(b,A.icon(icon_name),Rect2((rect.size.x-34)/2,12,34,34),ink).name="ActionIcon"
+  var caption=_label(b,text,Rect2(0,52,rect.size.x,34),23,ink,true)
   caption.name="ActionCaption"
   caption.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
  else:
   b.text=text
   if icon_name!="":
    b.icon=A.icon(icon_name);b.add_theme_constant_override("icon_max_width",26)
-   b.add_theme_color_override("icon_normal_color",INK)
-   b.add_theme_color_override("icon_hover_color",INK)
  b.pressed.connect(func():
   if desk.busy or desk._scene_blocked():return
   desk.shell.sound("click",-10);fn.call();dirty=true)
- b.button_down.connect(func():b.modulate=Color(.95,.93,.9,b.modulate.a))
- b.button_up.connect(func():
-  if Game.prefs.reduced_motion:b.modulate=Color(1,1,1,b.modulate.a)
-  else:
-   var tween=b.create_tween().set_parallel(true)
-   for channel in ["r","g","b"]:tween.tween_property(b,"modulate:"+channel,1.0,.12))
+ _bind_button_feedback(b)
  return b
+
+## A separate drawing layer survives empty styleboxes and later-painted skins.
+## Native Button owns the pointer, focus and disabled state; geometry never moves.
+func _bind_button_feedback(b: Button) -> void:
+ if b.get_node_or_null("InteractionFeedback")!=null:return
+ var feedback=ButtonFeedback.new()
+ feedback.name="InteractionFeedback";feedback.button=b
+ feedback.mouse_filter=Control.MOUSE_FILTER_IGNORE;feedback.z_index=8
+ b.add_child(feedback)
+ feedback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+class ButtonFeedback extends Panel:
+ var button: Button
+ var last_state := -1
+ func _ready() -> void:
+  _sync()
+ func _process(_delta: float) -> void:
+  _sync()
+ func _sync() -> void:
+  if not is_instance_valid(button):return
+  var hover=button.is_hovered()
+  var pressed=button.is_pressed()
+  var focus=button.has_focus()
+  var state=int(button.disabled)+int(hover)*2+int(pressed)*4+int(focus)*8
+  if state==last_state:return
+  last_state=state
+  visible=not button.disabled and (hover or pressed or focus)
+  var style=StyleBoxFlat.new()
+  # Keep the wash light enough to preserve cream lettering on burnt orange.
+  style.bg_color=Color(.30,.14,.04,.12) if pressed else Color(.94,.57,.22,.055 if hover else 0.0)
+  style.border_color=Color("713b1d") if pressed or focus else Color("a66330")
+  style.set_border_width_all(3 if focus else 2)
+  style.set_corner_radius_all(4)
+  style.set_content_margin_all(0)
+  add_theme_stylebox_override("panel",style)
+ func _draw() -> void:
+  if is_instance_valid(button) and button.has_focus() and not button.disabled:
+   # A light inner stroke remains visible on painted dark primary actions;
+   # the dark outer stroke supplies the contrast on cream navigation art.
+   draw_rect(Rect2(Vector2(3,3),size-Vector2(6,6)),Color("fff3d8"),false,1)
 
 func _nav(text: String,icon: String,x: float,width: float,fn: Callable) -> Button:
  var b=_button(self,text,Rect2(x,876,width,48),fn,icon)
  b.name="StrictNav_"+icon
  b.add_theme_constant_override("icon_max_width",43)
- for state in ["normal","hover","pressed","focus"]:
+ for state in ["normal","hover","pressed","hover_pressed","focus"]:
   b.add_theme_stylebox_override(state,StyleBoxEmpty.new())
  return b
 
@@ -198,8 +240,8 @@ func _source_style(texture: Texture2D,cap := 6) -> StyleBoxTexture:
 func _hit(parent: Node,text: String,rect: Rect2,fn: Callable) -> Button:
  var b=_button(parent,text,rect,fn)
  b.icon=null
- for state in ["normal","hover","pressed","disabled","focus"]:b.add_theme_stylebox_override(state,StyleBoxEmpty.new())
- for key in ["font_color","font_hover_color","font_pressed_color","font_disabled_color","font_focus_color"]:b.add_theme_color_override(key,Color.TRANSPARENT)
+ for state in ["normal","hover","pressed","hover_pressed","disabled","focus"]:b.add_theme_stylebox_override(state,StyleBoxEmpty.new())
+ for key in ["font_color","font_hover_color","font_pressed_color","font_hover_pressed_color","font_disabled_color","font_focus_color"]:b.add_theme_color_override(key,Color.TRANSPARENT)
  return b
 
 func _source_nav(text: String,key: String,rect: Rect2,fn: Callable) -> Button:
@@ -253,6 +295,9 @@ func _build() -> void:
  stock_scroll=ScrollContainer.new();stock_scroll.position=Vector2(20,640);stock_scroll.size=Vector2(393,185)
  stock_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;stock_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;add_child(stock_scroll)
  stock=GridContainer.new();stock.columns=6;stock.add_theme_constant_override("h_separation",2);stock.add_theme_constant_override("v_separation",3);stock_scroll.add_child(stock)
+ wanted_paper=preload("res://scripts/ui/wanted_desk_paper.gd").new();add_child(wanted_paper)
+ wanted_paper.setup(desk.shell);wanted_paper.position=Vector2(112,474);wanted_paper.size=Vector2(146,90)
+ _bind_button_feedback(wanted_paper)
  var paper=Panel.new();paper.name="StrictTradePaper";paper.position=Vector2(1186,68);paper.size=Vector2(485,791)
  paper.mouse_filter=Control.MOUSE_FILTER_IGNORE;paper.add_theme_stylebox_override("panel",_style(PAPER,INK,8));add_child(paper)
  detail_layer=Control.new();detail_layer.name="TradeDetails";detail_layer.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(detail_layer)
@@ -268,7 +313,7 @@ func _build() -> void:
  rounds=_label(detail_layer,"",Rect2(1530,210,122,37),22,INK,true)
  var evidence_key=_hit(detail_layer,"",Rect2(1344,210,145,37),_open_evidence);evidence_key.name="StrictEvidence";evidence_key.tooltip_text="选择用于议价的检验记录"
  var ribbon=Panel.new();ribbon.name="StrictAskRibbon";ribbon.position=Vector2(1208,276);ribbon.size=Vector2(440,63)
- ribbon.mouse_filter=Control.MOUSE_FILTER_IGNORE;ribbon.add_theme_stylebox_override("panel",_style(RED,INK,6));detail_layer.add_child(ribbon)
+ ribbon.mouse_filter=Control.MOUSE_FILTER_IGNORE;ribbon.add_theme_stylebox_override("panel",_style(ORANGE,INK,6));detail_layer.add_child(ribbon)
  ask_caption=_label(detail_layer,"",Rect2(1255,290,113,44),27,PAPER,true);ask_caption.name="StrictAskCaption"
  ask=_label(detail_layer,"",Rect2(1498,284,137,46),32,Color("fff1d6"),false);ask.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT;ask.clip_text=true;ask.add_theme_font_override("font",R.latin())
  quote_controls.append(_image(detail_layer,R.region("quote-label",Rect2i(1210,359,88,49)),Rect2(1210,359,88,49)))
@@ -300,7 +345,7 @@ func _build() -> void:
   var icons=["gavel","handshake","magnifying-glass","file-lines","right-from-bracket"]
   var b=_button(detail_layer,captions[index],rects[index],func():_trade_action(slot),icons[index],PAPER,true);b.name="StrictTradeAction_"+str(index)
   for state in ["normal","hover","pressed","disabled","focus"]:b.add_theme_stylebox_override(state,StyleBoxEmpty.new())
-  var art=_image(b,R.source_button(index),Rect2(Vector2.ZERO,R.source_button(index).get_size()));art.stretch_mode=TextureRect.STRETCH_SCALE;art.name="ActionSkin";b.move_child(art,0)
+  var art=_image(b,UIKit.orange_art(R.source_button(index)),Rect2(Vector2.ZERO,R.source_button(index).get_size()));art.stretch_mode=TextureRect.STRETCH_SCALE;art.name="ActionSkin";b.move_child(art,0)
   b.get_node("ActionCaption").hide();b.get_node("ActionIcon").hide();trade_buttons.append(b)
  secondary=_hit(detail_layer,"",Rect2(1248,610,368,57),func():
   if not desk.dialogue_put_aside.disabled:desk.dialogue_put_aside.pressed.emit())
@@ -327,6 +372,7 @@ func _build() -> void:
   var tool:String=spec[1];var key=UIKit.button(spec[0],"secondary",Vector2(425,47),23);key.pressed.connect(func():desk.showroom.open_tool(tool));detail_tools.add_child(key)
  var ret=UIKit.button("放回原位","primary",Vector2(425,47),23);ret.pressed.connect(func():desk.showroom.return_original();dirty=true);detail_tools.add_child(ret)
  var arrange=UIKit.button("整理 / 调价","secondary",Vector2(425,47),23);arrange.pressed.connect(func():desk.shell.go("warehouse",desk.showroom.selected_uid));detail_tools.add_child(arrange)
+ _configure_dialogue_actors()
 
 func _layout_desktop() -> void:
  if desk.shell.mobile_mode():return
@@ -360,6 +406,7 @@ func _layout_desktop() -> void:
  stock_art.size.y=278+extra_space.y
  stock_scroll.size.y=185+extra_space.y
  quick_list.fit_height(791+extra_space.y)
+ _layout_dialogue_actors()
  signature="";dirty=true
 
 func _table_project(point:Vector2) -> Vector2:
@@ -427,11 +474,7 @@ func _process(delta: float) -> void:
   bell_art.rotation=desk.bell.rotation
  if dirty or period>.10:
   _refresh(dirty);dirty=false;period=0.0
- face.position=_face_anchor()+face_offset
- if face.visible and visitor_phase=="standing" and not Game.prefs.reduced_motion and last_npc!="CHR-021":
-  face.position.y+=sin(clock*1.7)*.3
-  if is_instance_valid(desk.customer):
-   face.position.y+=float(desk.customer.gesture.get("nod",0))*2.0-float(desk.customer.gesture.get("lean",0))*1.5
+ _update_visitor_pose()
  _advance_visible_departure()
  speech.visible_ratio=desk.bubble_label.visible_ratio
 
@@ -519,7 +562,7 @@ func _refresh(force := false) -> void:
   name_key.text=GameData.npc(t.npcId).name
   var raw=desk.bubble_label.get_parsed_text()
   var boilerplate="这只%s我想出手，开价%s Cr。你先看看，价钱咱们可以谈。"%[fullname,Model.jnum(t.get("price",0))]
-  speech.text=("这只表，%s Cr。\n你看看。"%Model.jnum(t.get("price",0))) if raw==boilerplate else raw
+  _sync_speech(("这只表，%s Cr。\n你看看。"%Model.jnum(t.get("price",0))) if raw==boilerplate else raw)
   speech.tooltip_text=""
  for i in trade_buttons.size():
   var keys=desk.actions.get_children();trade_buttons[i].disabled=i>=keys.size() or keys[i].disabled or desk.busy
@@ -532,14 +575,14 @@ func _refresh(force := false) -> void:
    trade_buttons[i].get_node("ActionCaption").text=caption
    var source_caption=["出价","接受","鉴定","抵押","送客"][i]
    var original_skin=caption==source_caption
-   trade_buttons[i].get_node("ActionSkin").texture=R.source_button(i) if original_skin else R.blank_button(i)
+   trade_buttons[i].get_node("ActionSkin").texture=UIKit.orange_art(R.source_button(i) if original_skin else R.blank_button(i))
    trade_buttons[i].get_node("ActionCaption").visible=not original_skin
    trade_buttons[i].get_node("ActionIcon").visible=not original_skin
    trade_buttons[i].get_node("ActionCaption").add_theme_color_override("font_color",Color("fff1d6") if i==0 else INK)
    trade_buttons[i].get_node("ActionIcon").modulate=Color("fff1d6") if i==0 else INK
    var glyph={"交割":"handshake","出价":"gavel","接受":"handshake","鉴定":"magnifying-glass","抵押":"file-lines","送客":"right-from-bracket","取消":"arrow-rotate-left","选货":"box-archive","商品":"store","缴租":"coins","检查":"shield-halved","名单":"clipboard-list","接待":"bell","打烊":"sun"}
    trade_buttons[i].get_node("ActionIcon").texture=A.icon(glyph.get(caption,"file-lines"))
-  trade_buttons[i].modulate.a=.82 if trade_buttons[i].disabled else 1.0
+  trade_buttons[i].modulate.a=1.0
  var inv_key=JSON.stringify([s.inventory,s.get("showroomLayout",{}),WantedCases.has_notice(s)])
  if inv_key!=stock_signature:
   stock_signature=inv_key;_inventory()
@@ -557,7 +600,8 @@ func _inventory() -> void:
  for container in [stock,shelves]:
   for c in container.get_children():c.free()
  var goods: Array=Game.state.inventory
- stock_count.text="在库 %d"%(goods.size()+int(WantedCases.has_notice(Game.state)))
+ stock_count.text="在库 %d"%goods.size()
+ wanted_paper.refresh()
  var layout=preload("res://scripts/model/showroom_layout.gd")
  layout.ensure(Game.state)
  var last_stock=-1
@@ -568,37 +612,36 @@ func _inventory() -> void:
    var empty=preload("res://scripts/ui/showroom_slot.gd").new();empty.showroom=desk.showroom;empty.location="warehouse";empty.slot=index
    empty.name="strict_empty_warehouse_"+str(index);empty.custom_minimum_size=Vector2(63,91)
    for state in ["normal","hover","pressed","focus"]:empty.add_theme_stylebox_override(state,StyleBoxEmpty.new())
+   _bind_button_feedback(empty)
    stock.add_child(empty)
   else:
    var key=_stock_button(it,false,Vector2(63,91));stock.add_child(key);UIKit.decorate_item(key,it,16)
    var crest=key.find_child("tier_crest",true,false)
    if crest!=null:crest.hide()
- if WantedCases.has_notice(Game.state):
-  var document=UIKit.button("","secondary",Vector2(63,91),16,"orders")
-  document.name="strict_wanted_inventory";document.tooltip_text="库存档案 · 取出或收起通缉名单"
-  document.pressed.connect(func():desk.shell.toggle_wanted_notice());stock.add_child(document)
  var last_display=-1
  for slot in Game.state.showroomLayout.display.values():last_display=maxi(last_display,int(slot))
- shelves.custom_minimum_size=Vector2(304,_display_position(last_display).y+130 if last_display>=0 else 0)
- for index in layout.capacity(Game.state,"display"):
+ var visible_slots=mini(layout.capacity(Game.state,"display"),maxi(6,ceili(float(last_display+2)/3.0)*3))
+ shelves.custom_minimum_size=Vector2(276,_display_position(visible_slots-1).y+130)
+ shelves.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+ for index in visible_slots:
   var uid=layout.uid_at(Game.state,"display",index)
   var it=Game.item(uid)
   if it==null:
-   # No visible pluses/frames; only retain holes up to the last real item.
-   var last=-1
-   for v in Game.state.showroomLayout.display.values():last=maxi(last,int(v))
-   if index>last:break
+   # Empty targets stay invisible until hovered, including the third place
+   # on a partly filled row and the next available row.
    var empty=preload("res://scripts/ui/showroom_slot.gd").new();empty.showroom=desk.showroom;empty.location="display";empty.slot=index
    empty.name="strict_empty_display_"+str(index);empty.custom_minimum_size=Vector2(90,130);empty.size=Vector2(90,130);empty.position=_display_position(index)
    for state in ["normal","hover","pressed","focus"]:empty.add_theme_stylebox_override(state,StyleBoxEmpty.new())
+   _bind_button_feedback(empty)
    shelves.add_child(empty)
   else:
    var key=_stock_button(it,true,Vector2(90,130));shelves.add_child(key);key.position=_display_position(index);key.size=Vector2(90,130);UIKit.decorate_item(key,it,16)
 
 func _display_position(index: int) -> Vector2:
- var measured=[Vector2(3,0),Vector2(115,0),Vector2(219,0),Vector2(35,153),Vector2(162,153)]
- if index<5:return measured[index]
- return Vector2(((index-5)%3)*104,306+floori((index-5)/3.0)*153)
+ # Reserve the bar even on a partly filled row so columns stay still when
+ # the next row becomes scrollable, rather than clipping the third price.
+ var width=maxf(276,display_scroll.size.x-display_scroll.get_v_scroll_bar().get_combined_minimum_size().x)
+ return Vector2(3+(index%3)*(width-96)*.5,floori(index/3.0)*145)
 
 func _stock_button(it,display: bool,extent: Vector2) -> Button:
  var b=preload("res://scripts/ui/showroom_slot.gd").new()
@@ -614,7 +657,10 @@ func _stock_button(it,display: bool,extent: Vector2) -> Button:
  _image(b,texture,picture_rect)
  b.tooltip_text=GameData.def(it.defId).name+" · "+UIKit.pct(it.condition)
  if display:
-  var price=_label(b,Model.jnum(it.get("listPrice",0))+" Cr",Rect2(7,90,86,39),20,INK,true)
+  var price=_label(b,Model.jnum(it.get("listPrice",0))+" Cr",Rect2(3,90,84,39),20,INK,true)
+  price.clip_text=true
+  var label_width=price.get_theme_font("font").get_string_size(price.text,HORIZONTAL_ALIGNMENT_LEFT,-1,20).x
+  price.add_theme_font_size_override("font_size",mini(20,maxi(12,floori(20.0*80/maxf(80,label_width)))))
   price.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;var price_style=_source_style(R.price_tag(false,true),6);price_style.set_content_margin_all(0)
   price.add_theme_stylebox_override("normal",price_style)
  b.pressed.connect(func():
@@ -625,6 +671,7 @@ func _stock_button(it,display: bool,extent: Vector2) -> Button:
   if current==null:return
   var why=Model.sale_eligibility(current,t.npcId) if picking else null
   desk._stock_clicked(str(current.uid),picking,why);dirty=true)
+ _bind_button_feedback(b)
  return b
 
 func _table_points(direction: String,count: int) -> Array[Vector2]:
@@ -721,6 +768,7 @@ func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visit
   tag.add_theme_stylebox_override("normal",normal_tag);tag.add_theme_color_override("font_color",Color("efb34f") if focus else Color("f7e7c6"));arrow.visible=focus and not visitor)
  b.pressed.connect(func():
   if not desk.busy and not desk._scene_blocked():fn.call())
+ _bind_button_feedback(b)
  return b
 
 func _decorate_original(button: Control,it,compact:=false) -> void:
@@ -739,15 +787,48 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 func _can_drop_data(at_position: Vector2,data) -> bool:
  if desk.busy or desk._scene_blocked() or not data is Dictionary:return false
+ if data.get("kind","") in ["strict_trade","showroom_original"] and stock_art.get_rect().has_point(at_position):
+  return _stock_return_problem(data)==""
  if data.get("kind","")=="strict_trade":
   return Game.state.trade!=null and Rect2(430,463,750+extra_space.x,280+extra_space.y).has_point(at_position) and not TradeSession.row(Game.state,str(data.get("uid",""))).is_empty()
  if data.get("kind","")=="showroom_original":
-  return Game.state.trade==null and desk.showroom.available(Game.item(str(data.get("uid","")))) and (Rect2(0,140,370,330).has_point(at_position) or Rect2(0,630,420,210+extra_space.y).has_point(at_position) or Rect2(430,463,750+extra_space.x,280+extra_space.y).has_point(at_position))
+  return Game.state.trade==null and desk.showroom.available(Game.item(str(data.get("uid","")))) and (Rect2(0,140,370,330).has_point(at_position) or Rect2(430,463,750+extra_space.x,280+extra_space.y).has_point(at_position))
  return false
+
+func _stock_return_problem(data: Dictionary) -> String:
+ var uid=str(data.get("uid",""))
+ var why:=CounterDialogue.storage_problem(Game.state,uid)
+ if why!="":return why
+ if Game.state.trade!=null:
+  if data.get("kind","")!="strict_trade" or data.get("trade_id","")!=Game.state.trade.id or data.get("version",-1)!=TradeSession.session(Game.state).get("version",-1):return "商谈内容已经变化，请重新取这只表。"
+  var offered:=TradeSession.row(Game.state,uid)
+  if offered.is_empty() or offered.get("direction","")!="sell" or not offered.get("included",false) or offered.get("status","")=="done":return "这只原物已不在当前商谈中。"
+ elif data.get("kind","")!="showroom_original":return "这次来访已经结束，请重新取表。"
+ return ""
+
+func _return_table_original_to_stock(data: Dictionary) -> void:
+ var uid=str(data.uid)
+ var original=Game.item(uid)
+ var from:=_watch_center(uid);var texture:=_watch_texture(uid,original)
+ if Game.state.trade!=null:
+  Game.dispatch({"type":"COUNTER_STORE","tradeId":data.trade_id,"uid":uid,"version":data.version})
+  if Game.item(uid)!=null and Game.item(uid).location=="warehouse" and not TradeSession.row(Game.state,uid).get("included",false):
+   _store_motion.call_deferred(uid,texture,from);desk.shell.sound("drop",-10)
+ elif original.location=="warehouse":
+  if desk.showroom.selected_uid==uid:desk.showroom.return_original()
+ else:
+  var layout=preload("res://scripts/model/showroom_layout.gd")
+  for index in layout.capacity(Game.state,"warehouse"):
+   if layout.uid_at(Game.state,"warehouse",index)=="":
+    desk.showroom.place_original(uid,"warehouse",index);break
+ dirty=true
 
 func _drop_data(at_position: Vector2,data) -> void:
  if not _can_drop_data(at_position,data):return
  var uid=str(data.uid)
+ if stock_art.get_rect().has_point(at_position):
+  _return_table_original_to_stock(data)
+  return
  if data.kind=="strict_trade":
   var shown=CounterDialogue.table_items(Game.state)
   var info=shown.filter(func(entry):return entry.uid==uid)[0]
@@ -774,8 +855,69 @@ func _drop_data(at_position: Vector2,data) -> void:
     desk.showroom.place_original(uid,"warehouse",index);break
  dirty=true
 
+const DialogueLayout = preload("res://scripts/ui/counter_dialogue_layout.gd")
+
+func _configure_dialogue_actors() -> void:
+ var bubble=get_node("StrictSpeechBubble")
+ if bubble.get_node_or_null("BubbleSkin")==null:
+  # Preserve the original tail and rounded ink edges while extending the
+  # paper's center; the outer node remains the existing pointer boundary.
+  var skin=NinePatchRect.new();skin.name="BubbleSkin";skin.texture=R.bubble()
+  skin.patch_margin_left=47;skin.patch_margin_top=18;skin.patch_margin_right=28;skin.patch_margin_bottom=32
+  skin.mouse_filter=Control.MOUSE_FILTER_IGNORE
+  bubble.add_child(skin);skin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+  bubble.texture=null
+ speech.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+ speech.fit_content=false;speech.scroll_following=false
+ _layout_dialogue_actors()
+
+func _sync_speech(text: String) -> void:
+ if speech.text!=text:
+  speech.text=text;speech.scroll_to_line(0)
+ speech.tooltip_text=""
+ _layout_speech()
+
+func _layout_speech() -> void:
+ if not is_instance_valid(speech):return
+ var bubble=get_node("StrictSpeechBubble")
+ var origin=Vector2(760+extra_space.x*.5,157)
+ var right=get_node("StrictTradePaper").position.x-22.0
+ var bottom=_table_project(Vector2(700,451)).y-14.0
+ var top=hud_art.position.y+hud_art.size.y+12.0
+ var font=speech.get_theme_font("normal_font")
+ var font_size=speech.get_theme_font_size("normal_font_size")
+ var key=[speech.text,origin,right,bottom,top,font.get_instance_id(),font_size]
+ var geometry=bubble.get_meta("speech_geometry",{})
+ if bubble.get_meta("speech_layout_key",[])!=key:
+  geometry=DialogueLayout.speech_rects(font,font_size,speech.text,origin,right,bottom,top)
+  bubble.set_meta("speech_layout_key",key);bubble.set_meta("speech_geometry",geometry)
+ bubble.position=geometry.bubble.position;bubble.size=geometry.bubble.size
+ speech.position=geometry.text.position;speech.size=geometry.text.size
+ speech.scroll_active=geometry.scroll
+
+func _actor_stage() -> Rect2:
+ var stage:Rect2=layout_rects.get(face,Rect2(474,94,383,362))
+ stage.position.x+=extra_space.x*.5
+ return stage
+
 func _face_anchor() -> Vector2:
- return layout_rects.get(face,Rect2(474,94,383,362)).position+Vector2(extra_space.x*.5,0)
+ if face.texture==null:return _actor_stage().position
+ return DialogueLayout.actor_rect(face.texture,_actor_stage()).position
+
+func _layout_dialogue_actors() -> void:
+ _layout_speech()
+ _update_visitor_pose()
+ if is_instance_valid(departing_face) and not departure_started:
+  var rect=DialogueLayout.actor_rect(departing_face.texture,_actor_stage())
+  departing_face.size=rect.size;departing_face.position=rect.position
+
+func _update_visitor_pose() -> void:
+ if not is_instance_valid(face) or face.texture==null:return
+ var rect=DialogueLayout.actor_rect(face.texture,_actor_stage())
+ face.size=rect.size
+ # The old Customer rig still owns its gestures. A flat painted cutout
+ # stands on one baseline; only its horizontal arrival/departure offset moves.
+ face.position=rect.position+Vector2(face_offset.x,0)
 
 func _sync_visitor(trade) -> void:
  face.visible=trade!=null
@@ -787,7 +929,8 @@ func _sync_visitor(trade) -> void:
  last_visit=visit;last_npc=str(trade.npcId)
  if is_instance_valid(visitor_tween):visitor_tween.kill()
  _clear_departure()
- face.texture=A.counter_portrait(last_npc);face.modulate.a=1.0;face_offset=Vector2.ZERO
+ face.texture=DialogueLayout.portrait(last_npc);face.modulate.a=1.0;face_offset=Vector2.ZERO
+ _update_visitor_pose()
  visitor_phase="standing"
  if not motion_ready:return
  visitor_phase="entering";face.modulate.a=.2 if Game.prefs.reduced_motion else 0.0
@@ -909,7 +1052,7 @@ func _begin_drag_feedback(data) -> void:
  var uid=str(data.get("uid",""))
  var it=TradeSession.item(Game.state,uid) if Game.state.trade!=null else Game.item(uid)
  if it==null:return
- drag_feedback={"uid":uid,"from":_watch_center(uid),"texture":_watch_texture(uid,it)}
+ drag_feedback={"uid":uid,"from":_watch_center(uid),"texture":_watch_texture(uid,it),"data":data.duplicate(true)}
  var key=table.get_node_or_null("strict_table_"+uid)
  if key!=null:
   var visual=key.get_node("WatchVisual")
@@ -940,6 +1083,9 @@ func _end_drag_feedback(success: bool,animate:=true) -> void:
  if not success:
   var from=get_local_mouse_position() if not Game.prefs.reduced_motion else feedback.from
   _watch_ghost(feedback.texture,from,feedback.from,true)
+  if stock_art.get_rect().has_point(get_local_mouse_position()):
+   var why:=_stock_return_problem(feedback.get("data",{}))
+   if why!="":desk.shell.toast(why,"error")
 
 func _model_changed(previous: Dictionary,next: Dictionary,action: Dictionary) -> void:
  dirty=true

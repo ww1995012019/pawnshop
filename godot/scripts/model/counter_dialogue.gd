@@ -1,7 +1,16 @@
 class_name CounterDialogue
 extends Object
 ## Ordinary counter verbs talk about one original; agreed originals stay remembered.
-const VERBS := ["SELECT_TRADE","OFFER","ACCEPT","DELIVER","REFUSE","COUNTER_NEXT","COUNTER_CANCEL","COUNTER_UNSELECT","COUNTER_FOCUS","COUNTER_MOVE","PAWN"]
+const VERBS := ["SELECT_TRADE","OFFER","ACCEPT","DELIVER","REFUSE","COUNTER_NEXT","COUNTER_CANCEL","COUNTER_UNSELECT","COUNTER_FOCUS","COUNTER_MOVE","COUNTER_STORE","PAWN"]
+
+static func storage_problem(s: Dictionary,uid: String) -> String:
+ if s.phase!="open":return Model.business_hours_problem(s)
+ var it=Model.find_inventory(s,uid)
+ if it==null:return "来客的原物不能直接收入后仓，请先完成交易。"
+ if not Model.owns(it):return "受托或非本店所有的原物，不能这样收入后仓。"
+ if it.sealed or it.has("orderId") or it.location not in ["warehouse","display"] or it.get("service",{}).get("opened",false):return "受托、预留、隔离、封存或正在维修的原物不能这样收回。"
+ if it.location=="display" and Model.empty_cell(s,it)==null:return "后仓没有可容纳该形状的空位，手表仍留在原处。"
+ return ""
 static func active(s: Dictionary) -> bool:
  return s.get("trade")!=null and not s.trade.get("inspectionVisit",false) and bool(TradeSession.session(s).get("dialogue",false))
 static func current(s: Dictionary) -> Dictionary:
@@ -154,6 +163,23 @@ static func reduce(previous: Dictionary,a: Dictionary):
  var s: Dictionary=previous.duplicate(true)
  var se := TradeSession.session(s)
  var line := current(s)
+ if type=="COUNTER_STORE":
+  if a.get("tradeId","")!=s.trade.id or a.get("version",-1)!=se.version:return previous
+  var uid=String(a.get("uid",""))
+  var why:=storage_problem(s,uid)
+  if why!="":return Model.notice(s,why)
+  var offered:=TradeSession.row(s,uid)
+  if offered.is_empty() or offered.direction!="sell" or not offered.included or offered.status=="done":return previous
+  # Withdraw and store as one reducer action: a full cabinet never cancels
+  # an agreed offer while leaving its actual original on the display shelf.
+  var candidate:=_call(s,"TRADE_REMOVE",{"uid":uid})
+  if Model.find_inventory(candidate,uid).location=="display":candidate=Model.reduce(candidate,{"type":"DISPLAY","uid":uid})
+  if Model.find_inventory(candidate,uid).location!="warehouse":return Model.notice(previous.duplicate(true),"后仓没有可容纳该形状的空位，原物与商谈保持不变。")
+  TradeSession.session(candidate).get("table_positions",{}).erase(uid)
+  preload("res://scripts/model/showroom_layout.gd").ensure(candidate)
+  _idle(candidate,"这只先收回后仓，其他货物可以继续商谈。")
+  candidate=_focus_remaining(candidate)
+  return Model.notice(candidate,"已收回后仓，本件不再展示或计入本次结算。")
  if type=="REFUSE": return _call(s,"TRADE_END")
  if type=="COUNTER_NEXT": return next_offer(s) # Legacy saved actions remain compatible.
  if type in ["COUNTER_FOCUS","COUNTER_MOVE"]:

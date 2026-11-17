@@ -259,7 +259,7 @@ def main():
                         cmd({'type':'page','page':'warehouse'});wait("OrbitalTouch.state.workspace==='warehouse'")
                         for attempt in range(2):
                             if loc('@wanted_close')['found']:break
-                            click('通缉名单 · 取出 / 收起')
+                            click('@wanted_inventory')
                         wait_wanted_visible(True)
                         progress('paper restored')
                         # Return to the suspended inspector rather than append

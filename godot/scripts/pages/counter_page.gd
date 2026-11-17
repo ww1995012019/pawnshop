@@ -58,6 +58,7 @@ var board_day: Label
 var board_rent: Label
 var crate: PanelContainer
 var stock_grid: GridContainer
+var wanted_desk_paper: Button
 var stock_count: Label
 var strict_view: Control
 var showroom: Control
@@ -685,21 +686,14 @@ func _refresh_desk() -> void:
 	var s := Game.state
 	preload("res://scripts/model/showroom_layout.gd").ensure(s)
 	var items: Array = s.inventory
-	stock_count.text = "%d 件 · 点击选货" % (items.size()+ (1 if WantedCases.has_notice(s) else 0))
+	if is_instance_valid(wanted_desk_paper):wanted_desk_paper.refresh()
+	stock_count.text = "%d 件 · 点击选货" % items.size()
 	var t = s.trade
 	var picking: bool = CounterDialogue.active(s) or (t != null and t.kind == "sell" and not t.has("selectedUid") and not t.locked)
-	var stock_total := items.size() + (1 if WantedCases.has_notice(s) else 0)
+	var stock_total := items.size()
 	for i in maxi(CRATE_COLS * 3, ceili(stock_total / float(CRATE_COLS)) * CRATE_COLS):
 		if i < items.size():
 			stock_grid.add_child(_stock_slot(items[i], picking))
-		elif i == items.size() and WantedCases.has_notice(s):
-			var document := UIKit.button("","secondary",Vector2(58,58),16)
-			document.icon = load("res://assets/ui/wanted-document.svg")
-			document.expand_icon = true
-			document.name="wanted_inventory"
-			document.tooltip_text="库存档案 · 取出或收起通缉名单"
-			document.pressed.connect(func(): shell.toggle_wanted_notice())
-			stock_grid.add_child(document)
 		else:
 			var empty := Control.new()
 			empty.custom_minimum_size = Vector2(58, 58)
@@ -1914,6 +1908,12 @@ func _process(delta: float) -> void:
 
 # ------------------------------------------------ police / conversations
 func _build_police_controls() -> void:
+	wanted_desk_paper=preload("res://scripts/ui/wanted_desk_paper.gd").new()
+	add_child(wanted_desk_paper)
+	wanted_desk_paper.setup(shell)
+	wanted_desk_paper.name="wanted_inventory"
+	wanted_desk_paper.position=Vector2(340,660)
+	wanted_desk_paper.size=Vector2(146,90)
 	alarm_button=UIKit.button("报警 · 呼叫巡警","danger",Vector2(280,FRONT_RAIL_HEIGHT),16)
 	_till_key(alarm_button,"danger")
 	alarm_button.name="alarm_button"

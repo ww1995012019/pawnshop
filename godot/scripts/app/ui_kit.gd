@@ -17,12 +17,16 @@ const INK := Color("302b25")
 const RUST := Color("b44c36")
 const DANGER := Color("a33b2d")
 const GOOD := Color("3d684c")
-const AUX_PAPER := Color("dcebe5")
-const AUX_INK := Color("213f38")
-const AUX_EDGE := Color("4d776b")
-const AUX_HEADER := Color("284f45")
+const AUX_PAPER := Color("f4d5a4")
+const AUX_INK := Color("40271b")
+const AUX_EDGE := Color("a66330")
+const AUX_HEADER := Color("9a5326")
 const AUX_LIGHT := Color("fff3d8")
 const NOTICE_ERROR := Color("87382d")
+const ORANGE_KEY := Color("d8934f")
+const ORANGE_HOVER := Color("efb978")
+const ORANGE_PRESSED := Color("cf8945")
+const AUX_DISABLED := Color("d6c4a6")
 const GAP := 12
 const PAD := 20
 
@@ -105,11 +109,11 @@ static func paper_style(pad := 18) -> StyleBox:
 static func screen_style(pad := 10) -> StyleBox:
 	return skin("screen", "sm", minf(pad,6) if mobile_ui else pad)
 
-## Temporary controls use a cool auxiliary palette over the warm shop paper.
+## Temporary controls use an apricot/burnt-orange palette over the shop paper.
 static func context_style() -> StyleBoxFlat:
 	var s:=box(AUX_PAPER,AUX_EDGE,6,2,12,9)
 	s.bg_color=AUX_PAPER
-	s.shadow_color=Color(0.08,0.17,0.14,.28)
+	s.shadow_color=Color(0.22,0.12,0.06,.24)
 	return s
 
 static func context_header_style() -> StyleBoxFlat:
@@ -118,20 +122,40 @@ static func context_header_style() -> StyleBoxFlat:
 	return s
 
 static func context_button(b: Button,kind := "secondary") -> void:
-	for state in ["normal","hover","pressed","disabled"]:
-		var fill:Color={"normal":Color("c7ddd3"),"hover":Color("edf8f1"),"pressed":Color("a9c8ba"),"disabled":Color("d2ded7")}[state]
+	for state in ["normal","hover","pressed","hover_pressed","disabled"]:
+		var fill:Color={"normal":AUX_PAPER,"hover":Color("fff0cb"),"pressed":Color("dfb77b"),"hover_pressed":Color("dfb77b"),"disabled":AUX_DISABLED}[state]
 		var edge:=AUX_EDGE
 		if kind in ["primary","header"] and state!="disabled":
-			fill=Color("416f5f") if state=="hover" else Color("1d4037") if state=="pressed" else AUX_HEADER
+			fill=Color("9e5527") if state=="hover" else Color("85431f") if state in ["pressed","hover_pressed"] else AUX_HEADER
 		elif kind=="danger" and state!="disabled":
-			fill=Color("ffe8db") if state=="hover" else Color("ddb5a5") if state=="pressed" else Color("f0d7c9")
+			fill=Color("ffe8db") if state=="hover" else Color("ddb5a5") if state in ["pressed","hover_pressed"] else Color("f0d7c9")
 			edge=Color("975345")
 		var style:=box(fill,edge,2,2,6,0)
 		style.bg_color=fill
 		b.add_theme_stylebox_override(state,style)
 	var ink:=AUX_LIGHT if kind in ["primary","header"] else Color("783b31") if kind=="danger" else AUX_INK
-	for state in ["font_color","font_hover_color","font_pressed_color","font_focus_color"]:b.add_theme_color_override(state,ink)
-	b.add_theme_color_override("font_disabled_color",Color("67756d"))
+	for state in ["font_color","font_hover_color","font_pressed_color","font_hover_pressed_color","font_focus_color","icon_normal_color","icon_hover_color","icon_pressed_color","icon_hover_pressed_color","icon_focus_color"]:b.add_theme_color_override(state,ink)
+	b.add_theme_color_override("font_disabled_color",DISABLED_TEXT)
+	b.add_theme_color_override("icon_disabled_color",DISABLED_TEXT)
+	b.add_theme_stylebox_override("focus",focus_style())
+
+## Repaint only red pigment in immutable action art; cream type and ink stay exact.
+static func orange_art(texture: Texture2D) -> Texture2D:
+	if texture==null:return null
+	var key:="orange-art:"+str(texture.get_instance_id())
+	if _cache.has(key):return _cache[key]
+	var image:Image=texture.get_image()
+	if image==null or image.is_empty():return texture
+	if image.is_compressed():image.decompress()
+	image.convert(Image.FORMAT_RGBA8)
+	for y in image.get_height():
+		for x in image.get_width():
+			var c:=image.get_pixel(x,y)
+			if c.a>0 and c.r>.18 and c.r>c.g*1.28 and c.r>c.b*1.2 and c.r-c.g>.08:
+				image.set_pixel(x,y,Color.from_hsv(.065,clampf(c.s*.98,.72,.88),minf(c.v*.84,.60),c.a))
+	var result:=ImageTexture.create_from_image(image)
+	_cache[key]=result
+	return result
 
 static func notice_style(tone: String,pad := 12) -> StyleBoxFlat:
 	var urgent:=tone in ["error","danger","warning","warn"]
@@ -146,13 +170,13 @@ const KEY_TINT := {"primary": Color(1, 1, 1), "secondary": Color(0.92, 0.95, 1.0
 ## compact: icon-only keys and small tiles use the thin xs rim and tight
 ## padding, so the icon or label fills the key instead of a heavy frame.
 static func key_style(kind: String, state: String, compact := false) -> StyleBox:
-	var fill := Color("ecd9b6")
-	var edge := Color("a84432") if kind == "primary" else Color("493b30")
+	var fill := ORANGE_KEY if kind=="primary" else Color("ecd9b6")
+	var edge := Color("8d4e25") if kind == "primary" else Color("493b30")
 	match state:
 		"hover":
-			fill = Color("f7eacc")
-		"pressed":
-			fill = Color("d5bd95")
+			fill = ORANGE_HOVER if kind=="primary" else Color("f7eacc")
+		"pressed", "hover_pressed":
+			fill = ORANGE_PRESSED if kind=="primary" else Color("d5bd95")
 		"disabled":
 			fill = Color("d4c7ad")
 			edge = Color("9c917b")
@@ -166,7 +190,7 @@ static func key_style(kind: String, state: String, compact := false) -> StyleBox
 	return s
 
 static func focus_style() -> StyleBoxFlat:
-	var s := box(Color.TRANSPARENT, AMBER, 4, 2, 0, 0)
+	var s := box(Color.TRANSPARENT, AUX_EDGE, 4, 2, 0, 0)
 	s.draw_center = false
 	s.set_expand_margin_all(3)
 	return s
@@ -179,7 +203,7 @@ static func build_theme() -> Theme:
 	t.set_color("font_color", "Label", TEXT)
 	t.set_stylebox("panel", "PanelContainer", plate_style())
 	t.set_stylebox("panel", "Panel", plate_style())
-	for st in ["normal", "hover", "pressed", "disabled"]:
+	for st in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		t.set_stylebox(st, "Button", key_style("secondary", st))
 	t.set_stylebox("focus", "Button", focus_style())
 	t.set_color("font_color", "Button", TEXT)
@@ -292,7 +316,7 @@ static func button(text: String, kind := "secondary", min_size := Vector2(0, 58)
 	b.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	b.add_theme_font_size_override("font_size", mini(size,14) if phone_landscape() else mini(size,17) if mobile_ui else size)
 	var compact := text == ""
-	for st in ["normal", "hover", "pressed", "disabled"]:
+	for st in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		b.add_theme_stylebox_override(st, key_style(kind, st, compact))
 	if kind == "primary":
 		# Cream lettering remains legible on the dark flat key.
@@ -377,7 +401,7 @@ class SwitchKnob extends Control:
 
 ## Re-skin an existing key as compact (thin rim, tight padding).
 static func compact(b: Button, kind := "secondary") -> void:
-	for st in ["normal", "hover", "pressed", "disabled"]:
+	for st in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		b.add_theme_stylebox_override(st, key_style(kind, st, true))
 
 static func plate(style: StyleBox = null) -> PanelContainer:

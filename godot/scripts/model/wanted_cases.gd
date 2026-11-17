@@ -170,8 +170,8 @@ static func reduce(previous: Dictionary, action: Dictionary):
 		if s.trade.kind != "police": return previous
 		_issue(s)
 		s.police.paper.visible = true
-		s.trade.line = "这份名单放进你的库存了。随时展开贴在柜台；X只是收起。对照头像，也要听姓名、来路和去向。"
-		return Model.notice(s,"已收到六人协查名单，可从库存随时取出、拖动和收起。")
+		s.trade.line = "这份通缉令留在柜台文件区。随时点击展开核对；X只是收起。对照头像，也要听姓名、来路和去向。"
+		return Model.notice(s,"已收到六人通缉令，已放在柜台文件区，点击可展开核对。")
 	if type == "REPORT_VISITOR":
 		if report_reason(s) != "": return previous
 		var trade_id: String = s.trade.id

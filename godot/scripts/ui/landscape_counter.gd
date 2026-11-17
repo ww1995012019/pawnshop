@@ -25,6 +25,8 @@ var active := false
 var last_size := Vector2.ZERO
 var inset := Vector2.ZERO
 var mat := Rect2()
+var wanted_paper: Button
+var last_notice := false
 
 func setup(owner_adapter) -> void:
 	adapter = owner_adapter
@@ -67,6 +69,11 @@ func setup(owner_adapter) -> void:
 	flip.name = "landscape_flip"
 	goods = _key("选择货物",adapter._goods_popup)
 	goods.name = "landscape_goods"
+	wanted_paper=preload("res://scripts/ui/wanted_desk_paper.gd").new()
+	wanted_paper.compact=true
+	add_child(wanted_paper)
+	wanted_paper.setup(shell)
+	wanted_paper.name="wanted_inventory"
 	for spec in [["放大镜","TOL-001"],["紫外灯","TOL-002"],["电子秤","TOL-005"]]:
 		var id: String = spec[1]
 		var key := _key(spec[0],func():
@@ -148,7 +155,7 @@ func set_active(value: bool) -> void:
 func _layout() -> void:
 	var area: Rect2 = shell.safe_area()
 	var screen := area.size
-	if screen == last_size and inset == area.position: return
+	if screen == last_size and inset == area.position:return
 	inset = area.position
 	last_size = screen
 	# This view may have been constructed before the browser acquired phone
@@ -190,10 +197,8 @@ func _layout() -> void:
 	_place(item_name,Rect2(mat.position+Vector2(8,4),Vector2(mat.size.x-76,24)))
 	_place(flip,Rect2(mat.end.x-64,mat.position.y+4,58,28))
 	_place(hint,Rect2(mat.position+Vector2(8,33),Vector2(mat.size.x-16,20)))
-	for i in 3:
-		var width := 42.0
-		var start := mat.get_center().x-(width*3+20)*0.5
-		_place(tool_keys[i],Rect2(start+i*(width+10),mat.end.y-38,width,34))
+	_layout_paper_tools()
+
 	desk.MAT_POS = inset+Vector2(mat.get_center().x,mat.position.y+130)
 	desk.counter_table.presentation_rect = Rect2(inset+mat.position+Vector2(42,96),Vector2(maxf(80,mat.size.x-84),maxf(30,inner_h-150)))
 	desk._sync_table()
@@ -217,9 +222,23 @@ func _layout() -> void:
 	var dock_width := (screen.x-16)/5
 	for i in 5: _place(dock_keys[i],Rect2(8+i*dock_width,bottom+4,dock_width-4,30))
 
+func _layout_paper_tools() -> void:
+	# Paper ownership may change during a police handover. Reflow only the
+	# document/tool controls; rebuilding the table would destroy the originals.
+	var has_notice:=WantedCases.has_notice(Game.state)
+	last_notice=has_notice
+	for i in 3:
+		var start:=mat.get_center().x-73
+		if has_notice:start=mat.position.x+88
+		var spacing:=48 if has_notice and mat.size.x<280 else 52
+		_place(tool_keys[i],Rect2(start+i*spacing,mat.end.y-38,42,34))
+	_place(wanted_paper,Rect2(mat.position.x+6,mat.end.y-44,74,44))
+
 func _process(_delta: float) -> void:
 	if not active: return
 	_layout()
+	if last_notice!=WantedCases.has_notice(Game.state):_layout_paper_tools()
+	wanted_paper.refresh()
 	desk.cash_tray.show()
 	heading.text = "轨道旧货局 · 第 %02d 天" % Game.state.day
 	balance.text = "%s Cr   ·   AP %s" % [Model.jnum(desk.cash_tray.cash if desk.busy else Game.state.cash),Game.state.ap]

@@ -284,8 +284,8 @@ func _process(delta: float) -> void:
 func _document_inventory() -> void:
 	if not WantedCases.has_notice(Game.state): return
 	var row:=UIKit.hbox(8)
-	row.add_child(UIKit.label("纸质档案 / 1",16,UIKit.AMBER))
-	var open:=UIKit.button("通缉名单 · 取出 / 收起","secondary",Vector2(0,48),17)
+	row.add_child(UIKit.label("桌面文件 / 1",16,UIKit.AMBER))
+	var open:=UIKit.button("桌面通缉令 · 展开 / 收起","secondary",Vector2(0,48),17)
 	open.icon = load("res://assets/ui/wanted-document.svg")
 	open.expand_icon = true
 	open.add_theme_constant_override("icon_max_width",40)
