@@ -1,8 +1,8 @@
 {
-  "source_commit": "3684f3ee8079faf03fa00b82c29a8dce833fa0bc",
-  "release_id": "ab6c1c68167da88d",
-  "pack": "workbench-b71f8136124ea3e1.pck",
-  "html_sha256": "57ca7fb4e36bf30a13f4983c0fd8b7ae0020d66127c6cd1ad7477a22ab037a18",
+  "source_commit": "173b2d0d1e6f2c0fead21c8cc3731ef58aad6765",
+  "release_id": "cc9e647d98b02ac9",
+  "pack": "workbench-17c089e4365083c7.pck",
+  "html_sha256": "dc570b76c742be2e2929318924887270850c51257443cd8d913a72f3fd74f686",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 136,
+  "native_regression_groups": 140,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -338,9 +338,46 @@
   "comic_watch_appearance_count": 78,
   "cabinet_icon_centering_version": 1,
   "hold_to_drag_magnifier_version": 1,
-  "complete_scale_instrument_version": 1,
+  "complete_scale_instrument_version": 2,
   "repair_notice_slot_version": 1,
-  "context_and_notice_palette_version": 2,
-  "visible_counter_motion_version": 1,
-  "visit_transition_version": 1
+  "context_and_notice_palette_version": 3,
+  "visible_counter_motion_version": 2,
+  "visit_transition_version": 1,
+  "orange_counter_tools_version": 1,
+  "integrated_scale_controls_version": 1,
+  "three_column_cabinet_version": 1,
+  "atomic_counter_store_version": 1,
+  "wanted_desk_paper_version": 1,
+  "wanted_responsive_poster_version": 1,
+  "counter_speech_auto_layout_version": 1,
+  "stationary_actor_baseline_version": 1,
+  "orange_button_feedback_version": 1,
+  "inspect_short_portrait_scroll_version": 1,
+  "orange_counter_tools_verified_viewports": [
+    [
+      1440,
+      900
+    ],
+    [
+      1160,
+      700
+    ],
+    [
+      844,
+      390
+    ],
+    [
+      390,
+      844
+    ],
+    [
+      390,
+      640
+    ]
+  ],
+  "tool_polish_assertions": 152,
+  "dialogue_actor_assertions": 85,
+  "production_previous_pack": "workbench-b71f8136124ea3e1.pck",
+  "staged_static_cold_start_seconds": 9.261,
+  "prepared_at": "2026-11-17T11:18:43+08:00"
 }
