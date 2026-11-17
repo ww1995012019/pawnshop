@@ -97,7 +97,7 @@ func run():
 	page._scale_place()
 	await create_timer(1.3).timeout
 	page._scale_record()
-	check(Model.estimate(game.item(page.it_uid)).count == 1 and Model.displayed_clue(game.item(page.it_uid),"TOL-005") == unchanged_reading, "same mass can refresh stale appraisal after a condition change")
+	check(Model.estimate(game.item(page.it_uid)).count == 3 and Model.estimate(game.item(page.it_uid)).conditionCurrent and Model.displayed_clue(game.item(page.it_uid),"TOL-005") == unchanged_reading, "one same-mass recheck refreshes wear while preserving all physical channels")
 	print("WATCH INSPECT failures=", failures)
 	for player in root.find_children("*", "AudioStreamPlayer", true, false):
 		player.stop()

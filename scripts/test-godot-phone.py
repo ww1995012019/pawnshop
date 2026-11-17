@@ -10,7 +10,7 @@ PHONES = [(844, 390), (932, 430), (740, 360), (667, 375), (568, 320)]
 
 def workbench_width_fraction(page):
     native=page.evaluate('window.OrbitalTouch?.state?.workspace_rect')
-    if native:return native['width']/page.viewport_size['width']
+    if native:return native['width']/page.evaluate('OrbitalTouch.effectiveSize?.[0] || innerWidth')
     """Measure the drawn drawer's top border in the actual WebGL canvas."""
     return page.evaluate("""() => {
       const source = document.querySelector('#canvas');
@@ -34,15 +34,23 @@ def workbench_width_fraction(page):
 
 
 def locate(page, text):
-    """Find native controls, opening their mobile sheet when the layout moved them."""
+    """Find native controls and return a physical browser-screen center/extent."""
     def raw(label):
         page.evaluate("t => { window.__orbitalLocated = null; window.orbitalTouchSend(JSON.stringify({type:'locate', text:t})); }", label)
         page.wait_for_function("window.__orbitalLocated !== null")
-        return page.evaluate("window.__orbitalLocated")
+        return page.evaluate("""() => {
+            const result={...window.__orbitalLocated};
+            if(!result.found)return result;
+            result.canvas_x=result.x; result.canvas_y=result.y;
+            result.canvas_width=result.width; result.canvas_height=result.height;
+            [result.x,result.y]=OrbitalTouch.toPhysical?.(result.x,result.y)||[result.x,result.y];
+            if(OrbitalTouch.turned()) [result.width,result.height]=[result.height,result.width];
+            return result;
+        }""")
     found=raw(text)
     if not found['found'] and page.evaluate('!!window.OrbitalTouch?.phone()'):
         current=page.evaluate('OrbitalTouch.state')
-        aliases={'接客铃':'@landscape_primary','接待下一位来客':'@landscape_primary','鉴定仪':'@landscape_TOL-001','维修工作台':'@landscape_nav_repair','仓储 · 隔离柜':'@landscape_nav_warehouse','收起':'关闭','去鉴定':'鉴定'}
+        aliases={'接客铃':'@landscape_primary','接待下一位来客':'@landscape_primary','鉴定仪':'@landscape_TOL-001','维修工作台':'@landscape_nav_repair','仓储 · 隔离柜':'@landscape_nav_warehouse','收起':'@workspace_close','去鉴定':'鉴定'}
         if text in aliases: found=raw(aliases[text])
         elif current.get('workspace')=='repair':
             for tab in ['选择工序','物品档案']:
@@ -59,14 +67,15 @@ def locate(page, text):
                 found=raw('@mobile_'+text[1:] if stock else text)
                 if not found['found'] and text.startswith('@'):found=raw('@mobile_'+text[1:])
     assert found['found'], f'No visible in-game button for {text!r}'
-    if page.evaluate('!!window.OrbitalTouch?.phone()') and text not in ['关闭','收起','@modal_close']:
+    if page.evaluate('!!window.OrbitalTouch?.phone()') and text not in ['关闭','收起','@modal_close','@workspace_close']:
         current=page.evaluate('OrbitalTouch.state')
         if current.get('workspace') or current.get('blocked'):
-            height=page.viewport_size['height']
+            height=page.evaluate('OrbitalTouch.effectiveSize?.[1] || innerHeight')
             for _ in range(18):
-                if 125<found['y']<height-65 or not current.get('blocked') and 75<found['y']<height-55:break
-                page.mouse.move(found['x'],height*.7)
-                page.mouse.wheel(0,100 if found['y']>=height-65 else -100)
+                if 125<found['canvas_y']<height-65 or not current.get('blocked') and 75<found['canvas_y']<height-55:break
+                page.mouse.move(found['x'],found['y'])
+                step=100 if found['canvas_y']>=height-65 else -100
+                page.mouse.wheel(-step,0) if page.evaluate('OrbitalTouch.turned()') else page.mouse.wheel(0,step)
                 page.wait_for_timeout(100)
                 updated=raw(found.get('label',text) if not text.startswith('@') else found.get('text',text))
                 if not updated['found']:break
@@ -90,20 +99,16 @@ def wait(page, condition, timeout=15000):
 
 
 def assert_full_screen(page, width, height):
-    # Resize/render callbacks can span several frames on a busy software GPU.
+    # Engine geometry is unrotated CSS space; browser hit-testing is physical.
     page.wait_for_function("""([width,height]) => {
         const element=document.getElementById('canvas'), rect=element.getBoundingClientRect();
-        return Math.abs(rect.width-width)<=1 && Math.abs(rect.height-height)<=1 &&
-            Math.abs(element.width-rect.width*devicePixelRatio)<=1 &&
-            Math.abs(element.height-rect.height*devicePixelRatio)<=1;
+        const turned=OrbitalTouch.turned();
+        return Math.abs(rect.width-(turned?height:width))<=1 && Math.abs(rect.height-(turned?width:height))<=1 &&
+            Math.abs(element.width-rect.width*devicePixelRatio)<=1 && Math.abs(element.height-rect.height*devicePixelRatio)<=1;
     }""", arg=[width,height], timeout=6000)
     assert page.locator('#touch-nav').count() == 0, 'Phones must not show a separate Web toolbar'
-    canvas = page.locator('#canvas').bounding_box()
-    assert canvas['x'] == 0 and canvas['y'] == 0, 'The game canvas must start at the screen corner'
-    assert abs(canvas['width'] - width) <= 1 and abs(canvas['height'] - height) <= 1, 'The game must fill the whole phone screen'
-    pixels = page.evaluate('({width:canvas.width,height:canvas.height,ratio:devicePixelRatio})')
-    assert abs(pixels['width'] - canvas['width'] * pixels['ratio']) <= 1, 'Canvas pixel width does not match the display'
-    assert abs(pixels['height'] - canvas['height'] * pixels['ratio']) <= 1, 'Canvas pixel height does not match the display'
+    box=page.locator('#canvas').bounding_box()
+    assert abs(box['x'])<=1 and abs(box['y'])<=1 and abs(box['width']-width)<=1 and abs(box['height']-height)<=1,box
 
 
 def touch_drag(context, page, points):
@@ -138,13 +143,13 @@ def main():
                     'browser metadata to extension' not in message.text else None)
             page.on("request", lambda request: downloads.append(request.url) if ".wasm" in request.url or ".pck" in request.url else None)
             page.goto(args.url)
-            # Upright phones use native portrait UI and unrotated touch coordinates.
+            # Upright phones render landscape and receive physical rotated touches.
             page.wait_for_function("window.OrbitalTouch?.state?.ready", timeout=90000)
             assert downloads, "Portrait entry must start loading the game at once"
             assert page.locator('#phone-guide').count() == 0, 'Phones must not show a rotate prompt'
-            assert not page.evaluate("window.OrbitalTouch.turned()"), 'Portrait UI must remain upright'
+            assert page.evaluate("window.OrbitalTouch.turned()"), 'Upright touch phone must rotate its landscape canvas'
             pixels = page.evaluate('({width:canvas.width,height:canvas.height,ratio:devicePixelRatio})')
-            assert pixels['width'] == 390 * pixels['ratio'] and pixels['height'] == 844 * pixels['ratio'], 'Upright phones render a portrait canvas'
+            assert pixels['width'] == 844 * pixels['ratio'] and pixels['height'] == 390 * pixels['ratio'], 'Upright phones render an effective landscape canvas'
             box = page.locator('#canvas').bounding_box()
             assert abs(box['width'] - 390) <= 1 and abs(box['height'] - 844) <= 1, 'The portrait game must fill the upright screen'
             page.wait_for_timeout(800)
@@ -153,7 +158,7 @@ def main():
             page.touchscreen.tap(target['x'], target['y'])
             wait(page, "!s.title && !s.busy")
             if args.portrait_only:
-                print("PHONE native portrait start and direct touch coordinates pass")
+                print("PHONE upright landscape start and physical rotated touch coordinates pass")
                 return
             page.reload()
             page.wait_for_function("window.OrbitalTouch?.state?.ready", timeout=90000)
@@ -193,7 +198,7 @@ def main():
             page.wait_for_timeout(350)
             uid = state(page, 'inspection_uid')
             page.set_viewport_size({'width': 390, 'height': 844})
-            page.wait_for_function("!window.OrbitalTouch.turned() && canvas.width < canvas.height")
+            page.wait_for_function("window.OrbitalTouch.turned() && canvas.width > canvas.height")
             page.set_viewport_size({'width': 844, 'height': 390})
             page.wait_for_function("!window.OrbitalTouch.turned()")
             wait(page, f"s.workspace === 'inspect' && s.inspection_uid === {uid!r}")

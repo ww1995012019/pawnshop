@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise real three-tool appraisal and physical-forgery UI on desktop/phone."""
 import importlib.util
+import json
 import os
 from pathlib import Path
 import shutil
@@ -13,6 +14,7 @@ spec.loader.exec_module(phone)
 
 
 def main():
+    started = time.monotonic()
     out = Path('work/watch-appraisal-browser')
     out.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
@@ -29,6 +31,8 @@ def main():
                 if mobile: page.set_viewport_size({'width':width,'height':height})
                 page.wait_for_function('OrbitalTouch?.state?.ready && !document.getElementById("loader")',timeout=90000)
                 def cmd(data): page.evaluate('(data)=>orbitalTouchSend(JSON.stringify(data))',data)
+                def phase(name):
+                    print(f'{width} {time.monotonic()-started:.1f}s {name}',flush=True)
                 def click(text):
                     target = phone.locate(page,text)
                     assert not target['disabled'],text+' is disabled'
@@ -56,24 +60,47 @@ def main():
                         raise
                     return page.evaluate('OrbitalTouch.state.appraisal')
                 def inspect_all():
+                    phase('observing logo')
                     cmd({'type':'tool','tool':'TOL-001'})
                     page.wait_for_function("OrbitalTouch.state.inspection_current==='TOL-001' && !OrbitalTouch.state.inspection_busy")
                     click('定位并固定标识');first=appraisal(1)
                     snapshot('one-tool')
+                    phase('observing serial')
                     cmd({'type':'tool','tool':'TOL-002'})
                     page.wait_for_function("OrbitalTouch.state.inspection_current==='TOL-002' && !OrbitalTouch.state.inspection_busy")
                     click('定位并固定编号');second=appraisal(2)
-                    assert second['low']>=first['low'] and second['high']<=first['high']
+                    assert not second['exact'] and second['low'] < second['high']
+                    assert second['high']==first['high'], 'unchanged recorded wear must retain its catalogue ceiling'
                     snapshot('two-tools')
-                    cmd({'type':'tool','tool':'TOL-005'});page.wait_for_function("OrbitalTouch.state.inspection_current==='TOL-005'")
-                    click('空秤归零');click('放到秤上')
-                    page.wait_for_function('OrbitalTouch.state.scale_stable',timeout=10000)
+                    cmd({'type':'tool','tool':'TOL-005'})
+                    page.wait_for_function("OrbitalTouch.state.inspection_current==='TOL-005'")
+                    phase('scale selected '+str(page.evaluate('({busy:OrbitalTouch.state.inspection_busy,occupied:OrbitalTouch.state.scale_occupied,stable:OrbitalTouch.state.scale_stable})')))
+                    try:
+                        # Use the real instrument keys and acknowledge each
+                        # state change before the next physical input.
+                        page.wait_for_function('!OrbitalTouch.state.inspection_busy')
+                        click('@scale_tare')
+                        deadline=time.monotonic()+15
+                        while phone.locate(page,'@scale_place')['disabled']:
+                            assert time.monotonic()<deadline, 'TARE did not enable placement'
+                            page.wait_for_timeout(50)
+                        click('@scale_place')
+                        page.wait_for_function('OrbitalTouch.state.scale_occupied',timeout=10000)
+                        page.wait_for_function('OrbitalTouch.state.scale_stable',timeout=10000)
+                    except Exception:
+                        state = page.evaluate('OrbitalTouch.state')
+                        print('Scale failure state:',json.dumps(state,ensure_ascii=False),flush=True)
+                        (out/f'{width}-failed-scale-state.json').write_text(json.dumps(state,ensure_ascii=False,indent=2))
+                        snapshot('failed-scale-after-zero-put')
+                        raise
                     final=appraisal(3)
                     assert not final['exact'] and final['low'] < final['high']
-                    assert second['low']<=final['low']<final['high']<=second['high']
+                    assert final['high']==first['high'], 'normal tools cannot prove a working, original movement'
                     snapshot('three-tools')
+                    phase('three-tool observations recorded')
                     return (final['low'],final['high'])
                 cmd({'type':'start'});phone.wait(page,'!s.title && !s.busy')
+                phase('started new game')
                 cmd({'type':'page','page':'inspect'});phone.wait(page,"s.workspace==='inspect'")
                 assert appraisal(0)['exact'] is False
                 reference = inspect_all()
@@ -108,21 +135,34 @@ def main():
                     snapshot('failed-forgery-navigation')
                     raise
                 snapshot('forgery-options')
+                phase('starting physical forgery')
                 before_ap=page.evaluate('OrbitalTouch.state.ap')
-                for _ in range(30):
+                for index in range(30):
                     current=page.evaluate('OrbitalTouch.state')
                     if current.get('forge_done'):break
                     click(current['repair_action'])
                     step=current['repair_animation']['step']
                     page.wait_for_function("step=>{const a=OrbitalTouch.state.repair_animation;return a.complete || a.phase==='idle'&&a.step>step}",arg=step)
+                    if index % 5 == 0: phase('forgery animation step '+str(step))
                 page.wait_for_function('(ap)=>OrbitalTouch.state.ap===ap-1',arg=before_ap)
                 assert page.evaluate('OrbitalTouch.state.forge_done') is True
                 snapshot('forgery-physical-complete')
+                phase('physical forgery complete')
                 cmd({'type':'page','page':'inspect'});phone.wait(page,"s.workspace==='inspect'")
                 assert page.evaluate('OrbitalTouch.state.inspection_uid')==uid
-                assert appraisal(0)['exact'] is False
+                assert appraisal(2)['exact'] is False, 'logo repaint must preserve the serial and mass observations'
                 snapshot('stale-after-forgery')
-                assert inspect_all()==reference,'cosmetic forgery changed true reference value'
+                phase('rechecking changed logo only')
+                cmd({'type':'tool','tool':'TOL-001'})
+                page.wait_for_function("OrbitalTouch.state.inspection_current==='TOL-001' && !OrbitalTouch.state.inspection_busy")
+                recheck_ap=page.evaluate('OrbitalTouch.state.ap')
+                click('定位并固定标识')
+                refreshed=appraisal(3)
+                assert page.evaluate('OrbitalTouch.state.ap')==recheck_ap, 'single-channel recheck should be free'
+                assert refreshed['conditionCurrent'] and not refreshed['exact']
+                forged=(refreshed['low'],refreshed['high'])
+                snapshot('single-channel-rechecked')
+                assert forged[1]==reference[1] and forged[0]<=reference[0], 'visible forgery traces must retain or widen uncertainty'
                 assert page.evaluate('OrbitalTouch.state.detail_lines.join("\\n")').find('重描漆层')>=0
                 # Wait for the actual WebFS save, rather than relying on CPU-dependent timing.
                 persisted_script = """async uid => {
@@ -138,8 +178,15 @@ def main():
                                 const item=state.inventory?.find(item=>item.uid===uid);
                                 const facts=item?.inspectionFacts;
                                 if (!item?.forgery?.methods?.logo || !facts?.['TOL-001']?.tampered) continue;
-                                const revisions=['TOL-001','TOL-002','TOL-005'].map(tool=>facts[tool]?.appraisalRevision);
-                                if (revisions[0] && revisions.every(value=>value===revisions[0])) return true;
+                                const tools=['TOL-001','TOL-002','TOL-005'];
+                                const safe=tools.every(tool=>{
+                                    const snapshot=facts[tool];
+                                    const observation=snapshot?.appraisalObservation;
+                                    return snapshot?.appraisalChannelRevision && observation?.schema===1 &&
+                                        observation.tool===tool && observation.modelId===item.defId &&
+                                        item.evidence?.includes(tool) && item.evidenceReadings?.[tool];
+                                });
+                                if (safe && facts['TOL-001'].appraisalObservation.trace.includes('重描漆层')) return true;
                             } catch (_) {}
                         }
                         return false;
@@ -150,12 +197,13 @@ def main():
                     assert time.monotonic()<deadline, "latest three-tool appraisal did not reach WebFS persistence"
                     page.wait_for_timeout(150)
                 page.reload()
+                phase('reloading persisted observations')
                 page.wait_for_function('OrbitalTouch?.state?.ready && OrbitalTouch.state.has_save',timeout=90000)
                 page.wait_for_timeout(800);click('继续营业');phone.wait(page,'!s.title && !s.busy')
                 cmd({'type':'page','page':'inspect'});phone.wait(page,"s.workspace==='inspect'")
-                assert (appraisal(3)['low'],appraisal(3)['high'])==reference,'recorded appraisal lost on reload'
+                assert (appraisal(3)['low'],appraisal(3)['high'])==forged,'recorded appraisal lost on reload'
                 assert not errors,errors[:8]
-                print(width,'progressive range appraisal, concrete forge, stale recheck and saved result pass',flush=True)
+                print(width,'evidence appraisal, concrete forge, stale recheck and saved result pass',flush=True)
                 context.close()
         finally:browser.close()
 

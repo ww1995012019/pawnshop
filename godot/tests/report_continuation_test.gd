@@ -37,6 +37,7 @@ func settled_day_21() -> Dictionary:
 
 func run() -> void:
 	var game = root.get_node("Game")
+	var kit=load("res://scripts/app/ui_kit.gd")
 	game.prefs.reduced_motion = true
 	game.prefs.sound = false
 	game.state = settled_day_21()
@@ -51,6 +52,8 @@ func run() -> void:
 	var continue_button := button(page,"保留店铺，继续经营")
 	check(continue_button != null and not continue_button.disabled,"day21 report offers an explicit keep-shop continuation")
 	check(button(page,"查看结局") != null,"day21 report retains the original ending action")
+	check(text_of(page).contains("完成维修") and text_of(page).contains("维修交付") and text_of(page).contains("净现金流") and text_of(page).contains("不代表利润"),"day21 report displays recorded achievements and honest business results")
+	check(text_of(page).contains("至少3") and page.find_child("campaign_evaluation",true,false)!=null,"day21 report explains specialty thresholds in a scrollable evaluation")
 	check(text_of(page).contains("保留现金、库存、耗材、关系与账本") and page.hint_text().contains("继续经营"),"report explains retained shop progress and the continuation choice")
 	var ending := button(page,"查看结局")
 	if ending != null: ending.pressed.emit()
@@ -59,6 +62,7 @@ func run() -> void:
 	page = shell.active_shell().page
 	continue_button = button(page,"保留店铺，继续经营")
 	check(continue_button != null and button(page,"新开一家店") != null,"successful ending offers continuation alongside a new shop")
+	check(page.find_child("campaign_evaluation",true,false)!=null,"ending retains the same recorded evaluation")
 	if continue_button != null:
 		continue_button.pressed.emit()
 		await frames()
@@ -71,11 +75,14 @@ func run() -> void:
 	page = shell.active_shell().page
 	game.state.day = 28
 	game.state.risk = 0
+	game.state.cash+=7777
 	NightCrime.ensure_day(game.state)
 	page._refresh()
 	await frames()
 	var endless_text := text_of(page)
 	check(endless_text.contains("持续经营") and endless_text.contains("ENDLESS / 28") and page.hint_text().contains("第 4 周"),"endless report header, serial and hint identify the current week")
+	var assessment_panel=page.find_child("campaign_evaluation",true,false)
+	check(assessment_panel!=null and text_of(assessment_panel).contains("评估现金 "+kit.money(initial.report.evaluation.cash)),"endless report displays the saved assessment cash instead of later shop results")
 	check(not endless_text.contains("夜间失窃时段已结束") and button(page,"购买今晚保险") != null and not button(page,"购买今晚保险").disabled,"day28 endless insurance stays actionable without an expired-campaign message")
 	var late: Dictionary = initial.duplicate(true)
 	late.day = 28
@@ -108,6 +115,8 @@ func run() -> void:
 			scroll.ensure_control_visible(continue_button)
 			await frames()
 			check(active.content_rect().encloses(page.sheet.get_rect()) and active.get_viewport().get_visible_rect().encloses(continue_button.get_global_rect()),"continuation remains reachable inside the report at " + str(extent))
+		assessment_panel=page.find_child("campaign_evaluation",true,false)
+		check(assessment_panel!=null and assessment_panel.size.x<=page.sheet.size.x,"evaluation wraps inside the report width at "+str(extent))
 	var failed: Dictionary = initial.duplicate(true)
 	failed.day = 35
 	failed.phase = "ending"

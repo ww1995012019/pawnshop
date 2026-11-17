@@ -9,6 +9,7 @@ var status: Label
 var tabs := {}
 var journal_uid := ""
 var market_details := false
+var render_queued := false
 
 func setup(shell: Node, close: Callable, initial := "overview") -> void:
 	host = shell
@@ -39,7 +40,15 @@ func setup(shell: Node, close: Callable, initial := "overview") -> void:
 func _changed(_previous: Dictionary, next: Dictionary, _action: Dictionary) -> void:
 	status.text = next.get("notice","")
 	status.visible = status.text != ""
-	_render()
+	# Touch release still owns the pressed control during this dispatch. Keep
+	# its ancestors attached until the input event has finished propagating.
+	if not render_queued:
+		render_queued = true
+		call_deferred("_refresh_after_change")
+
+func _refresh_after_change() -> void:
+	render_queued = false
+	if is_inside_tree() and not is_queued_for_deletion(): _render()
 
 func _render() -> void:
 	if not is_instance_valid(body): return
@@ -116,6 +125,15 @@ func _overview() -> void:
 		_action(plan,"保留店铺 · 继续经营",{"type":"CONTINUE_CAMPAIGN"},problem,true)
 	var assessment=life.summary(s).firstAssessment
 	if assessment is Dictionary: _text(plan,"首轮第21天评估："+String(assessment.get("outcome","已完成"))+" · 原经营记录已保留。",UIKit.AMBER,14)
+	var evaluation: Dictionary = load("res://scripts/model/campaign_evaluation.gd").summary(s)
+	var achievements := _card("经营成果 · 已记录")
+	achievements.name = "CampaignAchievements"
+	_text(achievements,"完成维修 %d 件原物 · 履约订单 %d 张 · 维修交付 %d 单" % [int(evaluation.repairsCompleted),int(evaluation.fulfilledOrders),int(evaluation.repairDeliveries)],UIKit.TEXT,15)
+	_text(achievements,"已检查 %d 种型号，其中名贵/珍稀 %d 种" % [int(evaluation.inspectedModels),int(evaluation.rareModels)],UIKit.TEXT,15)
+	_text(achievements,"账本净现金流 %s · 当前现金 %s" % [UIKit.money(evaluation.netCashFlow),UIKit.money(evaluation.cash)],UIKit.CYAN,15)
+	_text(achievements,"当前经营方向："+String(evaluation.outcome)+"。"+String(evaluation.reason),UIKit.AMBER,14)
+	_text(achievements,"维修3件或检查3种名贵/珍稀型号可形成专长；两项达标取数量较高者，平手优先维修。风险60以上为高风险转运站。",UIKit.MUTED,13)
+	_text(achievements,String(evaluation.evidenceNote),UIKit.MUTED,13)
 	var now: Dictionary = market.current(s)
 	var future: Dictionary = market.forecast(s)
 	var prices := _card("行情与下周预告")
@@ -161,6 +179,12 @@ func _contracts() -> void:
 		_object_icon(card,UIKit.item_icon(String(job.model)))
 		_text(card,"%s · 第%d天前 · 预算不超过 %s" % [GameData.def(String(job.model)).name,int(job.dueDay),UIKit.money(job.budget)])
 		_text(card,String(job.statusText),UIKit.CYAN)
+		var trust: int = int(ShopJournal.customer(Game.state,String(job.npcId)).trust)
+		if int(job.get("pricingVersion",1))>=2:
+			_text(card,"友好价 ≤%s：交付信任+2；标准价 ≤%s：+1；其余预算内高价：+0。当前信任 %d/6，上限6。" % [UIKit.money(job.goodwillMax),UIKit.money(job.standardMax),trust],UIKit.MUTED,13)
+			_text(card,"折价换熟客信任，信任影响以后的报价与回头客；服务费只在实际交付时收取。",UIKit.MUTED,13)
+		elif job.status in ["approved","ready","expired"]:
+			_text(card,"原报价约定保留，维修与交付沿用原有信任规则。",UIKit.MUTED,13)
 		if job.originalParts: _text(card,"原装要求：保留顾客机芯、表壳与表带，不得替换或伪装。",UIKit.AMBER,13)
 		if job.status=="available":
 			var reason := "先结束当前接待再接委修。" if Game.state.trade!=null else Model.business_hours_problem(Game.state)
@@ -182,20 +206,42 @@ func _contracts() -> void:
 			var quote := SpinBox.new()
 			quote.min_value=1
 			quote.max_value=float(job.budget)
-			quote.value=float(job.quote) if float(job.quote)>0 else floor(float(job.budget)*.75)
+			quote.value=float(job.quote) if float(job.quote)>0 else float(job.get("standardMax",floor(float(job.budget)*.9)))
 			quote.step=1
 			quote.suffix=" Cr"
 			quote.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 			quote.get_line_edit().virtual_keyboard_type=LineEdit.KEYBOARD_TYPE_NUMBER
 			quote.get_line_edit().add_theme_font_size_override("font_size",14)
+			quote.get_line_edit().name="service_quote_input_"+id
 			row.add_child(quote)
+			var preview := _text(card,"",UIKit.CYAN,14)
+			preview.name="service_quote_terms_"+id
+			var update_quote := func(value: float):
+				var terms: Dictionary = jobs.quote_terms(job,int(value))
+				var gain: int = clampi(trust+int(terms.trust),-6,6)-trust
+				preview.text="%s · 服务费 %s · 交付时信任 +%d（档位收益+%d，受上限约束）" % [String(terms.label),UIKit.money(value),gain,int(terms.trust)]
+			quote.value_changed.connect(update_quote)
+			update_quote.call(quote.value)
+			var presets := UIKit.grid(3,4)
+			card.add_child(presets)
+			for preset in [["goodwill","友好价",int(job.goodwillMax)],["standard","标准价",int(job.standardMax)],["premium","预算价",int(job.budget)]]:
+				var price: int = preset[2]
+				var pick := UIKit.button(String(preset[1]),"secondary",Vector2(0,36),14)
+				pick.name="service_quote_"+String(preset[0])+"_"+id
+				pick.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+				pick.pressed.connect(func(): quote.value=price)
+				presets.add_child(pick)
 			var send := UIKit.button("提交维修报价","primary",Vector2(120,34),14)
+			send.name="service_quote_submit_"+id
 			send.custom_minimum_size.x=120
 			send.disabled=job.status=="diagnosis" or Model.business_hours_problem(Game.state)!=""
 			send.pressed.connect(func(): quote.apply();Game.dispatch({"type":"QUOTE_SERVICE_CONTRACT","id":id,"price":int(quote.value)}))
 			row.add_child(send)
 			_text(card,"报价前须在鉴定台取得本件原物的标识/品相记录。",UIKit.MUTED,13)
 		if job.status in ["approved","ready"]:
+			if int(job.get("pricingVersion",1))>=2:
+				var agreed: Dictionary = job.get("quoteTerms",{})
+				_text(card,"已约定：%s · 交付信任+%d（受上限约束）；取消或逾期不发放。" % [String(agreed.get("label","")),int(agreed.get("trust",0))],UIKit.CYAN,14)
 			_action(card,"交还原物 · 收取 %s" % UIKit.money(job.quote),{"type":"DELIVER_SERVICE_CONTRACT","id":id},"实际维修与封盖复测尚未完成。" if not job.ready else Model.business_hours_problem(Game.state) if Model.business_hours_problem(Game.state)!="" else "交付需要1 AP。" if not Model.has_ap(Game.state,1) else "",true)
 		var original=Game.item(uid)
 		var return_problem: String=jobs._safe_problem(Game.state,original) if original!=null else "登记原物不在保管中，请先找回原物。"

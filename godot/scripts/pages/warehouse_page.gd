@@ -360,8 +360,7 @@ func open_item_menu(uid: String, point: Vector2) -> void:
 	title.add_theme_color_override("font_color",UIKit.AUX_LIGHT)
 	title.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	header.add_child(title)
-	var close:=UIKit.button("关闭","chip",Vector2(48,32),14)
-	UIKit.context_button(close,"header")
+	var close:=UIKit.close_button()
 	close.pressed.connect(dismiss_context_menu)
 	header.add_child(close)
 	var scroller:=ScrollContainer.new()

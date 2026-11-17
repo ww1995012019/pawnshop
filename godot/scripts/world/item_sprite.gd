@@ -126,13 +126,24 @@ func _sync_logo_observation() -> void:
 	if it != null:
 		var facts: Dictionary = it.get("inspectionFacts", {}).get("TOL-001", {})
 		var recorded: String = facts.get("logoRevision", "")
+		var safe_logo_observed := false
 		if recorded.is_empty():
+			# Safe appraisal snapshots retain the physical logo separately from
+			# wear, serial and mass. Those other observations can become stale
+			# without hiding a mark the player has already examined.
+			var safe: Dictionary = facts.get("appraisalObservation", {})
+			safe_logo_observed = safe.get("schema", 0) == 1 and safe.get("tool", "") == "TOL-001" \
+				and safe.get("modelId", "") == it.defId \
+				and int(safe.get("logo_variant", -1)) == WatchRules.logo_variant(it) \
+				and String(safe.get("reading", "")).begins_with(WatchRules.logo_note(it)) \
+				and String(safe.get("trace", "")) == WatchForgery.trace(it, "TOL-001")
 			# Earlier saves already contain these physical mark facts inside the
 			# full appraisal fingerprint. Preserve their observed logo too.
-			var prior = JSON.parse_string(facts.get("appraisalRevision", "")) if facts.has("appraisalRevision") else null
+			var prior_revision := String(facts.get("appraisalRevision", ""))
+			var prior = JSON.parse_string(prior_revision) if not prior_revision.is_empty() else null
 			if prior is Array and prior.size() >= 10:
 				recorded = JSON.stringify([prior[0], int(prior[4]), bool(prior[9])])
-		observed = it.get("evidence", []).has("TOL-001") and recorded == Model.logo_revision(it)
+		observed = it.get("evidence", []).has("TOL-001") and (safe_logo_observed or recorded == Model.logo_revision(it))
 	if it != null and it.get("owner","")=="shop" and WatchForgery.active(it,"logo"): observed=true
 	mat.set_shader_parameter("logo_hidden", 1.0 if def_id.begins_with("WCH-") and not observed else 0.0)
 

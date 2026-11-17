@@ -9,6 +9,8 @@ func frame() -> void:
 	await process_frame
 	await process_frame
 func run() -> void:
+	# Use the desktop canvas when measuring the scene bell's real animation.
+	root.size=Vector2i(1920,1080)
 	var game = root.get_node("Game")
 	game.prefs.sound = false
 	game.prefs.reduced_motion = false
@@ -27,6 +29,12 @@ func run() -> void:
 		var bell = page.bell
 		check(page.strict_view.bell_art.is_visible_in_tree(), method + " animates a visible bell")
 		var original: Transform2D = bell.transform
+		# Capture both lobes of each oscillation instead of aliasing a zero crossing.
+		var wobble_samples:Array[Vector2]=[]
+		var sample_wobble=func():
+			if bell.motion!=null and bell.motion.is_valid():
+				wobble_samples.append(Vector2(bell.motion.get_total_elapsed_time(),absf(bell.rotation)))
+		process_frame.connect(sample_wobble)
 		var before_count := arrivals
 		if method == "_bell_clicked":
 			page.fixture_buttons.bell.pressed.emit()
@@ -37,16 +45,23 @@ func run() -> void:
 			check(action != null, "next-customer action is present")
 			if action != null: action.pressed.emit()
 		await create_timer(0.035).timeout
+		# A timer can expire before a newly-created Tween receives its first tick.
+		await process_frame
 		check(arrivals == before_count + 1, method + " dispatches exactly one arrival")
 		check(not bell.transform.is_equal_approx(original), method + " presses the same scene bell")
 		var count := arrivals
 		page._ring()
 		page._bell_clicked()
 		check(arrivals == count, "busy/trade rejects repeat arrival from both inputs")
-		await create_timer(0.11).timeout
-		var first_angle: float = absf(bell.rotation)
-		await create_timer(0.20).timeout
-		check(first_angle > 0.025 and absf(bell.rotation) < first_angle, "painted bell wobbles with decreasing amplitude")
+		while bell.motion.is_valid() and bell.motion.get_total_elapsed_time()<0.47:
+			await process_frame
+		process_frame.disconnect(sample_wobble)
+		var early_peak:=0.0
+		var late_peak:=0.0
+		for sample in wobble_samples:
+			if sample.x>=0.05 and sample.x<0.255:early_peak=maxf(early_peak,sample.y)
+			elif sample.x>=0.255 and sample.x<=0.455:late_peak=maxf(late_peak,sample.y)
+		check(early_peak > 0.025 and late_peak > 0.006 and late_peak < early_peak, "painted bell wobbles with decreasing amplitude")
 		await create_timer(0.50).timeout
 		check(bell.transform.is_equal_approx(original), "damped bell returns exactly to its painted pose")
 	game.new_game("bell-blocked")

@@ -24,6 +24,8 @@ func drag(from: Vector2, to: Vector2):
 	Input.parse_input_event(event)
 	await settle()
 func run():
+	# Use a desktop viewport for the embedded workbench's raw pointer projection.
+	root.size=Vector2i(1920,1080)
 	var game = root.get_node("Game")
 	game.prefs.sound = false
 	game.prefs.reduced_motion = true

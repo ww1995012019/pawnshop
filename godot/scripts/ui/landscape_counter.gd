@@ -44,6 +44,8 @@ func setup(owner_adapter) -> void:
 		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		background.add_child(panel)
 		panels.append(panel)
+	# The dock also owns its gaps; nearby business actions must not attract them.
+	panels[4].set_meta("touch_assist_no_expand",true)
 	heading = _label("轨道旧货局",20,UIKit.TEXT)
 	balance = _label("",18,UIKit.AMBER)
 	visitor_name = _label("",15,UIKit.AMBER)
@@ -94,6 +96,7 @@ func setup(owner_adapter) -> void:
 			elif target == "repair": desk._open_instrument("repair")
 			else: shell.go(target),target=="counter")
 		key.name = "landscape_nav_"+target
+		key.set_meta("touch_assist_no_expand",true)
 		dock_keys.append(key)
 
 func _label(text: String, font_size: int, color: Color) -> Label:
@@ -169,14 +172,16 @@ func _layout() -> void:
 	var left := clampf(screen.x*.22,145,200)
 	var right := clampf(screen.x*.22,150,200)
 	var top := 36.0
-	var bottom := screen.y-40
+	var dock_height := maxf(44.0,44.0/maxf(shell.touch_scale(),.01))
+	var dock_band := dock_height+8
+	var bottom := screen.y-dock_band
 	var inner_h := bottom-top-6
 	mat = Rect2(left+8,top,screen.x-left-right-16,inner_h)
 	_place(panels[0],Rect2(0,0,screen.x,32))
 	_place(panels[1],Rect2(4,top,left,inner_h))
 	_place(panels[2],mat)
 	_place(panels[3],Rect2(screen.x-right-4,top,right,inner_h))
-	_place(panels[4],Rect2(0,bottom,screen.x,40))
+	_place(panels[4],Rect2(0,bottom,screen.x,dock_band))
 	_place(heading,Rect2(12,2,screen.x*.52-20,28))
 	_place(balance,Rect2(screen.x*.52,2,screen.x*.48-12,28))
 	balance.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -220,7 +225,7 @@ func _layout() -> void:
 	_place(more,Rect2(tx,action_top+36,right-12,30))
 	if goods.visible: _place(goods,Rect2(tx,bottom-34,right-12,30))
 	var dock_width := (screen.x-16)/5
-	for i in 5: _place(dock_keys[i],Rect2(8+i*dock_width,bottom+4,dock_width-4,30))
+	for i in 5: _place(dock_keys[i],Rect2(8+i*dock_width,bottom+4,dock_width-4,dock_height))
 
 func _layout_paper_tools() -> void:
 	# Paper ownership may change during a police handover. Reflow only the

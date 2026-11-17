@@ -98,6 +98,15 @@ static func _remember(j: Dictionary, it: Dictionary, day: int, imported: bool) -
  record.publicModelRecorded=true
  record.inspected=bool(record.inspected) or not it.get("evidence",[]).is_empty() or not it.get("evidenceReadings",{}).is_empty()
  record.repaired=bool(record.repaired) or bool(it.get("repaired",false)) or not it.get("refurbishment",{}).get("done",[]).is_empty()
+ if not record.get("inspectedModels") is Array: record.inspectedModels=[]
+ # These IDs belong to an explicit past observation, rather than the casing
+ # currently visible while an unrelated action refreshes this archive.
+ for tool in ["TOL-001","TOL-002","TOL-005"]:
+  if not it.get("evidence",[]).has(tool): continue
+  var observed: Dictionary=it.get("inspectionFacts",{}).get(tool,{}).get("appraisalObservation",{})
+  if int(observed.get("schema",0))!=1 or observed.get("unknown",false) or observed.get("tool","")!=tool: continue
+  var model:=String(observed.get("publicModel",""))
+  if GameData.items.has(model) and not record.inspectedModels.has(model): record.inspectedModels.append(model)
 
 static func _uid(row: Dictionary, originals: Dictionary, previous: Dictionary={}) -> String:
  var explicit:=String(row.get("uid",""))
@@ -124,6 +133,7 @@ static func ensure(s: Dictionary) -> void:
  for it in originals.values(): _remember(j,it,day,true)
  for uid in j.originals:
   var recorded: Dictionary=j.originals[uid]
+  if not recorded.get("inspectedModels") is Array: recorded.inspectedModels=[]
   if not originals.has(uid) and not recorded.get("publicModelRecorded",false):
    recorded.defId=""
    recorded.name="未登记型号"
@@ -164,6 +174,7 @@ static func ensure(s: Dictionary) -> void:
    var npc_id: String=""
    var recorded_day:=day
    var successful_settlement:=false
+   var settlement_trust:=1
    for archived in historical_batches[batch]:
     var row: Dictionary=archived.row
     var entry:=_receipt_entry(j,row,archived.uid,"历史交割原物")
@@ -171,6 +182,8 @@ static func ensure(s: Dictionary) -> void:
     entry.note="历史账目导入；此前材料与用电记录不完整。"
     entries.append(entry)
     successful_settlement=successful_settlement or row.get("kind","")!="service-refund"
+    if row.get("kind","")=="service-job" and int(row.get("servicePricingVersion",1))>=2:
+     settlement_trust=clampi(int(row.get("serviceTrust",0)),0,2)
     cash+=float(row.get("amount",0))
     recorded_day=int(row.get("day",day))
     if row.get("npcId","")!="": npc_id=String(row.npcId)
@@ -178,7 +191,7 @@ static func ensure(s: Dictionary) -> void:
    if npc_id!="" and successful_settlement:
     var memory:=_memory(j,npc_id)
     memory.deals+=1
-    _note(j,npc_id,recorded_day,"旧账记有%d件原物交割" % entries.size(),1)
+    _note(j,npc_id,recorded_day,"旧账记有%d件原物交割" % entries.size(),settlement_trust)
   j.markers.legacyImported=true
  for ledger_row in s.get("ledger",[]):
   var ledger_id:=String(ledger_row.get("id",""))
@@ -320,7 +333,14 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
     j.markers[key]=true
     if owner_npc!="":
      _memory(j,owner_npc).repairs+=1
-     _note(j,owner_npc,day,"上次登记的手表已完成维修",1)
+     # New contract terms award their total trust only after actual delivery.
+     # Keep the physical repair count and history even if it is later returned.
+     var repair_trust:=1
+     for contract in next.get("serviceContracts",{}).get("entries",[]):
+      if contract.get("uid","")==uid and contract.get("id","")==it.get("serviceJobId","") and int(contract.get("pricingVersion",1))>=2:
+       repair_trust=0
+       break
+     _note(j,owner_npc,day,"上次登记的手表已完成维修",repair_trust)
    _event(j,uid,key,day,"维修工单已完成。")
  # A real new counter visit has a new persistent trade identity.
  if not trade.is_empty() and String(trade.get("id",""))!=String(old_trade.get("id","")):
@@ -361,6 +381,7 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
  var settlement_npc: String=npc if action.get("type","") in ["DELIVER","TRADE_CHECKOUT","BUY_RARE_ITEM","SELL_MERCHANT_ITEM","PAWN","REDEEM","BUY_BULK_CRATE"] else ""
  var rows: Array=[]
  var successful_settlement:=false
+ var settlement_trust:=1
  var prior_ids: Dictionary={}
  for row in previous.get("ledger",[]): prior_ids[String(row.get("id",""))]=true
  var all_originals:=before.duplicate()
@@ -385,6 +406,8 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
    var entry:=_receipt_entry(j,row,uid,"已交割原物",true)
    rows.append(entry)
    successful_settlement=successful_settlement or row.get("kind","")!="service-refund"
+   if row.get("kind","")=="service-job" and int(row.get("servicePricingVersion",1))>=2:
+    settlement_trust=clampi(int(row.get("serviceTrust",0)),0,2)
    _consume_service_costs(j,row,uid)
    _event(j,uid,"ledger/"+id+("/"+uid if row.get("bulkEntry",false) else ""),day,_ledger_text(row))
  if not rows.is_empty():
@@ -398,7 +421,7 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
   j.receipts.append({"id":id,"day":day,"npcId":settlement_npc,"entries":rows,"cashImpact":cash,"complete":complete,"note":"按已记录的直接成本列示，未分摊店铺日常费用。" if complete else "部分历史成本未知；记录差额不代表完整利润。","historical":false})
   if settlement_npc!="" and successful_settlement:
    _memory(j,settlement_npc).deals+=1
-   _note(j,settlement_npc,day,"上次已完成%d件原物交割" % rows.size(),1)
+   _note(j,settlement_npc,day,"上次已完成%d件原物交割" % rows.size(),settlement_trust)
  # Explicit discoveries only; hidden authenticity never enters memory.
  var checks: Dictionary=trade.get("forgeryChecks",{}).duplicate(true)
  for line in trade.get("session",{}).get("lines",[]):

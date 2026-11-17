@@ -19,6 +19,7 @@
     "test:counterfeit:web": "python3 scripts/test-premium-counterfeit-web.py",
     "test:warehouse:web": "python3 scripts/test-warehouse-expansion-web.py",
     "test:workspaces:web": "python3 scripts/test-compact-workspaces-web.py",
-    "test:desktop-framing:web": "python3 scripts/test-desktop-framing-web.py"
+    "test:desktop-framing:web": "python3 scripts/test-desktop-framing-web.py",
+    "test:landscape-ui:web": "python3 scripts/test-landscape-ui-web.py --case idle && python3 scripts/test-landscape-ui-web.py && python3 scripts/test-portrait-web.py"
   }
 }

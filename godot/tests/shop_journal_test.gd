@@ -249,6 +249,39 @@ func run() -> void:
  old_departed_cache.shopJournal.receipts[0].entries[0].name=GameData.def("WCH-023").name
  journal.ensure(old_departed_cache)
  check(journal.latest_receipt(old_departed_cache).entries[0].name=="未登记型号" and journal.collection(old_departed_cache,"WCH-023").handled==0,"pre-patch departed cached identity without public provenance migrates to unknown")
+ var provenance:=Model.create("INSPECTED-PUBLIC-MODELS")
+ provenance.inventory=[]
+ provenance.ap=100
+ var inexpensive:=Model.new_item(provenance,"WCH-035",{"sourceVerified":true,"authentic":true})
+ Model.put_in(provenance,inexpensive)
+ journal.ensure(provenance)
+ var provenance_before:=provenance.duplicate(true)
+ provenance=Model.reduce(provenance,{"type":"CHECK","uid":inexpensive.uid,"tool":"TOL-001"})
+ journal.observe(provenance_before,provenance,{"type":"CHECK","uid":inexpensive.uid,"tool":"TOL-001"})
+ check(provenance.shopJournal.originals[inexpensive.uid].get("inspectedModels",[])==["WCH-035"],"a real inspection retains its explicitly observed public catalogue model")
+ provenance_before=provenance.duplicate(true)
+ var changed: Dictionary=Model.find_inventory(provenance,inexpensive.uid)
+ changed.forgery={"targetId":"WCH-033","methods":{}}
+ WatchForgery.apply(changed,"case")
+ journal.observe(provenance_before,provenance,{"type":"SERVICE_COMPLETE","uid":inexpensive.uid})
+ check(WatchForgery.appearance_id(changed)=="WCH-033" and provenance.shopJournal.originals[inexpensive.uid].get("inspectedModels",[])==["WCH-035"],"a rare replacement casing cannot inherit a prior inexpensive-model inspection")
+ provenance_before=provenance.duplicate(true)
+ provenance=Model.reduce(provenance,{"type":"CHECK","uid":inexpensive.uid,"tool":"TOL-005"})
+ journal.observe(provenance_before,provenance,{"type":"CHECK","uid":inexpensive.uid,"tool":"TOL-005"})
+ check(provenance.shopJournal.originals[inexpensive.uid].get("inspectedModels",[])==["WCH-035","WCH-033"],"a new explicit inspection records the newly observed rare public model")
+ provenance_before=provenance.duplicate(true)
+ Model._remove_item(provenance,inexpensive.uid)
+ journal.observe(provenance_before,provenance,{"type":"RETURN_ITEM","uid":inexpensive.uid})
+ provenance=JSON.parse_string(JSON.stringify(provenance))
+ journal.ensure(provenance)
+ journal.ensure(provenance)
+ check(provenance.shopJournal.originals[inexpensive.uid].get("inspectedModels",[])==["WCH-035","WCH-033"],"departure and reload retain unique inspected public model history")
+ var unknown_provenance:=Model.create("NO-INVENTED-INSPECTED-MODEL")
+ unknown_provenance.inventory[0].inspected=true
+ unknown_provenance.inventory[0].evidence=["TOL-001"]
+ unknown_provenance.inventory[0].inspectionFacts={"TOL-001":{"appraisalObservation":{"schema":1,"tool":"TOL-001","modelId":"WCH-033"}}}
+ journal.ensure(unknown_provenance)
+ check(unknown_provenance.shopJournal.originals[unknown_provenance.inventory[0].uid].get("inspectedModels",[]).is_empty(),"legacy inspected flags and underlying model IDs cannot invent public inspection provenance")
  print("JOURNAL failures=",failures)
  for player in root.find_children("*", "AudioStreamPlayer", true, false):
   player.stop()

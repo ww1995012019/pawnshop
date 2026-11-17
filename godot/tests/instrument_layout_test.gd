@@ -34,6 +34,8 @@ func touch(active, world: Vector2, pressed: bool):
 	await process_frame
 	await process_frame
 func run():
+	# Native headless defaults to 64×64; desktop projection needs its actual canvas.
+	root.size=Vector2i(1920,1080)
 	DirAccess.make_dir_recursive_absolute("/tmp/pawn-v3-tools")
 	var game = root.get_node("Game")
 	game.prefs.reduced_motion = true

@@ -27,8 +27,7 @@ var risk: Label
 var selected: TextureRect
 var meta_cover: TextureRect
 var cost_cover: TextureRect
-var muted_paper: TextureRect
-var muted_symbol: TextureRect
+var utility_buttons := {}
 var item_name: Label
 var item_meta: Label
 var price_band: Label
@@ -262,11 +261,14 @@ func _build() -> void:
  risk=_label(self,"",Rect2(1151,10,112,38),24,INK,true)
  var ledger=_hit(self,"",Rect2(742,6,219,48),func():desk.shell.open_campaign_ledger());ledger.name="StrictCashLedger";ledger.tooltip_text="现金流水 · 查看账本"
  _hit(self,"事件",Rect2(476,8,101,43),func():_legacy("events"))
- muted_paper=_image(self,R.muted_patch(),Rect2(1487,13,39,35))
- muted_symbol=_image(self,A.icon("volume-xmark"),Rect2(1492,16,29,29),RED)
- for spec in [["手册",1297,"help"],["经营",1386,"plan"],["声音",1473,"sound"],["设置",1560,"settings"]]:
-  var key:String=spec[2]
-  _hit(self,spec[0],Rect2(spec[1],7,99,45),func():desk._utility_clicked(key,null))
+ for spec in [["手册","help","book-open"],["经营","plan","clipboard-list"],["声音","sound","volume-high"],["设置","settings","gear"]]:
+  var key:String=spec[1]
+  var b=_button(self,spec[0],Rect2(1294+utility_buttons.size()*92,4,84,52),func():desk._utility_clicked(key,null),spec[2])
+  b.name="strict_utility_"+key;b.tooltip_text=spec[0]
+  b.set_meta("touch_assist_no_expand",true)
+  b.add_theme_font_override("font",R.font(true))
+  b.add_theme_constant_override("h_separation",4)
+  utility_buttons[key]=b
  display_scroll=ScrollContainer.new();display_scroll.name="StrictDisplayScroll"
  display_scroll.position=Vector2(34,159);display_scroll.size=Vector2(312,291)
  display_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;display_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;add_child(display_scroll)
@@ -378,7 +380,9 @@ func _layout_desktop() -> void:
  if desk.shell.mobile_mode():return
  var extent=get_viewport().get_visible_rect().size/scale
  position=-desk.shell.counter_offset()
- if extent.is_equal_approx(layout_extent):return
+ if extent.is_equal_approx(layout_extent):
+  _layout_utilities()
+  return
  layout_extent=extent;size=extent;extra_space=extent-REFERENCE_SIZE
  var wide=extent.x/REFERENCE_SIZE.x
  for node in layout_rects:
@@ -386,7 +390,7 @@ func _layout_desktop() -> void:
   var rect:Rect2=layout_rects[node]
   node.position=rect.position;node.size=rect.size
   if node is TextureRect and node in scenery:continue
-  if node in [letterbox,hud_art,footer_art,stock_art,table]:continue
+  if node in [letterbox,hud_art,footer_art,stock_art,table] or node in utility_buttons.values():continue
   if node in [detail_layer,own]:node.position.x+=extra_space.x
   elif rect.position.y>=866:
    node.position+=Vector2(rect.position.x*(wide-1),extra_space.y);node.size.x*=wide
@@ -407,7 +411,27 @@ func _layout_desktop() -> void:
  stock_scroll.size.y=185+extra_space.y
  quick_list.fit_height(791+extra_space.y)
  _layout_dialogue_actors()
+ _layout_utilities()
  signature="";dirty=true
+
+func _layout_utilities() -> void:
+ # Layout visible skins and input together, independent of stretched HUD art.
+ # touch_scale includes viewport scaling and Web DPR, so these are CSS sizes.
+ var css=maxf(.01,desk.shell.touch_scale()*absf(get_global_transform_with_canvas().get_scale().x))
+ var css_y=maxf(.01,desk.shell.touch_scale()*absf(get_global_transform_with_canvas().get_scale().y))
+ var wide=size.x/REFERENCE_SIZE.x
+ var width=maxf(84*wide,52/css)
+ var gap=maxf(8*wide,6/css)
+ var height=maxf(52,44/css_y)
+ var start=size.x-12*wide-4*width-3*gap
+ var index=0
+ for key in utility_buttons:
+  var b:Button=utility_buttons[key]
+  b.position=Vector2(start+index*(width+gap),maxf(0,(61-height)*.5))
+  b.size=Vector2(width,height)
+  b.add_theme_font_size_override("font_size",maxi(17,ceili(13/css)))
+  b.add_theme_constant_override("icon_max_width",maxi(20,ceili(16/css)))
+  index+=1
 
 func _table_project(point:Vector2) -> Vector2:
  return Vector2(423+(point.x-423)*(763+extra_space.x)/763,point.y+extra_space.y*(.18 if point.y<570 else .6))
@@ -482,7 +506,7 @@ func _refresh(force := false) -> void:
  if desk==null:return
  var s=Game.state;var t=s.trade
  day.text="第%d天"%int(s.day)
- muted_paper.visible=not Game.prefs.sound;muted_symbol.visible=not Game.prefs.sound
+ utility_buttons.sound.icon=A.icon("volume-high" if Game.prefs.sound else "volume-xmark")
  business_label.text="营业" if s.phase=="open" else "休息" if s.phase=="closed" else "结束"
  if int(s.day)%7==0:rent.text="租金待交" if Landlord.outstanding(s)>0 else "租金已交"
  else:rent.text="租期余%d天"%(7-(int(s.day)%7))

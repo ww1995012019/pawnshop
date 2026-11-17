@@ -241,18 +241,10 @@ static func build_theme() -> Theme:
 
 # ---------------------------------------------------------------- widgets
 
-static var mobile_frame := -1
-static var mobile_window := Vector2i.ZERO
-static var mobile_landscape := false
 static func phone_landscape() -> bool:
-	if not OS.has_feature("web"): return mobile_ui and mobile_wide
-	var frame := Engine.get_process_frames()
-	var window := DisplayServer.window_get_size()
-	if frame != mobile_frame or window != mobile_window:
-		mobile_frame = frame
-		mobile_window = window
-		mobile_landscape = bool(JavaScriptBridge.eval("!!(window.OrbitalTouch?.phone() && innerWidth>innerHeight)",true))
-	return mobile_landscape
+	# The shell owns presentation; an upright browser has the same rotated
+	# landscape canvas and control metrics as a sideways phone.
+	return mobile_ui and mobile_wide
 
 static func label(text: String, size := 22, color := TEXT, is_mono := false, wrap := false) -> Label:
 	ensure()
@@ -291,18 +283,106 @@ static func _configure_option(picker: OptionButton, min_width: float) -> void:
 	picker.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	picker.add_theme_font_size_override("font_size",size)
 	picker.add_theme_constant_override("arrow_margin",4)
-	for state in ["normal","hover","pressed","disabled"]:
+	for state in ["normal","hover","pressed","hover_pressed","disabled"]:
 		var style := key_style("secondary",state,true)
 		style.content_margin_top = 2
 		style.content_margin_bottom = 2
 		picker.add_theme_stylebox_override(state,style)
+	picker.add_theme_stylebox_override("focus",focus_style())
+	for state in ["font_color","font_hover_color","font_pressed_color","font_hover_pressed_color","font_focus_color"]:
+		picker.add_theme_color_override(state,INK)
+	picker.add_theme_color_override("font_disabled_color",DISABLED_TEXT)
+	picker.add_theme_color_override("font_outline_color",Color.TRANSPARENT)
+	picker.add_theme_constant_override("modulate_arrow",1)
 	var menu := picker.get_popup()
+	# PopupMenu is a Window: Button theme overrides do not style expanded rows.
+	for state in ["font_color","font_hover_color","font_accelerator_color","font_separator_color"]:
+		menu.add_theme_color_override(state,INK)
+	menu.add_theme_color_override("font_disabled_color",DISABLED_TEXT)
+	menu.add_theme_color_override("font_outline_color",Color.TRANSPARENT)
+	menu.add_theme_color_override("font_separator_outline_color",Color.TRANSPARENT)
+	menu.add_theme_stylebox_override("hover",box(Color("d5bd95"),AMBER_DEEP,2,1,2,0))
+	menu.add_theme_stylebox_override("separator",box(Color.TRANSPARENT,MUTED,0,1,1,0))
+	for checked in [false,true]:
+		for disabled in [false,true]:
+			var suffix := ("checked" if checked else "unchecked")+("_disabled" if disabled else "")
+			menu.add_theme_icon_override("radio_"+suffix,_menu_marker(checked,disabled,true))
+			menu.add_theme_icon_override(suffix,_menu_marker(checked,disabled,false))
 	menu.add_theme_font_size_override("font_size",size)
 	menu.add_theme_stylebox_override("panel",box(Color("f0dfbf"),PLATE_EDGE,0,1,4,0))
 	menu.add_theme_constant_override("v_separation",8)
 	if picker.is_inside_tree():
 		var area := picker.get_viewport_rect().size
-		menu.max_size = Vector2i(maxi(160,int(area.x)-16),maxi(120,int(area.y*.75)))
+		menu.max_size = Vector2i(maxi(1,int(area.x)-16),maxi(1,mini(int(area.y)-16,int(area.y*.75))))
+
+## Native menu markers use dark ink, including a readable muted disabled variant.
+static func _menu_marker(checked: bool, disabled: bool, radio: bool) -> Texture2D:
+	var key := "menu_marker_%s_%s_%s" % [checked,disabled,radio]
+	if _cache.has(key): return _cache[key]
+	var image := Image.create(18,18,false,Image.FORMAT_RGBA8)
+	image.fill(Color.TRANSPARENT)
+	var ink := DISABLED_TEXT if disabled else INK
+	for y in 18:
+		for x in 18:
+			var d := Vector2(x-8.5,y-8.5).length()
+			var edge := (d>=5.5 and d<=7.0) if radio else (x>=2 and x<=15 and y>=2 and y<=15 and (x<4 or x>13 or y<4 or y>13))
+			var mark := d<=3.5 if radio else (x>=6 and x<=11 and y>=6 and y<=11)
+			if edge or (checked and mark): image.set_pixel(x,y,ink)
+	var texture := ImageTexture.create_from_image(image)
+	_cache[key] = texture
+	return texture
+
+## Dedicated window close: its icon and hit target share one centered rectangle.
+## Recompute in CSS pixels because documents/workspaces can be scaled independently.
+class CloseButton extends Button:
+	var requested_minimum := Vector2(44,44)
+	var _last_projection := Vector2.ZERO
+	var _pixel_ratio := 1.0
+	func _ready() -> void:
+		set_notify_transform(true)
+		add_to_group("shared_close_buttons")
+		get_viewport().size_changed.connect(refresh_target)
+		refresh_target()
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_TRANSFORM_CHANGED: _update_target()
+	## Browser resize/DPR hooks can refresh the group without idle JS polling.
+	func refresh_target() -> void:
+		_pixel_ratio = float(JavaScriptBridge.eval("devicePixelRatio || 1",true)) if OS.has_feature("web") else 1.0
+		_last_projection = Vector2.ZERO
+		_update_target()
+	func _update_target() -> void:
+		if not is_inside_tree(): return
+		var projected := get_viewport().get_screen_transform()*get_global_transform_with_canvas()
+		var css_scale := Vector2(projected.x.length(),projected.y.length())/maxf(0.01,_pixel_ratio)
+		if css_scale.is_equal_approx(_last_projection): return
+		_last_projection = css_scale
+		custom_minimum_size = requested_minimum.max(Vector2(44.0/maxf(.01,css_scale.x),44.0/maxf(.01,css_scale.y)))
+
+static func close_button(min_size := Vector2(44,44)) -> Button:
+	var b := CloseButton.new()
+	b.requested_minimum = min_size.max(Vector2(44,44))
+	b.custom_minimum_size = b.requested_minimum
+	b.icon = icon("close")
+	b.expand_icon = true
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+	b.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.tooltip_text = "关闭"
+	b.accessibility_name = "关闭"
+	b.focus_mode = Control.FOCUS_ALL
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	b.add_theme_constant_override("icon_max_width",20)
+	b.add_theme_constant_override("h_separation",0)
+	for state in ["normal","hover","pressed","hover_pressed","disabled"]:
+		var style := key_style("secondary",state,true)
+		style.set_content_margin_all(6)
+		b.add_theme_stylebox_override(state,style)
+	b.add_theme_stylebox_override("focus",focus_style())
+	for state in ["icon_normal_color","icon_hover_color","icon_pressed_color","icon_hover_pressed_color","icon_focus_color"]:
+		b.add_theme_color_override(state,INK)
+	b.add_theme_color_override("icon_disabled_color",DISABLED_TEXT)
+	return b
 
 static func button(text: String, kind := "secondary", min_size := Vector2(0, 58), size := 22, icon_name := "") -> Button:
 	var b := Button.new()

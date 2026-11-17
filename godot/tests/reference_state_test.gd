@@ -6,7 +6,7 @@ func run():
  var shell=load("res://main.tscn").instantiate();root.add_child(shell);await frames();shell._close_title();await frames()
  var page=shell.page;var view=page.strict_view
  check(view.get_node_or_null("StrictLetterbox")!=null,"desktop letterboxing has its own comic canvas rather than the legacy room")
- check(view.muted_paper.visible and view.muted_symbol.visible,"muted preference has a matching visible sound indicator")
+ check(view.utility_buttons.sound.icon==load("res://scripts/ui/comic_assets.gd").icon("volume-xmark"),"muted preference has one matching sound button icon")
  check(view.meta_cover.visible and not view.detail_layer.get_node("StrictEvidence").visible,"empty desk hides item-only icons and inactive evidence target")
  var business=view.get_node_or_null("StrictBusinessState")
  check(business!=null and business.text=="休息","closed counter does not retain painted open status")

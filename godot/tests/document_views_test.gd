@@ -7,6 +7,8 @@ func check(ok: bool, message: String) -> void:
 func frames() -> void:
 	for i in 5: await process_frame
 func run() -> void:
+	# Native headless defaults to 64×64; exercise the desktop document hit map.
+	root.size = Vector2i(1920,1080)
 	var game = root.get_node("Game")
 	game.prefs.sound = false
 	game.prefs.reduced_motion = true

@@ -1,11 +1,14 @@
-/* Phone shell around the Godot canvas: portrait has a dedicated native UI.
-   All shop controls live in the game itself; the canvas follows the device. */
+/* The game always uses landscape on a touch phone. Upright browsers display
+   the same canvas rotated clockwise and inputs use its unrotated CSS space. */
 (() => {
   'use strict';
   const coarse = matchMedia('(any-pointer: coarse)');
   const phone = () => coarse.matches && Math.min(innerWidth, innerHeight) <= 600;
   const canvas = document.getElementById('canvas');
   let turned = false;
+  let displayWidth = innerWidth, displayHeight = innerHeight;
+  let pendingRender = false;
+  const activeTouches = new Set();
   let state = {ready: false};
   const safeProbe = document.createElement('div');
   safeProbe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
@@ -18,7 +21,9 @@
   const POINTER = /^(mouse|touch|pointer|wheel|contextmenu|click|dblclick)/;
   const LISTS = new Set(['touches', 'changedTouches', 'targetTouches']);
   const shifts = new Map();
-  const inCanvas = point => turned ? [point.clientY, innerWidth - point.clientX] : [point.clientX, point.clientY];
+  const toCanvas = (x, y) => turned ? [y, displayWidth - x] : [x, y];
+  const toPhysical = (x, y) => turned ? [displayWidth - y, x] : [x, y];
+  const inCanvas = point => toCanvas(point.clientX, point.clientY);
   function place(touch) {
     const [x, y] = inCanvas(touch);
     let shift = [0, 0];
@@ -29,11 +34,20 @@
     } catch { /* The game is still loading: leave the touch where it is. */ }
     shifts.set(touch.identifier, shift);
   }
-  canvas.addEventListener('touchstart', event => { for (const touch of event.changedTouches) place(touch); }, true);
+  canvas.addEventListener('touchstart', event => {
+    for (const touch of event.changedTouches) { activeTouches.add(touch.identifier); place(touch); }
+  }, true);
   for (const type of ['touchend', 'touchcancel']) {
     addEventListener(type, event => {
       const done = Array.from(event.changedTouches, touch => touch.identifier);
-      setTimeout(() => done.forEach(id => shifts.delete(id)));
+      // Engine listeners must receive the release using the original mapping.
+      setTimeout(() => {
+        done.forEach(id => { shifts.delete(id); activeTouches.delete(id); });
+        if (!activeTouches.size) {
+          if (pendingRender) render();
+          if (type === 'touchend' && phone()) fullscreen();
+        }
+      });
     }, true);
   }
   function turnedPoint(point) {
@@ -41,6 +55,10 @@
       if (key === 'clientX' || key === 'clientY') {
         const shift = shifts.get(target.identifier) || [0, 0];
         return key === 'clientX' ? inCanvas(target)[0] + shift[0] : inCanvas(target)[1] + shift[1];
+      }
+      if (turned && ['movementX', 'movementY', 'deltaX', 'deltaY'].includes(key)) {
+        const horizontal = key.endsWith('X'), prefix = key.startsWith('delta') ? 'delta' : 'movement';
+        return horizontal ? target[prefix + 'Y'] : -target[prefix + 'X'];
       }
       if (LISTS.has(key)) return Array.from(target[key], turnedPoint);
       const value = target[key];
@@ -64,42 +82,47 @@
     };
   }
   const nativeRect = canvas.getBoundingClientRect.bind(canvas);
-  canvas.getBoundingClientRect = () => turned ? new DOMRect(0, 0, innerHeight, innerWidth) : nativeRect();
+  canvas.getBoundingClientRect = () => turned ? new DOMRect(0, 0, displayHeight, displayWidth) : nativeRect();
 
   async function fullscreen() {
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
-      // Orientation follows the device; portrait owns a separate native layout.
-    } catch { /* Not every browser allows it; the turned canvas still plays. */ }
+    } catch { /* Fullscreen is optional; CSS rotation works without it. */ }
+    try {
+      await screen.orientation?.lock?.('landscape');
+    } catch { /* Unsupported orientation locks use the rotated canvas. */ }
   }
-  // Landscape phones may enter fullscreen; portrait keeps browser navigation.
-  // Browsers only allow this from a user gesture, so every tap re-enters it
-  // (e.g. after a back gesture).
-  addEventListener('pointerup', event => {
-    if (event.pointerType !== 'mouse' && phone() && innerWidth > innerHeight && !document.fullscreenElement) fullscreen();
-  }, true);
   // Size the render buffer as well as the CSS box so the canvas stays sharp.
   function render() {
-    turned = false;
+    if (activeTouches.size) { pendingRender = true; return; }
+    pendingRender = false;
+    displayWidth = innerWidth; displayHeight = innerHeight;
+    turned = phone() && displayHeight > displayWidth;
     const safe = getComputedStyle(safeProbe);
-    window.OrbitalTouch.safeInsets = [safe.paddingLeft,safe.paddingTop,safe.paddingRight,safe.paddingBottom].map(value => parseFloat(value) || 0);
+    const insets = [safe.paddingLeft,safe.paddingTop,safe.paddingRight,safe.paddingBottom].map(value => parseFloat(value) || 0);
+    window.OrbitalTouch.safeInsets = turned ? [insets[1], insets[2], insets[3], insets[0]] : insets;
     const ratio = devicePixelRatio || 1;
-    const long = turned ? innerHeight : innerWidth, short = turned ? innerWidth : innerHeight;
+    const long = turned ? displayHeight : displayWidth, short = turned ? displayWidth : displayHeight;
+    window.OrbitalTouch.effectiveSize = [long, short];
     const width = Math.round(long * ratio), height = Math.round(short * ratio);
     if (canvas.width !== width) canvas.width = width;
     if (canvas.height !== height) canvas.height = height;
     canvas.style.width = `${long}px`;
     canvas.style.height = `${short}px`;
-    canvas.style.transform = turned ? `translateX(${innerWidth}px) rotate(90deg)` : '';
+    canvas.style.transform = turned ? `translateX(${displayWidth}px) rotate(90deg)` : '';
     document.documentElement.classList.toggle('turned', turned);
   }
   window.OrbitalTouch = {
     state,
     update(next) { state = next; this.state = next; },
     phone,
+    toPhysical,
+    toCanvas,
     turned: () => turned,
   };
   addEventListener('resize', render);
+  document.addEventListener('fullscreenchange', render);
+  screen.orientation?.addEventListener('change', render);
   coarse.addEventListener('change', render);
   render();
 })();

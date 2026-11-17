@@ -33,6 +33,11 @@ static func snap(point: Vector2, root: Control, scale: float) -> Vector2:
 			if control.clip_contents:
 				clip = rect
 			if rect.has_area():
+				# A marked control can also protect a whole navigation strip,
+				# including gaps, from nearby ordinary buttons' expansion.
+				if control.get_meta("touch_assist_no_expand", false):
+					if rect.has_point(point): return point
+					if control is BaseButton: continue
 				if control is BaseButton:
 					var grow := ((Vector2(TARGET, TARGET) - rect.size * scale) * 0.5).clamp(Vector2.ZERO, Vector2(MAX_GROW, MAX_GROW)) / scale
 					if grow != Vector2.ZERO:

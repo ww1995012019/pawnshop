@@ -32,6 +32,8 @@ func idle(page) -> void:
 	while page.busy and Time.get_ticks_msec()<deadline: await process_frame
 	await frames()
 func run() -> void:
+	# Real warehouse/menu clicks need a desktop viewport, not headless 64×64.
+	root.size=Vector2i(1920,1080)
 	var game = root.get_node("Game")
 	game.prefs.reduced_motion=true; game.prefs.sound=false
 	var fixture: Dictionary = Fixture.build()

@@ -3,7 +3,8 @@ extends RefCounted
 ## An explicit opt-in after the original campaign assessment. Ordinary NEXT
 ## remains the single place that opens a day and applies saved night outcomes.
 
-const SUCCESS_OUTCOMES := ["高风险转运站","稀有收藏行","可信赖维修店"]
+const SUCCESS_OUTCOMES := ["高风险转运站","稀有收藏行","可信赖维修店","稳健旧货铺"]
+const Evaluation = preload("res://scripts/model/campaign_evaluation.gd")
 
 static func ensure(s: Dictionary) -> void:
 	if not s.get("campaignLife") is Dictionary:
@@ -29,7 +30,7 @@ static func continue_problem(s: Dictionary) -> String:
 
 static func _outcome(s: Dictionary) -> String:
 	if SUCCESS_OUTCOMES.has(s.get("outcome","")): return s.outcome
-	return "高风险转运站" if s.risk >= 60 else ("稀有收藏行" if s.relations.merchant > s.relations.salvage else "可信赖维修店")
+	return Evaluation.outcome(s)
 
 static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 	if action.get("type","") != "CONTINUE_CAMPAIGN": return null
@@ -37,7 +38,10 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 	var s := previous.duplicate(true)
 	ensure(s)
 	if s.campaignLife.assessments.is_empty():
-		s.campaignLife.assessments.append({"day":int(s.day),"outcome":_outcome(s),"report":s.report.duplicate(true) if s.get("report") is Dictionary else null})
+		var assessment: Dictionary={"day":int(s.day),"outcome":_outcome(s),"report":s.report.duplicate(true) if s.get("report") is Dictionary else null}
+		if s.get("report") is Dictionary and s.report.get("evaluation") is Dictionary:
+			assessment.evaluation=s.report.evaluation.duplicate(true)
+		s.campaignLife.assessments.append(assessment)
 	s.campaignLife.endless = true
 	s.erase("outcome")
 	s.phase = "report"

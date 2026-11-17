@@ -2,6 +2,7 @@ class_name TradeSession
 extends Object
 ## Original objects live in inventory or session.goods. Rows contain quotes, never copies.
 const ACTIONS := ["TRADE_OPEN","TRADE_ADD","TRADE_REMOVE","TRADE_REVIEW","TRADE_OFFER","TRADE_CONFIRM","TRADE_FOCUS","TRADE_CHECKOUT","TRADE_END","TRADE_REORDER"]
+const Pricing = preload("res://scripts/model/shop_pricing.gd")
 const MAX_ITEMS := 8
 const COUNT_WEIGHTS := [40,24,14,9,6,4,2,1]
 
@@ -31,7 +32,7 @@ static func item(s: Dictionary, uid: String):
   if lot.uid==uid: return lot
  return null
 static func fingerprint(it: Dictionary) -> String:
- return JSON.stringify([Model.appraisal_revision(it),it.owner,it.sourceVerified,it.sealed,it.location,it.get("orderId",""),it.get("service",{}).get("opened",false)])
+ return JSON.stringify([Model.trade_revision(it),it.owner,it.sourceVerified,it.sealed,it.location,it.get("orderId",""),it.get("service",{}).get("opened",false)])
 static func ensure(s: Dictionary) -> void:
  if not session(s).is_empty(): return
  var t: Dictionary=s.trade
@@ -104,8 +105,15 @@ static func persist_holdings(s: Dictionary) -> void:
 static func _new_row(s: Dictionary, it: Dictionary, direction: String) -> Dictionary:
  var context := {"id":s.trade.id,"npcId":s.trade.npcId,"kind":direction,"item":null,"price":0,"rounds":0,"locked":false,"evidenceUsed":[],"npcKnowledge":{},"forgeryChecks":{}}
  if s.trade.get("forgeryChecks",{}).has(it.uid): context.forgeryChecks[it.uid]=s.trade.forgeryChecks[it.uid].duplicate(true)
+ # A legacy single-item visit may already have discussed this original even
+ # when another UID is selected now. Keep that same visitor's saved beliefs,
+ # economic snapshot and discussion when moving into the batch interface.
+ if s.trade.get("kind","") == direction:
+  for field in ["shopPriceFactors","npcKnowledge","negotiation"]:
+   var prior: Dictionary = s.trade.get(field,{})
+   if prior.has(it.uid): context[field] = {it.uid:prior[it.uid].duplicate(true)}
  var terms := Model.trade_terms(s,context,it)
- context.price=terms.opening if direction=="sell" else maxf(terms.floor,ceil(terms.value*1.1))
+ context.price=Pricing.initial_quote(s,context,it,terms)
  return {"uid":it.uid,"direction":direction,"context":context,"status":"queued" if direction=="sell" else "ready","reason":"等待 NPC 查看" if direction=="sell" else "NPC 已报开价，可还价或确认购买","selected":false,"fingerprint":fingerprint(it),"included":true}
 static func summary(s: Dictionary) -> Dictionary:
  var se := session(s)

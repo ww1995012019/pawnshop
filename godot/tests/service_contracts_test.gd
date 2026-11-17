@@ -48,7 +48,7 @@ func run() -> void:
 	var repeat := state()
 	check(rules.contracts(repeat) == offers,"seed and day repeat the saved board")
 	var reload: Dictionary = JSON.parse_string(JSON.stringify(s))
-	check(rules.contracts(reload) == JSON.parse_string(JSON.stringify(offers)),"migration and JSON retain offers")
+	check(JSON.parse_string(JSON.stringify(rules.contracts(reload))) == JSON.parse_string(JSON.stringify(offers)),"migration and JSON retain offers")
 	check(offers.any(func(c):return c.originalParts) and offers.any(func(c):return c.dueDay == s.day+2),"daily board includes original-parts and urgent choices")
 	check(offers.all(func(c):return c.budget >= 80 and c.budget <= 160 and not c.has("faults") and not c.has("working")),"public previews carry bounded terms without private faults")
 	var id: String = offers[0].id

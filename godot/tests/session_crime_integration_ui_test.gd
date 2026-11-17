@@ -1,5 +1,7 @@
 extends "res://tests/night_crime_ui_test.gd"
 func run() -> void:
+ # Real warehouse/menu clicks need a desktop viewport, not headless 64×64.
+ root.size=Vector2i(1920,1080)
  var game=root.get_node("Game");game.prefs.reduced_motion=true;game.prefs.sound=false
  game.state=Fixture.fresh("BATCH-RISK-UI")
  var physical:=Model.new_item(game.state,"WCH-002",{"sourceVerified":false,"condition":0.8,"authentic":true,"working":true})

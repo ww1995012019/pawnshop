@@ -13,6 +13,13 @@ TESTS = ("counter_storage_return_test", "counter_dialogue_actor_test", "orange_b
          "merchant_test", "residents_test", "forgery_test", "commerce_ui_test", "commerce_phone_test", "crime_event_test", "night_crime_test", "night_crime_ui_test", "wanted_cases_test", "wanted_art_test", "wanted_ui_test", "watch_rules_test", "watch_catalogue_test", "watch_appraisal_test", "watch_forgery_methods_test", "watch_art_test", "watch_inspection_test", "inspection_usability_test", "watch_manual_test", "watch_save_test", "bell_test", "watch_optical_face_test", "watch_evidence_refresh_test")
 
 
+TESTS = ("landscape_ui_integration_test", "shared_close_dropdown_test",
+         "shared_close_integration_test", "utility_topbar_test") + TESTS
+TESTS = ("shop_pricing_test", "evidence_appraisal_test", "negotiation_progress_test") + TESTS
+
+
+TESTS = ("service_quote_tradeoff_test", "inspection_channels_test", "campaign_evaluation_test", "shop_plan_touch_lifecycle_test") + TESTS
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--godot", default=os.environ.get("GODOT_BIN", "godot"))

@@ -99,8 +99,9 @@ def main():
                 def cmd(data):page.evaluate('d=>orbitalTouchSend(JSON.stringify(d))',data)
                 def loc(text):
                     page.evaluate('window.__orbitalLocated=null');cmd({'type':'locate','text':text});wait('window.__orbitalLocated!==null');return page.evaluate('__orbitalLocated')
-                # Both upright and landscape phones use native, unrotated UI.
-                def physical(x,y):return (x,y)
+                # Bridge geometry uses the effective landscape canvas; touches
+                # use the physical screen even when an upright phone is rotated.
+                def physical(x,y):return page.evaluate('([x,y])=>OrbitalTouch.toPhysical(x,y)',[x,y])
                 def move(x,y):
                     # Hover must not activate document contents on a phone.
                     # Real finger gestures use the explicit CDP touch path.

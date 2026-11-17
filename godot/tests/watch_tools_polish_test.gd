@@ -311,7 +311,8 @@ func run() -> void:
 	check(not page.toast_rect().intersects(page.instruction.get_global_rect()), "long wrapped no-repair guidance reserves separate notice space")
 	for dimensions in [Vector2i(844,390),Vector2i(390,844)]:
 		shell.close_workspace()
-		root.size = dimensions
+		# Upright physical phones arrive from the web shell as a rotated landscape canvas.
+		root.size = Vector2i(maxi(dimensions.x,dimensions.y),mini(dimensions.x,dimensions.y))
 		shell.phone_override = true
 		await frames()
 		shell.go("repair",lot.uid)
@@ -334,6 +335,7 @@ func run() -> void:
 		page = active.page
 		page._set_tool("TOL-005")
 		await frames()
+		check(active.landscape_mode() and not active.portrait_mode(),"physical phone %s keeps its inspection bench in landscape" % str(dimensions))
 		await check_scale_console(active,page,str(dimensions))
 		if active.portrait_mode():
 			await check_portrait_inspection_actions(active,page)

@@ -195,6 +195,8 @@ static func hud() -> Texture2D:
  var img=source().get_region(Rect2i(0,0,1671,61))
  for r in [Rect2i(43,13,117,35),Rect2i(324,14,121,32),Rect2i(802,14,146,34),Rect2i(999,14,82,34),Rect2i(1151,14,105,34)]:patch(img,r,Rect2i(600,8,100,45))
  patch(img,Rect2i(184,11,88,37),Rect2i(181,10,5,38))
+ # Utility controls own all their ink; preserve only the surrounding HUD paper.
+ patch(img,Rect2i(1285,4,381,51),Rect2i(600,8,100,45))
  return pack_texture("hud",img)
 
 static func folio() -> Texture2D:

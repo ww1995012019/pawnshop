@@ -58,6 +58,8 @@ func check_modal(owner, label: String) -> void:
 	await settle()
 
 func run() -> void:
+	# Native headless defaults to 64×64; desktop projection needs its actual canvas.
+	root.size=Vector2i(1920,1080)
 	var game = root.get_node("Game")
 	game.prefs.reduced_motion = true
 	game.prefs.sound = false

@@ -56,7 +56,8 @@ func run() -> void:
 	shell.go("counter")
 	await frames()
 	for dimensions in [Vector2i(1440,900), Vector2i(390,844), Vector2i(844,390)]:
-		root.size = dimensions
+		# Native phone fixtures receive the effective canvas supplied by the web rotation.
+		root.size = Vector2i(maxi(dimensions.x,dimensions.y),mini(dimensions.x,dimensions.y))
 		shell.phone_override = dimensions.x < 1000
 		shell._fit()
 		await frames()

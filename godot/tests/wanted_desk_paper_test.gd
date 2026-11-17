@@ -112,9 +112,14 @@ func run() -> void:
 	shell.close_workspace();await frames()
 	check(poster.get_index()>shell.workspace_overlay.get_index(),"restoring a suspended drawer cannot cover the open poster")
 	while shell.workspace_open():shell.close_workspace();await frames()
+	# The officer delivers paperwork without a watch; use a real visitor original
+	# when checking that the notice leaves the trading surface intact.
+	game.state.trade={"id":"paper-watch-fixture","npcId":"CHR-004","kind":"buy","item":Model.new_item(game.state,"WCH-002"),"price":80,"rounds":0,"locked":false,"evidenceUsed":[],"line":"请看看这只表。"}
+	shell.page._sync_world();shell.page._refresh();await frames()
 	var desktop_geometry=game.state.police.paper.duplicate(true)
 	for dimensions in [Vector2i(390,844),Vector2i(844,390)]:
-		root.size=dimensions;shell.phone_override=true;await frames();shell._fit();poster.refresh();await frames()
+		# The web shell rotates upright phones before Godot receives its viewport.
+		root.size=Vector2i(maxi(dimensions.x,dimensions.y),mini(dimensions.x,dimensions.y));shell.phone_override=true;await frames();shell._fit();poster.refresh();await frames()
 		check(poster.scale.is_equal_approx(Vector2.ONE),"mobile poster uses native readable text: "+str(dimensions))
 		check(shell.safe_area().encloses(poster.get_global_rect()),"mobile poster stays inside safe viewport")
 		for label in poster.find_children("*","Label",true,false):
@@ -124,26 +129,29 @@ func run() -> void:
 				check(stamp.size.x>=ink_width+10 and label.get_line_count()==1,"wanted stamp stays wide enough for a single horizontal line")
 				check(stamp.get_parent().size.y<=56,"poster masthead never stretches into a tall stamp column")
 		var grid=poster.find_child("WantedProfiles",true,false)
-		check(grid!=null and grid.columns==(1 if dimensions.x<dimensions.y else 2),"mobile poster reflows profile columns: "+str(dimensions))
+		check(grid!=null and grid.columns==2,"mobile poster retains two landscape profile columns: "+str(dimensions))
 		for label in poster.find_children("*","Label",true,false):
 			check(label.get_theme_font_size("font_size")>=16,"mobile poster text remains at least16 native pixels")
 		poster.document_scroll.scroll_vertical=10000;await frames()
 		var last=poster.find_child("case_"+String(game.state.police.wanted[-1]),true,false)
 		check(last!=null and poster.document_scroll.get_global_rect().intersects(last.get_global_rect()),"scroll reaches the sixth saved profile")
-		var adapter=shell.page.find_child("PortraitCounter",true,false)
+		var landscape=shell.page.find_child("LandscapeCounter",true,false)
+		check(shell.landscape_mode() and not shell.portrait_mode(),"every physical phone orientation uses landscape counter presentation")
 		poster.close_document();await frames()
-		if dimensions.x<dimensions.y:
-			var paper=adapter.find_child("wanted_inventory",true,false)
-			check(paper!=null and paper.is_visible_in_tree() and shell.safe_area().encloses(paper.get_global_rect()),"portrait has its own visible desk-document entry")
-			check(shell.safe_area().encloses(adapter.primary.get_global_rect()),"portrait paperwork leaves the real trade action on screen")
-			check(adapter.item_art.size.y>=48,"portrait paperwork leaves room for the real watch illustration")
-			adapter._goods_popup();await frames()
+		check(landscape!=null and landscape.is_visible_in_tree(),"phone uses its visible landscape desk")
+		if landscape!=null:
+			var paper=landscape.wanted_paper
+			check(paper.is_visible_in_tree() and paper.size.y>=44 and shell.safe_area().encloses(paper.get_global_rect()),"landscape desk-document target stays on its own surface")
+			for key in landscape.tool_keys:check(not paper.get_global_rect().intersects(key.get_global_rect()),"landscape paperwork never overlaps a tool target")
+			check(landscape.primary.is_visible_in_tree() and shell.safe_area().encloses(landscape.primary.get_global_rect()),"landscape paperwork leaves the real trade action on screen")
+			var watch=shell.page.mat_item
+			check(is_instance_valid(watch) and watch.is_visible_in_tree(),"landscape paperwork preserves the real watch illustration")
+			if is_instance_valid(watch):
+				var watch_rect:Rect2=watch.body.get_global_transform_with_canvas()*Rect2(-watch.tex_size()*.5,watch.tex_size())
+				check(watch_rect.size.y>=48 and shell.safe_area().encloses(watch_rect),"landscape paperwork leaves readable watch art inside the viewport")
+			landscape.adapter._goods_popup();await frames()
 			check(shell.modal_layer.find_child("mobile_wanted_inventory",true,false)==null,"phone goods picker contains watches without a paperwork tile")
-			shell.close_top_modal();game.dispatch({"type":"TOGGLE_NOTICE","visible":true});await frames()
-		else:
-			var paper=adapter.landscape.wanted_paper
-			check(paper.visible and paper.size.y>=44 and shell.safe_area().encloses(paper.get_global_rect()),"landscape desk-document target stays on its own surface")
-			for key in adapter.landscape.tool_keys:check(not paper.get_global_rect().intersects(key.get_global_rect()),"landscape paperwork never overlaps a tool target")
+			shell.close_top_modal();await frames()
 		poster.close_document();await frames()
 		check(game.state.police.paper.position==desktop_geometry.position and game.state.police.paper.scale==desktop_geometry.scale,"closing mobile reflow preserves the saved desktop paper placement")
 		game.dispatch({"type":"TOGGLE_NOTICE","visible":true});await frames()

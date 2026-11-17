@@ -31,7 +31,8 @@ func run():
   check(full.inventory.all(func(it):return Model.can_place(full,it.uid,it.x,it.y)),"full legacy cabinet repacks every original without overlap: "+str(width))
  var shell=load("res://main.tscn").instantiate();root.add_child(shell);await frames();shell._close_title()
  for dimensions in [Vector2i(1440,900),Vector2i(844,390),Vector2i(390,844)]:
-  root.size=dimensions;shell.phone_override=dimensions.x<1000;await frames();shell.go("warehouse");await frames()
+  # Upright phones enter native Godot with the landscape canvas supplied by the web shell.
+  root.size=Vector2i(maxi(dimensions.x,dimensions.y),mini(dimensions.x,dimensions.y));shell.phone_override=dimensions.x<1000;await frames();shell.go("warehouse");await frames()
   var page=shell.active_shell().page
   check(page.display_panel.size.y<=shell.active_shell().content_rect().size.y,"display cabinet fits workspace height")
   for key in page.cabinet_buttons.values():check(key.get_global_rect().end.y<=page.grid_scroll.get_global_rect().position.y,"category tabs sit above the grid")

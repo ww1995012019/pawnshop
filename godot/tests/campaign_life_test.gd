@@ -46,6 +46,7 @@ func run() -> void:
 	check(life.reduce(fresh,{"type":"UNKNOWN"}) == null,"unknown commands pass through the continuation reducer")
 	var report := settled_day_21()
 	check(report.phase == "report" and report.has("outcome"),"settling day21 still gives the campaign assessment")
+	check(report.report.get("evaluation") is Dictionary,"day21 settlement freezes detailed achievements before continuation")
 	var original := Model.new_item(report,"WCH-004",{"owner":"customer","orderId":"LATE-CONTRACT","sealed":true,"location":"customer"})
 	report.inventory.append(original)
 	report.serviceContracts = {"version":1,"contracts":[{"id":"LATE-CONTRACT","uid":original.uid,"status":"active","deadline":25}]}
@@ -55,6 +56,15 @@ func run() -> void:
 	check(next.inventory == before.inventory and next.materials == before.materials and next.cash == before.cash and next.relations == before.relations and next.ledger == before.ledger and next.serviceContracts == before.serviceContracts,"continuation preserves originals, open contracts, materials, money, relations and ledger")
 	check(report == before and not next.has("outcome"),"continuation preserves the prior snapshot and clears its old outcome")
 	check(next.campaignLife.assessments.size() == 1 and next.campaignLife.assessments[0].outcome == before.outcome and next.campaignLife.assessments[0].day == 21,"first assessment is recorded once")
+	check(next.campaignLife.assessments[0].get("evaluation")==before.report.evaluation,"continuation retains the settled evaluation snapshot alongside its report")
+	var achieved_after: Dictionary=next.duplicate(true)
+	achieved_after.cash+=1000
+	achieved_after.shopJournal={"histories":{"future":[{"id":"repair/future/22"}]}}
+	check(life.summary(achieved_after).firstAssessment.evaluation==before.report.evaluation,"later work and cash cannot rewrite the first assessment")
+	var generic_end:=before.duplicate(true)
+	generic_end.phase="ending"
+	generic_end.outcome="稳健旧货铺"
+	check(life.continue_problem(generic_end)=="" and life.reduce(generic_end,{"type":"CONTINUE_CAMPAIGN"}).day==22,"the generic successful shop ending can continue normally")
 	var loaded: Dictionary = JSON.parse_string(JSON.stringify(next))
 	var repeated: Dictionary = life.reduce(loaded,{"type":"CONTINUE_CAMPAIGN"})
 	check(repeated == loaded and repeated.day == 22 and repeated.campaignLife.assessments.size() == 1,"repeated continue after reload cannot skip or duplicate a day")
@@ -65,7 +75,9 @@ func run() -> void:
 	check(continued_end.day == 22 and continued_end.phase == "open" and continued_end.cash == before.cash,"a completed successful legacy save can continue without another settlement")
 	var no_report := legacy_end.duplicate(true)
 	no_report.report = null
-	check(life.reduce(no_report,{"type":"CONTINUE_CAMPAIGN"}).day == 22,"a known successful day21 ending remains resumable without a retained report")
+	var old_resume: Dictionary=life.reduce(no_report,{"type":"CONTINUE_CAMPAIGN"})
+	check(old_resume.day == 22,"a known successful day21 ending remains resumable without a retained report")
+	check(not old_resume.campaignLife.assessments[0].has("evaluation"),"legacy continuation does not reconstruct missing historical evaluation from later evidence")
 	for failure in ["无法支付租金，交还店面","限期清仓后仍无力支付店铺费用"]:
 		var bankrupt := legacy_end.duplicate(true)
 		bankrupt.outcome = failure

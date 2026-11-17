@@ -20,7 +20,8 @@ func run() -> void:
 	await frames()
 	for dimensions in [Vector2i(844,390),Vector2i(568,320),Vector2i(390,844),Vector2i(1920,1080)]:
 		shell.phone_override=dimensions.x<1000
-		root.size=dimensions
+		# The web shell supplies landscape dimensions for an upright physical phone.
+		root.size=Vector2i(maxi(dimensions.x,dimensions.y),mini(dimensions.x,dimensions.y))
 		await frames()
 		shell.open_shop_plan()
 		await frames()

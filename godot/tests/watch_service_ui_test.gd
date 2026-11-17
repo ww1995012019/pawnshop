@@ -7,6 +7,8 @@ func check(ok: bool, message: String) -> void:
 func settle() -> void:
 	for i in 6: await process_frame
 func run() -> void:
+	# Use a desktop viewport for the embedded workbench's raw pointer projection.
+	root.size=Vector2i(1920,1080)
 	var page_script = load("res://scripts/pages/repair_page.gd")
 	var preview = page_script.new()
 	if not preview.has_method("open_forgery"):

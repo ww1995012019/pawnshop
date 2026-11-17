@@ -31,6 +31,8 @@ func drag_cloth(shell, page):
 	Input.parse_input_event(up)
 	await settle()
 func run():
+	# Use a desktop viewport for the embedded workbench's raw pointer projection.
+	root.size=Vector2i(1920,1080)
 	var game = root.get_node("Game")
 	game.prefs.sound = false
 	game.state = Model.create("SQUARE-CLEANING-INPUT")

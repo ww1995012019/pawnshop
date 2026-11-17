@@ -385,7 +385,13 @@ func _refresh_info() -> void:
 		info.add_child(distinction)
 	var appraisal := Model.estimate(it)
 	var price_text := "估价 %s–%s Cr" % [Model.jnum(appraisal.low), Model.jnum(appraisal.high)]
-	info.add_child(UIKit.note_card("检验估价", price_text + "\n鉴定只提供参考范围；加工或维修后复测不耗 AP，用电另计。"))
+	var wear_note := "\n品相记录待更新：任选一项免费复核即可更新估价，未受影响的物证仍保留。" if int(appraisal.count)>0 and not appraisal.get("conditionCurrent",false) else ""
+	var model_recorded := false
+	for facts in it.get("inspectionFacts",{}).values():
+		if facts.get("appraisalObservation",{}).get("publicModel","")==WatchForgery.appearance_id(it): model_recorded=true
+	if int(appraisal.count)>0 and not model_recorded:
+		wear_note += "\n当前型号尚未登记进检验履历，任选一项免费复核即可登记。"
+	info.add_child(UIKit.note_card("检验估价", price_text + wear_note + "\n鉴定只提供参考范围；只需复测发生变化的项目，不耗 AP，用电另计。"))
 	info.add_child(UIKit.label("有效记录 · %d / %d" % [appraisal.count, TOOL_IDS.size()], 17, UIKit.AMBER))
 	var progress := UIKit.grid(3,4)
 	progress.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -393,7 +399,7 @@ func _refresh_info() -> void:
 	for index in TOOL_IDS.size():
 		var id: String = TOOL_IDS[index]
 		var done: bool = it.evidence.has(id)
-		var fresh: bool = done and it.get("inspectionFacts", {}).get(id, {}).get("appraisalRevision", "") == Model.appraisal_revision(it)
+		var fresh: bool = Model.inspection_current(it, id)
 		var state := UIKit.label(GameData.tool(id).name + "\n" + ("✓ 已记录" if fresh else "↻ 需复测" if done else "○ 待检"),15,UIKit.GOOD if fresh else UIKit.AMBER if done else UIKit.MUTED,false,true)
 		state.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		progress.add_child(state)
@@ -405,7 +411,8 @@ func _refresh_info() -> void:
 		tool_buttons[id].add_theme_stylebox_override("normal",UIKit.key_style("primary" if tool == id else "secondary","normal"))
 		if done:
 			info.add_child(UIKit.record_card(Model.evidence_caption(it, id), Model.displayed_clue(it, id), "物证 / %02d%s" % [index + 1, " · 需复测" if not fresh else ""]))
-	info.add_child(UIKit.note_card("当前消耗", "首次记录消耗 1 AP；后续取证不耗 AP。紫外与称重按新的有效读数计电费。"))
+	var first_record_cost := "已安装工作灯，每件原物首次记录不耗 AP" if Game.state.upgrades.lamp else "每件原物首次记录消耗 1 AP"
+	info.add_child(UIKit.note_card("当前消耗", first_record_cost + "；后续取证不耗 AP。紫外与称重按新的有效读数计电费。"))
 	var rules := UIKit.button("收起检验须知" if rules_expanded else "查看检验须知", "secondary", Vector2(0, 40), 16)
 	rules.name = "inspection_rules_toggle"
 	rules.pressed.connect(func():
@@ -413,7 +420,7 @@ func _refresh_info() -> void:
 		_refresh_info())
 	info.add_child(rules)
 	if rules_expanded:
-		var note := UIKit.note_card("检验须知", "三项记录齐全可缩小估价范围，仍需自行议价；单项物证不能证明原装、走时或防水。重描、覆印和配重会留下痕迹。重复查看旧结果不收费。")
+		var note := UIKit.note_card("检验须知", "估价依据已记录品相与物证；正常读数不保证原装、走时或防水，异常读数或加工痕迹可能使范围更宽。各工具分别保留有效记录，只复测受影响的项目；品相变化后任选一项免费复核即可更新估价。重描、覆印和配重会留下痕迹。重复查看旧结果不收费。")
 		note.name = "inspection_rules"
 		info.add_child(note)
 
@@ -697,9 +704,15 @@ func _record() -> void:
 	if (tool == "TOL-001" or tool == "TOL-002") and not _optical_face_visible(): return
 	var it = Game.item(it_uid)
 	if it == null: return
-	if it.evidence.has(tool) and Model.displayed_clue(it,tool) == WatchRules.reading(it,tool) and it.get("inspectionFacts", {}).get(tool, {}).get("appraisalRevision", "") == Model.appraisal_revision(it): return
+	var facts: Dictionary = it.get("inspectionFacts", {}).get(tool, {})
+	var recorded_condition: float = facts.get("appraisalObservation", {}).get("condition", -1.0)
+	var recorded_model: String = facts.get("appraisalObservation",{}).get("publicModel","")
+	if Model.inspection_current(it,tool) and is_equal_approx(recorded_condition,float(it.condition)) and recorded_model==WatchForgery.appearance_id(it): return
 	Game.dispatch({"type":"CHECK","uid":it_uid,"tool":tool})
 	_refresh_info()
+
+func _inspection_attempt(it: Dictionary) -> String:
+	return Model.inspection_revision(it,tool)+":"+str(snappedf(float(it.condition),0.000001))+":"+str(Game.state.ap)
 
 func on_changed(_p: Dictionary,_n: Dictionary,_a: Dictionary) -> void:
 	# A linked repair workspace can replace the physical UV marking while
@@ -799,12 +812,12 @@ func _process(delta: float) -> void:
 		scale_target = scale_pan.to_global(scale_pan.pan_position())-Vector2(0,item.tex_size().y*item.display_scale*.5)
 		scale_pan.queue_redraw()
 		if scale_stable:
-			var revision := Model.appraisal_revision(it)+":"+str(Game.state.ap)
+			var revision := _inspection_attempt(it)
 			if revision != scale_attempt_revision:
 				scale_attempt_revision = revision
 				_scale_record()
 				var current = Game.item(it_uid)
-				if current != null: scale_attempt_revision = Model.appraisal_revision(current)+":"+str(Game.state.ap)
+				if current != null: scale_attempt_revision = _inspection_attempt(current)
 		_scale_controls()
 	elif tool == "TOL-001" or tool == "TOL-002":
 		var node: Node2D = lens if tool == "TOL-001" else wand
@@ -828,12 +841,12 @@ func _process(delta: float) -> void:
 		if at.distance_to(_optical_target())<65:
 			progress = minf(1.0,progress+delta/.9)
 			if progress >= 1.0:
-				var revision := Model.appraisal_revision(it)+":"+str(Game.state.ap)
+				var revision := _inspection_attempt(it)
 				if revision != optical_attempt_revision:
 					optical_attempt_revision = revision
 					_record()
 					var current = Game.item(it_uid)
-					if current != null: optical_attempt_revision = Model.appraisal_revision(current)+":"+str(Game.state.ap)
+					if current != null: optical_attempt_revision = _inspection_attempt(current)
 		else: progress = 0.0
 		lens_ring.progress = progress
 		lens_ring.queue_redraw()

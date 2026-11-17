@@ -11,7 +11,6 @@ func setup(shell: Node) -> void:
 	name="wanted_notice"
 	configure("通缉令 · 旧港巡警", "wanted", Vector2(760,800))
 	close_button.name="wanted_close"
-	close_button.custom_minimum_size=Vector2(44,44)
 	header.custom_minimum_size.y=48
 	closed.connect(func():Game.dispatch({"type":"TOGGLE_NOTICE","visible":false}))
 	refresh()

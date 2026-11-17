@@ -45,7 +45,18 @@ def main(url):
             page.evaluate('failDownload(new Error("network interrupted"))')
             page.wait_for_selector('#loader.failed')
             assert page.locator('#retry').is_visible()
+            assert '检查网络' in page.locator('#fail-text').inner_text()
             assert not page.locator('#loading-bottom').is_visible()
+            context.close()
+            context=browser.new_context(viewport={'width':844,'height':390});page=context.new_page()
+            missing=STUB.replace('return []','return ["WebGL2"]')
+            page.route('**/'+release['engine']+'.js',lambda route:route.fulfill(body=missing,content_type='text/javascript'))
+            page.goto(url);page.wait_for_selector('#loader.failed')
+            text=page.locator('#fail-text').inner_text()
+            assert 'WebGL2' in text and '浏览器' in text
+            assert '检查网络' not in text,'missing graphics capability must not be presented as a network outage'
+            assert page.locator('#retry').inner_text()=='重新检测'
+            page.screenshot(path=str(output/'unsupported-webgl.png'))
             context.close()
             print('LOADING UI desktop/landscape/portrait, cast rotation, progress, startup, reduced motion and failure pass')
         finally:browser.close()

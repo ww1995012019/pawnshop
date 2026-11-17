@@ -31,7 +31,8 @@ func run():
  game.prefs.sound=false;game.prefs.reduced_motion=true
  var shell=load("res://main.tscn").instantiate();root.add_child(shell);await frames();shell._close_title()
  for dimensions in [Vector2i(1440,900),Vector2i(844,390),Vector2i(568,320),Vector2i(390,844)]:
-  root.size=dimensions;shell.phone_override=dimensions.x<1000;await frames();shell.go("warehouse");await frames()
+  # Upright phones enter native Godot with the landscape canvas supplied by the web shell.
+  root.size=Vector2i(maxi(dimensions.x,dimensions.y),mini(dimensions.x,dimensions.y));shell.phone_override=dimensions.x<1000;await frames();shell.go("warehouse");await frames()
   var page=shell.active_shell().page
   var entry=page.find_child("warehouse_expand",true,false)
   check(entry!=null,"fixed expansion entry is available at "+str(dimensions))

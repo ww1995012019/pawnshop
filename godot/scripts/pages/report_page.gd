@@ -3,6 +3,7 @@ extends Page
 ## upgrade from day 3, the next day, and the 21-day outcome.
 
 const Life = preload("res://scripts/model/campaign_life.gd")
+const Evaluation = preload("res://scripts/model/campaign_evaluation.gd")
 
 var body: VBoxContainer
 var sheet: PanelContainer
@@ -114,14 +115,11 @@ func _refresh() -> void:
 		var g := UIKit.grid(2, 10)
 		_row(g, "期末现金", UIKit.money(s.cash), UIKit.RUST)
 		_row(g, "完成交易", "%d 笔" % s.completedTrades.size())
-		var done := 0
-		for o in s.orders:
-			if o.status == "done":
-				done += 1
-		_row(g, "履约订单", "%d 张" % done)
+		_row(g, "履约订单", "%d 张" % int(Evaluation.summary(s).fulfilledOrders))
 		_row(g, "站务关注", "%d / 100" % int(s.risk))
 		final_sheet.add_child(g)
 		body.add_child(final_sheet)
+		_add_evaluation(s)
 		var continuation := _add_continuation(s)
 		var again := UIKit.button("新开一家店", "secondary" if continuation != null else "primary", Vector2(0, 64), 24)
 		again.pressed.connect(func():
@@ -137,6 +135,7 @@ func _refresh() -> void:
 	else:
 		body.add_child(UIKit.module_header("第 %d 天 · %s" % [day, "日结报告" if s.phase == "report" else "营业中"], "营业账目", "LEDGER / %02d" % day))
 	_add_status()
+	if int(s.day)==21 and s.phase=="report" or Life.is_endless(s): _add_evaluation(s)
 	_add_night_controls(s)
 	var today := []
 	for r in s.ledger:
@@ -247,7 +246,7 @@ func _refresh() -> void:
 			var up := BoxContainer.new()
 			up.add_theme_constant_override("separation", 14)
 			upgrades_row = up
-			for spec in [["lamp", "可变焦工作灯 · 120 Cr", "每天第一次鉴定不耗 AP；次日起用电 +1 Cr/日", s.upgrades.lamp], ["shelf", "模组陈列架 · 160 Cr", "合法货物陈列价提高 5%", s.upgrades.shelf]]:
+			for spec in [["lamp", "可变焦工作灯 · 120 Cr", "每件原物首次记录不耗 AP；次日起用电 +1 Cr/日", s.upgrades.lamp], ["shelf", "模组陈列架 · 160 Cr", "合法陈列货物的议价基准与顾客预算 +5%；手动价签保留", s.upgrades.shelf]]:
 				var card := UIKit.plate(UIKit.inset_style(14))
 				card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				var cv := UIKit.vbox(6)
@@ -269,6 +268,34 @@ func _refresh() -> void:
 		if shell.mobile_mode():
 			body.move_child(next,2)
 			if continuation != null: body.move_child(continuation,2)
+
+func _add_evaluation(s: Dictionary) -> void:
+	var recorded: Dictionary={}
+	var heading:="第21天经营评估"
+	if Life.is_endless(s):
+		var first=Life.summary(s).firstAssessment
+		if first is Dictionary and first.get("evaluation") is Dictionary: recorded=first.evaluation
+		heading="首轮经营评估 · 保留第21天快照"
+		if recorded.is_empty():
+			body.add_child(UIKit.label("首轮旧档未保存详细评价，不从之后的经营数据补写历史。",16,UIKit.MUTED,false,true))
+			return
+	elif s.get("report") is Dictionary and s.report.get("evaluation") is Dictionary:
+		recorded=s.report.evaluation
+	else:
+		recorded=Evaluation.summary(s)
+		heading="留存成果 · 原结局保留" if s.has("outcome") else "当前经营成果"
+	var panel:=UIKit.plate(UIKit.inset_style(14))
+	panel.name="campaign_evaluation"
+	var content:=UIKit.vbox(7)
+	content.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	panel.add_child(content)
+	content.add_child(UIKit.label(heading+" · "+String(recorded.get("outcome",s.get("outcome",""))),19,UIKit.AMBER,true,true))
+	content.add_child(UIKit.label("完成维修 %d 件 · 履约 %d 单（维修交付 %d 单）" % [int(recorded.get("repairsCompleted",0)),int(recorded.get("fulfilledOrders",0)),int(recorded.get("repairDeliveries",0))],17,UIKit.TEXT,false,true))
+	content.add_child(UIKit.label("检查公开型号 %d 种 · 名贵/珍稀 %d 种 · 站务关注 %d / 100" % [int(recorded.get("inspectedModels",0)),int(recorded.get("rareModels",0)),int(recorded.get("risk",0))],17,UIKit.TEXT,false,true))
+	content.add_child(UIKit.label("评估现金 %s · 净现金流 %s" % [UIKit.money(recorded.get("cash",0)),UIKit.money(recorded.get("netCashFlow",0))],17,UIKit.CYAN,false,true))
+	content.add_child(UIKit.label(String(recorded.get("reason",Evaluation.CRITERIA)),15,UIKit.MUTED,false,true))
+	content.add_child(UIKit.label(String(recorded.get("evidenceNote","净现金流不代表利润。")),15,UIKit.MUTED,false,true))
+	body.add_child(panel)
 
 func _add_continuation(s: Dictionary) -> VBoxContainer:
 	if Life.continue_problem(s) != "": return null

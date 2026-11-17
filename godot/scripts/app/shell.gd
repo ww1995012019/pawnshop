@@ -445,18 +445,16 @@ func _counter_layout_busy() -> bool:
 	return page != null and page_name == "counter" and (page.busy or is_instance_valid(page.mat_item) and page.mat_item.busy)
 
 func portrait_mode() -> bool:
-	if workspace_mode:
-		if workspace_parent.workspace_layout_deferred: return presentation_orientation == "portrait"
-		return workspace_parent.portrait_mode()
-	if _counter_layout_busy() and presentation_orientation != "": return presentation_orientation == "portrait"
-	if presentation_orientation!="" and get_window().size==presentation_window_size and phone_override==presentation_phone_override:
-		return presentation_orientation=="portrait"
-	return _physical_portrait()
+	# Mobile has one landscape presentation. The browser rotates its canvas;
+	# a narrow desktop window keeps the desktop layout instead of becoming mobile.
+	return false
 
-func _physical_portrait() -> bool:
-	var pixels := Vector2(get_window().size)
-	var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1", true)) if OS.has_feature("web") else 1.0
-	return pixels.y > pixels.x and pixels.x / maxf(ratio,1.0) <= 600
+func _effective_canvas_pixels() -> Vector2i:
+	if OS.has_feature("web"):
+		var size = JSON.parse_string(str(JavaScriptBridge.eval("JSON.stringify(window.OrbitalTouch?.effectiveSize || null)",true)))
+		if size is Array and size.size() == 2:
+			return Vector2i(roundi(float(size[0]) * presentation_pixel_ratio), roundi(float(size[1]) * presentation_pixel_ratio))
+	return get_window().size
 
 func landscape_mode() -> bool:
 	if workspace_mode:
@@ -465,15 +463,16 @@ func landscape_mode() -> bool:
 	if _counter_layout_busy() and presentation_orientation!="":return presentation_orientation=="landscape"
 	if presentation_orientation!="" and get_window().size==presentation_window_size and phone_override==presentation_phone_override:
 		return presentation_orientation=="landscape"
-	return not portrait_mode() and _landscape_phone()
+	return _landscape_phone()
 
 func safe_area() -> Rect2:
 	var area := get_viewport().get_visible_rect()
-	if not OS.has_feature("web") or not mobile_mode(): return area
+	if workspace_mode or not OS.has_feature("web") or not mobile_mode(): return area
 	var inset = JSON.parse_string(str(JavaScriptBridge.eval("JSON.stringify(window.OrbitalTouch?.safeInsets || [0,0,0,0])",true)))
 	if inset is Array and inset.size() == 4:
-		area.position = Vector2(float(inset[0]),float(inset[1]))
-		area.size -= Vector2(float(inset[0])+float(inset[2]),float(inset[1])+float(inset[3]))
+		var css_scale := maxf(touch_scale(), 0.1)
+		area.position = Vector2(float(inset[0]),float(inset[1])) / css_scale
+		area.size -= Vector2(float(inset[0])+float(inset[2]),float(inset[1])+float(inset[3])) / css_scale
 	return area
 
 func mobile_mode() -> bool:
@@ -482,7 +481,7 @@ func mobile_mode() -> bool:
 func _fit_view() -> void:
 	var window := get_window()
 	presentation_pixel_ratio = float(JavaScriptBridge.eval("devicePixelRatio || 1",true)) if OS.has_feature("web") else 1.0
-	var physical := "portrait" if _physical_portrait() else "landscape" if _landscape_phone() else "desktop"
+	var physical := "landscape" if _landscape_phone() else "desktop"
 	if _counter_layout_busy() and presentation_orientation != "" and physical != presentation_orientation:
 		counter_layout_deferred = true
 		window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
@@ -494,15 +493,9 @@ func _fit_view() -> void:
 	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	if landscape_mode():
 		var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1", true)) if OS.has_feature("web") else 1.0
-		var logical := Vector2i(Vector2(window.size) / maxf(ratio,1.0))
+		var logical := Vector2i((Vector2(_effective_canvas_pixels()) / maxf(ratio,0.1)).round())
 		if window.content_scale_size != logical: window.content_scale_size = logical
 		window.content_scale_factor = 1.0
-		view_shift = Vector2.ZERO
-		return
-	if portrait_mode():
-		var portrait_size := Vector2i(390, roundi(390.0 * window.size.y / maxf(window.size.x,1)))
-		if window.content_scale_size != portrait_size: window.content_scale_size = portrait_size
-		if window.content_scale_factor != 1.0: window.content_scale_factor = 1.0
 		view_shift = Vector2.ZERO
 		return
 	if window.content_scale_size != Vector2i(1920,1080): window.content_scale_size = Vector2i(1920,1080)
@@ -516,8 +509,9 @@ func touch_scale() -> float:
 		return touch_scale_override
 	if workspace_mode:
 		return workspace_parent.touch_scale() * workspace_parent.workspace_frame.scale.x
-	var ratio := float(JavaScriptBridge.eval("devicePixelRatio || 1", true)) if OS.has_feature("web") else 1.0
-	return absf(get_viewport().get_final_transform().get_scale().x) / maxf(ratio, 0.1)
+	# _fit_view refreshes this on browser resize/DPR events. Layout can query
+	# touch scale every frame without crossing the JavaScript bridge while idle.
+	return absf(get_viewport().get_final_transform().get_scale().x) / maxf(presentation_pixel_ratio, 0.1)
 
 func _touch_root() -> Control:
 	if modal_open():
@@ -572,6 +566,8 @@ func _fit() -> void:
 	# refresh metrics even when that control emits no resized signal.
 	for picker in root_ui.find_children("*","OptionButton",true,false):
 		UIKit.refresh_option(picker)
+	if not workspace_mode:
+		get_tree().call_group_flags(SceneTree.GROUP_CALL_DEFERRED, "shared_close_buttons", "refresh_target")
 	_place_toasts()
 	_layout_title()
 
@@ -747,9 +743,9 @@ func open_workspace(name: String, focus_uid := "") -> void:
 	workspace_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	workspace_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	header.add_child(workspace_title)
-	if not mobile_mode(): header.add_child(UIKit.label("店内操作  /  ESC 收起", 18, UIKit.MUTED))
-	workspace_close = UIKit.button("" if mobile_mode() else "收起", "secondary", Vector2(28,28) if mobile_mode() else Vector2(108,48),14 if mobile_mode() else 20,"close")
-	workspace_close.add_theme_constant_override("icon_max_width",16 if mobile_mode() else 24)
+	if not mobile_mode(): header.add_child(UIKit.label("店内操作  /  Esc 关闭", 18, UIKit.MUTED))
+	workspace_close = UIKit.close_button(Vector2(44,44) if mobile_mode() else Vector2(52,52))
+	workspace_close.name = "workspace_close"
 	workspace_close.tooltip_text = "关闭并返回柜台" if workspace_history.is_empty() else "关闭并返回" + WORKSPACE_LABELS.get(workspace_history.back().shell.page_name, "上一工作台")
 	workspace_close.pressed.connect(close_workspace)
 	header.add_child(workspace_close)
@@ -872,7 +868,7 @@ func close_workspace(return_to_counter := false, discard := false) -> void:
 	if not discard and mobile_mode() and workspace_shell.page.has_method("can_close_workspace") and not workspace_shell.page.can_close_workspace():
 		workspace_shell.page.request_close_workspace()
 		workspace_close_pending = true
-		workspace_close.text = "" if mobile_mode() else "稍后关闭"
+		workspace_close.text = ""
 		workspace_close.tooltip_text = "当前动画结束后关闭"
 		workspace_close.disabled = true
 		workspace_title.text = "当前动作结束后关闭 · 进度会保存"
@@ -1389,11 +1385,8 @@ func modal(title_text: String, width := 900.0) -> Array:
 		tw.tween_property(sheet, "scale", Vector2(0.98, 0.98), 0.14).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		tw.tween_property(dim, "modulate:a", 0.0, 0.14)
 		tw.chain().tween_callback(dim.queue_free)
-	var x := UIKit.button("", "secondary", Vector2(28,28) if mobile_mode() else Vector2(52,52),14 if mobile_mode() else 18)
+	var x := UIKit.close_button(Vector2(44,44) if mobile_mode() else Vector2(52,52))
 	x.name = "modal_close"
-	x.icon = UIKit.icon("close")
-	x.expand_icon = true
-	x.add_theme_constant_override("icon_max_width",16 if mobile_mode() else 24)
 	x.tooltip_text = "关闭"
 	x.pressed.connect(close)
 	head.add_child(x)
@@ -1735,7 +1728,7 @@ func open_help() -> void:
 	manual.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	manual.pressed.connect(func(): open_watch_manual())
 	entries.add_child(manual)
-	var text := "• 柜台：按服务铃请下一位来客。每天随机安排3–10位，开店前三天为教学保留必要名额。同一客人看多件货或分批交割只算一次接待。报价只代表对方的认识与预算；检测不会自动改变对方的开价。\n• 检验：只用放大镜、紫外线、称重。对照说明书查看 logo、编号与重量，记录物证；每项缩小估价范围，三项当前检验完成后仍保留估价区间，成交价需自行议定。\n• 多件买卖：就在原来的柜台对话中，从抽屉拿货给来客看，他会当场接受、还价或拒绝。问“你还带了别的货吗”可继续看他带来的旧货；不必进入其他交易界面。每只表各自议价，谈妥的几件会记着，原报价台可以一起交割1 AP；交割后客人仍在，送客才结束接待。\n• 议价：不再限制三次还价。NPC根据已知来源、主动出示的证据、报价差距和实际让步决定继续谈、拒绝本件或离开。可以主动出示物证。维修师、收藏者和普通人理解同一条证据的能力不同，相关专家85%概率独立准确估价，普通客人20%概率接近市价；你的私下检验不会自动更新对方认知。\n• 造假：在修表台选择外形与机芯兼容、目录价更高的目标款，分别仿制标识、换目标外壳、覆印编号和校准配重。编号与配重需先换壳，各项独立操作与结算，内部故障仍保留。相似度越高，未识破的顾客越接近按目标款估价；专家可识破加工痕迹并拒收，关注+10、阵营关系-8。同一轮不重复处罚。\n• 维修：依本件故障安排除尘、开盖、洗件、换件、润滑回装与走时复核；机械表与石英表操作不同。完成对应工序时扣费，进度可保存。材料等流动商人到店购买。独立翻新可自由选择吹灰、擦拭、抛光、换壳或换表带，分别结算；提升品相但不修复机芯，更换件保留可鉴定痕迹。\n• 仓储与订单：保管每一只原表，核验来源，按订单要求交还同一实物。\n• 警官抽查：当天抽查概率为关注度×0.03%，12点为0.36%，100点为3%。警官到店后可先整理，点击“整理好了，开始检查”后才处理；隔离箱不查，普通仿品和来源待核物不属于本次赃物范围。查到赃物全部没收，本次合计罚30 Cr；没发现就不罚。\n• 收租与日结：第7、14、21天房东梁叔上门收取450、495、545 Cr租金，核对后确认付款并保留回执，日结不再重复扣租。现金不足可先筹钱，再从账本请房东过来；收租不消耗AP。账本日结支付设备电费与固定清洁费8 Cr，第21天评估后可保留原店继续经营，后续每7天收租。电费只在成功记录新读数或提交用电工序时计次；手工清洁、移动镜片和查看旧结果不收费。账本可展开设备状态、台数与作业明细；工作灯一次性 120 Cr，安装后从次日起用电 +1 Cr/日。"
+	var text := "• 柜台：按服务铃请下一位来客。每天随机安排3–10位，开店前三天为教学保留必要名额。同一客人看多件货或分批交割只算一次接待。报价只代表对方的认识与预算；检测不会自动改变对方的开价。\n• 检验：只用放大镜、紫外线、称重。对照说明书查看 logo、编号与重量，记录物证；工具记录分别保留，只复测改变的项目。品相变化后任选一项免费复核即可更新估价；估价仅参考已记录品相与物证；正常读数不保证原装或走时，新增记录不一定缩小区间，异常读数或加工痕迹可能使范围更宽，成交价需自行议定。\n• 多件买卖：就在原来的柜台对话中，从抽屉拿货给来客看，他会当场接受、还价或拒绝。问“你还带了别的货吗”可继续看他带来的旧货；不必进入其他交易界面。每只表各自议价，谈妥的几件会记着，原报价台可以一起交割1 AP；交割后客人仍在，送客才结束接待。\n• 议价：不再限制三次还价。NPC根据已知来源、主动出示的证据、报价差距和实际让步决定继续谈、拒绝本件或离开。普通还价会消耗耐心，小幅让价不能完全抵消；只有实质让步或新的物证才会推动对方继续还价。可以主动出示物证。维修师、收藏者和普通人理解同一条证据的能力不同，相关专家85%概率独立准确估价，普通客人20%概率接近市价；你的私下检验不会自动更新对方认知。\n• 造假：在修表台选择外形与机芯兼容、目录价更高的目标款，分别仿制标识、换目标外壳、覆印编号和校准配重。编号与配重需先换壳，各项独立操作与结算，内部故障仍保留。相似度越高，未识破的顾客越接近按目标款估价；专家可识破加工痕迹并拒收，关注+10、阵营关系-8。同一轮不重复处罚。\n• 维修：依本件故障安排除尘、开盖、洗件、换件、润滑回装与走时复核；机械表与石英表操作不同。完成对应工序时扣费，进度可保存。材料等流动商人到店购买。独立翻新可自由选择吹灰、擦拭、抛光、换壳或换表带，分别结算；提升品相但不修复机芯，更换件保留可鉴定痕迹。\n• 仓储与订单：保管每一只原表，核验来源，按订单要求交还同一实物。委修预算内可选友好价（75%以内）、标准价（90%以内）或高价；完成交付分别增加2、1、0点熟客信任，只在交付时收服务费。合法陈列货物按挂牌提出要价，顾客预算以内可接受，超出则按自身判断还价。模组陈列架使新出售的议价基准与顾客预算提高5%，不改手动价签或已谈妥价格。\n• 警官抽查：当天抽查概率为关注度×0.03%，12点为0.36%，100点为3%。警官到店后可先整理，点击“整理好了，开始检查”后才处理；隔离箱不查，普通仿品和来源待核物不属于本次赃物范围。查到赃物全部没收，本次合计罚30 Cr；没发现就不罚。\n• 收租与日结：第7、14、21天房东梁叔上门收取450、495、545 Cr租金，核对后确认付款并保留回执，日结不再重复扣租。现金不足可先筹钱，再从账本请房东过来；收租不消耗AP。账本日结支付设备电费与固定清洁费8 Cr，第21天依据已记录维修与收藏成果评估：完成维修3件或检查3种名贵/珍稀型号可形成专长，未达标为稳健旧货铺；关注度60以上仍为高风险转运站。账本同时展示履约与净现金流。评估后可保留原店继续经营，后续每7天收租。电费只在成功记录新读数或提交用电工序时计次；手工清洁、移动镜片和查看旧结果不收费。账本可展开设备状态、台数与作业明细；工作灯一次性 120 Cr，安装后每件原物首次记录不耗 AP，从次日起用电 +1 Cr/日。"
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.custom_minimum_size.y = clampf(get_viewport().get_visible_rect().size.y - 300, 180, 450)

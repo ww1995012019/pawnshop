@@ -98,6 +98,17 @@ func run():
 		WatchForgery.apply(game.item(inspected_uid), method)
 		await process_frame
 		check(page.item.mat.get_shader_parameter("logo_hidden") == 0.0, method + " treatment preserves observed logo")
+	# Genuine pre-logoRevision save data uses the old positional fingerprint,
+	# without the new safe appraisalObservation metadata.
+	var literal_old_revision := '["%s",0.8,true,true,%d,"OLD SERIAL",123.4,"",0,false,false,false,"OLD SERIAL",123.4]' % [inspected.defId, int(inspected.watch.logo_variant)]
+	inspected.inspectionFacts["TOL-001"] = {"condition":0.8, "logo_variant":int(inspected.watch.logo_variant),
+		"appraisalRevision":literal_old_revision, "appraisalValue":999999999,
+		"tampered":false, "originalDefId":String(inspected.defId)}
+	game.state = JSON.parse_string(JSON.stringify(game.state))
+	inspected = game.item(inspected_uid)
+	await process_frame
+	check(page.item.mat.get_shader_parameter("logo_hidden") == 0.0, "literal old-format saved fingerprint preserves observed logo")
+	check(Model.estimate(inspected).count == 0, "preserved legacy logo reveal cannot make stale price observations current")
 	game.state = Model.reduce(game.state, {"type":"CHECK","uid":inspected_uid,"tool":"TOL-001"})
 	check(game.item(inspected_uid).inspectionFacts["TOL-001"].has("logoRevision"), "new loupe snapshot stores logo-specific revision")
 	WatchForgery.apply(game.item(inspected_uid), "logo")

@@ -9,6 +9,8 @@ const Negotiation = preload("res://scripts/model/negotiation.gd")
 const Market = preload("res://scripts/model/weekly_market.gd")
 const Extensions = preload("res://scripts/model/shop_upgrades.gd")
 const Journal = preload("res://scripts/model/shop_journal.gd")
+const Pricing = preload("res://scripts/model/shop_pricing.gd")
+const WatchAppraisal = preload("res://scripts/model/watch_appraisal.gd")
 const FIXED_EVENT_DAYS := {1: "EVT-001", 7: "EVT-007", 14: "EVT-014", 20: "EVT-020", 21: "EVT-021"}
 
 # Only actual business commands produce a closed-hours notice; unknown input stays a no-op.
@@ -179,6 +181,17 @@ static func logo_revision(it: Dictionary) -> String:
 	return JSON.stringify([String(it.defId), int(it.watch.logo_variant), WatchForgery.active(it, "logo"), WatchForgery.logo_id(it)]) if WatchForgery.target_id(it)!="" else JSON.stringify([String(it.defId), int(it.watch.logo_variant), WatchForgery.active(it, "logo")])
 
 static func appraisal_revision(it: Dictionary) -> String:
+	return WatchAppraisal.revision(it)
+
+static func inspection_revision(it: Dictionary, tool: String) -> String:
+	return WatchAppraisal.channel_revision(it, tool)
+
+static func inspection_current(it: Dictionary, tool: String) -> bool:
+	return WatchAppraisal.channel_current(it, tool)
+
+## Settlement integrity has a separate signature from the player's knowledge.
+## Preserve its original wire format so saved confirmed batches remain valid.
+static func trade_revision(it: Dictionary) -> String:
 	WatchRules.initialize(it)
 	var signature := [String(it.defId), snappedf(float(it.condition), 0.000001), bool(it.working), bool(it.authentic), int(it.watch.logo_variant), String(it.watch.serial), snappedf(float(it.watch.mass), 0.1), String(it.watch.get("missing_part", "")), snappedf(float(it.watch.get("part_mass", 0)), 0.1), WatchForgery.active(it,"logo"), WatchForgery.active(it,"serial"), WatchForgery.active(it,"weight"), WatchRules.serial(it), snappedf(WatchRules.mass(it), 0.1)]
 	var refurbished: Array = it.get("refurbishment",{}).get("done",[])
@@ -188,25 +201,7 @@ static func appraisal_revision(it: Dictionary) -> String:
 	return JSON.stringify(signature)
 
 static func estimate(it: Dictionary) -> Dictionary:
-	var base: float = D(it.defId).value
-	var low := maxf(1, floor(base * 0.05))
-	var high := maxf(low + 1, ceil(base))
-	var count := 0
-	var value := 0.0
-	var revision := appraisal_revision(it)
-	for tool in ["TOL-001", "TOL-002", "TOL-005"]:
-		var facts: Dictionary = it.get("inspectionFacts", {}).get(tool, {})
-		if it.evidence.has(tool) and facts.get("appraisalRevision", "") == revision and facts.has("appraisalValue"):
-			count += 1
-			value = facts.appraisalValue
-	# Binary buckets are nested, include the recorded value, and never use
-	# hidden price information before the first current inspection.
-	for step in count:
-		if high - low <= 1: break
-		var midpoint: float = floor((low + high) * 0.5)
-		if value <= midpoint: high = midpoint
-		else: low = midpoint + 1
-	return {"low":low, "high":high, "exact":false, "count":count}
+	return WatchAppraisal.estimate(it)
 
 static func appraisal_text(it: Dictionary) -> String:
 	var appraisal := estimate(it)
@@ -320,7 +315,7 @@ static func npc_knowledge(t: Dictionary, it: Dictionary) -> Dictionary:
 	return all_known[it.uid]
 
 static func record_inspection(it: Dictionary, tool: String) -> Dictionary:
-	var facts := {"condition":sale_appearance(it).condition, "appraisalRevision":appraisal_revision(it), "appraisalValue":item_value(it), "tampered":WatchForgery.trace(it, tool) != "", "originalDefId":String(it.defId)}
+	var facts := {"condition":sale_appearance(it).condition, "tampered":WatchForgery.trace(it, tool) != "", "originalDefId":String(it.defId)}
 	match tool:
 		"TOL-001":
 			facts.logo_variant = WatchRules.logo_variant(it)
@@ -330,6 +325,7 @@ static func record_inspection(it: Dictionary, tool: String) -> Dictionary:
 	var readings: Dictionary = it.get("evidenceReadings", {})
 	var snapshots: Dictionary = it.get("inspectionFacts", {})
 	readings[tool] = WatchRules.reading(it, tool)
+	facts.merge(WatchAppraisal.observation(it, tool), true)
 	snapshots[tool] = facts
 	it.evidenceReadings = readings
 	it.inspectionFacts = snapshots
@@ -361,12 +357,13 @@ static func disclose_evidence(t: Dictionary, it: Dictionary, tool: String) -> vo
 	if facts.get("tampered", false):
 		var skill: String = "logo" if tool == "TOL-001" else "serial" if tool == "TOL-002" else "structure"
 		strength = maxf(strength, 0.28 * float(expertise[skill]) / 100.0)
-	if known.get("appraisalGrade", "impression") != "impression" and facts.get("appraisalRevision", "") == appraisal_revision(it):
+	var current_wear: bool = is_equal_approx(float(facts.get("condition",-1)),float(it.condition))
+	if known.get("appraisalGrade", "impression") != "impression" and inspection_current(it, tool) and current_wear:
 		# An able buyer reassesses this watch from current shared observations;
 		# an old/private player price snapshot is never their source of truth.
 		known.appraisedValue = maxf(1, jround(item_value(it) * (1.0 + float(known.get("appraisalError", 0)))))
 	known.evidence[tool] = {"reading": it.get("evidenceReadings", {}).get(tool, WatchRules.reading(it, tool)), "facts": facts.duplicate(true), "adjustment": strength}
-	if WatchForgery.is_targeted(it) and facts.get("appraisalRevision","")==appraisal_revision(it) and facts.get("originalDefId","")==it.defId:
+	if WatchForgery.is_targeted(it) and inspection_current(it, tool) and current_wear and facts.get("originalDefId","")==it.defId:
 		known.identityRevealed=true
 		known.appraisedValue=maxf(1,jround(item_value(it)*(1.0+float(known.get("appraisalError",0)))))
 	var total := 0.0
@@ -404,7 +401,7 @@ static func sale_eligibility(it: Dictionary, npc_id: String):
 	return null
 
 static func _shop_price_factors(s: Dictionary, t: Dictionary, it: Dictionary) -> Dictionary:
-	var neutral := {"market":1.0,"sale":1.0}
+	var neutral := {"market":1.0,"sale":1.0,"listedAsk":0.0}
 	if t.get("shopPriceFactors",{}).has(it.uid): return t.shopPriceFactors[it.uid]
 	# Old locked promises predate these systems. Enabling a namespace on load
 	# must never invalidate an already agreed single-item or batch-line price.
@@ -412,10 +409,10 @@ static func _shop_price_factors(s: Dictionary, t: Dictionary, it: Dictionary) ->
 	if s.get("trade") is Dictionary:
 		for line in s.trade.get("session",{}).get("lines",[]):
 			if line.get("uid","") == it.uid and line.get("status","") == "confirmed" and line.get("context",{}).get("id","") == t.get("id",""): return neutral
-	if not s.get("weeklyMarket") is Dictionary and not s.get("shopUpgrades") is Dictionary and not s.get("shopJournal") is Dictionary: return neutral
-	var factors := {"market":Market.multiplier(s,it),"sale":1.0}
+	if not s.get("weeklyMarket") is Dictionary and not s.get("shopUpgrades") is Dictionary and not s.get("shopJournal") is Dictionary and (t.get("kind","") != "sell" or t.get("npcId","") == "CHR-010"): return neutral
+	var factors := {"market":Market.multiplier(s,it),"sale":1.0,"listedAsk":Pricing.listed_ask(it) if t.get("kind","") == "sell" and t.get("npcId","") != "CHR-010" else 0.0}
 	if t.get("kind","") == "sell":
-		factors.sale = Extensions.sale_multiplier(s,it)
+		factors.sale = Extensions.sale_multiplier(s,it) if t.get("npcId","") == "CHR-010" else Pricing.sale_multiplier(s,it)
 		if s.get("shopJournal") is Dictionary: factors.sale *= Journal.price_multiplier(s,String(t.npcId))
 	if not t.get("shopPriceFactors") is Dictionary: t.shopPriceFactors = {}
 	t.shopPriceFactors[it.uid] = factors
@@ -458,13 +455,7 @@ static func price_agreed(s: Dictionary, t: Dictionary, it: Dictionary, price = n
 	return float(p) == floor(float(p)) and p >= 1 and p <= terms.marketCap and (p <= terms.ceiling if t.kind == "sell" else p >= terms.floor)
 
 static func counter_price(s: Dictionary, t: Dictionary, it: Dictionary) -> float:
-	var terms := trade_terms(s, t, it)
-	var discussion: Dictionary = t.get("negotiation", {}).get(it.uid, {})
-	var step := maxf(1, ceil(terms.value * (0.03 + minf(0.03, terms.proof * 0.01))))
-	var previous_quote := float(discussion.get("lastCounter", t.price))
-	if t.kind == "sell":
-		return minf(terms.ceiling, maxf(terms.opening, previous_quote) + step)
-	return maxf(terms.floor, minf(terms.marketCap, previous_quote) - step)
+	return Negotiation.counter_quote(s, t, it, trade_terms(s, t, it))
 
 # ------------------------------------------------------------ market
 
@@ -784,7 +775,7 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 		StoreCosts.ensure(s)
 		s.report.upgraded = true
 		s.report.cash = s.cash
-		return notice(s, "工作灯已换装：新日鉴定首次费用减为0AP。" if a.id == "lamp" else "陈列架已换装：合法货物的陈列报价提高5%。")
+		return notice(s, "工作灯已换装：每件原物首次记录不耗AP；次日起用电+1Cr/日。" if a.id == "lamp" else "陈列架已换装：合法陈列货物的新出售议价基准与顾客预算提高5%，手动价签保留；已谈妥价格不变。")
 	if s.phase != "open":
 		return notice(s,business_hours_problem(s)) if BUSINESS_ACTIONS.has(type) else previous
 	var required_device := ""
@@ -879,7 +870,8 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				return s
 			t.selectedUid = it.uid
 			t.evidenceUsed = []
-			t.price = trade_terms(s, t, it).opening
+			var terms := trade_terms(s, t, it)
+			t.price = Pricing.initial_quote(s, t, it, terms)
 			t.line = npc_dialogue(s, t.npcId, "counter", "%s可以考虑。我先出%sCr，检测结果好的话还可以谈。" % [WatchForgery.sale_name(it), jnum(t.price)], t.price)
 			return s
 		"CHECK":
@@ -1080,8 +1072,6 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			if shown >= WarehouseExpansion.capacity(s,"display"):
 				return notice(s, "销售陈列位已满，请扩仓或先下架。")
 			it.location = "display"
-			if s.upgrades.shelf:
-				it.listPrice = jround(D(it.defId).value * sale_appearance(it).condition * 0.9)
 			return notice(s, "物品与已知证据价签已上架。")
 		"PRICE":
 			var it = find_inventory(s, a.uid)
@@ -1351,8 +1341,10 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			s.report = {"day": s.day, "income": income, "expenses": expenses, "maintenance": maintenance, "electricity": costs.electricity, "cleaning": costs.cleaning, "costs": costs.duplicate(true), "rent": rent_due(s.day), "settlementRent": due, "cash": s.cash, "upgraded": false}
 			s.phase = "report"
 			NightCrime.settle(s)
-			if s.day == 21:
-				s.outcome = "高风险转运站" if s.risk >= 60 else ("稀有收藏行" if s.relations.merchant > s.relations.salvage else "可信赖维修店")
+			if s.day == 21 and not s.has("outcome"):
+				var evaluation = load("res://scripts/model/campaign_evaluation.gd")
+				s.report.evaluation = evaluation.summary(s)
+				s.outcome = s.report.evaluation.outcome
 			return notice(s, "日结完成：旧版能源维护 %s Cr，租金 %s Cr；本次支付 %s Cr。" % [jnum(maintenance),jnum(due),jnum(payment)] if costs.legacy else "日结完成：电费 %s Cr，清洁费 %s Cr，租金 %s Cr；本次支付 %s Cr。" % [jnum(costs.electricity),jnum(costs.cleaning),jnum(due),jnum(payment)])
 	return previous
 

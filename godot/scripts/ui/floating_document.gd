@@ -72,10 +72,8 @@ func configure(title: String, key: String, dimensions := Vector2(720,760)) -> vo
 	heading.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(heading)
-	close_button = UIKit.button("","secondary",Vector2(28,28) if compact_mobile() else Vector2(44,44),14,"close")
+	close_button = UIKit.close_button()
 	close_button.name = "document_close"
-	close_button.add_theme_constant_override("icon_max_width",16)
-	close_button.tooltip_text = "关闭"
 	close_button.pressed.connect(close_document)
 	header.add_child(close_button)
 	document_scroll = ScrollContainer.new()

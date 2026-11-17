@@ -22,6 +22,8 @@ func pointer(point:Vector2, pressed:int=-1)->void:
 		Input.parse_input_event(event)
 	await frames()
 func run() -> void:
+	# Use a desktop viewport for document projection and real pointer hit checks.
+	root.size=Vector2i(1920,1080)
 	var game = root.get_node("Game")
 	game.prefs.reduced_motion=true
 	game.prefs.sound=false
@@ -77,7 +79,9 @@ func run() -> void:
 	check(paper.visible,"real desk-paper input reopens the saved notice")
 	if not paper.visible: shell.toggle_wanted_notice()
 	await frames()
-	check(paper.visible and game.state.police.wanted==ids and game.state.police.paper.position==saved,"reopening restores placement and the same wanted people")
+	# Saving normalized geometry round-trips through pixel coordinates on close.
+	var restored_position:Vector2=Vector2(game.state.police.paper.position[0],game.state.police.paper.position[1])
+	check(paper.visible and game.state.police.wanted==ids and restored_position.is_equal_approx(Vector2(saved[0],saved[1])),"reopening restores placement and the same wanted people")
 	game.dispatch({"type":"TOGGLE_NOTICE","visible":false})
 	shell.queue_free()
 	await frames()

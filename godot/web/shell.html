@@ -115,13 +115,17 @@ const engine = new Engine(GODOT_CONFIG);
 	const castTimer = setInterval(nextSpeaker, 5200);
 	let finished = false;
 
-	function fail(err) {
+	function fail(err, compatibility = false) {
 		console.error(err);
 		finished = true;
 		clearInterval(castTimer);
 		clearTimeout(swapTimer);
 		const msg = err instanceof Error ? err.message : (typeof err === 'string' ? err : '');
-		document.getElementById('fail-text').textContent = '店铺暂时没有接通。\n请检查网络后重试。' + (msg ? '\n（' + msg + '）' : '');
+		const guidance = compatibility
+			? '当前浏览器缺少运行游戏所需的功能。\n请更新浏览器并检查图形加速设置，或换用支持所需功能的浏览器。'
+			: '店铺暂时没有接通。\n请检查网络后重试。';
+		document.getElementById('fail-text').textContent = guidance + (msg ? '\n（' + msg + '）' : '');
+		document.getElementById('retry').textContent = compatibility ? '重新检测' : '重新开门';
 		loader.classList.add('failed');
 	}
 	document.getElementById('retry').addEventListener('click', () => location.reload());
@@ -143,7 +147,7 @@ const engine = new Engine(GODOT_CONFIG);
 
 	const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
 	if (missing.length !== 0) {
-		fail('浏览器缺少运行所需的功能：' + missing.join('、'));
+		fail('浏览器缺少运行所需的功能：' + missing.join('、'), true);
 		return;
 	}
 

@@ -6,6 +6,45 @@ const WORK_ACTIONS := ["SERVICE_BEGIN", "SERVICE_PROGRESS", "SERVICE_COMPLETE", 
 const TERMINAL := ["complete", "cancelled", "expired"]
 const CUSTOMERS := ["CHR-002", "CHR-003", "CHR-004", "CHR-005"]
 const MODELS := ["WCH-001", "WCH-002", "WCH-007", "WCH-008", "WCH-010", "WCH-014", "WCH-015"]
+const PRICING_VERSION := 2
+
+## Price/trust terms use the public budget only, never the original's faults.
+static func quote_terms(contract: Dictionary, price: Variant) -> Dictionary:
+	var budget := maxi(0,int(contract.get("budget",0)))
+	var terms := {"version":PRICING_VERSION,"band":"invalid","label":"无效报价","trust":0,
+		"goodwillMax":floori(float(budget)*75.0/100.0),"standardMax":floori(float(budget)*90.0/100.0),
+		"budget":budget,"price":price,"valid":false}
+	if not typeof(price) in [TYPE_INT,TYPE_FLOAT]: return terms
+	if not is_finite(float(price)) or float(price)<=0 or float(price)!=floor(float(price)): return terms
+	if float(price)>budget:
+		terms.band = "over_budget"
+		terms.label = "超出预算"
+		return terms
+	terms.valid = true
+	if float(price)<=int(terms.goodwillMax):
+		terms.band = "goodwill"
+		terms.label = "友好价"
+		terms.trust = 2
+	elif float(price)<=int(terms.standardMax):
+		terms.band = "standard"
+		terms.label = "标准价"
+		terms.trust = 1
+	else:
+		terms.band = "premium"
+		terms.label = "高价"
+	return terms
+
+static func _pricing(c: Dictionary) -> void:
+	if not c.has("pricingVersion"):
+		# A saved approval is an agreement, including one now expired/complete.
+		c.pricingVersion = 1 if float(c.get("quote",0))>0 and c.get("status","") in ["approved","ready","expired","complete"] else PRICING_VERSION
+	if int(c.pricingVersion)==1 and float(c.get("quote",0))>0 and not c.get("quoteTerms") is Dictionary:
+		var terms := quote_terms(c,c.quote)
+		terms.version = 1
+		terms.band = "legacy"
+		terms.label = "原约定"
+		terms.trust = 2
+		c.quoteTerms = terms
 
 static func _offer(s: Dictionary, slot: int) -> Dictionary:
 	var day := int(s.day)
@@ -14,14 +53,15 @@ static func _offer(s: Dictionary, slot: int) -> Dictionary:
 	var model: String = MODELS[Model.lcg(draw) % MODELS.size()]
 	return {"id":"service-%08X-%d-%d" % [Model.fnv(s.seed),day,slot], "title":"%s · 手表委修" % GameData.npc(npc).name,
 		"npcId":npc,"model":model,"uid":"","status":"available","budget":80+int(Model.lcg(Model.lcg(draw)) % 81),
-		"quote":0,"offerDay":day,"dueDay":day+2+slot,"originalParts":slot == 0,"problem":"顾客反映手表停走，表面积灰；请先实物检查再报价。", "returned":false}
+		"quote":0,"pricingVersion":PRICING_VERSION,"offerDay":day,"dueDay":day+2+slot,"originalParts":slot == 0,"problem":"顾客反映手表停走，表面积灰；请先实物检查再报价。", "returned":false}
 
 static func ensure(s: Dictionary) -> void:
 	GameData.ensure()
-	if not s.get("serviceContracts") is Dictionary: s.serviceContracts = {"version":1,"boardDay":0,"entries":[]}
+	if not s.get("serviceContracts") is Dictionary: s.serviceContracts = {"version":PRICING_VERSION,"boardDay":0,"entries":[]}
 	var data: Dictionary = s.serviceContracts
-	data.version = 1
+	data.version = PRICING_VERSION
 	if not data.get("entries") is Array: data.entries = []
+	for entry in data.entries: _pricing(entry)
 	if int(data.get("boardDay",0)) != int(s.day):
 		for entry in data.entries:
 			if entry.status == "available": entry.status = "expired"
@@ -111,6 +151,12 @@ static func contracts(s: Dictionary) -> Array:
 	for c in s.serviceContracts.entries:
 		var public := {}
 		for key in ["id","title","npcId","model","uid","status","budget","quote","dueDay","originalParts","problem"]: public[key] = c.get(key,"" if key == "uid" else null)
+		var terms: Dictionary = c.get("quoteTerms",{})
+		var thresholds := terms if not terms.is_empty() else quote_terms(c,1)
+		public.pricingVersion = int(c.pricingVersion)
+		public.goodwillMax = int(thresholds.goodwillMax)
+		public.standardMax = int(thresholds.standardMax)
+		public.quoteTerms = terms.duplicate(true)
 		public.statusText = _status_text(c)
 		public.ready = c.status == "ready"
 		result.append(public)
@@ -188,8 +234,10 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 			c.quote = 0
 			return Model.notice(s,"顾客拒绝超预算报价；未收费，原物仍代保管，可重报或归还。")
 		c.quote = int(price)
+		c.pricingVersion = PRICING_VERSION
+		c.quoteTerms = quote_terms(c,int(price))
 		c.status = "approved"
-		return Model.notice(s,"顾客同意 %dCr 服务费；完成实际维修并交付时才收款。" % c.quote)
+		return Model.notice(s,"顾客同意 %dCr %s服务费；实际交付时收款，信任增加%d点（受上限约束）。" % [c.quote,c.quoteTerms.label,int(c.quoteTerms.trust)])
 	if type == "DELIVER_SERVICE_CONTRACT":
 		if c.status in TERMINAL: return s
 		var problem := _delivery_problem(s,c,it)
@@ -201,6 +249,10 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 		s.ledger.back().npcId = c.npcId
 		s.ledger.back().defId = it.defId
 		s.ledger.back().serviceJobId = c.id
+		if int(c.pricingVersion)>=PRICING_VERSION:
+			s.ledger.back().servicePricingVersion = int(c.pricingVersion)
+			s.ledger.back().quoteBand = String(c.quoteTerms.band)
+			s.ledger.back().serviceTrust = int(c.quoteTerms.trust)
 		Model.spend(s,1)
 		Model._remove_item(s,it.uid)
 		c.status = "complete"

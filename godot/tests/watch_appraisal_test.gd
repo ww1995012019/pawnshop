@@ -8,11 +8,13 @@ func run():
  var s = Model.create('APPRAISAL')
  var it = s.inventory[0]
  var previous = Model.estimate(it)
+ var tool_count = 0
  for tool in ['TOL-001','TOL-002','TOL-005']:
   s = Model.reduce(s, {'type':'CHECK','uid':it.uid,'tool':tool})
   it = Model.find_inventory(s,it.uid)
   var current = Model.estimate(it)
-  check(current.low >= previous.low and current.high <= previous.high and current.high-current.low < previous.high-previous.low, 'each current inspection narrows nested price bounds')
+  tool_count += 1
+  check(current.count == tool_count and not current.exact and current.low < current.high, 'each tool records evidence while retaining authenticity and function uncertainty')
   previous = current
  check(not previous.exact and previous.count == 3 and previous.low < previous.high and previous.low <= Model.item_value(it) and previous.high >= Model.item_value(it), 'three tools retain uncertainty while containing the actual value')
  for repeat in 3:
@@ -21,7 +23,7 @@ func run():
  var old = JSON.parse_string(JSON.stringify(it))
  check(Model.estimate(old) == previous, 'appraisal survives save/reload')
  it.condition = 0.93
- check(Model.estimate(it).count == 0, 'a repaired watch requires refreshed appraisals')
+ check(Model.estimate(it).count == 3 and not Model.estimate(it).conditionCurrent, 'repair preserves physical channels while requiring one recorded wear refresh')
  var expert_hits = 0
  var novice_hits = 0
  for i in 200:

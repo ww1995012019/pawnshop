@@ -113,6 +113,7 @@ func run():
  var known_item=Model.find_inventory(progress_state,uid)
  WatchForgery.apply(known_item,"logo")
  var known_trade={"id":"known-identity","npcId":"CHR-004","kind":"sell","evidenceUsed":[]}
+ if not known_item.evidence.has("TOL-001"): known_item.evidence.append("TOL-001")
  Model.record_inspection(known_item,"TOL-001")
  Model.disclose_evidence(known_trade,known_item,"TOL-001")
  var disclosed=Model.npc_knowledge(known_trade,known_item)
