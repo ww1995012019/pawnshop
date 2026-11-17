@@ -33,12 +33,17 @@ func rebuild() -> void:
    key.add_theme_stylebox_override(state,interaction_style(state))
   if i<items.size():
    var it:Dictionary=items[i]
+   var quality_style := slot_style()
+   quality_style.bg_color = UIKit.quality_color(it)
+   key.add_theme_stylebox_override("normal",quality_style)
    key.uid=it.uid;key.icon=load("res://scripts/ui/comic_assets.gd").cabinet_icon(it);key.expand_icon=true
    key.texture_filter=CanvasItem.TEXTURE_FILTER_NEAREST
    key.tooltip_text=GameData.def(it.defId).name+" · "+it.uid
    UIKit.decorate_item(key,it,12)
    key.pressed.connect(func():page.select(it.uid))
-   if page.selected==it.uid:key.add_theme_stylebox_override("normal",interaction_style("normal"))
+   if page.selected==it.uid:
+    quality_style.border_color = UIKit.AMBER
+    quality_style.set_border_width_all(3)
   else:key.tooltip_text="空仓位 · 可拖入符合条件的原表"
   add_child(key)
 

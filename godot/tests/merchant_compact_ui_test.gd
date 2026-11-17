@@ -39,13 +39,13 @@ func run() -> void:
 		check(keyed("category:materials") != null and keyed("category:rare") != null and keyed("category:watches") != null, "horizontal merchant categories at " + str(window))
 		check(scrolls(shell.modal_layer) == 1, "one popup scroll at " + str(window))
 		var card := keyed("material:MAT-001")
-		check(card != null and card.custom_minimum_size.x <= 80 and card.custom_minimum_size.y <= 88, "compact material cards at " + str(window))
+		check(card != null and card.custom_minimum_size.x >= 88 and card.custom_minimum_size.y >= 108, "enlarged readable material cards at " + str(window))
 		var sheet = shell.modal_layer.find_child("ModalSheet", true, false)
 		if window == Vector2i(1440,900):
-			check(sheet.size.y < 620, "desktop material popup shrinks to content")
+			check(sheet.size.y < 740, "desktop material popup shrinks to content")
 			var grid = shell.modal_layer.find_child("material_grid", true, false)
 			check(grid.columns == 7, "thirteen materials use balanced seven and six icon rows")
-			check(sheet.size.x <= 700, "merchant module is compact in width")
+			check(sheet.size.x <= 860, "merchant module stays within the desktop viewport")
 			check(keyed("category:materials").size.x <= 150, "category control does not stretch across the module")
 		var buy := keyed("buy:MAT-001")
 		check(buy != null and sheet.get_global_rect().encloses(buy.get_global_rect()) and root.get_visible_rect().encloses(buy.get_global_rect()), "material action stays inside sheet at " + str(window))
@@ -69,7 +69,7 @@ func run() -> void:
 			tab.pressed.emit()
 			await frames()
 			if window == Vector2i(1440,900):
-				check(sheet.size.y < 620, "desktop watch popup shrinks to content")
+				check(sheet.size.y < 740, "desktop watch popup shrinks to content")
 			var item: Dictionary = game.state.inventory[-1]
 			var count: int = game.state.inventory.size()
 			var cash: float = game.state.cash

@@ -417,6 +417,7 @@ func _stage_ui() -> void:
 		if task != "":
 			var saved: Dictionary = it.get("refurbishment",{}).get("operations",{}).get(task.trim_prefix("refurb_"),{}) if mode == "refurb" else it.get("service",{}).get("operations",{}).get(task,{})
 			art.set_supplies(Game.state.materials)
+			saved_boundary = ""
 			art.configure(it,task,saved)
 			instruction.text = art.hint_text()
 			action_button.text = art.action_text()
@@ -583,7 +584,10 @@ func _operation_progressed(progress: Dictionary) -> void:
 	pending_operation = progress
 	pending_task = task
 	var boundary: String = task + ":" + str(progress.get("step", 0)) + ":" + String(progress.get("phase", "idle"))
-	if saved_boundary != boundary or operation_clock >= 0.35 or progress.get("complete",false):
+	# Animation frames stay in memory. Persist the initial lock and settled
+	# segments; navigation/backgrounding flush the latest in-flight snapshot.
+	var settled: bool = progress.get("phase", "idle") == "idle" or progress.get("complete", false)
+	if (saved_boundary == "" or settled) and saved_boundary != boundary:
 		saved_boundary = boundary
 		_save_operation()
 	if is_instance_valid(action_button): action_button.text = art.action_text()

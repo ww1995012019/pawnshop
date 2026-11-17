@@ -838,11 +838,7 @@ class StorageGrid extends Control:
 				continue
 			var d := Model.dimensions(it)
 			var r := Rect2(Vector2(it.x, it.y) * cs + Vector2(2, 2), Vector2(d[0], d[1]) * cs - Vector2(4, 4))
-			var col := Color(0.2, 0.28, 0.3, 0.9)
-			if it.owner == "customer":
-				col = Color(0.22, 0.3, 0.45, 0.9)
-			elif not it.sourceVerified:
-				col = Color(0.42, 0.2, 0.18, 0.9)
+			var col := UIKit.quality_color(it)
 			draw_rect(r, col)
 			draw_rect(r, Color("ffb35c") if it.uid == page.selected else Color(1, 1, 1, 0.12), false, 3.0 if it.uid == page.selected else 1.0)
 		if drag_uid != "" and moved and ghost != null:

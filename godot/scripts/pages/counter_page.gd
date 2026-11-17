@@ -1151,7 +1151,7 @@ func _prepare_inspection() -> void:
 func _merchant_shop() -> void:
 	if Game.state.trade == null or Game.state.trade.kind != "merchant":
 		return
-	var panel: Array = shell.modal("流动商人的补给", 660)
+	var panel: Array = shell.modal("流动商人的补给", 820)
 	var body: VBoxContainer = panel[0]
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2.ZERO
@@ -1181,7 +1181,7 @@ func _merchant_scroll_height(scroll: ScrollContainer, contents: VBoxContainer) -
 	if not is_instance_valid(scroll) or not is_instance_valid(contents) or scroll.is_queued_for_deletion(): return
 	# Only set the minimum when the content height changes. Category rebuilds
 	# and grid reflow can each notify more than once during container sorting.
-	var limit := maxf(1, minf(440, get_viewport_rect().size.y - 230))
+	var limit := maxf(1, minf(580, get_viewport_rect().size.y - 230))
 	var height := minf(limit, contents.get_combined_minimum_size().y)
 	if not is_equal_approx(scroll.custom_minimum_size.y, height):
 		scroll.custom_minimum_size.y = height
@@ -1208,16 +1208,16 @@ func _populate_merchant(contents: VBoxContainer) -> void:
 		return
 	var wallet := UIKit.hbox(12)
 	contents.add_child(wallet)
-	var cash_label := UIKit.label("现金 %s" % UIKit.money(s.cash), 15, UIKit.TEXT)
+	var cash_label := UIKit.label("现金 %s" % UIKit.money(s.cash), 18, UIKit.TEXT)
 	cash_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wallet.add_child(cash_label)
-	wallet.add_child(UIKit.label("材料交易不消耗 AP", 13, UIKit.MUTED))
+	wallet.add_child(UIKit.label("材料交易不消耗 AP", 16, UIKit.MUTED))
 	var category: String = contents.get_meta("category", "materials")
 	var tabs := UIKit.hbox(6)
 	tabs.name = "merchant_categories"
 	contents.add_child(tabs)
 	for entry in [["materials","材料","repair"],["rare","随行货","warehouse"],["watches","售表","inspect"]]:
-		var tab := UIKit.button(entry[1], "primary" if category == entry[0] else "secondary", Vector2(100,44),16)
+		var tab := UIKit.button(entry[1], "primary" if category == entry[0] else "secondary", Vector2(120,50),18)
 		tab.name = "merchant_tab_" + entry[0]
 		tab.icon = UIKit.icon(entry[2])
 		tab.expand_icon = true

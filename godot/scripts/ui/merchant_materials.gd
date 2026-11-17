@@ -38,7 +38,7 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 	add_child(_grid)
 	for material in GameData.materials:
 		var material_id: String = material.id
-		var card := UIKit.button("", "secondary", Vector2(64, 82), 17)
+		var card := UIKit.button("", "secondary", Vector2(88, 108), 17)
 		card.name = "material_" + material_id
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.tooltip_text = "%s\n%s" % [material.name, material.description]
@@ -50,13 +50,13 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 			margin.add_theme_constant_override("margin_" + side, 3)
 		var column := UIKit.vbox(0)
 		margin.add_child(column)
-		column.add_child(_icon(material_id, 32))
-		var title := UIKit.label(String(material.name).trim_prefix("匹配"), 12, UIKit.TEXT)
+		column.add_child(_icon(material_id, 44))
+		var title := UIKit.label(String(material.name).trim_prefix("匹配"), 16, UIKit.TEXT)
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		title.custom_minimum_size.x = 0
 		column.add_child(title)
-		var counts := UIKit.label("持有 %d" % int(state.materials.get(material_id, 0)), 12, UIKit.MUTED)
+		var counts := UIKit.label("持有 %d" % int(state.materials.get(material_id, 0)), 15, UIKit.MUTED)
 		counts.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		counts.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		counts.custom_minimum_size.x = 0
@@ -76,9 +76,9 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 	actions.add_child(UIKit.rule())
 	var heading := UIKit.hbox(12)
 	actions.add_child(heading)
-	_name = UIKit.label("", 17, UIKit.AMBER)
+	_name = UIKit.label("", 21, UIKit.AMBER)
 	heading.add_child(_name)
-	_stock = UIKit.label("", 13, UIKit.MUTED, false, true)
+	_stock = UIKit.label("", 16, UIKit.MUTED, false, true)
 	_stock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_stock.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_stock.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -90,12 +90,12 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 	_quantity_group.add_theme_constant_override("separation", 4)
 	_quantity_group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_operations.add_child(_quantity_group)
-	var quantity_title := UIKit.label("交易数量", 12, UIKit.MUTED)
+	var quantity_title := UIKit.label("交易数量", 16, UIKit.MUTED)
 	quantity_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_quantity_group.add_child(quantity_title)
 	var quantity_row := UIKit.hbox(6)
 	_quantity_group.add_child(quantity_row)
-	_minus = UIKit.button("−", "secondary", Vector2(40, 44), 20)
+	_minus = UIKit.button("−", "secondary", Vector2(44, 50), 22)
 	_minus.custom_minimum_size.x = 44
 	_minus.tooltip_text = "减少数量"
 	_minus.set_meta("merchant_focus", "qty:minus")
@@ -108,7 +108,7 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 	_quantity_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_quantity_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	quantity_row.add_child(_quantity_label)
-	_plus = UIKit.button("+", "secondary", Vector2(40, 44), 20)
+	_plus = UIKit.button("+", "secondary", Vector2(44, 50), 22)
 	_plus.custom_minimum_size.x = 44
 	_plus.tooltip_text = "增加数量"
 	_plus.set_meta("merchant_focus", "qty:plus")
@@ -122,9 +122,9 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 	var buying := UIKit.vbox(4)
 	buying.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	trades.add_child(buying)
-	_buy_unit = UIKit.label("", 12, UIKit.MUTED)
+	_buy_unit = UIKit.label("", 16, UIKit.MUTED)
 	buying.add_child(_buy_unit)
-	_buy = UIKit.button("", "primary", Vector2(110, 44), 16)
+	_buy = UIKit.button("", "primary", Vector2(110, 50), 19)
 	_buy.name = "material_buy"
 	_buy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_buy.pressed.connect(func(): transaction_requested.emit({"type": "BUY_MATERIAL", "id": selected_id, "qty": quantity}))
@@ -132,9 +132,9 @@ func setup(state: Dictionary, id: String, qty: int) -> void:
 	var selling := UIKit.vbox(4)
 	selling.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	trades.add_child(selling)
-	_sell_unit = UIKit.label("", 12, UIKit.MUTED)
+	_sell_unit = UIKit.label("", 16, UIKit.MUTED)
 	selling.add_child(_sell_unit)
-	_sell = UIKit.button("", "secondary", Vector2(110, 44), 16)
+	_sell = UIKit.button("", "secondary", Vector2(110, 50), 19)
 	_sell.name = "material_sell"
 	_sell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_sell.pressed.connect(func(): transaction_requested.emit({"type": "SELL_MATERIAL", "id": selected_id, "qty": quantity}))
@@ -170,7 +170,7 @@ func _ignore_pointer(node: Control) -> void:
 func _layout_grid() -> void:
 	if not is_inside_tree(): return
 	var width := maxf(64.0, size.x)
-	_grid.columns = clampi(floori((width + 6.0) / 70.0), 1, 7)
+	_grid.columns = clampi(floori((width + 6.0) / 104.0), 1, 7)
 	var narrow := actions.size.x < 520
 	_operations.vertical = narrow
 	_quantity_group.vertical = not narrow

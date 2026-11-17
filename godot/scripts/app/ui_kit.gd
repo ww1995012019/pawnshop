@@ -751,6 +751,12 @@ static func presentation_id(it: Dictionary) -> String:
 static func presentation_tier(it: Dictionary) -> String:
 	return String(GameData.def(presentation_id(it)).get("tier", ""))
 
+## Exterior model grade only; this must never expose authenticity or provenance.
+static func quality_color(it: Dictionary) -> Color:
+	return {"low": Color("eee9dc"), "mid": Color("81ac78"),
+		"high": Color("709fcb"), "luxury": Color("ac87c4"),
+		"ultra": Color("d7b458")}.get(presentation_tier(it), Color("eee9dc"))
+
 ## Completed treatments remain player knowledge after parts are removed/restored.
 static func is_modified(it: Dictionary) -> bool:
 	return not WatchForgery.treatments(it).is_empty()
