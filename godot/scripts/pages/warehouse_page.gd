@@ -35,6 +35,10 @@ var cabinet_drag_preview:TextureRect
 var cabinet_drag_point := Vector2.ZERO
 var context_layer: Control
 var item_menu: PanelContainer
+var _rotation_state: Dictionary = {}
+var _rotation_uid := ""
+var _rotation_next := false
+var _rotation_answer := false
 
 func scene_name() -> String:
 	return "warehouse"
@@ -112,6 +116,7 @@ func enter() -> void:
 	set_process(true);_refresh();relayout()
 
 func _refresh() -> void:
+	_rotation_state = {}
 	dismiss_context_menu()
 	var title:String={"warehouse":"手表后仓","materials":"工具材料","isolation":"隔离保管","pawn":"抵押保管"}[cabinet_mode]
 	UIKit.clear(storage_header)
@@ -393,11 +398,21 @@ func can_rotate_selected() -> bool:
 	if Game.state.phase != "open" or it == null or it.location != "warehouse" or it.owner == "pawn" or it.sealed or Model.trade_reserved(Game.state, it):
 		return false
 	var next := not selected_rotation()
+	# Companion polling asks this repeatedly while the pointer is moving.
+	# All game actions replace state; explicit refreshes also invalidate edits.
+	if is_same(_rotation_state, Game.state) and _rotation_uid == selected and _rotation_next == next:
+		return _rotation_answer
+	_rotation_state = Game.state
+	_rotation_uid = selected
+	_rotation_next = next
+	_rotation_answer = false
 	if Model.can_place(Game.state, it.uid, it.x, it.y, next):
+		_rotation_answer = true
 		return true
 	for y in ShopUpgrades.storage_rows(Game.state):
 		for x in WarehouseExpansion.columns(Game.state):
 			if Model.can_place(Game.state, it.uid, x, y, next):
+				_rotation_answer = true
 				return true
 	return false
 
@@ -650,11 +665,20 @@ func _stock_summary() -> void:
 	detail.add_child(UIKit.label("工具材料已移至后仓右侧「材料」按钮。",14,UIKit.MUTED,false,true))
 
 func on_changed(_p: Dictionary, _n: Dictionary, _a: Dictionary) -> void:
+	_rotation_state = {}
 	if Game.item(selected) == null:
 		selected = ""
 	var prepared = Game.item(grid.prepared_uid) if grid.prepared_uid != "" else null
 	if prepared == null or prepared.location != "warehouse" or prepared.rotated == grid.prepared_rot:
 		grid.prepared_uid = ""
+	if _a.type == "MOVE":
+		var before = Model.find_inventory(_p, _a.uid)
+		var after = Game.item(_a.uid)
+		if before != null and after != null and before.location == "warehouse" and after.location == "warehouse" and grid.tiles.has(_a.uid):
+			dismiss_context_menu()
+			grid.update_item(after)
+			if shell.mobile_mode(): _detail()
+			return
 	_refresh()
 
 
@@ -700,6 +724,13 @@ class StorageGrid extends Control:
 			if it.uid==drag_uid and moved:tr.modulate.a=0.3
 			add_child(tr)
 			tiles[it.uid] = tr
+		queue_redraw()
+
+	func update_item(it: Dictionary) -> void:
+		var tile: TextureRect = tiles[it.uid]
+		var d := Model.dimensions(it)
+		tile.position = Vector2(it.x, it.y) * page.cell_size + Vector2(4, 4)
+		tile.size = Vector2(d[0], d[1]) * page.cell_size - Vector2(8, 8)
 		queue_redraw()
 
 	func _cell(p: Vector2) -> Vector2i:
