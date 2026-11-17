@@ -1,8 +1,8 @@
 {
-  "source_commit": "173b2d0d1e6f2c0fead21c8cc3731ef58aad6765",
-  "release_id": "cc9e647d98b02ac9",
-  "pack": "workbench-17c089e4365083c7.pck",
-  "html_sha256": "dc570b76c742be2e2929318924887270850c51257443cd8d913a72f3fd74f686",
+  "source_commit": "216083054fc860f5487c9912dde6e83de90baa4b",
+  "release_id": "c7e0cdad663cb6a2",
+  "pack": "workbench-f62e0c2c228a5200.pck",
+  "html_sha256": "04bb3e1eb27b0017200b5095a161597796684ef052e5913bed3f28ef428f5184",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 140,
+  "native_regression_groups": 151,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -377,7 +377,12 @@
   ],
   "tool_polish_assertions": 152,
   "dialogue_actor_assertions": 85,
-  "production_previous_pack": "workbench-b71f8136124ea3e1.pck",
-  "staged_static_cold_start_seconds": 9.261,
-  "prepared_at": "2026-11-17T11:18:43+08:00"
+  "production_previous_pack": "workbench-17c089e4365083c7.pck",
+  "staged_static_cold_start_seconds": 18.441,
+  "prepared_at": "2026-11-17T16:49:26+08:00",
+  "landscape_input_ui_version": 2,
+  "gameplay_decisions_version": 1,
+  "gameplay_second_batch_version": 1,
+  "browser_compatibility_guidance_version": 1,
+  "legacy_acceptance_assertions": 209
 }
