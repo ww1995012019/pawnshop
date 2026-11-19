@@ -218,16 +218,21 @@ func offer_popup(context: Dictionary) -> void:
   key(line,"+"+str(step),Rect2(0,0,42,43),func():
    if edit.editable and edit.text.is_valid_int():edit.text=str(clampi(int(edit.text)+step,view.desk.dial.min_value,view.desk.dial.max_value))).custom_minimum_size=Vector2(42,43)
  var evidence=HFlowContainer.new();evidence.add_theme_constant_override("h_separation",6);box.add_child(evidence)
+ var reading=UIKit.label("",17,INK,false,true)
+ # Measure the wrapped note at the width of the quote before opening the popup.
+ reading.custom_minimum_size.x=390
+ reading.size.x=390
+ box.add_child(reading)
  for source in view.desk.chips.get_children():
   if not source is Button:continue
   var origin:Button=source
   var chip=key(evidence,str(source.get_meta("evidence_caption",source.text)),Rect2(0,0,120,34),func():
    if view._quick_valid(context.uid,context.trade_id,context.version,context.price) and is_instance_valid(origin) and not origin.disabled:
     origin.pressed.emit()
-    sync_evidence(evidence))
+    sync_evidence(evidence,reading,it))
   chip.custom_minimum_size=Vector2(120,34);chip.add_theme_font_size_override("font_size",16)
   chip.set_meta("evidence_tool",source.get_meta("evidence_tool",""))
- sync_evidence(evidence)
+ sync_evidence(evidence,reading,it)
  var hint=UIKit.label("物证 %d · 已商谈 %d 次"%[Model.evidence_count(it),int(CounterDialogue.current(Game.state).context.rounds)],16,INK);box.add_child(hint)
  var submit=key(box,"出价",Rect2(0,0,390,48),func():
   if not edit.text.is_valid_int() or int(edit.text)<view.desk.dial.min_value or int(edit.text)>view.desk.dial.max_value:
@@ -239,9 +244,16 @@ func offer_popup(context: Dictionary) -> void:
  show_popup()
  edit.call_deferred("grab_focus");edit.call_deferred("select_all")
 
-func sync_evidence(box: Control) -> void:
+func sync_evidence(box: Control,reading: Label,it: Dictionary) -> void:
+ reading.visible=box.get_child_count()>0
+ reading.text="挑一条物证，随报价出示给客人。"
  for child in box.get_children():
-  if child is Button:skin(child,false,str(child.get_meta("evidence_tool",""))==view.desk.chosen_evidence)
+  if not child is Button:continue
+  var tool:String=child.get_meta("evidence_tool","")
+  var selected:bool=tool==view.desk.chosen_evidence
+  skin(child,false,selected)
+  if selected:
+   reading.text=Model.displayed_clue(it,tool)
 
 func more_popup(context: Dictionary) -> void:
  var box=make_popup();box.add_child(UIKit.label("这件物品 · 更多操作",23,INK))

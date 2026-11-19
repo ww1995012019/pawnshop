@@ -75,6 +75,10 @@ func run() -> void:
  shell=load("res://main.tscn").instantiate();root.add_child(shell);await frames();shell._close_title();await frames()
  page=shell.page;view=page.strict_view
  var moving_uid:String=se.goods[0].uid
+ view.table.get_node("strict_table_"+moving_uid).pressed.emit();await frames()
+ check(view.appraisal_ticket.is_visible_in_tree() and view.ticket_uid==moving_uid,"the physical pick addresses the same original as its appraisal ticket")
+ var picked=view.table.get_node("strict_table_"+moving_uid)
+ check(picked.size.y>130 and not picked.get_global_rect().intersects(view.appraisal_ticket.get_global_rect()),"the enlarged original has a separate hit target beside its appraisal actions")
  var before_position=view.table.get_node("strict_table_"+moving_uid).position
  cash=game.state.cash;ap=game.state.ap
  view._drop_data(Vector2(780,510),{"kind":"strict_trade","uid":moving_uid});await frames()

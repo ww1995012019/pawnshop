@@ -30,7 +30,15 @@ func run() -> void:
 	var adapter = desk.find_child("PortraitCounter",true,false)
 	adapter._quote_popup()
 	await frames()
-	check(shell.modal_layer.find_child("mobile_evidence_TOL-001",true,false) != null,"phone quote sheet exposes existing evidence rather than hiding the mechanic")
+	var serial_key := shell.modal_layer.find_child("mobile_evidence_TOL-002",true,false) as Button
+	check(serial_key != null,"phone quote sheet offers the recorded serial")
+	if serial_key != null:
+		var text_width := serial_key.get_theme_font("font").get_string_size(serial_key.text,HORIZONTAL_ALIGNMENT_LEFT,-1,serial_key.get_theme_font_size("font_size")).x
+		check(serial_key.size.x >= text_width,"recorded evidence has room for its caption on a phone")
+		serial_key.pressed.emit()
+		await frames()
+		var selected := shell.modal_layer.find_child("MobileEvidenceSelectionHint",true,false) as Label
+		check(desk.chosen_evidence == "TOL-002" and selected.text.contains(Model.displayed_clue(item,"TOL-002")),"the quote previews the selected original's recorded reading")
 	shell.close_top_modal()
 	await frames()
 	shell.queue_free()

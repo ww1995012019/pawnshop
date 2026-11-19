@@ -591,15 +591,16 @@ func _optical(id: String) -> void:
 		optical_position = shell.ui_to_world(mat_rect.get_center()+Vector2(-95,-25))
 		node.global_position = _clamp_lens_position(optical_position)
 		optical_position = node.global_position
-	bench_body.add_child(UIKit.label("按住镜片或手柄拖动；松开停住，观察表盘标识。" if id == "TOL-001" else "移动紫外灯照亮后盖编号；停住记录字符。",18,UIKit.TEXT,false,true))
-	var fixed := UIKit.button("定位并固定标识" if id == "TOL-001" else "定位并固定编号","primary",Vector2(0,48),18)
+	bench_body.add_child(UIKit.label("拖动镜片寻找表盘印记，停稳后留下记录。" if id == "TOL-001" else "移动紫外灯寻找后盖编号，照稳后留下记录。",18,UIKit.TEXT,false,true))
+	var fixed := UIKit.button("辅助：定位并固定标识" if id == "TOL-001" else "辅助：定位并固定编号","secondary",Vector2(0,36),15)
+	fixed.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	optical_pin_button = fixed
 	fixed.pressed.connect(func():
 		optical_pinned = not optical_pinned
 		optical_fixed = id == "TOL-001" or optical_pinned
 		optical_dragging = false
 		if optical_pinned: optical_position = _optical_target()
-		fixed.text = "解除固定" if optical_pinned else "定位并固定观察点")
+		fixed.text = "解除固定" if optical_pinned else "辅助：定位并固定观察点")
 	bench_body.add_child(fixed)
 	if id == "TOL-002": bench_body.add_child(UIKit.label(_power_copy(id), 16, UIKit.CYAN, false, true))
 
@@ -778,13 +779,13 @@ func _unhandled_input(e: InputEvent) -> void:
 					optical_pinned = false
 					optical_dragging = true
 					optical_grab = optical_position-p
-					if is_instance_valid(optical_pin_button): optical_pin_button.text = "定位并固定标识"
+					if is_instance_valid(optical_pin_button): optical_pin_button.text = "辅助：定位并固定标识"
 				elif tool == "TOL-002" and mat_rect.has_point(shell.world_to_ui(p)):
 					optical_fixed = true
 					optical_pinned = false
 					optical_dragging = true
 					optical_position = p
-					if is_instance_valid(optical_pin_button): optical_pin_button.text = "定位并固定标识" if tool == "TOL-001" else "定位并固定编号"
+					if is_instance_valid(optical_pin_button): optical_pin_button.text = "辅助：定位并固定标识" if tool == "TOL-001" else "辅助：定位并固定编号"
 			else:
 				optical_dragging = false
 				if item.dragging and tool == "TOL-005" and item.position.distance_to(scale_target)<125:

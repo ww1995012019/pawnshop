@@ -45,6 +45,12 @@ var quote_controls: Array=[]
 var stock: GridContainer
 var wanted_paper: Button
 var shelves: Control
+var appraisal_ticket: Panel
+var ticket_name: Label
+var ticket_inspect: Button
+var ticket_offer: Button
+var ticket_uid := ""
+var parked_uid := ""
 var table: Control
 var detail_tools: VBoxContainer
 var own: Control
@@ -109,6 +115,7 @@ func setup(page) -> void:
  _build()
  for node in get_children():
   if node is Control:layout_rects[node]=Rect2(node.position,node.size)
+ _build_appraisal_ticket()
  _layout_desktop()
  Game.changed.connect(_model_changed)
  Game.prefs_changed.connect(func():dirty=true)
@@ -376,6 +383,17 @@ func _build() -> void:
  var arrange=UIKit.button("整理 / 调价","secondary",Vector2(425,47),23);arrange.pressed.connect(func():desk.shell.go("warehouse",desk.showroom.selected_uid));detail_tools.add_child(arrange)
  _configure_dialogue_actors()
 
+func _build_appraisal_ticket() -> void:
+ appraisal_ticket=_panel(Rect2(0,0,295,107),PAPER,true,4)
+ appraisal_ticket.name="DeskAppraisalTicket"
+ appraisal_ticket.hide()
+ ticket_name=_label(appraisal_ticket,"",Rect2(13,4,268,42),26,INK,true)
+ ticket_name.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+ ticket_inspect=_button(appraisal_ticket,"鉴定",Rect2(12,50,132,46),func():quick_list.request("inspect",ticket_uid),"magnifying-glass")
+ ticket_offer=_button(appraisal_ticket,"议价",Rect2(151,50,132,46),func():quick_list.request("offer",ticket_uid),"gavel")
+ ticket_inspect.name="DeskInspectOriginal"
+ ticket_offer.name="DeskOfferOriginal"
+
 func _layout_desktop() -> void:
  if desk.shell.mobile_mode():return
  var extent=get_viewport().get_visible_rect().size/scale
@@ -451,6 +469,7 @@ func _quick_valid(uid: String,trade_id: String,version: int,price: float) -> boo
  return not row.is_empty() and is_equal_approx(float(row.context.price),price)
 
 func _quick_focus(uid: String) -> void:
+ parked_uid=""
  desk._focus_table(uid);desk._refresh();dirty=true
 
 func _quick_action(verb: String,uid: String,trade_id: String,version: int,price: float) -> void:
@@ -614,9 +633,11 @@ func _refresh(force := false) -> void:
  detail_layer.visible=not list_active;quick_list.visible=list_active
  get_node("StrictTradePaper").visible=not list_active
  if list_active:quick_list.refresh(s)
+ ticket_inspect.disabled=desk.busy or desk._scene_blocked()
+ ticket_offer.disabled=ticket_inspect.disabled
  var backs=""
  for uid in desk.counter_table.sprites:backs+=str(desk.counter_table.sprites[uid].back)
- var table_key=str(CounterDialogue.table_items(s))+str(TradeSession.session(s).get("table_positions",{}))+str(desk.showroom.selected_uid)+str(desk.showroom.preview_back)+backs
+ var table_key=str(CounterDialogue.table_items(s))+str(TradeSession.session(s).get("table_positions",{}))+str(desk.showroom.selected_uid)+str(desk.showroom.preview_back)+backs+parked_uid
  if table_key!=signature:
   signature=table_key;_table()
 
@@ -666,6 +687,16 @@ func _display_position(index: int) -> Vector2:
  # the next row becomes scrollable, rather than clipping the third price.
  var width=maxf(276,display_scroll.size.x-display_scroll.get_v_scroll_bar().get_combined_minimum_size().x)
  return Vector2(3+(index%3)*(width-96)*.5,floori(index/3.0)*145)
+
+func mark_arrival(uid: String) -> void:
+ var slot := stock.get_node_or_null("strict_stock_"+uid) as Button
+ if slot==null: return
+ var tint := slot.modulate
+ slot.modulate=Color("ffcf89")
+ if Game.prefs.reduced_motion:
+  slot.create_tween().tween_callback(func(): slot.modulate=tint).set_delay(0.8)
+ else:
+  slot.create_tween().tween_property(slot,"modulate",tint,0.8)
 
 func _stock_button(it,display: bool,extent: Vector2) -> Button:
  var b=preload("res://scripts/ui/showroom_slot.gd").new()
@@ -717,6 +748,8 @@ func _table() -> void:
    previous[child.uid]=child.position+visual.position
  for c in table.get_children():c.free()
  var shown=CounterDialogue.table_items(Game.state)
+ appraisal_ticket.hide()
+ ticket_uid=""
  var buys=shown.filter(func(info):return info.direction=="buy")
  var sells=shown.filter(func(info):return info.direction!="buy")
  for group in [buys,sells]:
@@ -734,8 +767,17 @@ func _table() -> void:
    if saved is Array and saved.size()==2:
     var found=slots.find(Vector2(float(saved[0]),float(saved[1])))
     if found>=0:slot_index=found
-   var key=_table_watch(it,points[clampi(slot_index,0,points.size()-1)],info.price,info.focused,func():
-    Game.dispatch({"type":"COUNTER_FOCUS","tradeId":Game.state.trade.id,"uid":info.uid});dirty=true,visitor,tag_width)
+   var point:Vector2=points[clampi(slot_index,0,points.size()-1)]
+   var close_up:bool=info.focused and sells.is_empty() and info.uid!=parked_uid
+   if close_up:point=_table_project(Vector2(680,632))
+   if info.focused:
+    ticket_uid=info.uid
+    ticket_name.text=GameData.def(WatchForgery.appearance_id(it)).name
+    ticket_name.tooltip_text=ticket_name.text
+    appraisal_ticket.position=point+Vector2(95,-28) if close_up else Vector2(_table_project(Vector2(820,0)).x-147,footer_art.position.y-118)
+    appraisal_ticket.show()
+   var key=_table_watch(it,point,info.price,info.focused,func():
+    _quick_focus(info.uid),visitor,130.0 if close_up else tag_width,close_up)
    _animate_table_watch(key,previous,visitor)
  if Game.state.trade==null and desk.showroom.selected_uid!="":
   var it=Game.item(desk.showroom.selected_uid)
@@ -744,10 +786,11 @@ func _table() -> void:
    _animate_table_watch(key,previous,false)
  watch_sources.clear()
 
-func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visitor:=false,tag_width:=90.0) -> Button:
+func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visitor:=false,tag_width:=90.0,close_up:=false) -> Button:
  var b=TradeWatch.new();b.mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND;b.controller=self;b.uid=it.uid;b.name="strict_table_"+str(it.uid)
  b.position=center-Vector2(tag_width/2,43);b.size=Vector2(tag_width,118 if visitor else 130)
  for state in ["normal","hover","pressed","focus"]:b.add_theme_stylebox_override(state,StyleBoxEmpty.new())
+ if close_up:b.size.y=150
  table.add_child(b)
  var visual=Control.new();visual.name="WatchVisual";visual.mouse_filter=Control.MOUSE_FILTER_IGNORE;visual.size=b.size;b.add_child(visual)
  var is_back=desk.showroom.preview_back if Game.state.trade==null else desk.counter_table.sprites.has(it.uid) and desk.counter_table.sprites[it.uid].back
@@ -757,8 +800,9 @@ func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visit
   art_rect=Rect2(Vector2(tag_width/2,43)-texture.get_meta("native_anchor"),texture.get_size())
   if visitor and art_rect.size.y>78:
    art_rect.size*=78.0/art_rect.size.y;art_rect.position=Vector2((tag_width-art_rect.size.x)/2,0)
+ if close_up:art_rect=Rect2(0,0,tag_width,111)
  var shadow=R.shadow_for(it,visitor)
- if shadow!=null:_image(visual,shadow,Rect2(Vector2(tag_width/2,43)-shadow.get_meta("native_anchor"),shadow.get_size()))
+ if shadow!=null and not close_up:_image(visual,shadow,Rect2(Vector2(tag_width/2,43)-shadow.get_meta("native_anchor"),shadow.get_size()))
  var art=_image(visual,texture,art_rect);art.name="WatchArt"
  if watch_sides.has(it.uid) and watch_sides[it.uid]!=is_back:
   if Game.prefs.reduced_motion:
@@ -777,6 +821,7 @@ func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visit
  var tag_font=24 if visitor and tag_width>110 else 20
  var tag=_label(b,"未定价" if Game.state.trade==null and price<=0 else Model.jnum(price)+" Cr",Rect2(0,82 if visitor else 93,tag_width,34 if visitor else 37),tag_font,Color("f7e7c6"))
  tag.name="PriceTag";tag.clip_text=true
+ if close_up:tag.position.y=113
  var text_width=tag.get_theme_font("font").get_string_size(tag.text,HORIZONTAL_ALIGNMENT_LEFT,-1,tag_font).x
  tag.add_theme_font_size_override("font_size",mini(tag_font,maxi(14,int(tag_font*(tag_width-8)/maxf(tag_width-8,text_width)))))
  _decorate_original(b,it,tag_width<90)
@@ -862,6 +907,7 @@ func _drop_data(at_position: Vector2,data) -> void:
   var nearest=0
   for index in points.size():
    if points[index].distance_squared_to(at_position)<points[nearest].distance_squared_to(at_position):nearest=index
+  parked_uid=uid
   Game.dispatch({"type":"COUNTER_MOVE","tradeId":Game.state.trade.id,"uid":uid,"position":[slots[nearest].x,slots[nearest].y]})
  elif at_position.x>430:
   desk.showroom.select_original(uid)

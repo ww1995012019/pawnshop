@@ -432,8 +432,12 @@ func _quote_popup() -> void:
 		for tool in original_item.evidence:
 			if not GameData.relevant_tool(original_item.defId,tool): continue
 			var tool_id: String = tool
-			var caption: String = GameData.evidence_short(original_item.defId,tool_id)
+			var caption: String = {"TOL-001":"表盘印记","TOL-002":"后盖编号","TOL-005":"称重记录"}.get(tool_id,GameData.evidence_short(original_item.defId,tool_id))
 			var evidence_key := UIKit.button(caption,"chip",Vector2(0,30 if shell.landscape_mode() else 36),14)
+			evidence_key.clip_text = false
+			evidence_key.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+			evidence_key.custom_minimum_size.x = 94
+			evidence_key.set_meta("reading",Model.displayed_clue(original_item,tool_id))
 			evidence_key.name = "mobile_evidence_" + tool_id
 			evidence_key.set_meta("evidence_tool",tool_id)
 			evidence_key.set_meta("evidence_caption",caption)
@@ -481,8 +485,9 @@ func _sync_quote_evidence(row: HFlowContainer, hint: Label) -> void:
 		child.set_pressed_no_signal(selected)
 		child.text = ("✓ " if selected else "") + caption
 		child.tooltip_text = "已选 · 证据随下一次出价提交" if selected else "随下一次出价提交；再次点击可取消"
-		if selected: selected_caption = caption
-	hint.text = "证据随下一次出价提交" + (" · 已选" + selected_caption if selected_caption != "" else "")
+		if selected: selected_caption = String(child.get_meta("reading"))
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.text = "出示：" + selected_caption if selected_caption != "" else "挑一条物证，随报价出示给客人。"
 
 func _actions(showing_settlement := false) -> void:
 	var modal: Array = shell.modal("交易操作" if Game.state.trade != null else "柜台事务",360)

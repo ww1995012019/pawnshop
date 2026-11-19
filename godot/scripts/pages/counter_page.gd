@@ -1564,7 +1564,10 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 				proxy.handoffs=[]
 				for line in TradeSession.session(prev).lines:
 					if line.selected and line.status=="confirmed": proxy.handoffs.append({"original":TradeSession.item(prev,line.uid),"direction":line.direction})
-				await _deal(proxy,false,"本次说好的 %d 件原物" % int(receipt.count),true)
+				var item_name := "本次说好的 %d 件原物" % int(receipt.count)
+				if proxy.handoffs.size() == 1:
+					item_name = GameData.def(proxy.handoffs[0].original.defId).name
+				await _deal(proxy,false,item_name,true)
 			elif pt != null and nt == null:
 				var sold = Model.trade_item(prev)
 				await _deal(pt, a.type == "PAWN", WatchForgery.sale_name(sold) if sold != null else "货物")
@@ -1657,7 +1660,12 @@ func _deal(t: Dictionary, pawn: bool, item_name: String, stay := false) -> void:
 	customer.nod()
 	handover_history=[]
 	if stay:
-		for handoff in t.get("handoffs",[]): await _handover(handoff.original,String(handoff.direction))
+		for handoff in t.get("handoffs",[]):
+			await _handover(handoff.original,String(handoff.direction))
+			if handoff.direction == "buy" and is_instance_valid(strict_view) and strict_view.is_visible_in_tree():
+				strict_view.mark_arrival(handoff.original.uid)
+		if not Game.prefs.reduced_motion:
+			await get_tree().create_timer(0.65).timeout
 	elif is_instance_valid(mat_item): await _handover(null,"buy" if buy else "sell")
 	if stay:
 		busy=false

@@ -51,6 +51,12 @@ func setup(owner_adapter) -> void:
 		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		background.add_child(panel)
 		panels.append(panel)
+	# Crop the shop window and the empty felt/wood edge from the same room as the desktop.
+	for region in [[1,Rect2(560,68,400,389)],[2,Rect2(495,465,626,312)]]:
+		var surface := StyleBoxTexture.new()
+		surface.texture = preload("res://assets/comic/reference-clean-room.png")
+		surface.region_rect = region[1]
+		panels[region[0]].add_theme_stylebox_override("panel",surface)
 	# The dock also owns its gaps; nearby business actions must not attract them.
 	panels[4].set_meta("touch_assist_no_expand",true)
 	heading = _label("轨道旧货局",20,UIKit.TEXT)
@@ -94,6 +100,10 @@ func setup(owner_adapter) -> void:
 	goods_tiles = UIKit.hbox(5)
 	goods_strip.add_child(goods_tiles)
 	goods_position = _label("",13,UIKit.MUTED)
+	for label in [item_name,goods_position,hint,visitor_name]:
+		label.add_theme_color_override("font_color",Color("fff0cd"))
+		label.add_theme_color_override("font_outline_color",Color("3b2b21"))
+		label.add_theme_constant_override("outline_size",4)
 	wanted_paper=preload("res://scripts/ui/wanted_desk_paper.gd").new()
 	wanted_paper.compact=true
 	add_child(wanted_paper)
