@@ -111,7 +111,7 @@ func run() -> void:
 		await frames()
 		continue_button = button(page,"保留店铺，继续经营")
 		if continue_button != null:
-			var scroll: ScrollContainer = page.sheet.get_child(0)
+			var scroll: ScrollContainer = page.find_child("report_scroll",true,false)
 			scroll.ensure_control_visible(continue_button)
 			await frames()
 			check(active.content_rect().encloses(page.sheet.get_rect()) and active.get_viewport().get_visible_rect().encloses(continue_button.get_global_rect()),"continuation remains reachable inside the report at " + str(extent))

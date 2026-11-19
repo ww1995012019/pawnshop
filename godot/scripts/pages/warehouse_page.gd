@@ -496,6 +496,12 @@ func _detail() -> void:
 		hv.add_child(UIKit.label("改 · 已加工", 17, UIKit.RUST))
 	head.add_child(hv)
 	record.add_child(head)
+	if not shell.mobile_mode():
+		var repair := UIKit.button("去维修","secondary",Vector2(0,42),18)
+		var uid: String = it.uid
+		repair.name = "warehouse_repair"
+		repair.pressed.connect(func(): shell.go("repair",uid))
+		record.add_child(repair)
 	# Long metadata uses the full paper width, including narrow desktop drawers.
 	record.add_child(UIKit.label("型号档次：%s" % GameData.tier_label(it.defId), 17, UIKit.RUST,false,true))
 	if UIKit.presentation_id(it) != String(it.defId):

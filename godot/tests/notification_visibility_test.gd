@@ -40,8 +40,9 @@ func run():
 	shell.go("inspect");await frames()
 	owner=shell.active_shell()
 	owner.toast("稳定质量：54.5 g。按实际表带配置与说明书比较。估价 11–117 Cr。","info");await frames()
-	var inspection_notice:Control=owner.toast_box.get_child(0)
-	var manual:Control=owner.page.get_node("watch_manual")
-	check(not inspection_notice.get_global_rect().intersects(manual.get_global_rect()),"inspection notice leaves its manual button and text unobstructed")
+	var inspection_notice := owner.page.find_child("inspection_status",true,false) as Label
+	check(inspection_notice != null and inspection_notice.is_visible_in_tree(),"desktop inspection status appears in the item record")
+	if inspection_notice != null:
+		check(not inspection_notice.get_global_rect().intersects(owner.page.mat_rect),"inspection notice leaves the entire observation surface clear")
 	shell.queue_free();await frames()
 	quit(1 if failures else 0)

@@ -61,6 +61,12 @@ def main():
             click('接客铃');wait('s.trade&&!s.busy')
             capture('02-first-visitor')
             before=state();uid=before['trade_session']['goods'][0]['uid']
+            second_uid=before['trade_session']['goods'][1]['uid']
+            assert not locate('@quick_inspect_'+second_uid).get('found')
+            click('@quick_focus_'+second_uid)
+            wait("s.dialogue_uid==="+json.dumps(second_uid))
+            assert locate('@quick_inspect_'+second_uid).get('found')
+            click('@quick_focus_'+uid)
             click('@quick_inspect_'+uid);wait("s.workspace==='inspect'&&s.inspection_uid==="+json.dumps(uid))
             click('放大镜');wait("s.inspection_current==='TOL-001'&&!s.inspection_busy")
             click('定位并固定标识');wait('s.appraisal.count===1')
@@ -72,6 +78,7 @@ def main():
             if state()['blocked']:click('承担风险并锁价')
             wait('s.trade_session.buy_count===1')
             agreed=state();capture('04-confirmed-purchase')
+            assert locate('@QuickCheckout')['label'] == f'支付 {price:g} Cr · 1 件'
             click('@QuickCheckout')
             wait('s.cash==='+str(agreed['cash']-price)+'&&s.ap==='+str(agreed['ap']-1)+'&&!s.busy')
             paid=saved(lambda s:any(it['uid']==uid and it['owner']=='shop' for it in s['inventory']))
@@ -88,7 +95,11 @@ def main():
             assert state()['cash']==closed['cash']
             command({'type':'page','page':'report'});wait("s.workspace==='report'")
             capture('07-reloaded-report')
-            click('迎接第 2 天');wait('s.day===2&&!s.busy')
+            next_day=locate('迎接第 2 天')
+            assert next_day['found'] and not next_day['disabled'],next_day
+            assert next_day['y']+next_day['height']/2<900,next_day
+            page.mouse.click(next_day['x'],next_day['y'])
+            wait('s.day===2&&!s.busy')
             assert state()['cash']==closed['cash'] and state()['ap']==12
             final=saved(lambda s:s['day']==2)
             assert any(it['uid']==uid for it in final['inventory'])

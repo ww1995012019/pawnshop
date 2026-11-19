@@ -106,9 +106,11 @@ func run() -> void:
 		scroll.scroll_vertical = 100
 		await settle()
 		check(game.state == before, "scrolling does not change transactions or settlement")
-		var outer: ScrollContainer = page.sheet.get_child(0)
+		var outer: ScrollContainer = page.find_child("report_scroll",true,false)
 		outer.scroll_vertical = 10000
 		await settle()
+		if status != null:
+			check(page.sheet.get_global_rect().encloses(status.get_global_rect()), "status stays within the visible sheet after scrolling")
 		for button in controls:
 			if button.text.begins_with("迎接第") and status != null:
 				check(not button.get_global_rect().intersects(status.get_global_rect()), "scrolled expanded receipt keeps status clear of next-day button")

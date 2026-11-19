@@ -18,6 +18,24 @@ with sync_playwright() as p:
  page.goto('http://127.0.0.1:4174/');page.wait_for_function('OrbitalTouch?.state?.ready',timeout=120000)
  tap('开门营业');phone.wait(page,'!s.title&&!s.busy');tap('@landscape_primary');phone.wait(page,'s.trade&&!s.busy')
  page.wait_for_timeout(500);shot('counter.png')
+ goods=page.evaluate('OrbitalTouch.state.table_items')
+ first,second=[entry['uid'] for entry in goods[:2]]
+ tap('@landscape_item_'+second);phone.wait(page,'s.dialogue_uid==='+repr(second))
+ page.set_viewport_size({'width':667,'height':375})
+ page.wait_for_timeout(400)
+ y=raw('@landscape_item_'+second)['y']
+ phone.touch_drag(c,page,[(460-i*27,y) for i in range(10)])
+ last=goods[-1]['uid']
+ last_target=raw('@landscape_item_'+last)
+ assert last_target['found'] and 155<last_target['x']<505,last_target
+ assert page.evaluate('OrbitalTouch.state.dialogue_uid')==second
+ tap('@landscape_item_'+last);phone.wait(page,'s.dialogue_uid==='+repr(last))
+ shot('narrow-counter.png')
+ page.set_viewport_size({'width':844,'height':390})
+ page.wait_for_timeout(400)
+ # The goods sheet also gives direct access to a model without scrolling.
+ tap('@landscape_goods');phone.wait(page,'s.blocked')
+ tap('@table_good_'+first);phone.wait(page,'!s.blocked && s.dialogue_uid==='+repr(first))
  primary=raw('@landscape_primary');assert 32<=primary['height']<=36,primary
  tap('@landscape_primary');phone.wait(page,'s.blocked');page.wait_for_timeout(300)
  before=int(re.search(r'\d+',raw('出价')['label'])[0])
@@ -35,11 +53,26 @@ with sync_playwright() as p:
  shot('quote.png');tap('@modal_close');phone.wait(page,'!s.blocked');tap('@landscape_primary');phone.wait(page,'s.blocked')
  page.wait_for_timeout(250);assert str(before+12) in raw('出价')['label']
  old_line=page.evaluate('OrbitalTouch.state.dialogue_line');tap('出价');phone.wait(page,'!s.blocked');page.wait_for_function('line=>OrbitalTouch.state.dialogue_line!==line',arg=old_line);assert page.evaluate('OrbitalTouch.state.offer')==before+12
+ phone.wait(page,'s.locked')
+ assert raw('@landscape_primary')['label']==f'支付 {before+12} Cr · 1 件'
+ assert raw('@landscape_put_aside')['found']
  tap('@landscape_more');phone.wait(page,'s.blocked');page.wait_for_timeout(250);shot('actions.png')
- close=raw('@modal_close');assert close['width']<=80 and close['height']<=36,close
+ assert not raw('并交割')['found'] and not raw('这件先不算')['found']
+ close=raw('@modal_close');assert close['width']<=80 and close['height']<=44.1,close
  tap('@modal_close');phone.wait(page,'!s.blocked');tap('@landscape_nav_settings');phone.wait(page,'s.blocked');page.wait_for_timeout(300);shot('settings.png')
- for text in ['声音','减少动态效果','切换全屏','全图鉴','新开一家店']:
+ for text in ['声音','减少动态效果','全屏','全图鉴','新开一家店']:
   v=raw(text);assert v['found'] and v['height']<=36 and v['y']+v['height']/2<390,(text,v)
+ tap('@modal_close');phone.wait(page,'!s.blocked')
+ before_payment=page.evaluate('OrbitalTouch.state')
+ tap('@landscape_put_aside');phone.wait(page,'!s.locked&&s.dialogue_uid==='+repr(first))
+ unchanged=page.evaluate('OrbitalTouch.state')
+ assert len(unchanged['table_items'])==len(goods)
+ assert unchanged['cash']==before_payment['cash'] and unchanged['ap']==before_payment['ap']
+ tap('@landscape_primary');phone.wait(page,'s.blocked')
+ tap('接受 ');phone.wait(page,'s.locked&&!s.blocked')
+ tap('@landscape_primary')
+ phone.wait(page,'!s.busy&&s.cash==='+str(unchanged['cash']-before-12))
+ assert page.evaluate('OrbitalTouch.state.ap')==unchanged['ap']-1
  assert not errors,errors
  print('PASS touch +/- quote, numeric keyboard entry, retained draft, actual offer submission, compact settings and close button')
  c.close();b.close()

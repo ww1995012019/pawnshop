@@ -255,10 +255,10 @@ func _build() -> void:
  hud_art=_image(self,R.hud(),Rect2(0,0,1671,61));hud_art.stretch_mode=TextureRect.STRETCH_SCALE
  day=_label(self,"",Rect2(49,7,127,44),32,INK,true)
  business_label=_label(self,"",Rect2(184,7,90,46),31,Color("fff0d6"),false);business_label.name="StrictBusinessState";business_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
- rent=_label(self,"",Rect2(325,10,132,39),24,INK,true)
- money=_label(self,"",Rect2(804,10,150,38),25,INK,true)
- ap=_label(self,"",Rect2(1000,10,92,38),25,INK,true)
- risk=_label(self,"",Rect2(1151,10,112,38),24,INK,true)
+ rent=_label(self,"",Rect2(325,10,132,39),24,Color("705e49"),true)
+ money=_label(self,"",Rect2(804,10,150,38),28,INK,true)
+ ap=_label(self,"",Rect2(1000,10,92,38),28,INK,true)
+ risk=_label(self,"",Rect2(1151,10,112,38),24,Color("705e49"),true)
  var ledger=_hit(self,"",Rect2(742,6,219,48),func():desk.shell.open_campaign_ledger());ledger.name="StrictCashLedger";ledger.tooltip_text="现金流水 · 查看账本"
  _hit(self,"事件",Rect2(476,8,101,43),func():_legacy("events"))
  for spec in [["手册","help","book-open"],["经营","plan","clipboard-list"],["声音","sound","volume-high"],["设置","settings","gear"]]:
@@ -292,7 +292,7 @@ func _build() -> void:
  stock_art=NinePatchRect.new();stock_art.texture=R.stock_frame();stock_art.position=Vector2(5,575);stock_art.size=Vector2(418,278)
  stock_art.patch_margin_left=20;stock_art.patch_margin_right=20;stock_art.patch_margin_top=65;stock_art.patch_margin_bottom=20
  stock_art.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(stock_art)
- stock_count=_label(self,"",Rect2(79,585,132,40),27,PAPER,true)
+ stock_count=_label(self,"",Rect2(79,585,196,40),27,PAPER,true)
  _hit(self,"整理",Rect2(287,588,113,32),func():desk.shell.go("warehouse"))
  stock_scroll=ScrollContainer.new();stock_scroll.position=Vector2(20,640);stock_scroll.size=Vector2(393,185)
  stock_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;stock_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;add_child(stock_scroll)
@@ -624,7 +624,7 @@ func _inventory() -> void:
  for container in [stock,shelves]:
   for c in container.get_children():c.free()
  var goods: Array=Game.state.inventory
- stock_count.text="在库 %d"%goods.size()
+ stock_count.text="本店库存 %d" % goods.size()
  wanted_paper.refresh()
  var layout=preload("res://scripts/model/showroom_layout.gd")
  layout.ensure(Game.state)

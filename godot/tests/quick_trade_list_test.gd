@@ -17,9 +17,14 @@ func run():
  var cash:float=game.state.cash;var ap:float=game.state.ap
  var first:String=ids[0];var second:String=ids[1]
  var retained=named(list,"quick_select_"+second)
- await click(named(list,"quick_select_"+first));await click(named(list,"quick_select_"+second));await frames()
+ await click(named(list,"quick_focus_"+first))
+ await click(named(list,"quick_select_"+first))
+ check(not retained.is_visible_in_tree(),"only the focused row shows its trade actions")
+ await click(named(list,"quick_focus_"+second))
+ await click(named(list,"quick_select_"+second));await frames()
  check(TradeSession.summary(game.state).buy_count==2 and game.state.cash==cash and game.state.ap==ap,"selecting two originals locks their prices without paying or consuming AP")
  check(is_instance_valid(retained) and retained==named(list,"quick_select_"+second),"row controls survive confirmation and focus refreshes")
+ await click(named(list,"quick_focus_"+first))
  await click(named(list,"quick_select_"+first));await frames()
  check(not TradeSession.row(game.state,first).selected and TradeSession.row(game.state,second).selected,"canceling one choice retains the other original and its agreement")
  await click(named(list,"quick_more_"+first));await frames()
@@ -43,6 +48,7 @@ func run():
  check(game.state==stable,"stale visitor callback cannot act on the current encounter")
  view._quick_action("toggle",second,game.state.trade.id,int(TradeSession.session(game.state).version),TradeSession.row(game.state,second).context.price+1)
  check(game.state==stable,"changed displayed quote cannot select an unseen price")
+ await click(named(list,"quick_focus_"+second))
  await click(named(list,"quick_inspect_"+second));await frames()
  check(shell.workspace_open() and shell.workspace_shell.page.item.uid==second,"row inspection opens the exact original")
  stable=game.state.duplicate(true)
@@ -71,6 +77,7 @@ func run():
  risk_session.lines[0].context.price=Model.trade_terms(game.state,risk_session.lines[0].context,risk_session.goods[0]).marketCap
  game.state=CounterDialogue.begin(game.state);shell.page._refresh();await frames()
  cash=game.state.cash;ap=game.state.ap
+ await click(named(list,"quick_focus_"+risk_uid))
  await click(named(list,"quick_select_"+risk_uid));await frames()
  check(shell.modal_open() and not TradeSession.row(game.state,risk_uid).selected,"unverified source still requires the existing per-original risk consent")
  await click(button(shell,"承担风险并锁价"));await frames()
@@ -83,7 +90,10 @@ func run():
  shell.page._refresh();await frames()
  var before_position=TradeSession.session(game.state).table_positions[shop_uid].duplicate()
  cash=game.state.cash;ap=game.state.ap
- await click(named(list,"quick_select_"+other_uid));await click(named(list,"quick_select_"+shop_uid));await frames()
+ await click(named(list,"quick_focus_"+other_uid))
+ await click(named(list,"quick_select_"+other_uid))
+ await click(named(list,"quick_focus_"+shop_uid))
+ await click(named(list,"quick_select_"+shop_uid));await frames()
  check(TradeSession.row(game.state,shop_uid).selected and TradeSession.row(game.state,other_uid).selected,"shop originals can join the same selected settlement")
  await click(named(list,"quick_select_"+shop_uid));await frames()
  check(TradeSession.row(game.state,shop_uid).included and not TradeSession.row(game.state,shop_uid).selected and CounterDialogue.table_items(game.state).any(func(info):return info.uid==shop_uid) and TradeSession.session(game.state).table_positions.get(shop_uid,[])==before_position,"unselecting preserves the shop original, list row and exact table position")
@@ -98,6 +108,7 @@ func run():
  var rejected=TradeSession.row(game.state,rejected_uid);rejected.status="rejected";rejected.selected=false;rejected.reason="本次先不收。"
  shell.page._refresh();await frames()
  check(CounterDialogue.table_items(game.state).filter(func(info):return info.direction=="sell").size()==8,"withdrawal fixture presents the full eight shop originals")
+ await click(named(list,"quick_focus_"+rejected_uid))
  await click(named(list,"quick_more_"+rejected_uid));await frames()
  var withdraw=button(list,"收回本件")
  check(withdraw!=null and not withdraw.disabled,"rejected and unselected originals retain explicit withdrawal in More")

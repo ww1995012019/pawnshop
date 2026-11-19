@@ -175,6 +175,11 @@ func hint_text() -> String:
 	return "拖动实物、右键翻面；点击鉴定仪取证，再转动报价旋钮出价。"
 
 func toast_rect() -> Rect2:
+	if is_instance_valid(strict_view) and not shell.mobile_mode():
+		var speech_rect: Rect2 = strict_view.get_node("StrictSpeechBubble").get_global_rect()
+		var right: float = strict_view.quick_list.get_global_rect().position.x
+		var left: float = strict_view.face.get_global_rect().end.x + 8
+		return Rect2(Vector2(left,speech_rect.end.y+9)-shell.counter_offset(),Vector2(right-left-12,72))
 	return Rect2(666, 42, 630, 76)
 
 func enter() -> void:
@@ -1685,6 +1690,7 @@ func _handover(original, direction: String) -> void:
 			mat_item.mat.set_shader_parameter("region",Vector4(8.96/256.0,8.96/256.0,238.08/256.0,238.08/256.0))
 	if not is_instance_valid(mat_item): return
 	var moving:=mat_item
+	moving.show()
 	moving.draggable=false
 	if not Game.prefs.reduced_motion:
 		var start:=moving.global_position
@@ -1735,8 +1741,9 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 	var paper := UIKit.plate(UIKit.paper_style(12 if shell.landscape_mode() else 20))
 	paper.name = "trade_receipt"
 	paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var content_width := 240.0 if shell.landscape_mode() else 300.0
 	var v := UIKit.vbox(6)
-	v.custom_minimum_size.x = 240 if shell.landscape_mode() else 300
+	v.custom_minimum_size.x = content_width
 	paper.add_child(v)
 	var head := UIKit.hbox(8)
 	head.add_child(UIKit.label("轨道旧货局", 20, UIKit.INK))
@@ -1747,14 +1754,17 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 	v.add_child(_dashes())
 	var item_label := UIKit.label(item_name, 22, UIKit.INK, false, true)
 	item_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	item_label.custom_minimum_size.x = 240 if shell.landscape_mode() else 300
+	item_label.size.x = content_width
 	v.add_child(item_label)
 	var row := UIKit.hbox(8)
 	row.add_child(UIKit.label("本金" if pawn else "成交", 18, Color("6b5a40")))
 	row.add_child(UIKit.spacer(false))
 	row.add_child(UIKit.label(UIKit.money(price), 30, UIKit.RUST, true))
 	v.add_child(row)
-	if t.has("batch_income"): v.add_child(UIKit.label("卖出收入 %s · 买入支出 %s" % [UIKit.money(t.batch_income),UIKit.money(t.batch_expense)],15,UIKit.INK,false,true))
+	if t.has("batch_income"):
+		var totals := UIKit.label("卖出收入 %s · 买入支出 %s" % [UIKit.money(t.batch_income),UIKit.money(t.batch_expense)],15,UIKit.INK,false,true)
+		totals.size.x = content_width
+		v.add_child(totals)
 	v.add_child(_dashes())
 	v.add_child(UIKit.label("来客  %s · 第 %d 天" % [GameData.npc(t.npcId).name, int(Game.state.day)], 15, Color("6b5a40")))
 	# Room for the stamp so it never lands on the text.
@@ -1766,8 +1776,15 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 		(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(paper)
 	paper.reset_size()
-	# Prints below the till, clear of the visitor's speech.
+	# Anchor the slip beside the checkout panel and above the dock.
 	var final_pos := Vector2(1030, 700)
+	var exit_offset := Vector2(-36,42)
+	if is_instance_valid(strict_view) and not shell.mobile_mode():
+		var checkout_edge: Vector2 = strict_view.quick_list.get_global_rect().position
+		var dock_y: float = strict_view.footer_art.get_global_rect().position.y
+		var at := Vector2(checkout_edge.x-16-paper.size.x,dock_y-paper.size.y-28)
+		final_pos = get_global_transform_with_canvas().affine_inverse()*at
+		exit_offset = Vector2(-36,14)
 	if shell.landscape_mode(): final_pos = Vector2((get_viewport_rect().size.x-paper.size.x)*0.5,maxf(6,(get_viewport_rect().size.y-paper.size.y)*0.5))
 	paper.pivot_offset = Vector2(paper.size.x * 0.5, 0)
 	if Game.prefs.reduced_motion:
@@ -1778,7 +1795,7 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 		hold.tween_callback(paper.queue_free)
 		return
 	# Print: the slip feeds out of the till edge, line by line.
-	paper.position = final_pos + Vector2(40, -20)
+	paper.position = final_pos + Vector2(12, -18)
 	paper.rotation = 0.06
 	paper.scale = Vector2(1, 0.05)
 	shell.sound("click", -12, 2.4)
@@ -1789,7 +1806,7 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 	tw.tween_callback(func(): _stamp(paper, pawn, t, true))
 	tw.tween_interval(2.4)
 	# Torn off and filed: slide down toward the crate and fade.
-	tw.tween_property(paper, "position", final_pos + Vector2(-60, 140), 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tw.tween_property(paper, "position", final_pos + exit_offset, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	tw.parallel().tween_property(paper, "rotation", -0.18, 0.45)
 	tw.parallel().tween_property(paper, "modulate:a", 0.0, 0.45)
 	tw.tween_callback(paper.queue_free)

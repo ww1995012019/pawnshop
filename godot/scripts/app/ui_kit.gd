@@ -583,6 +583,13 @@ static func clear(n: Node) -> void:
 static func money(n) -> String:
 	return "%s Cr" % Model.jnum(n)
 
+static func batch_payment_caption(totals: Dictionary) -> String:
+	var count: int = totals.buy_count + totals.sell_count
+	if count == 0: return "统一结算"
+	var net: float = totals.net
+	if is_zero_approx(net): return "交割 %d 件 · 无需补差" % count
+	return "%s %s · %d 件" % ["支付" if net < 0 else "收款", money(absf(net)), count]
+
 static func pct(n: float) -> String:
 	return "%d%%" % roundi(n * 100)
 

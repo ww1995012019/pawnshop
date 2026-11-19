@@ -49,7 +49,9 @@ def main():
    page.goto('http://127.0.0.1:4174/');start();return data
   fixture=load(OUT/'two.json');ids=[it['uid'] for it in fixture['trade']['session']['goods']]
   snap('two-arrival')
-  for uid in ids:click('@quick_select_'+uid)
+  for uid in ids:
+   click('@quick_focus_'+uid)
+   click('@quick_select_'+uid)
   phone.wait(page,'s.trade_session.lines.filter(r=>r.selected).length===2',timeout=10000)
   for _ in range(50):
    s=saved()
@@ -57,13 +59,13 @@ def main():
    page.wait_for_timeout(150)
   lines=s['trade']['session']['lines'];assert len([r for r in lines if r['selected']])==2
   assert s['cash']==fixture['cash'] and s['ap']==fixture['ap'];snap('two-selected')
-  click('@quick_select_'+ids[0]);click('@quick_offer_'+ids[0]);snap('quote-editable')
+  click('@quick_focus_'+ids[0]);click('@quick_select_'+ids[0]);click('@quick_offer_'+ids[0]);snap('quote-editable')
   agreed=next(r['context']['price'] for r in lines if r['uid']==ids[0])+5
   page.keyboard.press('Control+a');page.keyboard.type(str(int(agreed)));snap('quote-typed')
   click('@QuickOfferSubmit')
   phone.wait(page,'s.trade_session.lines.filter(r=>r.selected).length===2',timeout=10000)
   assert next(r for r in state()['trade_session']['lines'] if r['uid']==ids[0])['context']['price']==agreed
-  snap('two-agreed');click('@quick_inspect_'+ids[1]);phone.wait(page,'s.workspace==="inspect"',timeout=10000);snap('inspect')
+  snap('two-agreed');click('@quick_focus_'+ids[1]);click('@quick_inspect_'+ids[1]);phone.wait(page,'s.workspace==="inspect"',timeout=10000);snap('inspect')
   page.evaluate('orbitalTouchSend(JSON.stringify({type:"close"}))');phone.wait(page,'s.workspace===""&&!s.busy',timeout=10000);page.wait_for_timeout(600)
   assert state()['dialogue_uid']==ids[1]
   before=saved();due=sum(r['context']['price'] for r in before['trade']['session']['lines'] if r['selected'])

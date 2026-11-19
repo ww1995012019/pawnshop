@@ -484,11 +484,16 @@ func _sync_quote_evidence(row: HFlowContainer, hint: Label) -> void:
 		if selected: selected_caption = caption
 	hint.text = "证据随下一次出价提交" + (" · 已选" + selected_caption if selected_caption != "" else "")
 
-func _actions() -> void:
+func _actions(showing_settlement := false) -> void:
 	var modal: Array = shell.modal("交易操作" if Game.state.trade != null else "柜台事务",360)
 	for original in desk.actions.get_children():
+		if showing_settlement and original == desk.actions.get_child(0): continue
+		var caption: String = original.text
+		if showing_settlement and caption == "这件先不算":
+			if Game.state.trade.kind != "sell": continue
+			caption = "收回本件"
 		var ref: WeakRef = weakref(original)
-		var b := _key(original.text,func():
+		var b := _key(caption,func():
 			modal[1].call()
 			call_deferred("_invoke",ref))
 		b.disabled = original.disabled

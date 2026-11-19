@@ -6,6 +6,7 @@ const Life = preload("res://scripts/model/campaign_life.gd")
 const Evaluation = preload("res://scripts/model/campaign_evaluation.gd")
 
 var body: VBoxContainer
+var footer: VBoxContainer
 var sheet: PanelContainer
 var status_label: Label
 var status_text := ""
@@ -33,10 +34,10 @@ func hint_text() -> String:
 		return "打砸维修，今日整日歇业。费用已记账，余额可为负；进入次日恢复营业。"
 	if s.phase == "report":
 		if Life.is_endless(s): return "持续经营 · 第 %d 周日结完成，迎接第 %d 天。" % [week,int(s.day)+1]
-		return "日结完成：选择升级（第 3 天起），然后迎接明天。"
+		return "日结完成。可先安装升级，再迎接明天。" if int(s.day) >= 3 and not s.report.upgraded else "日结完成。迎接明天，继续营业。"
 	return "经营结束。可以回看账目，或新开一家店。"
 
-## Results belong to the scrollable ledger, directly below its title.
+## Keep the latest result with the footer action that can trigger it.
 func show_status(text: String, tone := "info") -> void:
 	status_text = text
 	status_tone = tone
@@ -50,14 +51,22 @@ func _add_status() -> void:
 	status_label.name = "report_status"
 	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	status_label.visible = status_text != ""
-	body.add_child(status_label)
+	footer.add_child(status_label)
 
 func enter() -> void:
 	sheet = UIKit.plate()
 	add_child(sheet)
+	sheet.minimum_size_changed.connect(queue_relayout)
+	var content := UIKit.vbox(8)
+	sheet.add_child(content)
 	var sc := ScrollContainer.new()
+	sc.name = "report_scroll"
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	sheet.add_child(sc)
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(sc)
+	footer = UIKit.vbox(8)
+	footer.name = "report_footer"
+	content.add_child(footer)
 	body = UIKit.vbox(12)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -102,6 +111,7 @@ func _row(g: GridContainer, k: String, v: String, color := UIKit.INK) -> void:
 
 func _refresh() -> void:
 	UIKit.clear(body)
+	UIKit.clear(footer)
 	columns = null
 	upgrades_row = null
 	totals_panel = null
@@ -239,8 +249,7 @@ func _refresh() -> void:
 				Game.dispatch({"type":"CALL_LANDLORD"})
 			else:
 				Game.dispatch({"type":"SETTLE"}))
-		body.add_child(b)
-		if shell.mobile_mode(): body.move_child(b,2)
+		footer.add_child(b)
 	elif s.phase == "report":
 		if day >= 3 and not s.report.upgraded:
 			var up := BoxContainer.new()
@@ -264,10 +273,8 @@ func _refresh() -> void:
 		next.pressed.connect(func():
 			if Game.dispatch({"type": "NEXT"}) and Game.state.phase == "open":
 				shell.go("counter"))
-		body.add_child(next)
-		if shell.mobile_mode():
-			body.move_child(next,2)
-			if continuation != null: body.move_child(continuation,2)
+		footer.add_child(next)
+		if shell.mobile_mode() and continuation != null: body.move_child(continuation,2)
 
 func _add_evaluation(s: Dictionary) -> void:
 	var recorded: Dictionary={}

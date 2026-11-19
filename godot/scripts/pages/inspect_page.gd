@@ -22,6 +22,7 @@ var info: VBoxContainer
 var bench: PanelContainer
 var bench_scroll: ScrollContainer
 var bench_body: VBoxContainer
+var inspection_status: Label
 var instrument: Control
 var picker: OptionButton
 var tared := false
@@ -104,6 +105,10 @@ func _build_panels() -> void:
 		Game.focus_uid = picker.get_item_metadata(i)
 		_load_item())
 	rv.add_child(picker)
+	inspection_status = UIKit.label("",16,UIKit.INK,false,true)
+	inspection_status.name = "inspection_status"
+	inspection_status.hide()
+	rv.add_child(inspection_status)
 	var sc := ScrollContainer.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -166,8 +171,11 @@ func relayout() -> void:
 	var records_width := minf(130,action_budget*.46) if shell.portrait_mode() else 130.0
 	var guide_button := get_node_or_null("watch_manual") as Button
 	if guide_button != null:
-		guide_button.position = Vector2(shell.content_rect().end.x-104,shell.content_rect().position.y) if shell.landscape_mode() else Vector2(mat_rect.end.x-12-guide_width,mat_rect.position.y+12)
-		guide_button.custom_minimum_size = Vector2(104,30) if shell.landscape_mode() else Vector2(guide_width,44)
+		var content: Rect2 = shell.content_rect()
+		guide_button.position = Vector2(content.end.x-104,content.position.y) if shell.landscape_mode() else Vector2(mat_rect.end.x-guide_width,content.position.y)
+		if shell.portrait_mode():
+			guide_button.position = Vector2(mat_rect.end.x-12-guide_width,mat_rect.position.y+12)
+		guide_button.custom_minimum_size = Vector2(104,30) if shell.landscape_mode() else Vector2(guide_width,44 if shell.mobile_mode() else 52)
 		guide_button.size = guide_button.custom_minimum_size
 	var records := get_node_or_null("portrait_records") as Button
 	if records != null:
@@ -220,7 +228,7 @@ func _desktop_layout() -> Rect2:
 	portrait_tools.show()
 	var width := r.size.x-490.0
 	portrait_tools.position = r.position
-	portrait_tools.size = Vector2(width,52)
+	portrait_tools.size = Vector2(width-158,52)
 	for id in TOOL_IDS:
 		var key: Button = tool_buttons[id]
 		if key.get_parent() != portrait_tools: key.reparent(portrait_tools)
@@ -246,10 +254,10 @@ func prepare_close_workspace() -> void:
 	optical_dragging = false
 	if is_instance_valid(item) and item.dragging: item.end_drag()
 
-func toast_rect() -> Rect2:
-	if shell.mobile_mode() or not mat_rect.has_area(): return Rect2()
-	# Keep the larger status banner left of the manual at the mat's top right.
-	return Rect2(mat_rect.position+Vector2(12,12),Vector2(maxf(1,mat_rect.size.x-182),100))
+func show_status(text: String, tone: String) -> void:
+	inspection_status.text = text
+	inspection_status.visible = not text.is_empty()
+	inspection_status.add_theme_color_override("font_color",UIKit.INK if tone == "info" else UIKit.DANGER)
 
 func _landscape_layout() -> Rect2:
 	var r: Rect2 = shell.content_rect()
@@ -309,7 +317,9 @@ func _portrait_records() -> void:
 		modal[0].add_child(UIKit.label("请先选择一件物品。",17))
 		return
 	modal[0].add_child(UIKit.label(GameData.def(current.defId).name,22,UIKit.AMBER,false,true))
-	modal[0].add_child(UIKit.label(Model.appraisal_text(current),17,UIKit.TEXT,false,true))
+	var appraisal := Model.estimate(current)
+	modal[0].add_child(UIKit.label(_price_summary(current.uid,appraisal),18,UIKit.TEXT,false,true))
+	modal[0].add_child(UIKit.label("已验 %d / %d" % [appraisal.count,TOOL_IDS.size()],16,UIKit.AMBER))
 	for evidence in current.evidence:
 		modal[0].add_child(UIKit.label(Model.evidence_caption(current,evidence),18,UIKit.AMBER,false,true))
 		modal[0].add_child(UIKit.label(Model.displayed_clue(current,evidence),17,UIKit.TEXT,false,true))
@@ -369,6 +379,18 @@ func _fill_picker() -> void:
 		picker.set_item_metadata(picker.item_count-1,it.uid)
 		if it.uid == it_uid: picker.select(picker.item_count-1)
 
+func _price_summary(uid: String, appraisal: Dictionary) -> String:
+	var estimate := "估价 %s–%s Cr" % [Model.jnum(appraisal.low),Model.jnum(appraisal.high)]
+	var trade = Game.state.trade
+	if trade != null and trade.kind in ["buy","sell"]:
+		var row := TradeSession.row(Game.state,uid)
+		if not row.is_empty() and row.included and row.status != "done":
+			return "%s %s   /   %s" % ["要价" if row.direction == "buy" else "出价",UIKit.money(row.context.price),estimate]
+		var current = Model.trade_item(Game.state)
+		if not CounterDialogue.active(Game.state) and current != null and current.uid == uid:
+			return "%s %s   /   %s" % ["要价" if trade.kind == "buy" else "出价",UIKit.money(trade.price),estimate]
+	return estimate
+
 func _refresh_info() -> void:
 	UIKit.clear(info)
 	var it = Game.item(it_uid)
@@ -384,15 +406,16 @@ func _refresh_info() -> void:
 		distinction.add_child(UIKit.label("珍稀型号 · 穹铸工艺" if GameData.def(it.defId).get("tier")=="ultra" else "名贵型号 · 金饰徽章", 16, UIKit.AMBER))
 		info.add_child(distinction)
 	var appraisal := Model.estimate(it)
-	var price_text := "估价 %s–%s Cr" % [Model.jnum(appraisal.low), Model.jnum(appraisal.high)]
+	info.add_child(UIKit.label(_price_summary(it_uid,appraisal),22,UIKit.INK,true,true))
+	info.add_child(UIKit.label("已验 %d / %d" % [appraisal.count,TOOL_IDS.size()],18,UIKit.AMBER,true))
 	var wear_note := "\n品相记录待更新：任选一项免费复核即可更新估价，未受影响的物证仍保留。" if int(appraisal.count)>0 and not appraisal.get("conditionCurrent",false) else ""
 	var model_recorded := false
 	for facts in it.get("inspectionFacts",{}).values():
 		if facts.get("appraisalObservation",{}).get("publicModel","")==WatchForgery.appearance_id(it): model_recorded=true
 	if int(appraisal.count)>0 and not model_recorded:
 		wear_note += "\n当前型号尚未登记进检验履历，任选一项免费复核即可登记。"
-	info.add_child(UIKit.note_card("检验估价", price_text + wear_note + "\n鉴定只提供参考范围；只需复测发生变化的项目，不耗 AP，用电另计。"))
-	info.add_child(UIKit.label("有效记录 · %d / %d" % [appraisal.count, TOOL_IDS.size()], 17, UIKit.AMBER))
+	if wear_note != "":
+		info.add_child(UIKit.label(wear_note.strip_edges(),16,UIKit.MUTED,false,true))
 	var progress := UIKit.grid(3,4)
 	progress.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_child(progress)
@@ -495,6 +518,7 @@ func _set_tool(id: String) -> void:
 		shell.toast(problem)
 		return
 	if scale_occupied: _scale_remove()
+	show_status("","info")
 	tool = id
 	pending_tool = id if id in ["TOL-001", "TOL-002"] else ""
 	progress = 0.0

@@ -4,6 +4,7 @@ var sprites: Dictionary={}
 var cards: Dictionary={}
 var origins: Dictionary={}
 var presentation_rect := Rect2()
+var show_focused_only := false
 const MODEL_RECT := Rect2(670,480,640,180)
 func display_point(point: Vector2) -> Vector2:
  if presentation_rect.size == Vector2.ZERO: return point
@@ -79,7 +80,9 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
    pos=presentation_rect.get_center()
 
   var mobile := presentation_rect.size != Vector2.ZERO and presentation_rect.size.x < 640
-  var height := minf(148.0 if shown.size()==1 else 116.0,presentation_rect.size.y+44.0) if mobile and info.focused else 54.0 if mobile else 64.0
+  if show_focused_only and info.focused and model_point(pos).round() in slots:
+   pos = presentation_rect.get_center()
+  var height := clampf(presentation_rect.size.y+18.0,48.0,146.0) if show_focused_only else 54.0 if mobile else 64.0
   var bounds := Rect2(670,500,610,110)
   if presentation_rect.size != Vector2.ZERO:
    var half := height*.5
@@ -108,6 +111,7 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
   var sprite: ItemSprite=sprites[uid]
   origins[uid]=info.direction
   card.visible = not mobile
+  sprite.visible = not show_focused_only or info.focused
   sprite.bounds = bounds
   if not sprite.busy and sprite.get_meta("display_height",0.0) != height:
    var next_scale := height/sprite.tex_size().y
@@ -186,6 +190,7 @@ func hit_test(global_point: Vector2) -> String:
  var distance := INF
  for uid in order:
   var sprite: ItemSprite=sprites[uid]
+  if show_focused_only and not sprite.visible: continue
   if sprite.contains(global_point) or (presentation_rect.size == Vector2.ZERO and cards[uid].area().has_point(to_local(global_point)-sprite.position)):
    var candidate := global_point.distance_squared_to(sprite.body.global_position)
    if candidate < distance:

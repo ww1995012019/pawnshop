@@ -5,7 +5,10 @@ const R=preload("res://scripts/ui/reference_atlas.gd")
 const A=preload("res://scripts/ui/comic_assets.gd")
 const INK=Color("20241e")
 const PAPER=Color("f7e5c3")
+const MUTED=Color("70604a")
 const RED=Color("b84e37")
+const ROW_HEIGHT := 64.0
+const ACTIVE_HEIGHT := 122.0
 var view
 var rows: VBoxContainer
 var scroll: ScrollContainer
@@ -45,13 +48,14 @@ func setup(controller) -> void:
  heading=view._label(self,"本次物品",Rect2(58,17,245,38),26,INK,true)
  subtitle=view._label(self,"",Rect2(22,54,441,23),16,Color("70604a"))
  scroll=ScrollContainer.new();scroll.name="QuickTradeScroll";scroll.position=Vector2(18,84);scroll.size=Vector2(449,425)
- scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;add_child(scroll)
- rows=VBoxContainer.new();rows.size_flags_horizontal=Control.SIZE_EXPAND_FILL;rows.add_theme_constant_override("separation",7);scroll.add_child(rows)
+ scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO
+ scroll.follow_focus=true;add_child(scroll)
+ rows=VBoxContainer.new();rows.size_flags_horizontal=Control.SIZE_EXPAND_FILL;rows.add_theme_constant_override("separation",3);scroll.add_child(rows)
  empty_hint=view._label(self,"暂无待看物品\n从库存挑一件摆上柜台",Rect2(50,220,385,110),22,Color("70604a"))
  empty_hint.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
  summary=view._label(self,"",Rect2(22,522,441,30),21,INK,true)
  balance=view._label(self,"",Rect2(22,552,441,24),16,Color("70604a"));balance.clip_text=true
- checkout=key(self,"统一结算",Rect2(18,582,310,52),func():request("checkout",""),"handshake",true);checkout.name="QuickCheckout"
+ checkout=key(self,"统一结算",Rect2(18,582,310,52),func():request("checkout",""),"handshake",true);checkout.name="QuickCheckout";checkout.clip_text=true
  sendoff=key(self,"送客",Rect2(338,582,130,52),func():request("send",""),"right-from-bracket");sendoff.name="QuickSendOff"
  for node in [summary,balance,checkout,sendoff]:bottom_rects[node]=node.position
  visibility_changed.connect(func():
@@ -69,18 +73,41 @@ func request(verb: String,uid: String) -> void:
  view._quick_action(verb,uid,snapshot.trade_id,snapshot.version,price)
 
 func add_row(uid: String) -> void:
- var panel=Control.new();panel.name="quick_row_"+uid;panel.custom_minimum_size=Vector2(425,100);panel.size_flags_horizontal=Control.SIZE_EXPAND_FILL;rows.add_child(panel)
- var focus=key(panel,"",Rect2(0,0,425,100),func():request("focus",uid));focus.name="quick_focus_"+uid
+ var panel := Control.new()
+ panel.name = "quick_row_" + uid
+ panel.custom_minimum_size = Vector2(425,ROW_HEIGHT)
+ panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+ rows.add_child(panel)
+ var focus := key(panel,"",Rect2(0,0,425,ROW_HEIGHT),func():request("focus",uid))
+ focus.name = "quick_focus_" + uid
  focus.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
- var thumb=view._image(panel,null,Rect2(17,10,44,78))
- var title=view._label(panel,"",Rect2(72,7,224,29),20,INK,true);title.clip_text=true
- var price=view._label(panel,"",Rect2(72,38,224,28),20,INK,true);price.clip_text=true
- var state=view._label(panel,"",Rect2(72,72,224,21),14,Color("70604a"));state.clip_text=true
- var choose=key(panel,"选购",Rect2(308,9,108,37),func():request("toggle",uid),"coins");choose.name="quick_select_"+uid
- var inspect=key(panel,"",Rect2(308,56,34,35),func():request("inspect",uid),"magnifying-glass");inspect.name="quick_inspect_"+uid;inspect.tooltip_text="鉴定这件原物"
- var offer=key(panel,"",Rect2(345,56,34,35),func():request("offer",uid),"gavel");offer.name="quick_offer_"+uid;offer.tooltip_text="详情与议价"
- var more=key(panel,"",Rect2(382,56,34,35),func():request("more",uid),"list");more.name="quick_more_"+uid;more.tooltip_text="更多操作：抵押、报警或收回"
- row_views[uid]={"panel":panel,"focus":focus,"thumb":thumb,"title":title,"price":price,"state":state,"choose":choose,"inspect":inspect,"offer":offer,"more":more,"shown_price":INF}
+ var thumb = view._image(panel,null,Rect2(12,5,38,51))
+ var title = view._label(panel,"",Rect2(62,5,216,28),20,INK,true)
+ title.clip_text = true
+ var state = view._label(panel,"",Rect2(62,33,346,23),16,MUTED)
+ state.clip_text = true
+ var price = view._label(panel,"",Rect2(280,5,129,28),19,INK,true)
+ price.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+ price.clip_text = true
+ var divider := UIKit.rule()
+ divider.position = Vector2(7,ROW_HEIGHT-2)
+ divider.size = Vector2(411,1)
+ divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+ panel.add_child(divider)
+ var inspect := key(panel,"鉴定",Rect2(12,71,106,38),func():request("inspect",uid),"magnifying-glass")
+ inspect.name = "quick_inspect_" + uid
+ var offer := key(panel,"议价",Rect2(125,71,88,38),func():request("offer",uid))
+ offer.name = "quick_offer_" + uid
+ var choose := key(panel,"锁价",Rect2(220,71,119,38),func():request("toggle",uid))
+ choose.name = "quick_select_" + uid
+ var more := key(panel,"更多",Rect2(346,71,67,38),func():request("more",uid))
+ more.name = "quick_more_" + uid
+ more.tooltip_text = "抵押、报警或收回"
+ row_views[uid] = {
+  "panel":panel,"focus":focus,"thumb":thumb,"title":title,"price":price,
+  "state":state,"divider":divider,"choose":choose,"inspect":inspect,"offer":offer,
+  "more":more,"shown_price":INF
+ }
 
 func refresh(s: Dictionary) -> void:
  var t=s.get("trade")
@@ -97,7 +124,7 @@ func refresh(s: Dictionary) -> void:
  empty_hint.visible=ids.is_empty()
  var totals=TradeSession.summary(s);var count=int(totals.buy_count)+int(totals.sell_count)
  snapshot={"trade_id":str(t.id),"version":int(totals.version),"net":float(totals.net)}
- var blocked=view.desk.busy or view.desk._scene_blocked()
+ var blocked: bool = view.desk.busy or view.desk._scene_blocked()
  heading.text="本次物品 · %d 件"%ids.size()
  subtitle.text="%s  ·  来客 %d  /  本店 %d"%[GameData.npc(t.npcId).name,shown.filter(func(info):return info.direction=="buy").size(),shown.filter(func(info):return info.direction=="sell").size()]
  for info in shown:
@@ -106,23 +133,42 @@ func refresh(s: Dictionary) -> void:
   var row:Dictionary=row_views[info.uid];var line=TradeSession.row(s,info.uid)
   var selected=bool(line.get("selected",false)) and line.get("status","")=="confirmed"
   row.shown_price=float(info.price);row.thumb.texture=A.watch(it)
-  row.title.text=GameData.def(WatchForgery.appearance_id(it)).name;row.title.tooltip_text=row.title.text
-  row.title.add_theme_color_override("font_color",RED if info.focused else INK)
-  row.price.text=("要价 " if info.direction=="buy" else "报价 ")+Model.jnum(info.price)+" Cr"
-  row.state.text="已选 · 价格锁定" if selected else "物证 %d · 已商谈 %d次"%[Model.evidence_count(it),int(line.get("context",{}).get("rounds",0))]
-  row.state.tooltip_text=line.get("reason","")
-  row.choose.text="已选" if selected else "选购" if info.direction=="buy" else "出售"
-  row.choose.icon=A.icon("check" if selected else "coins");skin(row.choose,false,selected)
-  row.choose.tooltip_text="取消这件选择" if selected else "按当前价选入待结算；此时不扣钱、不消耗 AP"
-  row.choose.disabled=blocked or not selected and line.get("status","") in ["blocked","rejected"]
-  if row.choose.disabled and not blocked:row.choose.tooltip_text=line.get("reason","")
-  for button in [row.focus,row.inspect,row.offer,row.more]:button.disabled=blocked
- summary.text="已选 %d 件  ·  %s %s Cr"%[count,"待付" if totals.net<0 else "待收",Model.jnum(absf(totals.net))]
+  var focused: bool = info.focused
+  row.title.text = WatchForgery.sale_name(it)
+  row.title.tooltip_text = row.title.text
+  row.focus.tooltip_text = row.title.text
+  row.price.text = ("要价 " if info.direction == "buy" else "出价 ") + UIKit.money(info.price)
+  row.price.tooltip_text = row.price.text
+  row.state.text = "已锁价 · 待结算" if selected else "物证 %d · 已商谈 %d 次" % [Model.evidence_count(it),int(line.get("context",{}).get("rounds",0))]
+  row.state.tooltip_text = line.get("reason","")
+  row.choose.text = "取消锁价" if selected else "按此价锁定"
+  row.choose.tooltip_text = "取消这件的锁价" if selected else "加入待结算，此时不扣款、不消耗 AP"
+  row.choose.disabled = blocked or not selected and line.get("status","") in ["blocked","rejected"]
+  if row.choose.disabled and not blocked: row.choose.tooltip_text = line.get("reason","")
+  row.focus.disabled = blocked
+  for button in [row.inspect,row.offer,row.more]:
+   button.disabled = blocked
+  if row.get("focused") != focused:
+   row.focused = focused
+   row.panel.custom_minimum_size.y = ACTIVE_HEIGHT if focused else ROW_HEIGHT
+   row.divider.visible = not focused
+   for button in [row.inspect,row.offer,row.choose,row.more]: button.visible = focused
+   for face in ["normal","hover","pressed","hover_pressed","disabled"]:
+    var fill := Color("f4d6a1") if focused else Color("ffecc6") if face == "hover" else Color.TRANSPARENT
+    var edge := Color("a56832") if focused else Color.TRANSPARENT
+    row.focus.add_theme_stylebox_override(face,view._style(fill,edge,5))
+  var guide_inspection: bool = focused and not selected and info.direction == "buy" and Model.evidence_count(it) == 0
+  if row.get("guide_inspection") != guide_inspection:
+   row.guide_inspection = guide_inspection
+   skin(row.inspect,guide_inspection,false)
+ summary.text = "已锁价 %d 件" % count if count > 0 else "逐件锁价后可统一结算"
  var problem=TradeSession.checkout_problem(s) if count>0 else ""
  if problem=="" and count>0:problem=StoreCosts.device_problem(s,"quote_terminal")
- balance.text=problem if problem!="" else "结算后余 %s Cr · 整批 1 AP"%Model.jnum(s.cash+totals.net) if count>0 else "逐件选中，统一交割 · 整批 1 AP"
+ balance.text=problem if problem!="" else "结算后余 %s Cr · 整批 1 AP"%Model.jnum(s.cash+totals.net) if count>0 else "结算一次消耗 1 AP"
  balance.tooltip_text=balance.text;balance.add_theme_color_override("font_color",RED if problem!="" else Color("70604a"))
- checkout.text="统一结算 · %d 件"%count;checkout.disabled=blocked or count==0 or problem!="";checkout.tooltip_text=problem
+ checkout.text = UIKit.batch_payment_caption(totals)
+ checkout.disabled = blocked or count == 0 or problem != ""
+ checkout.tooltip_text = problem
  sendoff.disabled=blocked;sendoff.tooltip_text="送客；取消尚未结算的选择"
  var focus_uid:String=TradeSession.session(s).get("focus","")
  if focus_uid!=last_focus:

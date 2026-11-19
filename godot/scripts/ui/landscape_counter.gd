@@ -19,6 +19,13 @@ var primary: Button
 var more: Button
 var flip: Button
 var goods: Button
+var put_aside: Button
+var goods_strip: ScrollContainer
+var goods_tiles: HBoxContainer
+var goods_position: Label
+var tile_buttons: Dictionary = {}
+var strip_signature := ""
+var strip_focus := ""
 var tool_keys: Array[Button] = []
 var dock_keys: Array[Button] = []
 var active := false
@@ -62,29 +69,41 @@ func setup(owner_adapter) -> void:
 	item_name = _label("",17,UIKit.TEXT)
 	hint = _label("拖动实物 · 轻点选中",14,UIKit.MUTED)
 	price = _label("",18,UIKit.AMBER)
+	price.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	price.max_lines_visible = 2
 	primary = _key("",adapter._primary,true)
 	primary.name = "landscape_primary"
-	more = _key("更多操作",adapter._actions)
+	more = _key("顾客操作",func(): adapter._actions(put_aside.visible))
 	more.name = "landscape_more"
 	flip = _key("翻面",func():
 		if is_instance_valid(desk.mat_item) and not desk.busy and not desk._scene_blocked(): desk.mat_item.flip())
 	flip.name = "landscape_flip"
 	goods = _key("选择货物",adapter._goods_popup)
 	goods.name = "landscape_goods"
+	put_aside = _key("取消本件锁价",func():
+		if not desk.busy and not desk._scene_blocked():
+			Game.dispatch(put_aside.get_meta("action",{})))
+	put_aside.name = "landscape_put_aside"
+	goods_strip = ScrollContainer.new()
+	goods_strip.name = "landscape_goods_strip"
+	goods_strip.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	goods_strip.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	goods_strip.scroll_deadzone = 8
+	goods_strip.follow_focus = true
+	add_child(goods_strip)
+	goods_tiles = UIKit.hbox(5)
+	goods_strip.add_child(goods_tiles)
+	goods_position = _label("",13,UIKit.MUTED)
 	wanted_paper=preload("res://scripts/ui/wanted_desk_paper.gd").new()
 	wanted_paper.compact=true
 	add_child(wanted_paper)
 	wanted_paper.setup(shell)
 	wanted_paper.name="wanted_inventory"
-	for spec in [["放大镜","TOL-001"],["紫外灯","TOL-002"],["电子秤","TOL-005"]]:
+	for spec in [["放大镜","TOL-001"],["紫外灯","TOL-002"],["称重","TOL-005"]]:
 		var id: String = spec[1]
 		var key := _key(spec[0],func():
 			if not desk.busy and not desk._scene_blocked(): adapter._open_instrument(id))
 		key.name = "landscape_"+id
-		key.text = ""
-		key.icon = UIKit.tool_icon(id)
-		key.expand_icon = true
-		key.add_theme_constant_override("icon_max_width",28)
 		key.tooltip_text = spec[0]
 		tool_keys.append(key)
 	for spec in [["柜台","counter"],["仓库","warehouse"],["展开工作台","repair"],["事务","tasks"],["设置","settings"]]:
@@ -141,6 +160,7 @@ func set_active(value: bool) -> void:
 			desk.bell.resting_scale = Vector2.ONE
 			desk.bell.scale = Vector2.ONE
 			desk.counter_table.presentation_rect = Rect2()
+			desk.counter_table.show_focused_only = false
 			for node in desk.back_root.get_children():
 				if node != desk.resident_window: node.show()
 			if is_instance_valid(desk.customer): desk.customer.scale = Vector2.ONE*(320.0/desk.customer.size.y)
@@ -156,6 +176,8 @@ func set_active(value: bool) -> void:
 		for node in shell.scene_nodes: if is_instance_valid(node): node.show()
 
 func _layout() -> void:
+	# Keep committed originals available until their handoff animation ends.
+	if desk.busy and last_size != Vector2.ZERO: return
 	var area: Rect2 = shell.safe_area()
 	var screen := area.size
 	if screen == last_size and inset == area.position:return
@@ -204,8 +226,17 @@ func _layout() -> void:
 	_place(hint,Rect2(mat.position+Vector2(8,33),Vector2(mat.size.x-16,20)))
 	_layout_paper_tools()
 
-	desk.MAT_POS = inset+Vector2(mat.get_center().x,mat.position.y+130)
-	desk.counter_table.presentation_rect = Rect2(inset+mat.position+Vector2(42,96),Vector2(maxf(80,mat.size.x-84),maxf(30,inner_h-150)))
+	var strip_y := mat.end.y-94.0
+	var strip_width := mat.size.x-16.0
+	var strip_resized := not is_equal_approx(goods_strip.size.x,strip_width)
+	_place(goods_strip,Rect2(mat.position.x+8,strip_y,strip_width,50))
+	if strip_resized and tile_buttons.has(strip_focus):
+		goods_strip.ensure_control_visible.call_deferred(tile_buttons[strip_focus])
+	_place(goods_position,Rect2(mat.position.x+8,strip_y-19,mat.size.x-16,18))
+	var surface := Rect2(inset+mat.position+Vector2(20,55),Vector2(maxf(60,mat.size.x-40),maxf(34,strip_y-mat.position.y-74)))
+	desk.MAT_POS = surface.get_center()
+	desk.counter_table.presentation_rect = surface
+	desk.counter_table.show_focused_only = true
 	desk._sync_table()
 	if is_instance_valid(desk.mat_item) and not CounterDialogue.active(Game.state):
 		desk.mat_item.position = desk.MAT_POS
@@ -220,9 +251,10 @@ func _layout() -> void:
 	desk.mobile_goods = inset+Vector2(18+left*.5,bottom+22)
 	goods.visible = screen.y >= 320
 	var action_top := bottom-122 if goods.visible else bottom-84
-	_place(price,Rect2(tx,action_top-26,right-12,24))
+	_place(price,Rect2(tx,action_top-38,right-12,36))
 	_place(primary,Rect2(tx,action_top,right-12,32))
 	_place(more,Rect2(tx,action_top+36,right-12,30))
+	_place(put_aside,Rect2(mat.end.x-132,mat.position.y+35,126,30))
 	if goods.visible: _place(goods,Rect2(tx,bottom-34,right-12,30))
 	var dock_width := (screen.x-16)/5
 	for i in 5: _place(dock_keys[i],Rect2(8+i*dock_width,bottom+4,dock_width-4,dock_height))
@@ -232,12 +264,53 @@ func _layout_paper_tools() -> void:
 	# document/tool controls; rebuilding the table would destroy the originals.
 	var has_notice:=WantedCases.has_notice(Game.state)
 	last_notice=has_notice
+	var left := mat.position.x+6.0+(60.0 if has_notice else 0.0)
+	var available := mat.end.x-6.0-left
+	var width := minf(110.0,(available-8.0)/3.0)
+	var start := left+(available-3.0*width-8.0)/2.0
 	for i in 3:
-		var start:=mat.get_center().x-73
-		if has_notice:start=mat.position.x+88
-		var spacing:=48 if has_notice and mat.size.x<280 else 52
-		_place(tool_keys[i],Rect2(start+i*spacing,mat.end.y-38,42,34))
-	_place(wanted_paper,Rect2(mat.position.x+6,mat.end.y-44,74,44))
+		_place(tool_keys[i],Rect2(start+i*(width+4.0),mat.end.y-38,width,34))
+	_place(wanted_paper,Rect2(mat.position.x+4,mat.end.y-38,56,34))
+
+func _refresh_goods_strip(shown: Array) -> void:
+	goods_strip.visible = not shown.is_empty()
+	goods_position.visible = goods_strip.visible
+	var focus := ""
+	var index := 0
+	var ids: Array = []
+	for i in shown.size():
+		ids.append(shown[i].uid)
+		if shown[i].focused:
+			focus = shown[i].uid
+			index = i+1
+	goods_position.text = ("第 %d / %d 件" % [index,shown.size()] if index > 0 else "请选择柜台上的货物") if not shown.is_empty() else ""
+	var signature := str(Game.state.trade.id if Game.state.trade != null else "") + str(ids)
+	var changed := signature != strip_signature
+	if changed:
+		strip_signature = signature
+		UIKit.clear(goods_tiles)
+		tile_buttons.clear()
+		for entry in shown:
+			var uid: String = entry.uid
+			var item = TradeSession.item(Game.state,uid)
+			if item == null: continue
+			var button: Button = adapter._key("",func():
+				if not desk.busy and not desk._scene_blocked(): desk._focus_table(uid),"secondary")
+			PortraitSkin.button(button,false,true)
+			button.name = "landscape_item_" + uid
+			button.icon = UIKit.physical_icon(item)
+			button.expand_icon = true
+			button.add_theme_constant_override("icon_max_width",34)
+			button.custom_minimum_size = Vector2(51,48)
+			button.tooltip_text = WatchForgery.sale_name(item)
+			goods_tiles.add_child(button)
+			tile_buttons[uid] = button
+	if changed or focus != strip_focus:
+		for uid in tile_buttons:
+			PortraitSkin.button(tile_buttons[uid],uid == focus,true)
+		if tile_buttons.has(focus): goods_strip.ensure_control_visible.call_deferred(tile_buttons[focus])
+		strip_focus = focus
+	for button in tile_buttons.values(): button.disabled = desk.busy or desk._scene_blocked()
 
 func _process(_delta: float) -> void:
 	if not active: return
@@ -252,15 +325,35 @@ func _process(_delta: float) -> void:
 		if not adapter.speech.text.begins_with(speech_copy.text): dialogue_scroll.scroll_vertical = 0
 		speech_copy.text = adapter.speech.text
 	item_name.text = adapter.item_name.text
-	price.text = adapter.price.text
+	var trade = Game.state.trade
+	var problem := ""
+	var dialogue := CounterDialogue.active(Game.state)
+	var shown := CounterDialogue.table_items(Game.state) if dialogue else []
+	_refresh_goods_strip(shown)
 	primary.text = adapter.primary.text
 	primary.disabled = adapter.primary.disabled
+	if dialogue and trade.locked:
+		primary.text = UIKit.batch_payment_caption(TradeSession.summary(Game.state))
+		problem = TradeSession.checkout_problem(Game.state)
+		if problem == "": problem = StoreCosts.device_problem(Game.state,"quote_terminal")
+		primary.disabled = primary.disabled or problem != ""
+	price.autowrap_mode = TextServer.AUTOWRAP_OFF if problem == "" else TextServer.AUTOWRAP_ARBITRARY
+	price.add_theme_font_size_override("font_size",18 if problem == "" else 13)
+	price.add_theme_color_override("font_color",UIKit.AMBER if problem == "" else UIKit.DANGER)
+	price.text = adapter.price.text if problem == "" else problem.get_slice("，",0)
+	primary.tooltip_text = problem
+	put_aside.visible = dialogue and trade.locked
+	put_aside.disabled = desk.dialogue_put_aside.disabled
+	if put_aside.visible:
+		var action := CounterDialogue.action_for(Game.state,"COUNTER_UNSELECT")
+		if put_aside.get_meta("action",{}) != action: put_aside.set_meta("action",action)
 	more.disabled = desk.busy
+	more.text = "顾客操作" if trade != null else "柜台操作"
 	goods.disabled = desk.busy
-	goods.text = "货物 · %d 件" % CounterDialogue.table_items(Game.state).size() if CounterDialogue.active(Game.state) else "选择货物"
+	goods.text = "货物 · %d 件" % shown.size() if dialogue else "选择货物"
 	flip.disabled = desk.busy or not is_instance_valid(desk.mat_item)
 	for key in tool_keys: key.disabled = flip.disabled
 	for key in dock_keys: key.disabled = desk.busy
 	var police: bool = desk.resident_window.has_node("counter_patrol")
 	if police: visitor_name.text = "巡警 · 现场核对"
-	hint.text = "巡警正在核对 · 请等候" if police else "正在交割 · 请等待钱货落稳" if desk.busy else "拖动实物 · 工具展开鉴定台"
+	hint.text = "巡警正在核对 · 请等候" if police else "正在交割 · 请等待钱货落稳" if desk.busy else "选中手表后可用工具鉴定" if not is_instance_valid(desk.mat_item) else ""

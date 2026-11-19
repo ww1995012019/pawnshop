@@ -1031,7 +1031,7 @@ func toast(text: String, tone := "info") -> void:
 	if not workspace_mode and workspace_open() and active.page_name=="repair":
 		active.toast(text,tone)
 		return
-	if active.page_name == "report" and active.page != null:
+	if active.page != null and (active.page_name == "report" or (active.page_name == "inspect" and not mobile_mode())):
 		_clear_toasts()
 		active.page.show_status(text, tone)
 		return
@@ -1062,11 +1062,16 @@ func toast(text: String, tone := "info") -> void:
 	p.name="NoticeBanner"
 	p.set_meta("message",text);p.set_meta("tone",tone)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var l := UIKit.label(("！ " if urgent else "提示 · ")+text,14 if landscape_mode() else 16 if mobile_mode() else 20,UIKit.AUX_INK,true,true)
+	var notice_size := 14 if landscape_mode() else 16 if mobile_mode() else 18 if page_name == "counter" else 20
+	var l := UIKit.label(("！ " if urgent else "提示 · ")+text,notice_size,UIKit.AUX_INK,true,true)
 	l.add_theme_color_override("font_color",UIKit.AUX_LIGHT if urgent else UIKit.AUX_INK)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.max_lines_visible = 1 if landscape_mode() and page_name!="repair" else 2
+	var one_line := landscape_mode() and page_name != "repair"
+	if one_line:
+		l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	elif page_name == "counter" and not mobile_mode():
+		l.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	l.max_lines_visible = 1 if one_line else 2
 	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	l.tooltip_text = text
 	l.custom_minimum_size = Vector2(toast_box.size.x - 36, 0)

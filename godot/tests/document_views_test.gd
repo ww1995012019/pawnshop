@@ -81,7 +81,10 @@ func run() -> void:
 	paper.move_document(Vector2(170,100))
 	check(paper.position.distance_to(Vector2(170,100))<1,"wanted move survives geometry save refresh")
 	var rect: Rect2 = shell.page.toast_rect()
-	check(rect.end.y <= 124, "counter notification stays above portrait window")
+	rect.position += shell.counter_offset()
+	var counter = shell.page.strict_view
+	check(not rect.intersects(counter.face.get_global_rect()), "counter notification leaves the visitor portrait unobstructed")
+	check(not rect.intersects(counter.get_node("StrictSpeechBubble").get_global_rect()), "counter notification leaves the dialogue unobstructed")
 	check(shell.page.cash_tray.mouse_filter != Control.MOUSE_FILTER_IGNORE,"cash stack is clickable")
 	if guide != null: guide.close_document()
 	paper.close_document()
