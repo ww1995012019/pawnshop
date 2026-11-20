@@ -37,7 +37,7 @@ func model_helpers() -> void:
 	check(position != null and position.x == 0 and position.y == 6,"storage packing searches added rows after old rows fill")
 	s.shopUpgrades.extension = "workshop"
 	s.phase = "report"
-	s.report = {"cash":s.cash}
+	s.report = {"day":s.day,"cash":s.cash}
 	var next := Model.reduce(s,{"type":"NEXT"})
 	check(next.ap == 14 and next.day == 4,"workshop refills14 AP through real next-day reducer")
 func run() -> void:

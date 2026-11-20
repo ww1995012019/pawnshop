@@ -993,13 +993,14 @@ func _on_changed(prev: Dictionary, next: Dictionary, action: Dictionary) -> void
 		_suspend_home_focus()
 	_refresh_hud()
 	hint(page.hint_text() if page else "")
-	if action.type in ["NEXT","CONTINUE_CAMPAIGN"] and next.phase == "open" and not workspace_mode:
+	if action.type in ["NEXT","CONTINUE_CAMPAIGN","START_STORY_90"] and next.phase == "open" and not workspace_mode:
 		close_workspace(true, true)
 		shutter(next.day)
 
 func _refresh_hud() -> void:
 	var s := Game.state
-	gauges.day.text = "第%d天" % int(s.day) if CampaignLife.is_endless(s) else "%02d/21" % int(s.day)
+	var boundary := CampaignLife.end_day(s)
+	gauges.day.text = "第%d天" % int(s.day) if boundary == 0 else "%02d/%d" % [int(s.day),boundary]
 	gauges.ap.text = "%d/%d" % [int(s.ap),ShopUpgrades.daily_ap(s)]
 	gauges.risk.text = "%d" % int(s.risk)
 	gauges.risk.add_theme_color_override("font_color", UIKit.DANGER if s.risk >= 60 else UIKit.AMBER)
@@ -1640,6 +1641,38 @@ func open_watch_catalogue() -> void:
 func open_campaign_ledger() -> void:
 	load("res://scripts/ui/campaign_ledger.gd").open(self)
 
+func campaign_scene_priority_problem() -> String:
+	return preload("res://scripts/model/campaign_story.gd").priority_problem(Game.state)
+
+func campaign_scene_problem() -> String:
+	if workspace_mode or workspace_open() or page_name != "counter" or not is_instance_valid(page):
+		return "回到柜台后可以拆信。"
+	if Game.state.phase != "open":
+		return "营业时可以拆信。"
+	var priority := campaign_scene_priority_problem()
+	if priority != "":
+		return priority
+	if Game.state.trade != null or _counter_layout_busy():
+		return "接待和交割结束后可以拆信。"
+	if is_instance_valid(title):
+		return "开门后可以拆信。"
+	for effect in fx.get_children():
+		if effect.get_meta("blocks_shop_input",false) and not effect.is_queued_for_deletion():
+			return "开门后可以拆信。"
+	return ""
+
+func open_campaign_scene(beat_id: String) -> void:
+	if beat_id == "" or modal_open() or campaign_scene_problem() != "":
+		return
+	var script := preload("res://scripts/ui/campaign_scene.gd")
+	var beat := preload("res://scripts/model/campaign_story.gd").current(Game.state)
+	if String(beat.get("id","")) != beat_id:
+		return
+	var m := modal(String(beat.title),740)
+	var letter := script.new()
+	m[0].add_child(letter)
+	letter.setup(self,m[1],beat)
+
 func export_legacy_backup() -> void:
 	var text: String = Game.legacy_save_text()
 	if text == "":
@@ -1687,9 +1720,9 @@ func _open_story_book_after_close() -> void:
 		await get_tree().process_frame
 	open_story_book()
 
-func open_shop_plan(initial := "overview") -> void:
+func open_shop_plan(initial := "overview", focus_uid := "") -> void:
 	if workspace_mode:
-		workspace_parent.open_shop_plan(initial)
+		workspace_parent.open_shop_plan(initial,focus_uid)
 		return
 	var m := modal("经营计划",1100)
 	var content: VBoxContainer = m[0]
@@ -1706,18 +1739,18 @@ func open_shop_plan(initial := "overview") -> void:
 		scroll.follow_focus = true
 		content.add_child(scroll)
 		scroll.add_child(plan)
-	plan.setup(self,m[1],initial)
+	plan.setup(self,m[1],initial,focus_uid)
 
 func _plan_navigate(destination: String, uid := "") -> void:
 	# Let the sheet finish closing before restoring workspace keyboard/pointers.
-	for frame in 30:
-		var closing := false
+	while modal_open():
 		for dim in modal_layer.get_children():
-			if dim.has_meta("closing"): closing = true
-		if not closing: break
+			if not dim.has_meta("closing"): return
 		await get_tree().process_frame
-	if modal_open(): return
-	go(destination,uid)
+	match destination:
+		"campaign_scene": open_campaign_scene(uid)
+		"history": open_shop_plan("history",uid)
+		_: go(destination,uid)
 
 func open_help() -> void:
 	var m := modal("经营手册", 1000)
@@ -1914,6 +1947,14 @@ func _show_title() -> void:
 		_close_title()
 		shutter(int(Game.state.day)))
 	v.add_child(cont)
+	if not Game.has_save and Game.DEFAULT_CAMPAIGN_MODE != CampaignLife.STORY90:
+		var story := UIKit.button("开新店 · 90 天故事", "secondary", Vector2(0, 52), 21)
+		story.name = "start_campaign_90"
+		story.pressed.connect(func():
+			_close_title()
+			Game.new_game("", CampaignLife.STORY90)
+			shutter(1))
+		v.add_child(story)
 	if Game.has_save:
 		var fresh := UIKit.button("新开一家店", "secondary", Vector2(0, 52), 21)
 		fresh.pressed.connect(func():

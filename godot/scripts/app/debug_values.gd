@@ -130,6 +130,7 @@ static func apply(scope: String, path: Array, text: String) -> Dictionary:
  for part in path.slice(0,path.size()-1): target=target[part]
  target[path[-1]]=value
  if not _backup(): return {"ok":false,"message":"备份写入失败，未执行修改。"}
+ if scope=="state": ShopJournal.ensure(next)
  var previous: Dictionary=Game.state.duplicate(true)
  var path_to_save: String={"state":Game.SAVE_PATH,"data":DATA_PATH,"prefs":Game.PREFS_PATH}[scope]
  if not _write(path_to_save,next): return {"ok":false,"message":"保存失败，未执行修改。"}

@@ -1,6 +1,6 @@
 extends Page
 ## Day end: today's ledger, electricity/cleaning receipts, the first equipment
-## upgrade from day 3, the next day, and the 21-day outcome.
+## upgrade from day 3, the next day, and saved campaign assessments.
 
 const Life = preload("res://scripts/model/campaign_life.gd")
 const Evaluation = preload("res://scripts/model/campaign_evaluation.gd")
@@ -30,11 +30,15 @@ func hint_text() -> String:
 	var week := int(Life.summary(s).week)
 	if s.phase == "open":
 		return ("持续经营 · 第 %d 周。" % week if Life.is_endless(s) else "") + "处理完今天的客人与订单后，打烊结算电费与清洁费，租金由房东上门收取。"
-	if s.phase == "report" and s.get("report",{}).get("closed",false):
+	if Life.pending_closed_checkpoint(s):
+		return "歇业日费用已入账，可以完成本期经营评估。"
+	if s.phase == "report" and not Life.report_is_current(s):
+		return "没有当前营业日的日结记录。"
+	if s.phase == "report" and s.report.get("closed",false):
 		return "打砸维修，今日整日歇业。费用已记账，余额可为负；进入次日恢复营业。"
 	if s.phase == "report":
 		if Life.is_endless(s): return "持续经营 · 第 %d 周日结完成，迎接第 %d 天。" % [week,int(s.day)+1]
-		return "日结完成。可先安装升级，再迎接明天。" if int(s.day) >= 3 and not s.report.upgraded else "日结完成。迎接明天，继续营业。"
+		return "日结完成。可先安装升级，再迎接明天。" if int(s.day) >= 3 and not s.report.get("upgraded",false) else "日结完成。迎接明天，继续营业。"
 	return "经营结束。可以回看账目，或新开一家店。"
 
 ## Keep the latest result with the footer action that can trigger it.
@@ -123,10 +127,12 @@ func _refresh() -> void:
 		body.add_child(UIKit.record_card("结业记录", String(s.get("outcome", "旧货局的灯熄了。")), "FINAL"))
 		var final_sheet := UIKit.plate(UIKit.paper_style(18))
 		var g := UIKit.grid(2, 10)
-		_row(g, "期末现金", UIKit.money(s.cash), UIKit.RUST)
+		var frozen: Dictionary = Life.checkpoint(s,day).get("evaluation",{}) if Life.is_story(s) else {}
+		_row(g, "期末现金", UIKit.money(frozen.get("cash",s.cash)), UIKit.RUST)
 		_row(g, "完成交易", "%d 笔" % s.completedTrades.size())
-		_row(g, "履约订单", "%d 张" % int(Evaluation.summary(s).fulfilledOrders))
-		_row(g, "站务关注", "%d / 100" % int(s.risk))
+		var orders := int(frozen.fulfilledOrders) if frozen.has("fulfilledOrders") else int(Evaluation.summary(s).fulfilledOrders)
+		_row(g, "履约订单", "%d 张" % orders)
+		_row(g, "站务关注", "%d / 100" % int(frozen.get("risk",s.risk)))
 		final_sheet.add_child(g)
 		body.add_child(final_sheet)
 		_add_evaluation(s)
@@ -142,10 +148,14 @@ func _refresh() -> void:
 		var subtitle := "第 %d 周 · %s" % [int(summary.week),"日结报告" if s.phase == "report" else "营业账目"]
 		if summary.firstAssessment is Dictionary: subtitle += " · 首次评估：" + String(summary.firstAssessment.outcome)
 		body.add_child(UIKit.module_header("持续经营 · 第 %d 天" % day, subtitle, "ENDLESS / %02d" % day))
+	elif Life.is_story(s):
+		var subtitle := "日结报告" if s.phase == "report" else "营业账目"
+		body.add_child(UIKit.module_header("故事战役 · 第 %d / %d 天" % [day,Life.end_day(s)], subtitle, "LEDGER / %02d" % day))
 	else:
 		body.add_child(UIKit.module_header("第 %d 天 · %s" % [day, "日结报告" if s.phase == "report" else "营业中"], "营业账目", "LEDGER / %02d" % day))
 	_add_status()
-	if int(s.day)==21 and s.phase=="report" or Life.is_endless(s): _add_evaluation(s)
+	if Life.is_endless(s) or (s.phase == "report" and Life.report_is_current(s) and (day == 21 or Life.can_view_ending(s)) and not Life.pending_closed_checkpoint(s)):
+		_add_evaluation(s)
 	_add_night_controls(s)
 	var today := []
 	for r in s.ledger:
@@ -196,8 +206,7 @@ func _refresh() -> void:
 	totals.add_child(right)
 	right.add_child(UIKit.label("结算联 / TOTALS", 18, UIKit.INK, true))
 	var g := UIKit.grid(2, 8)
-	var due := Landlord.outstanding(s)
-	var paid: bool = s.phase == "report" and s.report != null
+	var paid: bool = s.phase == "report" and Life.report_is_current(s)
 	# Historic reports preserve the old single charge; never recalculate them.
 	var costs: Dictionary = s.report.get("costs", {"legacy":true,"maintenance":s.report.get("maintenance",20),"electricity":0,"cleaning":0,"total":s.report.get("maintenance",20),"details":{}}) if paid else StoreCosts.quote(s)
 	if paid:
@@ -212,9 +221,16 @@ func _refresh() -> void:
 	else:
 		_row(g, "店铺电费" if paid else "预计电费", UIKit.money(costs.electricity))
 		_row(g, "店铺清洁费" if paid else "固定清洁费", UIKit.money(costs.cleaning))
-	var rent: float = s.report.get("settlementRent",s.report.rent) if paid else due
-	_row(g, "本期租金已交房东" if Landlord.paid(s) else "待交房东的租金", UIKit.money(Model.rent_due(s.day)))
-	_row(g, "本次支付" if paid else "本次日结预计支付", UIKit.money(costs.total + (rent if paid else 0)), UIKit.RUST)
+	var scheduled_rent := float(Landlord.nominal_due(s))
+	if paid: scheduled_rent = float(s.report.get("rent",scheduled_rent))
+	var settlement_rent: float = s.report.get("settlementRent",scheduled_rent) if paid else 0.0
+	var story := Life.is_story(s)
+	var next_rent := Landlord.next_payment(s) if story else {}
+	if not story or (scheduled_rent > 0 and next_rent.get("day",0) != day):
+		_row(g, "本期租金已交房东" if Landlord.paid(s) else "待交房东的租金", UIKit.money(scheduled_rent))
+	if not next_rent.is_empty():
+		_row(g, "第 %d 天应付租金" % next_rent.day, UIKit.money(next_rent.amount))
+	_row(g, "本次支付" if paid else "本次日结预计支付", UIKit.money(costs.total + settlement_rent), UIKit.RUST)
 	_row(g, "结余现金" if paid else "支付后现金", UIKit.money(s.report.cash if paid else s.cash - costs.total), UIKit.RUST)
 	if not paid:
 		_row(g, "剩余行动点", "%d AP" % int(s.ap))
@@ -251,7 +267,12 @@ func _refresh() -> void:
 				Game.dispatch({"type":"SETTLE"}))
 		footer.add_child(b)
 	elif s.phase == "report":
-		if day >= 3 and not s.report.upgraded:
+		if Life.pending_closed_checkpoint(s):
+			var finalize := UIKit.button("完成当日结算", "primary", Vector2(0,64), 24)
+			finalize.pressed.connect(func(): Game.dispatch({"type":"SETTLE"}))
+			footer.add_child(finalize)
+			return
+		if Life.report_is_current(s) and day >= 3 and not s.report.get("upgraded",false) and not (Life.is_story(s) and day == Life.end_day(s)):
 			var up := BoxContainer.new()
 			up.add_theme_constant_override("separation", 14)
 			upgrades_row = up
@@ -269,34 +290,47 @@ func _refresh() -> void:
 				up.add_child(card)
 			body.add_child(up)
 		var continuation := _add_continuation(s)
-		var next := UIKit.button("迎接第 %d 天" % (day + 1) if day < 21 or Life.is_endless(s) else "查看结局", "secondary" if continuation != null else "primary", Vector2(0, 64), 24)
-		next.pressed.connect(func():
-			if Game.dispatch({"type": "NEXT"}) and Game.state.phase == "open":
-				shell.go("counter"))
-		footer.add_child(next)
+		if Life.can_advance(s) or Life.can_view_ending(s):
+			var next := UIKit.button("迎接第 %d 天" % (day + 1) if Life.can_advance(s) else "查看结局", "secondary" if continuation != null else "primary", Vector2(0, 64), 24)
+			next.pressed.connect(func():
+				if Game.dispatch({"type": "NEXT"}) and Game.state.phase == "open":
+					shell.go("counter"))
+			footer.add_child(next)
 		if shell.mobile_mode() and continuation != null: body.move_child(continuation,2)
 
 func _add_evaluation(s: Dictionary) -> void:
-	var recorded: Dictionary={}
-	var heading:="第21天经营评估"
+	var day := int(s.day)
+	var story_final: Dictionary = s.get("campaignStory", {}).get("final", {})
+	if day == 90 and not story_final.is_empty():
+		body.add_child(load("res://scripts/ui/campaign_scene.gd").final_card(story_final))
 	if Life.is_endless(s):
 		var first=Life.summary(s).firstAssessment
-		if first is Dictionary and first.get("evaluation") is Dictionary: recorded=first.evaluation
-		heading="首轮经营评估 · 保留第21天快照"
-		if recorded.is_empty():
-			body.add_child(UIKit.label("首轮旧档未保存详细评价，不从之后的经营数据补写历史。",16,UIKit.MUTED,false,true))
+		if first is Dictionary and first.get("evaluation") is Dictionary:
+			_evaluation_panel(first.evaluation,"首轮经营评估 · 保留第%d天快照" % int(first.day))
+		else:
+			body.add_child(UIKit.label("首轮旧档的评估详情未知。",16,UIKit.MUTED,false,true))
+		var final := Life.checkpoint(s,90)
+		if final.get("evaluation") is Dictionary:
+			_evaluation_panel(final.evaluation,"第90天经营评估 · 保留终局快照","campaign_final_evaluation")
+		return
+	var heading := "第%d天经营评估" % day
+	var recorded = Life.checkpoint(s,day).get("evaluation")
+	if not recorded is Dictionary and Life.report_is_current(s): recorded = s.report.get("evaluation")
+	if not recorded is Dictionary:
+		if s.phase == "ending" and day == 21 and Life.SUCCESS_OUTCOMES.has(s.get("outcome","")):
+			body.add_child(UIKit.label("旧档仅保留结局与现有账目，首次评估详情未知。",16,UIKit.MUTED,false,true))
 			return
-	elif s.get("report") is Dictionary and s.report.get("evaluation") is Dictionary:
-		recorded=s.report.evaluation
-	else:
-		recorded=Evaluation.summary(s)
-		heading="留存成果 · 原结局保留" if s.has("outcome") else "当前经营成果"
+		recorded = Evaluation.summary(s)
+		heading = "留存成果 · 原结局保留" if s.has("outcome") else "当前经营成果"
+	_evaluation_panel(recorded,heading)
+
+func _evaluation_panel(recorded: Dictionary, heading: String, panel_name := "campaign_evaluation") -> void:
 	var panel:=UIKit.plate(UIKit.inset_style(14))
-	panel.name="campaign_evaluation"
+	panel.name=panel_name
 	var content:=UIKit.vbox(7)
 	content.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	panel.add_child(content)
-	content.add_child(UIKit.label(heading+" · "+String(recorded.get("outcome",s.get("outcome",""))),19,UIKit.AMBER,true,true))
+	content.add_child(UIKit.label(heading+" · "+String(recorded.get("outcome","")),19,UIKit.AMBER,true,true))
 	content.add_child(UIKit.label("完成维修 %d 件 · 履约 %d 单（维修交付 %d 单）" % [int(recorded.get("repairsCompleted",0)),int(recorded.get("fulfilledOrders",0)),int(recorded.get("repairDeliveries",0))],17,UIKit.TEXT,false,true))
 	content.add_child(UIKit.label("检查公开型号 %d 种 · 名贵/珍稀 %d 种 · 站务关注 %d / 100" % [int(recorded.get("inspectedModels",0)),int(recorded.get("rareModels",0)),int(recorded.get("risk",0))],17,UIKit.TEXT,false,true))
 	content.add_child(UIKit.label("评估现金 %s · 净现金流 %s" % [UIKit.money(recorded.get("cash",0)),UIKit.money(recorded.get("netCashFlow",0))],17,UIKit.CYAN,false,true))
@@ -315,6 +349,13 @@ func _add_continuation(s: Dictionary) -> VBoxContainer:
 		if Game.dispatch({"type":"CONTINUE_CAMPAIGN"}) and Game.state.phase == "open":
 			shell.go("counter"))
 	choice.add_child(resume)
+	if Life.start_story_problem(s) == "":
+		var story := UIKit.button("续接 90 天故事","secondary",Vector2(0,64),24)
+		story.name = "start_story_90"
+		story.pressed.connect(func():
+			if Game.dispatch({"type":"START_STORY_90"}) and Game.state.phase == "open":
+				shell.go("counter"))
+		choice.add_child(story)
 	body.add_child(choice)
 	return choice
 
@@ -396,7 +437,7 @@ func _add_night_controls(s: Dictionary) -> void:
 	var risk_text := "当前失窃概率 %.2f%%。" % (NightCrime.theft_chance_bp(s)/100.0)
 	if int(s.day)<3:
 		risk_text="前两晚享受保护，今晚不会发生夜间失窃。"
-	elif int(s.day)>20 and not Life.is_endless(s):
+	elif not NightCrime.theft_active(s):
 		risk_text="夜间失窃时段已结束。"
 	elif not s.inventory.any(func(item):return NightCrime.stealable(s,item)):
 		risk_text="暂无可被盗的店铺自有库存，今晚无失窃损失。"

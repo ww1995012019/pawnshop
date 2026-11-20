@@ -5,6 +5,7 @@ func run() -> void:
  var recovered:Dictionary=load("res://scripts/model/commerce.gd").reduce(s,{"type":"REPORT_LOST_ITEM","tradeId":s.trade.id})
  recovered.robbery.entries[0].revenge={"day":int(recovered.day)+1,"percent":8,"done":false}
  recovered.phase="report";recovered.cash=1
+ recovered.report={"day":recovered.day}
  var closed:=Model.reduce(recovered,{"type":"NEXT"})
  var path:="res://../work/robbery"
  DirAccess.make_dir_recursive_absolute(path)

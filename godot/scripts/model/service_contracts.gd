@@ -180,12 +180,18 @@ static func reduce(previous: Dictionary, action: Dictionary) -> Variant:
 		if original != null and original.has("serviceJobId"):
 			return reduce(previous,{"type":"RETURN_SERVICE_CONTRACT","id":original.serviceJobId})
 		return null
-	if not ACTIONS.has(type) and not WORK_ACTIONS.has(type): return null
+	var work_action := WORK_ACTIONS.has(type)
+	if work_action:
+		var original = Model.find_inventory(previous,action.get("uid",""))
+		if original == null or not original.has("serviceJobId"): return null
+		# A previously approved original stays eligible when its deadline expires.
+		var board = previous.get("serviceContracts")
+		if board is Dictionary and board.get("entries") is Array and work_problem(previous,original) == "": return null
+	elif not ACTIONS.has(type): return null
 	var s: Dictionary = previous.duplicate(true)
 	ensure(s)
-	if WORK_ACTIONS.has(type):
+	if work_action:
 		var it = Model.find_inventory(s,action.get("uid",""))
-		if it == null or not it.has("serviceJobId"): return null
 		var problem := work_problem(s,it)
 		return null if problem=="" else Model.notice(s,problem)
 	var c = _find(s,String(action.get("id","")))

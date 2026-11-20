@@ -1,9 +1,12 @@
 extends VBoxContainer
 ## One scrollable case list. Actions remain the authoritative model descriptors.
+const Campaign = preload("res://scripts/model/campaign_story.gd")
+const CampaignScene = preload("res://scripts/ui/campaign_scene.gd")
 var host
 var dismiss: Callable
 var selected := "active"
 var filters := {}
+var nav: GridContainer
 var body: VBoxContainer
 var status: Label
 var Stories = preload("res://scripts/model/shop_stories.gd")
@@ -13,9 +16,9 @@ func setup(shell: Node, close: Callable, initial := "active") -> void:
 	selected=initial
 	size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	add_theme_constant_override("separation",6)
-	var nav:=UIKit.grid(3,4)
+	nav=UIKit.grid(3,4)
 	add_child(nav)
-	for spec in [["active","进行中"],["upcoming","预告"],["archive","已结束"]]:
+	for spec in [["active","进行中"],["upcoming","预告"],["archive","已结束"],["campaign","夜班案卷"]]:
 		var group: String=spec[0]
 		var key:=UIKit.button(spec[1],"secondary",Vector2(0,32),14)
 		key.name="story_filter_"+group
@@ -41,7 +44,13 @@ func text(parent:Node,copy:String,color:=UIKit.TEXT,size:=14) -> void:
 	parent.add_child(label)
 func render() -> void:
 	UIKit.clear(body)
+	var campaign := Campaign.history(Game.state)
+	filters.campaign.visible = not campaign.is_empty()
+	nav.columns = 4 if filters.campaign.visible else 3
 	for group in filters: UIKit.compact(filters[group],"primary" if selected==group else "secondary")
+	if selected == "campaign":
+		campaign_history(campaign)
+		return
 	text(body,"预告不会扣费；接下的原物会跨天保管。可拒绝事件，过期后的顾客原物仍须安全归还。",UIKit.MUTED,13)
 	var shown:=0
 	for event in Stories.view(Game.state):
@@ -53,6 +62,25 @@ func render() -> void:
 		if selected=="upcoming" and int(Game.state.day)<int(Game.state.ownershipClaims.startDay)+2:
 			text(body,"初次安排：第%d天开放失物寻主，第%d天开放旧货拍卖；各提前一天公布预告。" % [int(Game.state.ownershipClaims.startDay)+2,int(Game.state.auctionNights.startDay)+4],UIKit.CYAN)
 		text(body,{"active":"目前没有待处理事件。新的寻主与拍卖会先出现在预告中；实际完成委修后可能收到返修回访。","upcoming":"暂时没有新的事件预告。同类寻主与拍卖间隔至少12天，返修只关联实际交付的原物。","archive":"事件结束后，会在这里保留处理结果。"}.get(selected,"暂无事件。"),UIKit.MUTED)
+func campaign_history(rows: Array) -> void:
+	var final: Dictionary = Game.state.get("campaignStory",{}).get("final",{})
+	if not final.is_empty(): body.add_child(CampaignScene.final_card(final))
+	if Game.state.get("campaignStory", {}).get("opening", {}).has("uid"):
+		text(body, "当前原物 · " + Campaign.original_summary(Game.state), UIKit.CYAN, 15)
+	var current := Campaign.current(Game.state)
+	for item in rows:
+		var entry: Dictionary = item
+		var status: String = {"open":"可查阅","upcoming":"预告","recorded":"当时已记录","missed":"已错过","unrecorded":"前史未记录"}.get(entry.status,"")
+		var paper := UIKit.record_card(String(entry.title),status + ("\n" + String(entry.detail) if entry.detail != "" else ""),"第 %d 天" % int(entry.day))
+		paper.name = "campaign_history_" + String(entry.id)
+		body.add_child(paper)
+		if current.get("id","") == entry.id:
+			var key := UIKit.button("打开来信","secondary",Vector2(0,38),16,"speech")
+			var problem: String = host.campaign_scene_problem()
+			key.disabled = problem != ""
+			key.tooltip_text = problem
+			key.pressed.connect(func():dismiss.call();host.call_deferred("_plan_navigate","campaign_scene",String(entry.id)))
+			paper.get_child(0).add_child(key)
 func card(event:Dictionary) -> void:
 	var plate:=UIKit.plate(UIKit.inset_style(7))
 	plate.size_flags_horizontal=Control.SIZE_EXPAND_FILL

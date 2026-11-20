@@ -6,7 +6,8 @@ extends RefCounted
 
 static func is_rent_day(s: Dictionary) -> bool:
 	var day := int(s.day)
-	return day > 0 and day%7 == 0 and (day <= 21 or s.get("campaignLife",{}).get("endless",false))
+	var boundary := CampaignLife.end_day(s)
+	return day > 0 and day%7 == 0 and (boundary == 0 or day <= boundary)
 
 static func _day(s: Dictionary) -> Dictionary:
 	if not s.get("visitSchedule") is Dictionary: s.visitSchedule = {"version":1,"days":{}}

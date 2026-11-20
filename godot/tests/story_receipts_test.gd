@@ -84,6 +84,7 @@ func run() -> void:
  var sale: Dictionary=Journal.latest_receipt(s)
  check(sale.entries[0].materialCost==first_material+second_material and sale.entries[0].electricityCost==2.0 and sale.entries[0].recordedMargin==100-30-first_material-second_material-2.0,"eventual shop sale retains lifetime direct costs despite prior service baselines")
  var upgrade:=first_paid.duplicate(true)
+ upgrade.shopJournal.version=1
  upgrade.shopJournal.recordedCosts[uid].erase("consumedMaterial")
  upgrade.shopJournal.recordedCosts[uid].erase("consumedElectricity")
  upgrade.shopJournal.recordedCosts[uid].erase("serviceBaselineLedgerId")

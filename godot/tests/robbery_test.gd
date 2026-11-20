@@ -49,6 +49,7 @@ func run() -> void:
  var robbed: Dictionary={}
  for i in 1000:
   s=Model.create("ROBBERY-%d"%i);s.day=2;s.phase="report";s.inventory=[];s.cash=100000
+  s.report={"day":s.day}
   for j in 10:s.inventory.append(Model.new_item(s,higher))
   var next:=Model.reduce(s,{"type":"NEXT"})
   if not next.get("robbery",{}).get("entries",[]).is_empty():robbed=next;break
@@ -106,6 +107,7 @@ func run() -> void:
  var e:Dictionary=recovered.robbery.entries[0]
  e.revenge={"day":int(recovered.day)+1,"percent":8,"done":false}
  recovered.phase="report";recovered.cash=1
+ recovered.report={"day":recovered.day}
  var closed:=Model.reduce(recovered,{"type":"NEXT"})
  check(closed.phase=="report" and closed.report.get("closed",false),"attack skips a complete business day")
  check(closed.cash<0,"repair expense can make cash negative")
@@ -141,6 +143,7 @@ func run() -> void:
   if Model.fnv("%s/3/robbery-v1"%seed)%10000<900 and Model.fnv("%s/ROBBERY-3/onsite"%seed)%100<5:onsite_seed=seed;break
  check(onsite_seed!="","deterministic onsite scenario exists")
  s=Model.create(onsite_seed);s.day=2;s.phase="report";s.inventory=[];s.relations.station=60
+ s.report={"day":s.day}
  for i in 100:s.inventory.append(Model.new_item(s,higher))
  var onsite:=Model.reduce(s,{"type":"NEXT"})
  check(onsite.robbery.entries.size()==1 and onsite.robbery.entries[0].onsite,"station relation sixty allows onsite arrest")

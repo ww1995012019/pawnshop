@@ -2,6 +2,9 @@ class_name ShopJournal
 extends Object
 ## Public memories and recorded costs only. Never copies an original's hidden truth.
 
+# Version 2 has normalized history text, public names and paid-service baselines.
+const VERSION := 2
+
 static func _trade(s: Dictionary) -> Dictionary:
  return s.get("trade",{}) if s.get("trade") is Dictionary else {}
 
@@ -69,9 +72,9 @@ static func _purchase_rows(row: Dictionary, originals: Dictionary, historical: b
   rows.append(part)
  return rows
 
-static func _name(it: Dictionary) -> String:
+static func _name(model_id: String) -> String:
  GameData.ensure()
- var definition: Dictionary=GameData.items.get(_public_model(it),{})
+ var definition: Dictionary=GameData.items.get(model_id,{})
  return String(definition.get("name","未登记型号"))
 
 static func _memory(j: Dictionary, npc_id: String) -> Dictionary:
@@ -85,19 +88,26 @@ static func _event(j: Dictionary, uid: String, key: String, day: int, text: Stri
  if not j.histories.has(uid): j.histories[uid]=[]
  j.histories[uid].append({"id":key,"day":day,"text":text})
 
-static func _remember(j: Dictionary, it: Dictionary, day: int, imported: bool) -> void:
+static func _remember(j: Dictionary, it: Dictionary, day: int, imported: bool, renamed: Dictionary) -> bool:
  var uid:=String(it.uid)
- if not j.originals.has(uid):
-  j.originals[uid]={"uid":uid,"defId":_public_model(it),"name":_name(it),"handled":true,"inspected":false,"repaired":false,"npcId":""}
+ var model_id:=_public_model(it)
+ var name:=_name(model_id)
+ var added: bool=not j.originals.has(uid)
+ if added:
+  j.originals[uid]={"uid":uid,"defId":model_id,"name":name,"handled":true,"inspected":false,"repaired":false,"npcId":""}
   j.recordedCosts[uid]={"acquisition":0.0 if it.get("owner","")=="customer" else null,"materials":0.0,"electricity":0.0,"complete":not imported,"notes":[]}
   if imported: j.recordedCosts[uid].notes.append("启用档案前的购入、材料与用电记录不完整。")
   _event(j,uid,"original/"+uid,day,"原物已登记；此前经历未补写。" if imported else "实物到店，已登记原物。")
  var record: Dictionary=j.originals[uid]
- record.defId=_public_model(it)
- record.name=_name(it)
+ var inspected: bool=bool(record.get("inspected",false)) or not it.get("evidence",[]).is_empty() or not it.get("evidenceReadings",{}).is_empty()
+ var repaired: bool=bool(record.get("repaired",false)) or bool(it.get("repaired",false)) or not it.get("refurbishment",{}).get("done",[]).is_empty()
+ var collection_changed: bool=added or record.get("defId","")!=model_id or record.get("inspected",false)!=inspected or record.get("repaired",false)!=repaired
+ if record.get("name","")!=name: renamed[uid]=true
+ record.defId=model_id
+ record.name=name
  record.publicModelRecorded=true
- record.inspected=bool(record.inspected) or not it.get("evidence",[]).is_empty() or not it.get("evidenceReadings",{}).is_empty()
- record.repaired=bool(record.repaired) or bool(it.get("repaired",false)) or not it.get("refurbishment",{}).get("done",[]).is_empty()
+ record.inspected=inspected
+ record.repaired=repaired
  if not record.get("inspectedModels") is Array: record.inspectedModels=[]
  # These IDs belong to an explicit past observation, rather than the casing
  # currently visible while an unrelated action refreshes this archive.
@@ -107,6 +117,7 @@ static func _remember(j: Dictionary, it: Dictionary, day: int, imported: bool) -
   if int(observed.get("schema",0))!=1 or observed.get("unknown",false) or observed.get("tool","")!=tool: continue
   var model:=String(observed.get("publicModel",""))
   if GameData.items.has(model) and not record.inspectedModels.has(model): record.inspectedModels.append(model)
+ return collection_changed
 
 static func _uid(row: Dictionary, originals: Dictionary, previous: Dictionary={}) -> String:
  var explicit:=String(row.get("uid",""))
@@ -120,28 +131,41 @@ static func _uid(row: Dictionary, originals: Dictionary, previous: Dictionary={}
   return String(t.get("selectedUid",""))
  return ""
 
+static func _has_current_journal(s: Dictionary) -> bool:
+ var journal=s.get("shopJournal")
+ return journal is Dictionary and int(journal.get("version",0))>=VERSION
+
+static func _journal(s: Dictionary) -> Dictionary:
+ if not _has_current_journal(s): ensure(s)
+ return s.shopJournal
+
 static func ensure(s: Dictionary) -> void:
- if not s.get("shopJournal") is Dictionary:
-  s.shopJournal={"version":1,"customers":{},"collection":{},"histories":{},"receipts":[],"recordedCosts":{},"originals":{},"markers":{},"observations":{}}
+ var migrate:=not _has_current_journal(s)
+ if not s.get("shopJournal") is Dictionary: s.shopJournal={}
  var j: Dictionary=s.shopJournal
- for key in ["customers","collection","histories","recordedCosts","originals","markers","observations"]:
-  if not j.get(key) is Dictionary: j[key]={}
- if not j.get("receipts") is Array: j.receipts=[]
- j.version=1
+ if migrate:
+  for key in ["customers","collection","histories","recordedCosts","originals","markers","observations"]:
+   if not j.get(key) is Dictionary: j[key]={}
+  if not j.get("receipts") is Array: j.receipts=[]
  var originals:=_originals(s)
  var day:=int(s.get("day",1))
- for it in originals.values(): _remember(j,it,day,true)
+ var renamed: Dictionary={}
+ var collection_changed:=false
+ for it in originals.values(): collection_changed=_remember(j,it,day,true,renamed) or collection_changed
+ if migrate:
+  _migrate_legacy(s,j,originals,day)
+  j.version=VERSION
+ else:
+  _refresh_receipt_names(j,renamed)
+  if collection_changed: _rebuild_collection(j)
+
+static func _migrate_legacy(s: Dictionary, j: Dictionary, originals: Dictionary, day: int) -> void:
  for uid in j.originals:
   var recorded: Dictionary=j.originals[uid]
   if not recorded.get("inspectedModels") is Array: recorded.inspectedModels=[]
   if not originals.has(uid) and not recorded.get("publicModelRecorded",false):
    recorded.defId=""
    recorded.name="未登记型号"
- # Refresh previously cached names when a casing changes or an older save
- # stored its hidden model. Actual recorded readings remain factual history.
- for receipt in j.receipts:
-  for entry in receipt.get("entries",[]):
-   if j.originals.has(String(entry.get("uid",""))): entry.name=j.originals[String(entry.uid)].name
  if not j.markers.has("legacyImported"):
   var historical_batches: Dictionary={}
   for ledger_row in s.get("ledger",[]):
@@ -151,7 +175,7 @@ static func ensure(s: Dictionary) -> void:
    for row in _purchase_rows(ledger_row,originals,true):
     var uid:=_uid(row,originals)
     if uid!="":
-     if not j.originals.has(uid): _remember(j,_archive_original(row,uid),day,true)
+     if not j.originals.has(uid): _remember(j,_archive_original(row,uid),day,true,{})
      var event_id: String="ledger/"+id+("/"+uid if row.get("bulkEntry",false) else "")
      _event(j,uid,event_id,int(row.get("day",day)),_ledger_text(row))
      if row.get("kind","")=="purchase": j.recordedCosts[uid].acquisition=absf(float(row.get("amount",0)))
@@ -160,8 +184,9 @@ static func ensure(s: Dictionary) -> void:
      if row.get("kind","") in ["pawn-return","pawn-fee"] and uid!="": batch="redemption/%s/%s" % [uid,row.get("day",day)]
      if not historical_batches.has(batch): historical_batches[batch]=[]
      historical_batches[batch].append({"row":row,"uid":uid})
-  for identity in _usage(s):
-   var usage: Dictionary=_usage(s)[identity]
+  var historical_usage:=_usage(s)
+  for identity in historical_usage:
+   var usage: Dictionary=historical_usage[identity]
    var tokens:=String(usage.get("key","")).split("|")
    for uid in j.recordedCosts:
     if tokens.has(uid):
@@ -193,6 +218,7 @@ static func ensure(s: Dictionary) -> void:
     memory.deals+=1
     _note(j,npc_id,recorded_day,"旧账记有%d件原物交割" % entries.size(),settlement_trust)
   j.markers.legacyImported=true
+ _refresh_receipt_names(j,j.originals)
  for ledger_row in s.get("ledger",[]):
   var ledger_id:=String(ledger_row.get("id",""))
   for row in _purchase_rows(ledger_row,originals,true):
@@ -201,6 +227,14 @@ static func ensure(s: Dictionary) -> void:
     if event.get("id","")=="ledger/"+ledger_id or event.get("id","")=="ledger/"+ledger_id+"/"+uid: event.text=_ledger_text(row)
  _recover_service_baselines(s,j)
  _rebuild_collection(j)
+
+static func _refresh_receipt_names(j: Dictionary, renamed: Dictionary) -> void:
+ if renamed.is_empty(): return
+ # A receipt names the visible casing. Inspection readings remain historical.
+ for receipt in j.receipts:
+  for entry in receipt.get("entries",[]):
+   var uid:=String(entry.get("uid",""))
+   if renamed.has(uid): entry.name=j.originals[uid].name
 
 static func _rebuild_collection(j: Dictionary) -> void:
  j.collection={}
@@ -293,25 +327,32 @@ static func _contracts(s: Dictionary) -> Array:
 
 static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) -> void:
  # Bootstrap from the BEFORE state so newly appended ledgers remain observable.
- if not next.get("shopJournal") is Dictionary:
-  var bootstrap:=previous.duplicate(true)
+ if not _has_current_journal(next):
+  var bootstrap:=previous.duplicate(false)
+  var journal=next.get("shopJournal")
+  if not journal is Dictionary: journal=previous.get("shopJournal")
+  if journal is Dictionary: bootstrap.shopJournal=journal.duplicate(true)
   ensure(bootstrap)
-  next.shopJournal=bootstrap.shopJournal.duplicate(true)
+  next.shopJournal=bootstrap.shopJournal
  var j: Dictionary=next.shopJournal
- _recover_service_baselines(previous,j)
  var before:=_originals(previous)
  var after:=_originals(next)
+ var renamed: Dictionary={}
+ var collection_changed:=false
  # A departing original may be absent from the after-state. Refresh its
  # observable casing before the receipt uses a cached older identity.
- for original in before.values(): _remember(j,original,int(previous.get("day",1)),true)
+ for original in before.values(): collection_changed=_remember(j,original,int(previous.get("day",1)),true,renamed) or collection_changed
  var day:=int(next.get("day",1))
  var old_trade:=_trade(previous)
  var trade:=_trade(next)
  var npc:=String(trade.get("npcId",old_trade.get("npcId","")))
+ var next_contracts:=_contracts(next)
+ var contract_customers: Dictionary={}
+ for contract in next_contracts:
+  if contract.get("uid","")!="" and contract.get("npcId","")!="": contract_customers[contract.uid]=contract.npcId
  for uid in after:
-  _remember(j,after[uid],day,before.has(uid))
-  for contract in _contracts(next):
-   if contract.get("uid","")==uid and contract.get("npcId","")!="": j.originals[uid].npcId=contract.npcId
+  collection_changed=_remember(j,after[uid],day,before.has(uid),renamed) or collection_changed
+  if contract_customers.has(uid): j.originals[uid].npcId=contract_customers[uid]
   var old: Dictionary=before.get(uid,{})
   var it: Dictionary=after[uid]
   for tool in it.get("evidence",[]):
@@ -369,9 +410,10 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
     j.markers[key]=true
     j.recordedCosts[action_uid].materials+=amount
  var prior_usage:=_usage(previous)
- for identity in _usage(next):
+ var current_usage:=_usage(next)
+ for identity in current_usage:
   if prior_usage.has(identity) or j.markers.has("electricity/"+identity): continue
-  var usage: Dictionary=_usage(next)[identity]
+  var usage: Dictionary=current_usage[identity]
   var tokens:=String(usage.get("key","")).split("|")
   for uid in j.recordedCosts:
    if tokens.has(uid):
@@ -394,7 +436,8 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
    if row.get("kind","") not in ["sale","purchase","clearance","service","service-job","service-refund","order","pawn-principal","pawn-return","pawn-fee"]: continue
    var uid:=_uid(row,all_originals,previous)
    if uid=="" and action_uid!="" and all_originals.has(action_uid): uid=action_uid
-   if uid!="" and not j.originals.has(uid): _remember(j,all_originals.get(uid,_archive_original(row,uid)),day,true)
+   if uid!="" and not j.originals.has(uid):
+    collection_changed=_remember(j,all_originals.get(uid,_archive_original(row,uid)),day,true,renamed) or collection_changed
    var row_npc:=String(row.get("npcId",""))
    if row_npc=="": row_npc=settlement_npc
    if row.get("bulkEntry",false) and row_npc!="": settlement_npc=row_npc
@@ -436,10 +479,10 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
    _event(j,uid,key,day,"交涉中已发现加工痕迹，未据此确认真伪。")
  if action.get("type","")=="RETURN_ITEM" and before.has(action_uid) and not after.has(action_uid):
   _event(j,action_uid,"return/%s/%s" % [action_uid,day],day,"原物已按返还凭证移交。")
- for order in _contracts(next):
-  var prior_status: String=""
-  for old_order in _contracts(previous):
-   if old_order.get("id","")==order.get("id",""): prior_status=String(old_order.get("status",""))
+ var previous_statuses: Dictionary={}
+ for old_order in _contracts(previous): previous_statuses[old_order.get("id","")]=String(old_order.get("status",""))
+ for order in next_contracts:
+  var prior_status: String=previous_statuses.get(order.get("id",""),"")
   if order.get("status","")!=prior_status and String(order.get("uid",""))!="":
    _event(j,String(order.uid),"contract/%s/%s" % [order.id,order.status],day,"委托已%s。" % {"active":"接取并登记保管","done":"盖章交付","failed":"结束，未按约完成","diagnosis":"接取并登记保管","quoting":"完成诊断，等待商定报价","declined":"记录暂未接受的报价","ready":"完成维修，等待取回","accepted":"接取并登记保管","approved":"商定维修报价","complete":"盖章交付","cancelled":"取消并归还原物","expired":"到期结束"}.get(order.status,"更新登记"))
    var contract_npc:=String(order.get("npcId",""))
@@ -449,28 +492,27 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
      j.markers[visit_key]=true
      _memory(j,contract_npc).visits+=1
      _note(j,contract_npc,day,"曾把原物交到店里委修")
- _rebuild_collection(j)
+ _refresh_receipt_names(j,renamed)
+ if collection_changed: _rebuild_collection(j)
 
 static func customer(s: Dictionary, npc_id: String) -> Dictionary:
- ensure(s)
- return _memory(s.shopJournal,npc_id).duplicate(true)
+ return _memory(_journal(s),npc_id).duplicate(true)
 
 static func greeting(s: Dictionary, npc_id: String) -> String:
- var memory:=customer(s,npc_id)
- if String(memory.lastNote)=="": return ""
- return "又见面了，%s。" % memory.lastNote
+ var note:=String(_journal(s).customers.get(npc_id,{}).get("lastNote",""))
+ return "" if note=="" else "又见面了，%s。" % note
 
 static func preferred_npc(s: Dictionary, fallback_id: String) -> String:
- ensure(s)
+ var customers: Dictionary=_journal(s).customers
  var eligible: Array=[]
  var arrested:Dictionary={}
  var wanted=load("res://scripts/model/wanted_cases.gd")
  for id in s.get("police",{}).get("caught",[]):
   var npc:String=wanted.profile(id).get("npcId","")
   if npc!="":arrested[npc]=true
- for id in s.shopJournal.customers:
+ for id in customers:
   if arrested.has(id):continue
-  var memory: Dictionary=s.shopJournal.customers[id]
+  var memory: Dictionary=customers[id]
   if int(memory.deals)>0 and int(memory.trust)>0: eligible.append(String(id))
  eligible.sort()
  if eligible.is_empty(): return fallback_id
@@ -479,21 +521,18 @@ static func preferred_npc(s: Dictionary, fallback_id: String) -> String:
  return eligible[draw%eligible.size()]
 
 static func price_multiplier(s: Dictionary, npc_id: String) -> float:
- var memory:=customer(s,npc_id)
- return clampf(1.0+float(memory.trust)*0.005,0.97,1.03)
+ var trust:=float(_journal(s).customers.get(npc_id,{}).get("trust",0))
+ return clampf(1.0+trust*0.005,0.97,1.03)
 
 static func collection(s: Dictionary, def_id: String) -> Dictionary:
- ensure(s)
- return s.shopJournal.collection.get(def_id,{"defId":def_id,"handled":0,"inspected":0,"repaired":0}).duplicate(true)
+ return _journal(s).collection.get(def_id,{"defId":def_id,"handled":0,"inspected":0,"repaired":0}).duplicate(true)
 
 static func timeline(s: Dictionary, uid: String) -> Array:
- ensure(s)
- return s.shopJournal.histories.get(uid,[]).duplicate(true)
+ return _journal(s).histories.get(uid,[]).duplicate(true)
 
 static func latest_receipt(s: Dictionary) -> Dictionary:
- ensure(s)
- return s.shopJournal.receipts.back().duplicate(true) if not s.shopJournal.receipts.is_empty() else {}
+ var archive: Array=_journal(s).receipts
+ return archive.back().duplicate(true) if not archive.is_empty() else {}
 
 static func receipts(s: Dictionary) -> Array:
- ensure(s)
- return s.shopJournal.receipts.duplicate(true)
+ return _journal(s).receipts.duplicate(true)

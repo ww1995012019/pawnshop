@@ -176,6 +176,8 @@ func run() -> void:
 	patrol_combo = Commerce.reduce(patrol_combo,{"type":"REFUSE"})
 	patrol_combo = JSON.parse_string(JSON.stringify(patrol_combo))
 	check(Commerce.merchant_slot(patrol_combo) == 4 and WantedCases.officer_slot(patrol_combo,4) == 0 and schedule.landlord_slot(patrol_combo) == 1,"merchant and patrol map their original identities once through composed saved exchanges")
+	test_story_rent(schedule)
+	test_rent_preview()
 	print("VISITS failures=",failures)
 	quit(1 if failures else 0)
 
@@ -189,3 +191,65 @@ func natural_swap_inspection() -> Dictionary:
 		NightCrime.ensure_day(s)
 		if Model.daily_visit_limit(s)==6 and Commerce.merchant_slot(s)==3 and s.nightCrime.days["5"].inspectionSlot==4: return s
 	return {}
+
+func test_story_rent(schedule) -> void:
+	var daily := Model.create("STORY-RENT-WEEKS")
+	daily.campaignLife = {"mode":"story90"}
+	for term in [[28,599],[56,877],[84,900]]:
+		daily.day = term[0]
+		check(schedule.is_rent_day(daily) and Landlord.outstanding(daily) == term[1],"story retains the scheduled %d Cr rent on day %d" % [term[1],term[0]])
+	daily.day = 90
+	check(schedule.landlord_slot(daily) == -1 and Landlord.outstanding(daily) == 0,"day90 has no rent or landlord appointment")
+	daily.day = 91
+	check(schedule.landlord_slot(daily) == -1 and Landlord.outstanding(daily) == 0,"rent beyond the final story day begins only after continuation")
+	daily.campaignLife = {"mode":"endless"}
+	check(schedule.landlord_slot(daily) == schedule.limit(daily)-1 and Landlord.outstanding(daily) == 900,"continued day91 reserves an appointment for the thirteenth rent")
+	var shop := Model.create("STORY-RENT-6")
+	shop.campaignLife = {"mode":"story90"}
+	shop.day = 84
+	shop.risk = 0
+	shop.cash = 10000
+	var merchant := Commerce.merchant_slot(shop)
+	var patrol := WantedCases.officer_slot(shop,merchant)
+	var final_slot: int = schedule.limit(shop)-1
+	check(merchant >= 0 and patrol >= 0 and merchant != patrol and schedule.landlord_slot(shop) == final_slot,"day84 has distinct merchant, patrol and rent appointments")
+	if merchant < 0 or patrol < 0: return
+	shop.cursor = merchant
+	shop = Commerce.reduce(shop,{"type":"CALL_LANDLORD"})
+	shop = Commerce.reduce(shop,{"type":"PAY_RENT","tradeId":shop.trade.id})
+	shop = Commerce.reduce(shop,{"type":"REFUSE"})
+	shop = JSON.parse_string(JSON.stringify(shop))
+	check(schedule.landlord_slot(shop) == merchant and Commerce.merchant_slot(shop) == final_slot and WantedCases.officer_slot(shop,final_slot) == patrol,"calling the day84 landlord early preserves both original visitor identities through reload")
+
+func pay_today(s: Dictionary) -> Dictionary:
+	s.cursor = 0
+	s = Commerce.reduce(s,{"type":"CALL_LANDLORD"})
+	s = Commerce.reduce(s,{"type":"PAY_RENT","tradeId":s.trade.id})
+	return Commerce.reduce(s,{"type":"REFUSE"})
+
+func test_rent_preview() -> void:
+	var shop := Model.create("STORY-RENT-PREVIEW")
+	shop.campaignLife = {"mode":"story90"}
+	shop.risk = 0
+	shop.cash = 10000
+	shop.day = 5
+	var captured := shop.duplicate(true)
+	check(Landlord.next_payment(shop) == {"day":7,"amount":450} and shop == captured,"day5 previews the first rent without changing the state")
+	shop.day = 7
+	check(Landlord.next_payment(shop) == {"day":7,"amount":450},"unpaid rent day previews today's payment")
+	shop = pay_today(shop)
+	shop = JSON.parse_string(JSON.stringify(shop))
+	check(Landlord.next_payment(shop) == {"day":14,"amount":495},"day7 payment advances the preview to day14 after reload")
+	shop.day = 21
+	check(Landlord.next_payment(shop) == {"day":21,"amount":545},"day21 previews its scheduled rent before payment")
+	shop = pay_today(shop)
+	check(Landlord.next_payment(shop) == {"day":28,"amount":599},"paid checkpoint day previews day28 rent in story mode")
+	shop.day = 84
+	check(Landlord.next_payment(shop) == {"day":84,"amount":900},"day84 previews the twelfth rent before payment")
+	shop = pay_today(shop)
+	check(Landlord.next_payment(shop).is_empty(),"day84 payment leaves no further rent inside the story")
+	shop.day = 90
+	check(Landlord.next_payment(shop).is_empty(),"the final story day shows no upcoming rent")
+	shop.day = 91
+	shop.campaignLife.mode = "endless"
+	check(Landlord.next_payment(shop) == {"day":91,"amount":900},"continued day91 previews the thirteenth rent")

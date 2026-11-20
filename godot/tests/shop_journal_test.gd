@@ -5,6 +5,64 @@ func _initialize() -> void: call_deferred("run")
 func check(ok: bool, message: String) -> void:
  print("JOURNAL ","PASS " if ok else "FAIL ",message)
  if not ok: failures += 1
+
+func long_save(days: int) -> Dictionary:
+ var s:=Model.create("JOURNAL-LONG-SAVE")
+ s.inventory.resize(1)
+ s.materials["MAT-007"]=days
+ journal.ensure(s)
+ for day in range(1,days+1):
+  s.day=day
+  var previous:=s.duplicate(true)
+  var stock:=Model.new_item(s,"WCH-%03d" % (day%30+1),{"cost":60})
+  var repair:=Model.new_item(s,"WCH-002",{"owner":"customer"})
+  s.inventory.append_array([stock,repair])
+  Model.ledger(s,"buy/"+stock.uid,"purchase","购入原物",-60)
+  s.ledger.back().merge({"uid":stock.uid,"npcId":"CHR-004"})
+  journal.observe(previous,s,{"type":"TRADE_CHECKOUT"})
+  previous=s.duplicate(true)
+  s.materials["MAT-007"]-=1
+  StoreCosts.record(s,"repair_tester","service|%s|test" % repair.uid,1.5)
+  Model.ledger(s,"repair/"+repair.uid,"service-job","交还委修原物",90)
+  s.ledger.back().merge({"uid":repair.uid,"npcId":"CHR-005"})
+  Model.ledger(s,"sell/"+stock.uid,"sale","售出原物",110)
+  s.ledger.back().merge({"uid":stock.uid,"npcId":"CHR-003"})
+  Model.ledger(s,"electricity/%d" % day,"electricity","缴纳电费",-10)
+  Model.ledger(s,"cleaning/%d" % day,"cleaning","缴纳清洁费",-8)
+  s.inventory.resize(1)
+  journal.observe(previous,s,{"type":"SERVICE_COMPLETE","uid":repair.uid})
+ return JSON.parse_string(JSON.stringify(s))
+
+func read_time(s: Dictionary) -> int:
+ var uid: String=s.inventory[0].uid
+ var best:=0
+ for sample in 3:
+  var start:=Time.get_ticks_usec()
+  for repeat in 3:
+   for definition in GameData.item_list:
+    journal.collection(s,definition.id)
+   for query in 8:
+    journal.price_multiplier(s,"CHR-003")
+    journal.greeting(s,"CHR-003")
+    journal.preferred_npc(s,"CHR-004")
+   journal.timeline(s,uid)
+   journal.latest_receipt(s)
+  var elapsed:=Time.get_ticks_usec()-start
+  best=elapsed if sample==0 else mini(best,elapsed)
+ return best
+
+func check_long_save_reads() -> void:
+ var early:=long_save(7)
+ var late:=long_save(84)
+ journal.ensure(early)
+ journal.ensure(late)
+ var early_usec:=read_time(early)
+ var late_usec:=read_time(late)
+ print("JOURNAL READS D7=%0.2fms D84=%0.2fms (%d late ledger rows, %d receipts)" % [early_usec/1000.0,late_usec/1000.0,late.ledger.size(),late.shopJournal.receipts.size()])
+ check(late_usec<early_usec*3+50000,"catalogue, pricing and history lookups stay fast as settlements accumulate")
+ var before:=JSON.stringify(late.shopJournal)
+ check(journal.price_multiplier(late,"CHR-008")==1.0 and journal.greeting(late,"CHR-008")=="" and JSON.stringify(late.shopJournal)==before,"pricing and greetings leave an unknown customer's archive untouched")
+
 func run() -> void:
  GameData.ensure()
  journal = load("res://scripts/model/shop_journal.gd")
@@ -214,7 +272,12 @@ func run() -> void:
  departed_hidden.ledger=hidden_archive.ledger.duplicate(true)
  journal.ensure(departed_hidden)
  check(journal.latest_receipt(departed_hidden).entries[0].name=="未登记型号" and journal.collection(departed_hidden,"WCH-023").handled==0 and not JSON.stringify(departed_hidden.shopJournal).contains(GameData.def("WCH-023").name),"historical departure with only private model metadata keeps public model unknown")
+ var partial_archive:=departed_hidden.duplicate(true)
+ partial_archive.shopJournal={"version":1,"receipts":[{"entries":[{"uid":disguised.uid,"name":GameData.def("WCH-023").name}]}]}
+ journal.ensure(partial_archive)
+ check(journal.receipts(partial_archive).front().entries[0].name=="未登记型号","a saved receipt is sanitized when legacy import restores its missing original")
  var cached_hidden:=hidden_archive.duplicate(true)
+ cached_hidden.shopJournal.version=1
  cached_hidden.shopJournal.originals[disguised.uid].defId="WCH-023"
  cached_hidden.shopJournal.originals[disguised.uid].name=GameData.def("WCH-023").name
  cached_hidden.shopJournal.receipts[0].entries[0].name=GameData.def("WCH-023").name
@@ -243,6 +306,7 @@ func run() -> void:
  journal.observe(metadata_before,metadata_crate,{"type":"BUY_BULK_CRATE","id":metadata_offer.id})
  check(journal.latest_receipt(metadata_crate).npcId=="CHR-009" and journal.customer(metadata_crate,"CHR-009").deals==1,"explicit bulk ledger merchant metadata takes precedence over incidental current trade")
  var old_departed_cache:=masked.duplicate(true)
+ old_departed_cache.shopJournal.version=1
  old_departed_cache.shopJournal.originals[disguised.uid].defId="WCH-023"
  old_departed_cache.shopJournal.originals[disguised.uid].name=GameData.def("WCH-023").name
  old_departed_cache.shopJournal.originals[disguised.uid].erase("publicModelRecorded")
@@ -256,6 +320,10 @@ func run() -> void:
  Model.put_in(provenance,inexpensive)
  journal.ensure(provenance)
  var provenance_before:=provenance.duplicate(true)
+ Model.ledger(provenance,"public-casing-purchase","purchase","购入原物",-30)
+ provenance.ledger.back().uid=inexpensive.uid
+ journal.observe(provenance_before,provenance,{"type":"TRADE_CHECKOUT"})
+ provenance_before=provenance.duplicate(true)
  provenance=Model.reduce(provenance,{"type":"CHECK","uid":inexpensive.uid,"tool":"TOL-001"})
  journal.observe(provenance_before,provenance,{"type":"CHECK","uid":inexpensive.uid,"tool":"TOL-001"})
  check(provenance.shopJournal.originals[inexpensive.uid].get("inspectedModels",[])==["WCH-035"],"a real inspection retains its explicitly observed public catalogue model")
@@ -265,6 +333,7 @@ func run() -> void:
  WatchForgery.apply(changed,"case")
  journal.observe(provenance_before,provenance,{"type":"SERVICE_COMPLETE","uid":inexpensive.uid})
  check(WatchForgery.appearance_id(changed)=="WCH-033" and provenance.shopJournal.originals[inexpensive.uid].get("inspectedModels",[])==["WCH-035"],"a rare replacement casing cannot inherit a prior inexpensive-model inspection")
+ check(journal.latest_receipt(provenance).entries[0].name==GameData.def("WCH-033").name and journal.collection(provenance,"WCH-035").handled==0 and journal.collection(provenance,"WCH-033").handled==1,"a live casing change updates the public receipt name and collection")
  provenance_before=provenance.duplicate(true)
  provenance=Model.reduce(provenance,{"type":"CHECK","uid":inexpensive.uid,"tool":"TOL-005"})
  journal.observe(provenance_before,provenance,{"type":"CHECK","uid":inexpensive.uid,"tool":"TOL-005"})
@@ -282,6 +351,7 @@ func run() -> void:
  unknown_provenance.inventory[0].inspectionFacts={"TOL-001":{"appraisalObservation":{"schema":1,"tool":"TOL-001","modelId":"WCH-033"}}}
  journal.ensure(unknown_provenance)
  check(unknown_provenance.shopJournal.originals[unknown_provenance.inventory[0].uid].get("inspectedModels",[]).is_empty(),"legacy inspected flags and underlying model IDs cannot invent public inspection provenance")
+ check_long_save_reads()
  print("JOURNAL failures=",failures)
  for player in root.find_children("*", "AudioStreamPlayer", true, false):
   player.stop()

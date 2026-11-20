@@ -24,15 +24,17 @@ func button(node: Node, caption: String) -> Button:
 		if control.text == caption: return control
 	return null
 
-func settled_day_21() -> Dictionary:
+func settled(day: int, mode := "legacy21") -> Dictionary:
 	var s := Model.create("REPORT-CONTINUATION")
-	s.day = 21
+	s.day = day
 	s.risk = 0
 	s.cash = 10000
+	s.campaignLife = {"mode":mode}
 	NightCrime.ensure_day(s)
-	s = Landlord.reduce(s,{"type":"CALL_LANDLORD"})
-	s = Landlord.reduce(s,{"type":"PAY_RENT","tradeId":s.trade.id})
-	s = Landlord.reduce(s,{"type":"REFUSE"})
+	if Landlord.outstanding(s) > 0:
+		s = Landlord.reduce(s,{"type":"CALL_LANDLORD"})
+		s = Landlord.reduce(s,{"type":"PAY_RENT","tradeId":s.trade.id})
+		s = Landlord.reduce(s,{"type":"REFUSE"})
 	return Model.reduce(s,{"type":"SETTLE"})
 
 func run() -> void:
@@ -40,7 +42,7 @@ func run() -> void:
 	var kit=load("res://scripts/app/ui_kit.gd")
 	game.prefs.reduced_motion = true
 	game.prefs.sound = false
-	game.state = settled_day_21()
+	game.state = settled(21)
 	var initial: Dictionary = game.state.duplicate(true)
 	var shell = load("res://main.tscn").instantiate()
 	root.add_child(shell)
@@ -51,6 +53,7 @@ func run() -> void:
 	var page = shell.active_shell().page
 	var continue_button := button(page,"保留店铺，继续经营")
 	check(continue_button != null and not continue_button.disabled,"day21 report offers an explicit keep-shop continuation")
+	check(button(page,"续接 90 天故事") != null,"legacy day21 report offers story continuation alongside endless play")
 	check(button(page,"查看结局") != null,"day21 report retains the original ending action")
 	check(text_of(page).contains("完成维修") and text_of(page).contains("维修交付") and text_of(page).contains("净现金流") and text_of(page).contains("不代表利润"),"day21 report displays recorded achievements and honest business results")
 	check(text_of(page).contains("至少3") and page.find_child("campaign_evaluation",true,false)!=null,"day21 report explains specialty thresholds in a scrollable evaluation")
@@ -88,8 +91,7 @@ func run() -> void:
 	late.day = 28
 	late.report.day = 28
 	late.erase("outcome")
-	Life.ensure(late)
-	late.campaignLife.endless = true
+	Life.set_mode(late,Life.ENDLESS)
 	game.state = late
 	page._refresh()
 	await frames()
@@ -130,6 +132,7 @@ func run() -> void:
 	page._refresh()
 	await frames()
 	check(button(page,"保留店铺，继续经营") == null,"ordinary early reports do not offer a campaign shortcut")
+	await test_story_reports(game,shell)
 	shell.queue_free()
 	await frames()
 	for player in root.find_children("*","AudioStreamPlayer",true,false):
@@ -138,3 +141,42 @@ func run() -> void:
 	await process_frame
 	print("REPORT CONTINUE failures=",failures)
 	quit(1 if failures else 0)
+
+func test_story_reports(game, shell) -> void:
+	game.state = settled(21,"story90")
+	shell.go("report")
+	await frames()
+	var page = shell.active_shell().page
+	var next := button(page,"迎接第 22 天")
+	check(next != null and not next.disabled and button(page,"查看结局") == null and button(page,"保留店铺，继续经营") == null,"story day21 report permits ordinary next day without a finale choice")
+	check(text_of(page).contains("第 21 / 90 天") and page.find_child("campaign_evaluation",true,false)!=null,"story day21 report identifies the campaign length and checkpoint")
+	check(text_of(page).contains("第 28 天应付租金") and text_of(page).contains("599 Cr"),"the paid day21 story report previews the next installment")
+	shell.open_shop_plan()
+	await frames()
+	var costs: Node = shell.modal_layer.find_child("CostsCard",true,false)
+	check(costs != null and text_of(costs).contains("第 28 天应付租金 599 Cr"),"the story overview displays the same next unpaid rent")
+	shell.close_top_modal()
+	await frames()
+	if next != null:
+		next.pressed.emit()
+		await frames()
+		check(game.state.day == 22 and game.state.phase == "open","story checkpoint action opens day22")
+	game.state = settled(90,"story90")
+	shell.go("report")
+	await frames()
+	page = shell.active_shell().page
+	var ending := button(page,"查看结局")
+	check(ending != null and not ending.disabled and button(page,"迎接第 91 天") == null,"story day90 report offers a read-only finale instead of ordinary next day")
+	check(text_of(page).contains("第 90 / 90 天") and text_of(page).contains("第90天经营评估"),"story day90 report displays the final frozen assessment")
+	check(not text_of(page).contains("第 91 天应付租金"),"day90 report has no upcoming rent inside the story")
+	if ending != null:
+		ending.pressed.emit()
+		await frames()
+		check(game.state.phase == "ending" and game.state.day == 90,"reading the ending stays on day90")
+	page = shell.active_shell().page
+	var resume := button(page,"保留店铺，继续经营")
+	check(resume != null and not resume.disabled,"story finale offers explicit endless continuation")
+	if resume != null:
+		resume.pressed.emit()
+		await frames()
+		check(game.state.phase == "open" and game.state.day == 91 and Life.is_endless(game.state),"story continuation button opens the retained shop on day91")

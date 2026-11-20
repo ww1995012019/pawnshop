@@ -33,6 +33,7 @@ var last_size := Vector2.ZERO
 var inset := Vector2.ZERO
 var mat := Rect2()
 var wanted_paper: Button
+var story_ticket: Button
 var last_notice := false
 
 func setup(owner_adapter) -> void:
@@ -109,6 +110,9 @@ func setup(owner_adapter) -> void:
 	add_child(wanted_paper)
 	wanted_paper.setup(shell)
 	wanted_paper.name="wanted_inventory"
+	story_ticket = preload("res://scripts/ui/campaign_scene.gd").Letter.new()
+	add_child(story_ticket)
+	story_ticket.setup(shell,true)
 	for spec in [["放大镜","TOL-001"],["紫外灯","TOL-002"],["称重","TOL-005"]]:
 		var id: String = spec[1]
 		var key := _key(spec[0],func():
@@ -231,6 +235,7 @@ func _layout() -> void:
 			actor.scale=Vector2.ONE*minf(customer_h/actor.size.y,(left-12)*.46/actor.size.x)
 			if not actor.walking: actor.position=Vector2((left-12)*(.25 if actor==desk.customer else .75),customer_h)
 	_place(speech,Rect2(14,top+customer_h+34,left-16,inner_h-customer_h-40))
+	_place(story_ticket,Rect2(left-87,top+customer_h-14,80,44))
 	_place(item_name,Rect2(mat.position+Vector2(8,4),Vector2(mat.size.x-76,24)))
 	_place(flip,Rect2(mat.end.x-64,mat.position.y+4,58,28))
 	_place(hint,Rect2(mat.position+Vector2(8,33),Vector2(mat.size.x-16,20)))
@@ -327,6 +332,7 @@ func _process(_delta: float) -> void:
 	_layout()
 	if last_notice!=WantedCases.has_notice(Game.state):_layout_paper_tools()
 	wanted_paper.refresh()
+	story_ticket.update_interaction()
 	desk.cash_tray.show()
 	heading.text = "轨道旧货局 · 第 %02d 天" % Game.state.day
 	balance.text = "%s Cr   ·   AP %s" % [Model.jnum(desk.cash_tray.cash if desk.busy else Game.state.cash),Game.state.ap]

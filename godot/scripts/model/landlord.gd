@@ -11,8 +11,23 @@ static func paid(s: Dictionary, day := -1) -> bool:
 			return true
 	return false
 
+static func nominal_due(s: Dictionary) -> int:
+	return int(Model.rent_due(s.day)) if VisitSchedule.is_rent_day(s) else 0
+
 static func outstanding(s: Dictionary) -> int:
-	return 0 if paid(s) else int(Model.rent_due(s.day))
+	return 0 if paid(s) else nominal_due(s)
+
+## Preview a payment from the current day onward without reserving a visit.
+static func next_payment(s: Dictionary) -> Dictionary:
+	if s.get("phase","") == "ending": return {}
+	var day := maxi(1,int(s.day))
+	var payment_day := day + posmod(-day,7)
+	var boundary := CampaignLife.end_day(s)
+	while boundary == 0 or payment_day <= boundary:
+		if not paid(s,payment_day):
+			return {"day":payment_day,"amount":int(Model.rent_due(payment_day))}
+		payment_day += 7
+	return {}
 
 static func ensure(s: Dictionary) -> void:
 	if not s.get("rent") is Dictionary: s.rent = {"version":1,"days":{}}

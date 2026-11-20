@@ -442,6 +442,8 @@ static func trade_terms(s: Dictionary, t: Dictionary, it: Dictionary) -> Diction
 	if float(shop_factors.sale) != 1.0:
 		ceiling = maxf(1,floor(ceiling * float(shop_factors.sale)))
 		opening = minf(ceiling,maxf(1,floor(opening * float(shop_factors.sale))))
+	if t.kind == "buy" and t.get("campaignWholesaleUid", "") == it.uid:
+		floor_p = maxf(1, float(t.campaignWholesalePrice))
 	return {"value": value, "floor": floor_p, "ceiling": ceiling, "opening": opening, "marketCap": market_cap, "proof": proof, "provenance": provenance}
 
 static func offer_bounds(s: Dictionary, t: Dictionary, it: Dictionary) -> Dictionary:
@@ -471,6 +473,14 @@ static func market_stock(s: Dictionary, day = null, slot = null) -> Dictionary:
 		var unverified := dd == 3 and sl == 0
 		return {"defId": def_id, "condition": 0.65 if sl == 0 else 0.8, "working": sl != 0, "authentic": not (dd == 2 and sl == 2), "sourceVerified": not unverified,
 			"source": "封签批次与旧港注销清单待比对" if unverified else "供货人登记回执 / 旧港回收批次", "price": jround(D(def_id).value * (0.42 if sl == 0 else 0.7))}
+	var life: Dictionary = s.get("campaignLife", {})
+	# After the opening week, the first ordinary selling visitor each day
+	# can bring one registered wholesale lot. The posted ask is saved with it.
+	if life.get("mode", "") == "story90" and dd >= 8 and dd <= 90 and sl % 2 == 0 and int(life.get("wholesaleDay", 0)) != dd:
+		var offers := ["WCH-013", "WCH-014", "WCH-015"]
+		var def_id: String = offers[fnv("%s/%d/wholesale" % [s.seed, dd]) % offers.size()]
+		return {"defId":def_id, "condition":0.90, "working":true, "authentic":true,
+			"sourceVerified":true, "source":"旧港换季清货 / 回执已核对", "price":jround(D(def_id).value * 0.14), "wholesale":true}
 	var supply_key := "market/%d/%d" % [dd,sl]
 	var def_id := WatchSupply.pick(s.seed, supply_key)
 	var key := "%s/%d/%d/physical-v1" % [s.seed, dd, sl]
@@ -488,6 +498,8 @@ static func market_stock(s: Dictionary, day = null, slot = null) -> Dictionary:
 
 static func stock_preview(s: Dictionary, day = null, slot = null) -> Dictionary:
 	var stock := market_stock(s, day, slot)
+	if stock.get("wholesale", false):
+		return {"defId":stock.defId, "source":stock.source, "priceBand":[stock.price, stock.price]}
 	var value: float = D(stock.defId).value
 	return {"defId": stock.defId, "source": stock.source, "priceBand": [jround(value * 0.4), jround(value * 0.8)]}
 
@@ -511,6 +523,7 @@ static func stock_item_options(stock: Dictionary) -> Dictionary:
 	var o := stock.duplicate(true)
 	o.erase("defId")
 	o.erase("price")
+	o.erase("wholesale")
 	return o
 
 # ------------------------------------------------------------ readings & voices
@@ -580,6 +593,8 @@ static func event_for_day(seed: String, day) -> Variant:
 ## The state-free lookup above deliberately retains its 21-day contract.
 ## Continued campaigns reuse ordinary station situations, never the finale.
 static func event_for_state(s: Dictionary) -> Variant:
+	if s.get("campaignLife", {}).get("mode", "") == "story90":
+		return load("res://scripts/model/campaign_story.gd").station_event(s)
 	var day := int(s.day)
 	if day <= 21 or not s.get("campaignLife",{}).get("endless",false):
 		return event_for_day(s.seed,s.day)
@@ -721,11 +736,11 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 		s.counterPreviewUid = uid
 		return s
 	if type == "NEXT":
-		if s.phase != "report":
-			return previous
-		if not s.get("campaignLife",{}).get("endless",false) and (s.day >= 21 or s.has("outcome")):
+		if CampaignLife.can_view_ending(s):
 			s.phase = "ending"
 			return s
+		if not CampaignLife.can_advance(s):
+			return previous
 		s.day += 1
 		s.ap = Extensions.daily_ap(s)
 		s.phase = "open"
@@ -763,6 +778,8 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 	if type == "UPGRADE":
 		if s.phase != "report" or s.report == null:
 			return notice(s, "店铺升级在日结后安排。")
+		if CampaignLife.is_story(s) and s.day == CampaignLife.end_day(s):
+			return notice(s, "继续营业后可以安排店铺升级。")
 		if s.day < 3:
 			return notice(s, "首个设备升级在第3日日结开放。")
 		if s.report.upgraded or s.upgrades[a.id]:
@@ -776,6 +793,10 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 		s.report.upgraded = true
 		s.report.cash = s.cash
 		return notice(s, "工作灯已换装：每件原物首次记录不耗AP；次日起用电+1Cr/日。" if a.id == "lamp" else "陈列架已换装：合法陈列货物的新出售议价基准与顾客预算提高5%，手动价签保留；已谈妥价格不变。")
+	if type == "SETTLE" and CampaignLife.pending_closed_checkpoint(s):
+		# Robbery already posted the closure fees and formed this day's report.
+		CampaignLife.record_settlement(s)
+		return notice(s,"歇业日费用已入账，经营评估已保存。")
 	if s.phase != "open":
 		return notice(s,business_hours_problem(s)) if BUSINESS_ACTIONS.has(type) else previous
 	var required_device := ""
@@ -849,9 +870,15 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 			if not sell:
 				var stock := market_stock(s)
 				t.item = new_item(s, stock.defId, stock_item_options(stock))
+				if stock.get("wholesale", false):
+					s.campaignLife.wholesaleDay = int(s.day)
+					t.campaignWholesaleUid = t.item.uid
+					t.campaignWholesalePrice = stock.price
 				t.price = maxf(stock.price, trade_terms(s, t, t.item).floor)
 				if s.day == 1 and s.cursor == 0:
 					t.line = "这只北辰通勤表从旧航道带回。表带连接需要维护，你先对照手册看看。"
+					if s.get("campaignLife", {}).get("mode", "") == "story90":
+						t.campaignOpeningUid = t.item.uid
 				elif s.day == 3 and s.cursor == 0:
 					t.line = "这只旧航表的来源回执还没有核对，先别放上销售架。"
 				else:
@@ -1338,13 +1365,10 @@ static func reduce(previous: Dictionary, a: Dictionary) -> Dictionary:
 				ledger(s, "cleaning-day-%s" % jnum(s.day), "cleaning", "店铺清洁费", -costs.cleaning)
 			if due:
 				ledger(s, "rent-day-%s" % jnum(s.day), "rent", "第%s天租金" % jnum(s.day), -due)
-			s.report = {"day": s.day, "income": income, "expenses": expenses, "maintenance": maintenance, "electricity": costs.electricity, "cleaning": costs.cleaning, "costs": costs.duplicate(true), "rent": rent_due(s.day), "settlementRent": due, "cash": s.cash, "upgraded": false}
+			s.report = {"day": s.day, "income": income, "expenses": expenses, "maintenance": maintenance, "electricity": costs.electricity, "cleaning": costs.cleaning, "costs": costs.duplicate(true), "rent": Landlord.nominal_due(s), "settlementRent": due, "cash": s.cash, "upgraded": false}
 			s.phase = "report"
 			NightCrime.settle(s)
-			if s.day == 21 and not s.has("outcome"):
-				var evaluation = load("res://scripts/model/campaign_evaluation.gd")
-				s.report.evaluation = evaluation.summary(s)
-				s.outcome = s.report.evaluation.outcome
+			CampaignLife.record_settlement(s)
 			return notice(s, "日结完成：旧版能源维护 %s Cr，租金 %s Cr；本次支付 %s Cr。" % [jnum(maintenance),jnum(due),jnum(payment)] if costs.legacy else "日结完成：电费 %s Cr，清洁费 %s Cr，租金 %s Cr；本次支付 %s Cr。" % [jnum(costs.electricity),jnum(costs.cleaning),jnum(due),jnum(payment)])
 	return previous
 

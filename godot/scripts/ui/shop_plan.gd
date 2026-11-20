@@ -1,5 +1,6 @@
 extends VBoxContainer
 ## One compact entry for long-term decisions; physical work stays at the bench.
+const Campaign = preload("res://scripts/model/campaign_story.gd")
 var host
 var dismiss: Callable
 var section := "overview"
@@ -8,13 +9,16 @@ var body: VBoxContainer
 var status: Label
 var tabs := {}
 var journal_uid := ""
+var receipt_uid := ""
 var market_details := false
 var render_queued := false
 
-func setup(shell: Node, close: Callable, initial := "overview") -> void:
+func setup(shell: Node, close: Callable, initial := "overview", focus_uid := "") -> void:
 	host = shell
 	dismiss = close
 	section = initial
+	journal_uid = focus_uid
+	receipt_uid = focus_uid
 	add_theme_constant_override("separation",6)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var nav := UIKit.grid(3 if shell.portrait_mode() else 6,4)
@@ -96,7 +100,8 @@ func _overview() -> void:
 	var s := Game.state
 	var life = load("res://scripts/model/campaign_life.gd")
 	var market = load("res://scripts/model/weekly_market.gd")
-	var heading := "第 %d 天 · %s" % [int(s.day),"长期经营" if life.is_endless(s) else "21天阶段考核"]
+	var campaign := "长期经营" if life.is_endless(s) else ("90 天故事" if life.is_story(s) else "21天阶段考核")
+	var heading := "第 %d 天 · %s" % [int(s.day),campaign]
 	_text(body,heading,UIKit.AMBER,19)
 	var summary := UIKit.grid(1 if host.mobile_mode() else 3,8)
 	summary.name = "OverviewSummary"
@@ -104,7 +109,27 @@ func _overview() -> void:
 	body.add_child(summary)
 	var plan := _card("今日待办",summary)
 	plan.get_parent().name = "TodayCard"
-	var stories:=UIKit.button("事件簿 · %d 件待处理" % ShopStories.pending(s),"primary",Vector2(0,40),16)
+	var beat := Campaign.current(s)
+	var cases := ShopStories.view(s).filter(func(event): return ShopStories.group(s,event) == "active")
+	var priority: String = host.campaign_scene_priority_problem() if Campaign.enabled(s) and s.phase == "open" else ""
+	if priority != "":
+		_text(plan,priority,UIKit.AMBER,15)
+	if not beat.is_empty():
+		var problem: String = host.campaign_scene_problem()
+		if problem != "" and problem != priority: _text(plan,problem,UIKit.MUTED,14)
+		var letter := UIKit.button("来信 · " + String(beat.title),"primary",Vector2(0,40),16,"speech")
+		letter.name = "open_campaign_scene"
+		letter.disabled = problem != ""
+		letter.pressed.connect(func():dismiss.call();host.call_deferred("_plan_navigate","campaign_scene",String(beat.id)))
+		plan.add_child(letter)
+	elif Campaign.enabled(s) and priority == "" and s.phase == "open":
+		var due: Dictionary = {}
+		for event in cases:
+			if event.type in ["claim","warranty"] and int(event.dueDay) >= int(s.day) and (due.is_empty() or int(event.dueDay) < int(due.dueDay)):
+				due = event
+		if not due.is_empty():
+			_text(plan,"%s · 第 %d 天到期" % [String(due.title),int(due.dueDay)],UIKit.AMBER,15)
+	var stories:=UIKit.button("事件簿 · %d 件待处理" % cases.size(),"primary" if beat.is_empty() and priority == "" else "secondary",Vector2(0,40),16)
 	stories.name="open_story_book"
 	stories.pressed.connect(func():dismiss.call();host.call_deferred("_open_story_book_after_close"))
 	plan.add_child(stories)
@@ -117,12 +142,17 @@ func _overview() -> void:
 	var expenses := _card("费用与租金",summary)
 	expenses.get_parent().name = "CostsCard"
 	_text(expenses,"预计费用 %s" % UIKit.money(costs.total),UIKit.TEXT,15)
-	_text(expenses,"未付租金 %s" % UIKit.money(Landlord.outstanding(s)),UIKit.AMBER,15)
+	var next_rent := Landlord.next_payment(s) if life.is_story(s) else {}
+	if next_rent.is_empty():
+		_text(expenses,"未付租金 %s" % UIKit.money(Landlord.outstanding(s)),UIKit.AMBER,15)
+	else:
+		_text(expenses,"第 %d 天应付租金 %s" % [next_rent.day,UIKit.money(next_rent.amount)],UIKit.AMBER,15)
 	_text(body,"先核对到期委托和资金，再安排鉴定、维修与采购。",UIKit.MUTED,15)
-	if int(s.day)>=21 and s.phase in ["report","ending"] and not life.is_endless(s):
-		var problem: String = life.continue_problem(s)
-		_text(plan,"阶段成绩与旧物都将保留；继续经营从下一天开始，不会重扣本次结算。",UIKit.CYAN,14)
-		_action(plan,"保留店铺 · 继续经营",{"type":"CONTINUE_CAMPAIGN"},problem,true)
+	if life.continue_problem(s) == "":
+		_text(plan,"继续经营从下一天开始，店铺、旧物与评估均会保留。",UIKit.CYAN,14)
+		_action(plan,"保留店铺 · 继续经营",{"type":"CONTINUE_CAMPAIGN"},"",true)
+		if life.start_story_problem(s) == "":
+			_action(plan,"续接 90 天故事",{"type":"START_STORY_90"})
 	var assessment=life.summary(s).firstAssessment
 	if assessment is Dictionary: _text(plan,"首轮第21天评估："+String(assessment.get("outcome","已完成"))+" · 原经营记录已保留。",UIKit.AMBER,14)
 	var evaluation: Dictionary = load("res://scripts/model/campaign_evaluation.gd").summary(s)
@@ -306,8 +336,16 @@ func _history() -> void:
 	var journal = load("res://scripts/model/shop_journal.gd")
 	if history_mode=="receipts":
 		var receipts: Array = journal.receipts(Game.state).duplicate()
+		if receipt_uid != "":
+			receipts = receipts.filter(func(receipt):
+				return receipt.get("items",receipt.get("entries",[])).any(func(item): return item.get("uid","") == receipt_uid))
+			_text(body,"原物 " + receipt_uid,UIKit.CYAN,15)
+			var all := UIKit.button("查看全部回执","secondary",Vector2(0,36),14)
+			all.pressed.connect(func():receipt_uid = "";_render())
+			body.add_child(all)
 		receipts.reverse()
-		if receipts.is_empty(): _text(body,"成交或完成委修后，这里会保留费用与资金变化回执。")
+		if receipts.is_empty():
+			_text(body,"成交或完成委修后，这里会保留费用与资金变化回执。" if receipt_uid == "" else "这件原物没有已保存的交割回执。")
 		for receipt in receipts.slice(0,20): _receipt(receipt)
 	elif history_mode=="collection":
 		for definition in GameData.item_list:
@@ -333,7 +371,9 @@ func _receipt(receipt: Dictionary) -> void:
 	var card := _card("第%d天 · 成交回执" % day)
 	var rows: Array = receipt.get("items",receipt.get("entries",[]))
 	for item in rows:
-		_text(card,String(item.get("name","原物"))+" · "+UIKit.money(item.get("price",0)),UIKit.CYAN)
+		var entry := String(item.get("name","原物")) + " · " + UIKit.money(item.get("price",0))
+		if receipt_uid != "" and item.get("uid","") == receipt_uid: entry += " · " + receipt_uid
+		_text(card,entry,UIKit.CYAN)
 		if item.get("direction","")=="acquisition":
 			_text(card,"本次为购入，购入价计入原物成本；尚未形成售货利润。",UIKit.MUTED,13)
 		else:

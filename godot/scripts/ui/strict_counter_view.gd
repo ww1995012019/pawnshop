@@ -44,6 +44,7 @@ var trade_buttons: Array=[]
 var quote_controls: Array=[]
 var stock: GridContainer
 var wanted_paper: Button
+var story_ticket: Button
 var shelves: Control
 var appraisal_ticket: Panel
 var ticket_name: Label
@@ -307,6 +308,10 @@ func _build() -> void:
  wanted_paper=preload("res://scripts/ui/wanted_desk_paper.gd").new();add_child(wanted_paper)
  wanted_paper.setup(desk.shell);wanted_paper.position=Vector2(112,474);wanted_paper.size=Vector2(146,90)
  _bind_button_feedback(wanted_paper)
+ story_ticket=preload("res://scripts/ui/campaign_scene.gd").Letter.new()
+ add_child(story_ticket)
+ story_ticket.setup(desk.shell,false)
+ story_ticket.position=Vector2(267,494);story_ticket.size=Vector2(90,58)
  var paper=Panel.new();paper.name="StrictTradePaper";paper.position=Vector2(1186,68);paper.size=Vector2(485,791)
  paper.mouse_filter=Control.MOUSE_FILTER_IGNORE;paper.add_theme_stylebox_override("panel",_style(PAPER,INK,8));add_child(paper)
  detail_layer=Control.new();detail_layer.name="TradeDetails";detail_layer.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(detail_layer)
@@ -511,6 +516,7 @@ func _process(delta: float) -> void:
  desk.stage_root.hide();desk.back_root.hide()
  desk.shell.hint_label.hide()
  _layout_desktop()
+ story_ticket.update_interaction()
  clock+=delta;period+=delta
  if is_instance_valid(desk.bell) and not Game.prefs.reduced_motion:
   bell_art.pivot_offset=bell_art.size*.5

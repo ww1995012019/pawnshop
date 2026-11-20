@@ -55,6 +55,10 @@ static func ensure(s: Dictionary) -> void:
   goods.append(Model.new_item(s,t.rare.defId,{"owner":"npc","authentic":t.rare.get("authentic",true),"working":true,"condition":0.8,"sourceVerified":true,"source":"流动商人的已登记货品"}))
   count=maxi(1,count)
   t.rare.available=false
+ if goods.size() == 1 and goods[0].uid == t.get("campaignOpeningUid", ""):
+  goods.append(Model.new_item(s, "WCH-002", {"owner":"npc", "condition":0.8,
+   "working":true, "authentic":true, "sourceVerified":true, "source":"栗叔的旧港回收登记"}))
+  count = 2
  while goods.size()<count and not record.owned.is_empty(): goods.append(record.owned.pop_front())
  while goods.size()<count:
   var n := int(Model.fnv("%s/%s/%d" % [s.seed,t.id,goods.size()]))

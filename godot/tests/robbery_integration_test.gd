@@ -5,6 +5,7 @@ func run() -> void:
  game.state=receipt()
  var s:Dictionary=game.state
  s.day=4;s.phase="report";s.cash=1
+ s.report={"day":s.day}
  var robbery=load("res://scripts/model/robbery.gd")
  robbery.ensure(s)
  s.robbery.entries=[{"id":"ROBBERY-2","day":2,"count":1,"culprit":"saved","onsite":false,"arrestChecked":true,"revenge":{"day":5,"percent":8,"done":false}}]

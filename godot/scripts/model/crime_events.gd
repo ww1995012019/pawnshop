@@ -5,7 +5,10 @@ static func event_for_day(s: Dictionary):
 	var ordinary = Model.event_for_state(s)
 	var day := int(s.day)
 	var continued: bool = s.get("campaignLife",{}).get("endless",false) and day > 21
-	if day < 3 or (day > 19 and not continued) or Model.FIXED_EVENT_DAYS.has(day):
+	if s.get("campaignLife", {}).get("mode", "") == "story90":
+		if not load("res://scripts/model/campaign_story.gd").optional_station_day(s):
+			return ordinary
+	elif day < 3 or (day > 19 and not continued) or Model.FIXED_EVENT_DAYS.has(day):
 		return ordinary
 	var roll := Model.fnv("%s/crime/%d" % [s.seed, int(s.day)]) % 5
 	if roll == 1:

@@ -48,6 +48,10 @@ static func begin(s: Dictionary) -> Dictionary:
    for index in se.goods.size():
     if se.goods[index].uid==line.uid: se.offer_cursor=index
   if line.status=="confirmed": _reply(s,line)
+  elif line.uid == s.trade.get("campaignOpeningUid", "") and int(line.context.rounds) == 0:
+   s.trade.line="这表夜班那会儿还能走，后来就停了。你先看一眼。"
+  elif line.uid == s.trade.get("campaignWholesaleUid", ""):
+   _reply(s,line)
   elif line.direction=="buy":
    s.trade.line="我带了%d件旧货，都摆这儿了。你可以挑一件或几件看看，价钱可以分别谈。" % se.goods.size() if se.goods.size()>1 else "这只%s我想出手，开价%s Cr。你先看看，价钱咱们可以谈。" % [GameData.def(TradeSession.item(s,line.uid).defId).name,Model.jnum(line.context.price)]
  else: _idle(s,"我想找些合适的旧表，你可以挑一件或几件一起摆上来。"+("我带的旧货也都在桌上，你随便看看。" if not se.goods.is_empty() else "合不合适，咱们看过再谈。"))
@@ -133,6 +137,10 @@ static func _reply(s: Dictionary,line: Dictionary) -> void:
   s.trade.line="%s我先不收。%s %s" % [name,line.reason,"这次先到这儿吧。" if departure_reason(s)=="refused" else "先把已经说好的货物交割，其他的可以再谈。" if TradeSession.summary(s).sell_count+TradeSession.summary(s).buy_count>0 else "可以换其他货物，或者稍后再谈。"]
  elif line.status=="confirmed":
   s.trade.line="行，%s就按%s Cr。说好的几件我都记着，你还有别的可以接着拿。" % [name,Model.jnum(line.context.price)]
+ elif line.uid == s.trade.get("campaignOpeningUid", "") and int(line.context.rounds) == 0:
+  s.trade.line="这表夜班那会儿还能走，后来就停了。你先看一眼。"
+ elif line.uid == line.context.get("campaignWholesaleUid", "") and int(line.context.rounds) == 0:
+  s.trade.line="这只%s是过季的货，回执核过了。清货价 %s Cr，你先验一眼。" % [name,Model.jnum(line.context.price)]
  elif line.direction=="buy":
   s.trade.line="这只%s我开%s Cr，你可以先鉴定，再跟我谈。%s" % [name,Model.jnum(line.context.price),line.reason if int(line.context.rounds)>0 else ""]
  else:

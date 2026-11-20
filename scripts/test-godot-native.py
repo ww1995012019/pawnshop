@@ -19,6 +19,7 @@ TESTS = ("shop_pricing_test", "evidence_appraisal_test", "negotiation_progress_t
 
 
 TESTS = ("service_quote_tradeoff_test", "inspection_channels_test", "campaign_evaluation_test", "shop_plan_touch_lifecycle_test") + TESTS
+TESTS = ("campaign_story_test", "campaign_story_ui_test", "campaign_supply_test", "campaign_end_to_end_test") + TESTS
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

@@ -15,11 +15,13 @@ const Crates = preload("res://scripts/model/bulk_crates.gd")
 const Contracts = preload("res://scripts/model/service_contracts.gd")
 const Journal = preload("res://scripts/model/shop_journal.gd")
 const Stories = preload("res://scripts/model/shop_stories.gd")
+const Campaign = preload("res://scripts/model/campaign_story.gd")
 const SAVE_PATH := "user://orbital-watch-save-v4.json"
 const LEGACY_PATH := "user://orbital-save-v3.json"
 const LEGACY_BACKUP_PATH := "user://orbital-save-v3.backup.json"
 const SERVICE_BACKUP_PATH := "user://orbital-watch-save-v4.pre-service.backup.json"
 const PREFS_PATH := "user://orbital-prefs.json"
+const DEFAULT_CAMPAIGN_MODE := Life.LEGACY21
 
 var state: Dictionary = {}
 var prefs := {"sound": true, "reduced_motion": false, "music_volume": 0.6, "sfx_volume": 0.8}
@@ -41,8 +43,10 @@ func _ready() -> void:
 			has_save = true
 	if state.is_empty():
 		state = Model.create()
+		Life.set_mode(state, DEFAULT_CAMPAIGN_MODE)
 	else:
 		state = migrate_service_save(state)
+		Life.ensure(state)
 	Landlord.ensure(state)
 	StoreCosts.ensure(state)
 	Wanted.ensure(state)
@@ -91,9 +95,10 @@ func backup_legacy_save() -> void:
 func legacy_save_text() -> String:
 	return FileAccess.get_file_as_string(LEGACY_BACKUP_PATH) if FileAccess.file_exists(LEGACY_BACKUP_PATH) else ""
 
-func new_game(seed := "") -> void:
+func new_game(seed := "", mode_override := "") -> void:
 	var prev := state
 	state = Model.create(seed if seed != "" else "ORBITAL-%08X" % randi())
+	Life.set_mode(state, DEFAULT_CAMPAIGN_MODE if mode_override == "" else mode_override)
 	Landlord.ensure(state)
 	Wanted.ensure(state)
 	NightCrime.ensure(state)
@@ -112,6 +117,7 @@ func ensure_shop_state(s: Dictionary, include_journal := true) -> void:
 	Crates.ensure(s)
 	Contracts.ensure(s)
 	Stories.ensure(s)
+	Campaign.ensure(s)
 	if include_journal: Journal.ensure(s)
 
 func dispatch(a: Dictionary) -> bool:
@@ -125,6 +131,7 @@ func dispatch(a: Dictionary) -> bool:
 	if next == null: next = Extensions.reduce(prepared,a)
 	if next == null: next = Crates.reduce(prepared,a)
 	if next == null: next = Stories.reduce(prepared,a)
+	if next == null: next = Campaign.reduce(prepared,a)
 	if next == null: next = Contracts.reduce(prepared,a)
 	if next == null: next = Commerce.reduce(prepared,a)
 	if is_same(next,prepared): return false
@@ -133,6 +140,7 @@ func dispatch(a: Dictionary) -> bool:
 	Stories.observe(prepared,next,a)
 	_attach_referral(prepared,next,a)
 	Journal.observe(prepared,next,a)
+	Campaign.observe(prepared,next,a)
 	Stories.observe_journal(prepared,next,a)
 	_enrich_shop_feedback(prepared,next,a)
 	if a.get("type","") in ["EXPAND_WAREHOUSE","BUY_PAWN_SLOTS"]:

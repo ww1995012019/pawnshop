@@ -343,11 +343,12 @@ func run() -> void:
 	var old := fresh()
 	old.erase("nightCrime")
 	old.phase = "report"
+	old.report = {"day":old.day}
 	old.police = {"caught":["WNT-001","WNT-002"]}
 	night.ensure(old)
 	check(old.nightCrime.cases.is_empty() and old.nightCrime.nights.is_empty() and old.nightCrime.cooperation.count == 2,"old save migration credits distinct arrests without retroactive theft")
 	old = act(old,"NEXT")
-	check(old.nightCrime.cases.is_empty(),"old closed save does not invent past losses")
+	check(old.day == 4 and old.nightCrime.cases.is_empty(),"old closed save opens the next day without inventing past losses")
 	# All owners and unfinished objects are safeguarded, including external open work.
 	s = fresh(seed)
 	for item in s.inventory: item.owner = "customer"

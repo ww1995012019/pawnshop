@@ -19,6 +19,9 @@ func run():
  check(debug.apply("state",["inventory",0,"condition"],"0.73").ok and is_equal_approx(game.state.inventory[0].condition,.73),"nested decimal can be edited")
  check(game.state.inventory[1]==initial.inventory[1],"editing one original leaves neighbors unchanged")
  check(debug.apply("state",["inventory",0,"working"],"true").ok and game.state.inventory[0].working,"boolean can be edited")
+ var edited_model: String=game.state.inventory[0].defId
+ var prior_repaired: int=ShopJournal.collection(game.state,edited_model).repaired
+ check(debug.apply("state",["inventory",0,"repaired"],"true").ok and ShopJournal.collection(game.state,edited_model).repaired==prior_repaired+1,"repair edit immediately refreshes the collection")
  var before=JSON.stringify(game.state)
  for input in ["nan","inf","1e9999","abc"]:
   check(not debug.apply("state",["cash"],input).ok and JSON.stringify(game.state)==before,"invalid numeric input is rejected: "+input)
