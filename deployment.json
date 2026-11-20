@@ -1,8 +1,8 @@
 {
-  "source_commit": "281ded0742ff2de389ce49fbc12d5dbe0a8af854",
-  "release_id": "0fd38505c83edc55",
-  "pack": "workbench-cdef0a765cc720b9.pck",
-  "html_sha256": "5ccdfdb1c0799ece3044eab3da02e793abb51eeb807edd9194ea828a57c8c912",
+  "source_commit": "019940e6a7e595df9998005f1b4688804ad51647",
+  "release_id": "84816aa4d3edcfdf",
+  "pack": "workbench-85e3a31e82a9c28a.pck",
+  "html_sha256": "6a3e1a7c2efb6ade459918767f5b9234b9c345a47a7aa8f69a6c18fbbba1426e",
   "watch_service_version": 1,
   "workshop_guidance_version": 1,
   "continuous_cleaning_version": 2,
@@ -57,7 +57,7 @@
   "mobile_dialogue_scroll_version": 1,
   "mobile_goods_icon_grid_version": 1,
   "x_only_close_version": 1,
-  "native_regression_groups": 152,
+  "native_regression_groups": 157,
   "contraband_inspection_version": 2,
   "inspection_attention_percent_per_point": 0.03,
   "inspection_fixed_fine": 30,
@@ -76,11 +76,11 @@
   "compact_selector_version": 1,
   "compact_dropdown_menu_version": 1,
   "shop_expansion_version": 1,
-  "campaign_continuation_version": 1,
+  "campaign_continuation_version": 2,
   "service_contracts_version": 1,
   "bulk_salvage_version": 1,
   "weekly_market_version": 1,
-  "shop_journal_version": 1,
+  "shop_journal_version": 2,
   "shop_extension_version": 1,
   "shop_plan_browser_viewports": [
     [
@@ -209,7 +209,7 @@
       800
     ]
   ],
-  "live_browser_verification": "Local browser checks passed on the exact release artifact; hosting is verified against its GitHub Pages deployment.",
+  "live_browser_verification": "The campaign game pack passed local desktop and mobile browser checks.",
   "quote_readability_version": 1,
   "dense_counter_layout_version": 1,
   "desktop_dialogue_font_size": 18,
@@ -377,8 +377,8 @@
   ],
   "tool_polish_assertions": 152,
   "dialogue_actor_assertions": 85,
-  "production_previous_pack": "workbench-27b455967c861c54.pck",
-  "prepared_at": "2026-11-20T00:38:17.905860+08:00",
+  "production_previous_pack": "workbench-cdef0a765cc720b9.pck",
+  "prepared_at": "2026-11-20T18:47:47.930427+08:00",
   "landscape_input_ui_version": 2,
   "gameplay_decisions_version": 1,
   "gameplay_second_batch_version": 1,
@@ -400,5 +400,9 @@
     ]
   ],
   "warehouse_drag_local_snapshot_ms": 0.175,
-  "warehouse_drag_local_move_ms": 17.86
+  "warehouse_drag_local_move_ms": 17.86,
+  "campaign_story_version": 1,
+  "campaign_story_days": 90,
+  "campaign_story_optional": true,
+  "campaign_balance_fixed_runs": 24
 }
