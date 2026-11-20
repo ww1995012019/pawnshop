@@ -148,6 +148,7 @@ func check_original_links(game: Node) -> void:
 		var inspect: Button = shell.modal_layer.find_child("campaign_navigation_inspect",true,false)
 		check(inspect != null,"owned original has an appraisal link")
 		if inspect != null:
+			check(link_label_fits(inspect), "the mobile appraisal link shows its full label and can be tapped")
 			await click(inspect)
 			check(shell.workspace_open() and shell.active_shell().page_name == "inspect" and game.focus_uid == uid,"appraisal opens on the exact story original")
 			if shell.workspace_open():
@@ -158,9 +159,15 @@ func check_original_links(game: Node) -> void:
 		var history: Button = shell.modal_layer.find_child("campaign_navigation_history",true,false)
 		check(history != null,"an actual payment has a receipt link")
 		if history != null:
+			check(link_label_fits(history), "the mobile receipt link shows its full label and can be tapped")
 			await click(history)
 			var plan: Control = shell.modal_layer.find_child("ShopPlan",true,false)
 			check(plan != null and plan.section == "history" and plan.receipt_uid == uid,"receipt link filters the existing plan to the same UID")
 	check(game.state == before,"navigating to appraisal and receipts leaves the scene unresolved")
 	shell.queue_free()
 	await frames()
+
+func link_label_fits(key: Button) -> bool:
+	var font := key.get_theme_font("font")
+	var text_width := font.get_string_size(key.text, HORIZONTAL_ALIGNMENT_LEFT, -1, key.get_theme_font_size("font_size")).x
+	return key.size.x >= text_width + 16.0 and key.size.y >= 44.0

@@ -80,14 +80,19 @@ func setup(shell: Node, close: Callable, beat: Dictionary) -> void:
 	var detail := UIKit.label(String(beat.detail),18,UIKit.INK,false,true)
 	detail.name = "campaign_evidence"
 	evidence.add_child(detail)
-	for destination in beat.get("navigation",[]):
-		var route: Dictionary = destination
-		var key := UIKit.button(String(route.label),"secondary",Vector2(0,42),16)
-		key.name = "campaign_navigation_" + String(route.page)
-		key.custom_minimum_size.y = 44 if compact else 42
-		key.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-		key.pressed.connect(func(): _follow(route))
-		evidence.add_child(key)
+	var destinations: Array = beat.get("navigation", [])
+	if not destinations.is_empty():
+		var links := UIKit.grid(mini(2, destinations.size()), 6)
+		evidence.add_child(links)
+		for destination in destinations:
+			var route: Dictionary = destination
+			var kind := "primary" if route.page == "inspect" else "secondary"
+			var key := UIKit.button(String(route.label), kind, Vector2(0, 44), 16)
+			key.name = "campaign_navigation_" + String(route.page)
+			key.custom_minimum_size.y = 44
+			key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			key.pressed.connect(func(): _follow(route))
+			links.add_child(key)
 	add_child(paper)
 	var choices: Array = beat.get("actions",[])
 	if choices.is_empty():

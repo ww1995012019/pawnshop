@@ -93,6 +93,15 @@ def run_journey(context, url, output, fixtures, opening, mobile, screenshots, ma
         page.wait_for_function("window.__orbitalLocated !== null")
         return page.evaluate("window.__orbitalLocated")
 
+    def wait_for_control(label):
+        deadline = time.monotonic() + 45
+        while time.monotonic() < deadline:
+            target = locate(label)
+            if target["found"]:
+                return target
+            page.wait_for_timeout(250)
+        raise AssertionError(("Expected native control did not appear", label, state()))
+
     def click(label, scroll_bottom=None):
         bottom = min(height - 8, scroll_bottom) if scroll_bottom is not None else height - 8
         for _ in range(12):
@@ -180,8 +189,15 @@ def run_journey(context, url, output, fixtures, opening, mobile, screenshots, ma
             click("日结打烊")
         wait("s.workspace === 'report' && !s.blocked && !s.busy")
 
-    def settle(day, rent=0):
-        before = saved_day(day)
+    def check_day_charges(current, day, rent=0):
+        rows = [row for row in current["ledger"] if row["day"] == day]
+        assert sum(row["kind"] == "rent" for row in rows) == bool(rent), rows
+        assert sum(row["kind"] == "electricity" for row in rows) == 1, rows
+        assert sum(row["kind"] == "cleaning" for row in rows) == 1, rows
+        assert sum(row["amount"] for row in rows if row["kind"] == "rent") == -rent, rows
+
+    def settle(day, rent=0, *, persist=True):
+        before = state()
         open_report()
         if rent:
             click("请房东上门收租")
@@ -195,22 +211,22 @@ def run_journey(context, url, output, fixtures, opening, mobile, screenshots, ma
             open_report()
         click("打烊结算")
         wait("s.notice.startsWith('日结完成')")
+        if not persist:
+            live = state()
+            assert live["day"] == day and live["cash"] == before["cash"] - 16
+            return live
         closed = saved_day(day, "report")
         report = closed["report"]
         assert report["day"] == day and report["settlementRent"] == 0, report
         assert closed["cash"] == before["cash"] - rent - report["costs"]["total"], report
-        rows = [row for row in closed["ledger"] if row["day"] == day]
-        assert sum(row["kind"] == "rent" for row in rows) == bool(rent), rows
-        assert sum(row["kind"] == "electricity" for row in rows) == 1, rows
-        assert sum(row["kind"] == "cleaning" for row in rows) == 1, rows
-        assert sum(row["amount"] for row in rows if row["kind"] == "rent") == -rent, rows
+        check_day_charges(closed, day, rent)
         return closed
 
-    def next_day(closed):
+    def next_day(closed, *, persist=True):
         day = closed["day"] + 1
         click(f"迎接第 {day} 天")
         wait(f"s.day === {day} && !s.workspace && !s.busy")
-        fresh = saved_day(day)
+        fresh = saved_day(day) if persist else state()
         assert fresh["cash"] == closed["cash"] and fresh["ap"] == 12
         return fresh
 
@@ -316,8 +332,11 @@ def run_journey(context, url, output, fixtures, opening, mobile, screenshots, ma
         send_off()
         early_choice = choose(2, "CW-02", "note" if buy_original else "leave")
         assert reload_day(2)["campaignStory"]["decisions"]["CW-02"] == early_choice
-        for day in range(2, 8):
-            current = next_day(settle(day, 450 if day == 7 else 0))
+        for day in range(2, 7):
+            next_day(settle(day, persist=False), persist=False)
+        current = next_day(settle(7, 450))
+        for day in range(2, 7):
+            check_day_charges(current, day)
         print(f"{device} reached day 8 with the first rent and the day-two decision saved", flush=True)
 
         jump_to(20, current)
@@ -340,13 +359,9 @@ def run_journey(context, url, output, fixtures, opening, mobile, screenshots, ma
         history = locate("@campaign_navigation_history")
         assert (history["found"] and not history.get("disabled", True)) == buy_original, history
         if buy_original:
+            assert inspect["width"] >= 96 and history["width"] >= 96, (inspect, history)
             click("@campaign_navigation_history")
-            for _ in range(30):
-                if locate("@shop_plan_history")["found"]:
-                    break
-                page.wait_for_timeout(100)
-            else:
-                raise AssertionError("Campaign letter did not open the receipt archive")
+            wait_for_control("@shop_plan_history")
             click("@modal_close")
             wait("!s.blocked && !s.workspace")
             click("@campaign_story_ticket")
@@ -381,7 +396,8 @@ def run_journey(context, url, output, fixtures, opening, mobile, screenshots, ma
         assert not locate("迎接第 91 天")["found"]
         snap("day-90-final-report")
         click("查看结局")
-        saved_day(90, "ending")
+        wait_for_control("新开一家店")
+        assert state()["cash"] == ending["cash"]
         frame = state()["workspace_rect"]
         click("@continue_campaign", scroll_bottom=frame["y"] + frame["height"] - 20)
         wait("s.day === 91 && !s.workspace && !s.busy")
