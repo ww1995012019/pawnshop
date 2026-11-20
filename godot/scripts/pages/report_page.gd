@@ -20,6 +20,10 @@ var report_entries: GridContainer
 var night_expanded := false
 var pawn_expanded := false
 
+# Dispatching a report action rebuilds its controls. Defer these handlers so
+# touch processing can finish with the original button attached to the tree.
+const REPORT_ACTION_CONNECTION := CONNECT_DEFERRED
+
 func scene_name() -> String:
 	return "counter"
 
@@ -140,7 +144,7 @@ func _refresh() -> void:
 		var again := UIKit.button("新开一家店", "secondary" if continuation != null else "primary", Vector2(0, 64), 24)
 		again.pressed.connect(func():
 			Game.new_game()
-			shell.shutter(1))
+			shell.shutter(1), REPORT_ACTION_CONNECTION)
 		body.add_child(again)
 		return
 	if Life.is_endless(s):
@@ -264,12 +268,12 @@ func _refresh() -> void:
 				host.close_workspace()
 				Game.dispatch({"type":"CALL_LANDLORD"})
 			else:
-				Game.dispatch({"type":"SETTLE"}))
+				Game.dispatch({"type":"SETTLE"}), REPORT_ACTION_CONNECTION)
 		footer.add_child(b)
 	elif s.phase == "report":
 		if Life.pending_closed_checkpoint(s):
 			var finalize := UIKit.button("完成当日结算", "primary", Vector2(0,64), 24)
-			finalize.pressed.connect(func(): Game.dispatch({"type":"SETTLE"}))
+			finalize.pressed.connect(func(): Game.dispatch({"type":"SETTLE"}), REPORT_ACTION_CONNECTION)
 			footer.add_child(finalize)
 			return
 		if Life.report_is_current(s) and day >= 3 and not s.report.get("upgraded",false) and not (Life.is_story(s) and day == Life.end_day(s)):
@@ -285,7 +289,7 @@ func _refresh() -> void:
 				var b := UIKit.button("已安装" if spec[3] else "安装", "good", Vector2(0, 50), 19)
 				b.disabled = spec[3]
 				var id: String = spec[0]
-				b.pressed.connect(func(): Game.dispatch({"type": "UPGRADE", "id": id}))
+				b.pressed.connect(func(): Game.dispatch({"type": "UPGRADE", "id": id}), REPORT_ACTION_CONNECTION)
 				cv.add_child(b)
 				up.add_child(card)
 			body.add_child(up)
@@ -294,7 +298,7 @@ func _refresh() -> void:
 			var next := UIKit.button("迎接第 %d 天" % (day + 1) if Life.can_advance(s) else "查看结局", "secondary" if continuation != null else "primary", Vector2(0, 64), 24)
 			next.pressed.connect(func():
 				if Game.dispatch({"type": "NEXT"}) and Game.state.phase == "open":
-					shell.go("counter"))
+					shell.go("counter"), REPORT_ACTION_CONNECTION)
 			footer.add_child(next)
 		if shell.mobile_mode() and continuation != null: body.move_child(continuation,2)
 
@@ -347,14 +351,14 @@ func _add_continuation(s: Dictionary) -> VBoxContainer:
 	resume.name = "continue_campaign"
 	resume.pressed.connect(func():
 		if Game.dispatch({"type":"CONTINUE_CAMPAIGN"}) and Game.state.phase == "open":
-			shell.go("counter"))
+			shell.go("counter"), REPORT_ACTION_CONNECTION)
 	choice.add_child(resume)
 	if Life.start_story_problem(s) == "":
 		var story := UIKit.button("续接 90 天故事","secondary",Vector2(0,64),24)
 		story.name = "start_story_90"
 		story.pressed.connect(func():
 			if Game.dispatch({"type":"START_STORY_90"}) and Game.state.phase == "open":
-				shell.go("counter"))
+				shell.go("counter"), REPORT_ACTION_CONNECTION)
 		choice.add_child(story)
 	body.add_child(choice)
 	return choice
@@ -479,7 +483,7 @@ func _add_night_controls(s: Dictionary) -> void:
 		if not item.covered or item.value > item.confirmedValue: needs_update = true
 	var purchase := UIKit.button("更新保障" if q.purchased else "购买今晚保险", "primary", Vector2(0, 56), 21)
 	purchase.disabled = reason != "" or not needs_update
-	purchase.pressed.connect(func(): Game.dispatch({"type":"UPDATE_INSURANCE" if q.purchased else "BUY_INSURANCE"}))
+	purchase.pressed.connect(func(): Game.dispatch({"type":"UPDATE_INSURANCE" if q.purchased else "BUY_INSURANCE"}), REPORT_ACTION_CONNECTION)
 	section.add_child(purchase)
 	section.add_child(UIKit.label(reason if reason != "" else "保障已确认；目前无需更新。" if not needs_update else "确认后立即支付 " + UIKit.money(q.due) + "，不消耗 AP。", 17, UIKit.DANGER if reason != "" else UIKit.TEXT, false, true))
 	if bool(NightCrime.public_report(s).inspection.pending):
@@ -488,5 +492,5 @@ func _add_night_controls(s: Dictionary) -> void:
 		arrive.disabled = s.trade != null
 		arrive.pressed.connect(func():
 			Game.dispatch({"type":"ARRIVE_INSPECTION"})
-			shell.go("counter"))
+			shell.go("counter"), REPORT_ACTION_CONNECTION)
 		section.add_child(arrive)

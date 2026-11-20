@@ -116,7 +116,7 @@ def run_journey(context, url, output, fixtures, opening, mobile, screenshots, ma
                 return
             assert scroll_bottom is not None and y >= bottom, (label, target)
             if mobile:
-                phone.touch_drag(context, page, [(width * .55, height * (.68 - i * .045)) for i in range(9)])
+                phone.touch_drag(context, page, [(width * .5, height * (.72 - i * .051)) for i in range(9)])
             else:
                 page.mouse.move(width * .55, height * .55)
                 page.mouse.wheel(0, 420)
@@ -399,7 +399,9 @@ def run_journey(context, url, output, fixtures, opening, mobile, screenshots, ma
         wait_for_control("新开一家店")
         assert state()["cash"] == ending["cash"]
         frame = state()["workspace_rect"]
-        click("@continue_campaign", scroll_bottom=frame["y"] + frame["height"] - 20)
+        # The mobile status area sits between the scroll body and the frame edge.
+        scroll_bottom = frame["y"] + frame["height"] - (70 if mobile else 20)
+        click("@continue_campaign", scroll_bottom=scroll_bottom)
         wait("s.day === 91 && !s.workspace && !s.busy")
         current = reload_day(91)
         assert current["campaignLife"]["mode"] == "endless"

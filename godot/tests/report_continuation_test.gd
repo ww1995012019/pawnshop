@@ -171,6 +171,7 @@ func test_story_reports(game, shell) -> void:
 	check(not text_of(page).contains("第 91 天应付租金"),"day90 report has no upcoming rent inside the story")
 	if ending != null:
 		ending.pressed.emit()
+		check(ending.is_inside_tree() and game.state.phase == "report", "the ending control stays attached until the touch signal returns")
 		await frames()
 		check(game.state.phase == "ending" and game.state.day == 90,"reading the ending stays on day90")
 	page = shell.active_shell().page
@@ -178,5 +179,6 @@ func test_story_reports(game, shell) -> void:
 	check(resume != null and not resume.disabled,"story finale offers explicit endless continuation")
 	if resume != null:
 		resume.pressed.emit()
+		check(resume.is_inside_tree() and game.state.phase == "ending", "the continuation control stays attached until the touch signal returns")
 		await frames()
 		check(game.state.phase == "open" and game.state.day == 91 and Life.is_endless(game.state),"story continuation button opens the retained shop on day91")
