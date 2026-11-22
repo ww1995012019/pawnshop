@@ -127,6 +127,7 @@ func budget_input(parent:Node,config:Dictionary) -> void:
 	amount.value=float(config.get("value",amount.min_value))
 	amount.suffix=" Cr"
 	amount.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	amount.get_line_edit().accessibility_name=String(config.get("label","最高预算"))+"（Cr）"
 	amount.get_line_edit().virtual_keyboard_type=LineEdit.KEYBOARD_TYPE_NUMBER
 	amount.get_line_edit().add_theme_font_size_override("font_size",14)
 	row.add_child(amount)

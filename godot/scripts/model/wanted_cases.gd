@@ -121,7 +121,11 @@ static func current_case(s: Dictionary) -> Dictionary:
 static func dialogue(s: Dictionary, topic: String) -> String:
 	var npc := GameData.npc(s.trade.npcId)
 	if s.trade.kind == "police":
+		if s.trade.get("inspectionVisit",false):
+			return {"identity":"旧港巡警衡岚。今天轮到这间店例行查货。", "origin":"我在柜台等你，你可以先去仓库整理。", "goods":"这次只查隔离箱外的赃物。查到会没收，本次合计罚 30 Cr。", "destination":"整理好后告诉我开始检查。查完给你回执。没有发现赃物就不罚款。"}.get(topic,"你准备好后我们再开始查货。")
 		return {"identity":"衡岚，旧港巡警。失窃案卷和报警回执都由我核对。", "origin":"刚查过二号栈桥。照片、衣着和口供要交叉看，相似的帽子不是证据。", "goods":"名单是协查线索，不是见人就定罪。认对有报酬，前两次误报提醒，多次误报要处罚。", "destination":"接到报警会回来核对。确认抓获后会收回整份名单；下次巡查再给你一份新的六人名单，已抓获的人不会再列入。"}.get(topic, "有细节不确定，可以多问来客几句。")
+	if s.trade.kind == "merchant":
+		return {"identity":"我叫%s，跑这条航线送维修耗材。" % npc.name, "origin":"早上在补给站装了货，今天顺路停一站。", "goods":"我带了维修材料，也收你用不上的零件。打开补给清单能看到单价和余量。", "destination":"下一班货船起航前我都在，你慢慢挑。"}.get(topic,"想看看我带来的补给吗？")
 	var wanted := current_case(s)
 	if not wanted.is_empty():
 		match topic:

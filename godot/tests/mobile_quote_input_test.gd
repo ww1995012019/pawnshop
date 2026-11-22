@@ -40,9 +40,25 @@ func run():
  await frames()
  check(editor.has_focus(),"numeric editor retains focus inside the modal")
  editor.text = str(original+12)
+ editor.text_changed.emit(editor.text)
+ await frames()
+ var submit: Button
+ for button in shell.modal_layer.find_children("*","Button",true,false):
+  if button.text.begins_with("出价"): submit=button
+ check(submit!=null and submit.text.contains(str(original+12)) and desk.dial.value==original+12,"active draft and visible submission amount match before committing or rotating")
+ root.size=Vector2i(568,320)
+ await frames()
+ check(submit.get_global_rect().end.x<=568 and submit.text.contains(str(original+12)),"active quotation survives resizing inside the small modal")
+ editor.text=""
+ editor.text_changed.emit(editor.text)
+ await frames()
+ check(submit.disabled,"a blank draft cannot submit the last price")
+ editor.text=str(original+12)
+ editor.text_changed.emit(editor.text)
  editor.text_submitted.emit(editor.text)
  await frames()
  check(desk.dial.value == original+12,"typed amount updates actual quote")
+ check(submit.has_focus(),"Enter commits and leaves keyboard focus on the unsent offer")
  shell.close_top_modal()
  await frames()
  adapter._quote_popup()

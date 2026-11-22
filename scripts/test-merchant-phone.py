@@ -10,7 +10,32 @@ from playwright.sync_api import sync_playwright
 _spec = importlib.util.spec_from_file_location("phone", Path(__file__).with_name("test-godot-phone.py"))
 phone = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(phone)
-tap, locate, state, wait = phone.tap, phone.locate, phone.state, phone.wait
+tap, state, wait = phone.tap, phone.state, phone.wait
+
+
+def control_rect(page, label):
+    page.evaluate("""label => {
+        window.__orbitalLocated = null;
+        orbitalTouchSend(JSON.stringify({type: 'locate', text: label}));
+    }""", label)
+    page.wait_for_function('window.__orbitalLocated !== null')
+    target = page.evaluate('window.__orbitalLocated')
+    assert target['found'] and not target['disabled'], (label, target)
+    return target
+
+
+def tap_warehouse_action(context, page, label):
+    drawer = state(page, 'workspace_rect')
+    top = drawer['y'] + drawer['height'] * .25
+    bottom = drawer['y'] + drawer['height'] * .85
+    for _ in range(8):
+        target = control_rect(page, label)
+        if top < target['y'] < bottom:
+            page.touchscreen.tap(target['x'], target['y'])
+            return
+        start, end = (bottom, top) if target['y'] >= bottom else (top, bottom)
+        phone.touch_drag(context, page, [(target['x'], start + (end - start) * i / 8) for i in range(9)])
+    raise AssertionError(f'Warehouse action {label!r} remained outside the drawer: {target}')
 
 
 def main():
@@ -47,7 +72,8 @@ def main():
             page.screenshot(path=str(args.screenshots / 'merchant-visitor.png'))
             cash_at_arrival = state(page, 'cash')
             tap(page, '维修工作台')
-            wait(page, "s.workspace === 'repair'")
+            wait(page, "s.workspace === 'repair' && !!s.repair_uid")
+            original_uid = state(page, 'repair_uid')
             page.evaluate("window.orbitalTouchSend(JSON.stringify({type:'merchant_buy', id:'MAT-001'}))")
             page.wait_for_timeout(350)
             assert state(page, 'cash') == cash_at_arrival, 'A workspace must block counter purchases'
@@ -58,10 +84,10 @@ def main():
             page.wait_for_timeout(500)
             good = page.evaluate('OrbitalTouch.state.merchant_goods[0]')
             before = {'cash': state(page, 'cash'), 'owned': good['owned']}
-            target = locate(page, f"购买 {good['name']}")
-            assert target['width'] >= 44 and target['height'] >= 18, 'Merchant goods need a usable touch target'
             for bought in range(1, 4):
-                tap(page, f"购买 {good['name']}")
+                target = control_rect(page, f"购买 {good['name']}")
+                assert target['width'] >= 44 and target['height'] >= 18, 'Merchant goods need a usable touch target'
+                page.touchscreen.tap(target['x'], target['y'])
                 page.wait_for_function('(cash) => OrbitalTouch.state.cash === cash', arg=before['cash'] - 8 * bought)
             assert page.evaluate('OrbitalTouch.state.merchant_goods[0].owned') == before['owned'] + 3
             page.screenshot(path=str(args.screenshots / 'merchant.png'))
@@ -80,24 +106,26 @@ def main():
 
             tap(page, '仓储 · 隔离柜')
             wait(page, "s.workspace === 'warehouse'")
-            page.wait_for_timeout(600)
-            page.touchscreen.tap(116, 126)
-            wait(page, "!!s.forge_uid", 10000)
             before_ap = state(page, 'ap')
-            # The printed custody card makes the action list scroll on phones.
-            # Locate reports geometry even for a control clipped by its scroller.
-            page.mouse.move(690, 250)
-            page.mouse.wheel(0, 900)
-            page.wait_for_timeout(400)
-            forge_target = locate(page, '送到修表台 · 加工')
-            assert 60 < forge_target['y'] < 330, 'Forgery control must be reachable by scrolling'
-            tap(page, '送到修表台 · 加工')
+            if not state(page, 'warehouse_uid'):
+                adjacent_uid = next(row['uid'] for row in state(page, 'warehouse_targets') if row['uid'] != original_uid)
+                tap(page, '@warehouse_pick_' + adjacent_uid)
+                page.wait_for_function('uid => OrbitalTouch.state.warehouse_uid === uid', arg=adjacent_uid)
+            tap(page, '返回后仓清单')
+            wait(page, "!s.warehouse_uid")
+            tap(page, '@warehouse_pick_' + original_uid)
+            page.wait_for_function('uid => OrbitalTouch.state.warehouse_uid === uid && OrbitalTouch.state.forge_uid === uid', arg=original_uid)
+            assert not state(page, 'forge_reason') and not state(page, 'forge_done')
+            page.screenshot(path=str(args.screenshots / 'warehouse-original.png'))
+            tap_warehouse_action(context, page, '送到修表台 · 加工')
             wait(page, "s.workspace === 'repair' && s.repair_mode === 'forge'", 10000)
+            assert state(page, 'repair_uid') == original_uid and state(page, 'ap') == before_ap
             for _ in range(30):
                 current = page.evaluate('OrbitalTouch.state')
                 if current.get('forge_done'): break
-                tap(page, current['repair_action'])
-                page.wait_for_function("step=>{const a=OrbitalTouch.state.repair_animation;return a.complete || a.phase==='idle'&&a.step>step}", arg=current['repair_animation']['step'])
+                action = control_rect(page, '@repair_primary')
+                page.touchscreen.tap(action['x'], action['y'])
+                page.wait_for_function("step => {const s = OrbitalTouch.state, a = s.repair_animation; return s.forge_done || a.complete || (a.phase === 'idle' && a.step > step)}", arg=current['repair_animation']['step'])
             wait(page, "s.forge_done === true", 10000)
             assert state(page, 'ap') == before_ap - 1
             page.screenshot(path=str(args.screenshots / 'forgery.png'))

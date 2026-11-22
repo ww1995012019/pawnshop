@@ -2,6 +2,7 @@ extends Node
 ## Accessible Web controls delegate to the desk and reducer; no second ruleset.
 const Commerce = preload("res://scripts/model/commerce.gd")
 var shell
+var reader: RefCounted
 var callback: JavaScriptObject
 var place_callback: JavaScriptObject
 var window: JavaScriptObject
@@ -23,6 +24,7 @@ func setup(owner_shell: Node) -> void:
 	set_process(OS.has_feature("web"))
 	if not OS.has_feature("web"):
 		return
+	reader = preload("res://scripts/app/web_controls.gd").new(shell)
 	window = JavaScriptBridge.get_interface("window")
 	callback = JavaScriptBridge.create_callback(_receive)
 	window.orbitalTouchSend = callback
@@ -87,7 +89,10 @@ func _process(delta: float) -> void:
 	if elapsed < 0.15:
 		return
 	elapsed = 0.0
-	var data := JSON.stringify(snapshot())
+	var status := snapshot()
+	if reader != null and status.get("ready", false):
+		status.reader = reader.snapshot(status)
+	var data := JSON.stringify(status)
 	if data != last_json:
 		last_json = data
 		JavaScriptBridge.eval("window.OrbitalTouch && window.OrbitalTouch.update(%s);" % data)
@@ -112,6 +117,10 @@ func snapshot() -> Dictionary:
 		"can_arrive": not title_open and not blocked and not busy and trade == null and
 			NightCrime.can_arrive(state),
 		"offer": shell.page.dial.value, "min": shell.page.dial.min_value, "max": shell.page.dial.max_value}
+	if not shell.page.patrol_status.is_empty():
+		result.visitor = shell.page.patrol_status
+		result.notice = shell.page.patrol_detail
+		result.cash = shell.page.cash_tray.cash
 	if shell.workspace_open():
 		var frame: Control = shell.workspace_frame
 		result.workspace_rect = _screen_rect(frame)
@@ -239,6 +248,9 @@ func command(data: Dictionary) -> void:
 	var kind = data.get("type", "")
 	if not kind is String:
 		return
+	if kind == "reader":
+		if reader != null: reader.interact(data)
+		return
 	if kind == "locate":
 		_locate(str(data.get("text", "")))
 		return
@@ -333,7 +345,7 @@ func command(data: Dictionary) -> void:
 				Game.dispatch(CounterDialogue.action_for(Game.state,"DELIVER") if CounterDialogue.active(Game.state) else {"type":"DELIVER","tradeId":trade.id})
 		"refuse":
 			if trade != null:
-				Game.dispatch({"type": "REFUSE"})
+				shell.page.request_sendoff(String(trade.id))
 		"merchant_buy", "merchant_sell":
 			var id = data.get("id", null)
 			if trade != null and trade.kind == "merchant" and id is String:
@@ -350,6 +362,7 @@ func command(data: Dictionary) -> void:
 ## the real in-scene control instead of a separate Web overlay.
 func _locate(text: String) -> void:
 	var found: CanvasItem = null
+	var foreground: Node = reader.active_scope() if reader != null and text.begins_with("@") else null
 	var stack: Array[Node] = [shell]
 	while not stack.is_empty():
 		var node: Node = stack.pop_front()
@@ -360,7 +373,12 @@ func _locate(text: String) -> void:
 		if node is Button and text != "" and (node as Button).is_visible_in_tree():
 			var b := node as Button
 			if text.begins_with("@"):
-				if String(b.name)==text.substr(1): found=b;break
+				if String(b.name) == text.substr(1):
+					# A drawer and the desk below it can contain identically named buttons.
+					if foreground == null or foreground.is_ancestor_of(b):
+						found = b
+						break
+					if found == null: found = b
 				continue
 			if b.text == text or (found == null or not found is Button or found.text != text) and (b.text.contains(text) or b.tooltip_text.contains(text)):
 				found = b

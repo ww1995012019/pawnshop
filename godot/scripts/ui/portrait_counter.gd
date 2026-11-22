@@ -7,6 +7,7 @@ var body: VBoxContainer
 var visitor: TextureRect
 var speech: Label
 var visitor_name: Label
+var patrol_partner: TextureRect
 var item_art: TextureRect
 var item_name: Label
 var item_hint: Label
@@ -26,6 +27,7 @@ var active := false
 var landscape: Control
 var backdrop: TextureRect
 var refresh_time := 0.0
+var last_patrol_status := ""
 var wanted_paper: Button
 var wanted_row: HBoxContainer
 
@@ -109,6 +111,10 @@ func _build() -> void:
 	visitor.custom_minimum_size.x = 100
 	visitor.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	window_row.add_child(visitor)
+	patrol_partner = _picture(null,80)
+	patrol_partner.custom_minimum_size.x = 74
+	patrol_partner.hide()
+	window_row.add_child(patrol_partner)
 	var conversation := UIKit.vbox(2)
 	conversation.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	conversation.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -239,7 +245,8 @@ func _process(delta: float) -> void:
 	_sync_layout()
 	if not active: return
 	refresh_time += delta
-	if refresh_time < 0.1: return
+	if refresh_time < 0.1 and last_patrol_status == desk.patrol_status: return
+	last_patrol_status = desk.patrol_status
 	refresh_time = 0.0
 	_refresh()
 
@@ -273,6 +280,7 @@ func _refresh() -> void:
 	if robbed:item_hint.text="本店被抢物品 · 可直接报警追回"
 	item_hint.add_theme_color_override("font_color",UIKit.DANGER if robbed else UIKit.MUTED)
 	tools.get_child(0).disabled = item == null or desk.busy
+	tools.get_child(0).visible = desk.patrol_status.is_empty() and (t == null or t.kind != "merchant")
 	if is_instance_valid(quote):
 		quote.set_block_signals(true)
 		quote.min_value = desk.dial.min_value
@@ -298,6 +306,27 @@ func _refresh() -> void:
 	var goods: Array = CounterDialogue.table_items(s) if CounterDialogue.active(s) else []
 	goods_button.text = "货物 · %d 件" % goods.size()
 	goods_button.visible = goods.size() > 1
+	patrol_partner.hide()
+	if t != null and t.kind == "merchant":
+		item_name.text = "流动商人的补给"
+		item_hint.text = "从商人处采购维修耗材，或出售本店余料。"
+		item_art.texture = UIKit.icon("warehouse")
+		primary.text = "查看商品 · 商人补给"
+		goods_button.text = "本店库存"
+		goods_button.visible = true
+	if not desk.patrol_status.is_empty():
+		visitor.texture = UIKit.npc_portrait(WantedCases.OFFICER_ID)
+		patrol_partner.texture = UIKit.npc_portrait(desk.patrol_visitor)
+		patrol_partner.visible = is_instance_valid(desk.customer) and not desk.customer.is_queued_for_deletion()
+		visitor_name.text = "巡警 · " + desk.patrol_status
+		speech.text = desk.patrol_detail
+		item_art.texture = preload("res://scripts/ui/comic_assets.gd").icon("shield-halved")
+		item_name.text = desk.patrol_status
+		item_hint.text = desk.patrol_detail
+		primary.text = desk.patrol_status
+		balance.text = "%s Cr" % Model.jnum(desk.cash_tray.cash)
+		price.text = "现场协查"
+		goods_button.hide()
 
 func _primary() -> void:
 	if desk.busy or desk._scene_blocked(): return
@@ -312,7 +341,7 @@ func _primary() -> void:
 func _dialogue_popup() -> void:
 	var modal: Array = shell.modal("顾客对话",360)
 	modal[0].add_child(UIKit.label(visitor_name.text,20,UIKit.AMBER,false,true))
-	modal[0].add_child(UIKit.label(desk.bubble_label.get_parsed_text() if Game.state.trade != null else speech.text,19,UIKit.TEXT,false,true))
+	modal[0].add_child(UIKit.label(desk.patrol_detail if not desk.patrol_status.is_empty() else desk.bubble_label.get_parsed_text() if Game.state.trade != null else speech.text,19,UIKit.TEXT,false,true))
 
 func _item_popup() -> void:
 	var item = Model.trade_item(Game.state) if Game.state.trade != null else null
@@ -343,7 +372,8 @@ func _open_instrument(id: String) -> void:
 	if shell.workspace_open(): shell.workspace_shell.page._set_tool(id)
 
 func _goods_popup() -> void:
-	var modal: Array = shell.modal("柜台货物 / 店内库存",520)
+	var merchant: bool = Game.state.trade != null and Game.state.trade.kind == "merchant"
+	var modal: Array = shell.modal("本店库存" if merchant else "柜台货物 / 店内库存",520)
 	var table_grid := UIKit.grid(4 if shell.landscape_mode() else 3,6)
 	table_grid.name = "table_goods_grid"
 	modal[0].add_child(table_grid)
@@ -358,7 +388,7 @@ func _goods_popup() -> void:
 		_goods_tile(key,UIKit.physical_icon(item),GameData.def(item.defId).name)
 		table_grid.add_child(key)
 
-	modal[0].add_child(UIKit.label("店内库存 · 点击推荐 / 查看",14,UIKit.AMBER))
+	modal[0].add_child(UIKit.label("店内库存 · " + UIKit.stock_counts(Game.state.inventory),14,UIKit.AMBER))
 	var stock := UIKit.grid(4 if shell.landscape_mode() else 3,6)
 	stock.name = "stock_goods_grid"
 	modal[0].add_child(stock)
@@ -405,6 +435,7 @@ func _quote_popup() -> void:
 	quote.custom_minimum_size.y = 34 if shell.landscape_mode() else 56
 	quote.name = "mobile_quote"
 	quote.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	quote.get_line_edit().accessibility_name = "我的报价（Cr）"
 	quote.get_line_edit().virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
 	quote.suffix = " Cr"
 	quote.get_line_edit().add_theme_font_size_override("font_size",17 if shell.landscape_mode() else 24)
@@ -473,11 +504,30 @@ func _quote_popup() -> void:
 		key.disabled = original.disabled
 		modal[0].add_child(key)
 		if original == desk.offer_button:
-			var preview: WeakRef = weakref(key)
-			quote.value_changed.connect(func(value):
-				desk.dial.set_value(int(value),false)
-				desk._update_offer_value(desk.dial.value)
-				if is_instance_valid(preview.get_ref()): preview.get_ref().text = "出价 " + UIKit.money(value))
+			var editor := quote.get_line_edit()
+			var sync_preview := func(text: String):
+				var digits := text.strip_edges().trim_suffix("Cr").strip_edges()
+				var valid := digits.is_valid_int() and digits.to_int() >= quote.min_value and digits.to_int() <= quote.max_value
+				key.disabled = not valid or desk.offer_button.disabled
+				if not valid:
+					key.text = "请输入 %d–%d Cr 的整数" % [quote.min_value,quote.max_value]
+					return
+				var amount := digits.to_int()
+				desk.dial.set_value(amount,false)
+				desk._update_offer_value(amount)
+				key.text = "出价 " + UIKit.money(amount)
+			# Keep the native editor's caret and unfinished text intact. The
+			# amount shown on the action is already the amount it will commit.
+			editor.text_changed.connect(sync_preview)
+			quote.value_changed.connect(func(value): sync_preview.call(str(int(value))))
+			editor.text_submitted.connect(func(_text):
+				if not key.disabled: _focus_submitted_quote.call_deferred(key))
+
+func _focus_submitted_quote(submit: Button) -> void:
+	if not is_instance_valid(submit) or not submit.is_visible_in_tree(): return
+	shell._focus_keyboard(submit)
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("if (document.activeElement === document.body) document.getElementById('canvas')?.focus({preventScroll:true})")
 
 func _sync_quote_evidence(row: HFlowContainer, hint: Label) -> void:
 	var selected_caption := ""
@@ -515,7 +565,8 @@ func _actions(showing_settlement := false) -> void:
 		alarm.name = "mobile_alarm_button"
 		alarm.disabled = desk.alarm_button.disabled
 		modal[0].add_child(alarm)
-	modal[0].add_child(_key("选择货物 / 推荐库存",func():
+	var inventory_caption := "本店库存" if Game.state.trade != null and Game.state.trade.kind == "merchant" else "选择货物 / 推荐库存"
+	modal[0].add_child(_key(inventory_caption,func():
 		modal[1].call()
 		_open_goods_after_close.call_deferred()))
 	modal[0].add_child(_key("成交回执",func():
@@ -548,7 +599,8 @@ func _tasks() -> void:
 	var modal: Array = shell.modal("店内事务",360)
 	for spec in [["经营计划","shop_plan"],["事件簿","stories"],["成交回执","history"],["委托订单","orders"],["营业账本 / 打烊","report"],["站内消息","events"],["经营手册","help"]]:
 		var target: String = spec[1]
-		modal[0].add_child(_key(spec[0],func():
+		var caption: String = spec[0] + " · " + UIKit.order_counts(Game.state) if target == "orders" else spec[0]
+		modal[0].add_child(_key(caption,func():
 			modal[1].call()
 			if target in ["shop_plan","history"]: _open_shop_plan_after_close.call_deferred("history" if target == "history" else "")
 			elif target == "stories": shell._open_story_book_after_close.call_deferred()

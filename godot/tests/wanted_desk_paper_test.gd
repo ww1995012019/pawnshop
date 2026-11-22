@@ -30,6 +30,7 @@ func run() -> void:
 	var game=root.get_node("Game")
 	game.new_game("DESK-WANTED")
 	game.prefs.reduced_motion=true;game.prefs.sound=false
+	Model.put_in(game.state, Model.new_item(game.state, "WCH-001", {"owner":"customer"}))
 	game.state.day=2;game.state.trade=WantedCases.new_officer_trade(game.state)
 	var shell=load("res://main.tscn").instantiate();root.add_child(shell)
 	await frames();shell._close_title()
@@ -37,7 +38,10 @@ func run() -> void:
 	game.dispatch({"type":"ISSUE_WANTED","tradeId":game.state.trade.id})
 	await frames()
 	check(JSON.stringify(game.state.inventory)==before_inventory,"receiving desk paperwork preserves every watch slot and original")
-	check(shell.page.stock_count.text.begins_with(str(game.state.inventory.size())+" 件"),"legacy counter watch total excludes paperwork")
+	var owned: int = game.state.inventory.filter(func(it): return it.owner == "shop").size()
+	var held: int = game.state.inventory.filter(func(it): return it.owner in ["customer","pawn"]).size()
+	var caption := "自有 %d · 受托 %d" % [owned, held]
+	check(held == 1 and owned + held == game.state.inventory.size() and shell.page.stock_count.text == caption and shell.page.strict_view.stock_count.text == caption, "both counter stock counts include all owned and held watches and exclude paperwork")
 	check(shell.page.stock_grid.find_child("wanted_inventory",false,false)==null,"legacy watch grid contains no paperwork tile")
 	var poster=shell.wanted_notice
 	check(has_text(poster,"通缉令"),"expanded paper has an unmistakable wanted-poster heading")

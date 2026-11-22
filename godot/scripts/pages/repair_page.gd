@@ -33,6 +33,7 @@ var cleaning_unsaved := false
 var save_clock := 0.0
 var grime_label: Label
 var action_button: Button
+var inspect_button: Button
 var mode_buttons: Dictionary = {}
 var mode_bar: HBoxContainer
 var guidance: PanelContainer
@@ -425,13 +426,13 @@ func _stage_ui() -> void:
 			instruction.text = "已完成的工序保留记录；鉴定读数若受维修影响，请复查。"
 			action_button.text = "完成工单 · 记录交工"
 		action_button.disabled = _current_problem() != ""
-	var inspect := UIKit.button("鉴定" if shell.landscape_mode() else "去鉴定","secondary",Vector2(60 if shell.landscape_mode() else 126,44 if shell.landscape_mode() else 50),16 if shell.landscape_mode() else 19)
+	inspect_button = UIKit.button("鉴定" if shell.landscape_mode() else "去鉴定","secondary",Vector2(60 if shell.landscape_mode() else 126,44 if shell.landscape_mode() else 50),16 if shell.landscape_mode() else 19)
 	if shell.landscape_mode():
 		action_button.custom_minimum_size.y = 44
 		action_button.add_theme_font_size_override("font_size",16)
-		action_button.clip_text = true
-	inspect.pressed.connect(func(): call_deferred("_open_inspection"))
-	row.add_child(inspect)
+		action_button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	inspect_button.pressed.connect(func(): call_deferred("_open_inspection"))
+	row.add_child(inspect_button)
 	bench_body.add_child(row)
 	_update_guidance()
 	shell.hint(hint_text())
@@ -592,6 +593,7 @@ func _operation_progressed(progress: Dictionary) -> void:
 		_save_operation()
 	if is_instance_valid(action_button): action_button.text = art.action_text()
 	_update_guidance()
+	shell.hint(art.hint_text())
 
 func _save_operation() -> void:
 	if pending_operation.is_empty() or pending_task == "" or it_uid == "": return
@@ -750,21 +752,26 @@ func _layout_landscape() -> void:
 	var area := Rect2(r.position+Vector2(0,40),r.size-Vector2(0,40))
 	list_box.columns = maxi(1,floori((area.size.x-16)/100.0))
 	var sidebar := clampf(area.size.x*.27,180,240)
+	if is_instance_valid(inspect_button):
+		var touch_minimum := ceilf(44.0 / maxf(shell.touch_scale(),.1))
+		inspect_button.custom_minimum_size = Vector2(maxf(58,touch_minimum),touch_minimum)
+		action_button.custom_minimum_size.y = touch_minimum
+	bench.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",4))
+	bench.size = Vector2(sidebar,52)
+	# A wrapped operation or a scaled touch target can make the row taller.
+	bench.position = Vector2(area.end.x-sidebar,area.end.y-bench.size.y)
 	guidance_scroll.custom_minimum_size.y = 0
 	notice_slot.visible = operation
 	notice_slot.custom_minimum_size.y = 52
 	guidance.add_theme_stylebox_override("panel",UIKit.screen_style(6))
 	guidance.position = Vector2(area.end.x-sidebar,area.position.y)
-	guidance.size = Vector2(sidebar,area.size.y-58)
+	guidance.size = Vector2(sidebar,bench.position.y-area.position.y-6)
 	mode_bar.visible = false
 	for node in guidance_body.get_children():
 		if node is Label:
 			node.add_theme_font_size_override("font_size",15)
 			node.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			node.custom_minimum_size.y = 0
-	bench.position = Vector2(area.end.x-sidebar,area.end.y-52)
-	bench.size = Vector2(sidebar,52)
-	bench.add_theme_stylebox_override("panel",PortraitSkin.panel("wine",4))
 	# Mode choice stays reachable in the selection view.
 	if not operation:
 		mode_bar.visible = true
@@ -807,8 +814,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			last_uv = uv
 			cloth_uv = uv
 			queue_redraw()
-		elif not event.pressed:
+		elif not event.pressed and scrubbing:
 			scrubbing = false
+			cloth_uv = Vector2(-1,-1)
+			queue_redraw()
 			_save_cleaning()
 
 func _process(delta: float) -> void:

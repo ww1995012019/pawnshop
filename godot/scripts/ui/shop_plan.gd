@@ -240,6 +240,7 @@ func _contracts() -> void:
 			quote.step=1
 			quote.suffix=" Cr"
 			quote.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+			quote.get_line_edit().accessibility_name=String(job.title)+" · 委修报价（Cr）"
 			quote.get_line_edit().virtual_keyboard_type=LineEdit.KEYBOARD_TYPE_NUMBER
 			quote.get_line_edit().add_theme_font_size_override("font_size",14)
 			quote.get_line_edit().name="service_quote_input_"+id
@@ -368,7 +369,7 @@ func _history() -> void:
 
 func _receipt(receipt: Dictionary) -> void:
 	var day := int(receipt.get("day",0))
-	var card := _card("第%d天 · 成交回执" % day)
+	var card := _card("第%d天 · 成交回执 No.%04d" % [day,int(receipt.serial)])
 	var rows: Array = receipt.get("items",receipt.get("entries",[]))
 	for item in rows:
 		var entry := String(item.get("name","原物")) + " · " + UIKit.money(item.get("price",0))

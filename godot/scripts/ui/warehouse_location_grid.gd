@@ -85,7 +85,7 @@ class Slot extends Button:
      dragging=false
      cabinet.page.finish_cabinet_drag(uid,get_global_transform_with_canvas()*event.position)
      accept_event()
-  elif event is InputEventMouseMotion and held:
+  elif event is InputEventMouseMotion and held and Game.state.phase=="open":
    if not dragging and event.position.distance_to(press_point)>6:
     dragging=true;cabinet.page.begin_cabinet_drag(uid)
    if dragging:

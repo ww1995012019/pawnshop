@@ -1,5 +1,5 @@
 """Exercise the phone quote using touch controls and the engine's Web keyboard."""
-import importlib.util,re,shutil
+import importlib.util,re,shutil,sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 spec=importlib.util.spec_from_file_location('phone',Path(__file__).with_name('test-godot-phone.py'));phone=importlib.util.module_from_spec(spec);spec.loader.exec_module(phone)
@@ -15,7 +15,8 @@ with sync_playwright() as p:
  def tap(t):
   v=raw(t);assert v['found'] and not v['disabled'],v;page.touchscreen.tap(v['x'],v['y']);return v
  def shot(name):page.screenshot(path=str(out/name),scale='css')
- page.goto('http://127.0.0.1:4174/');page.wait_for_function('OrbitalTouch?.state?.ready',timeout=120000)
+ page.goto(sys.argv[1] if len(sys.argv)>1 else 'http://127.0.0.1:4174/');page.wait_for_function('OrbitalTouch?.state?.ready',timeout=120000)
+ page.locator('#loader').wait_for(state='hidden')
  tap('开门营业');phone.wait(page,'!s.title&&!s.busy');tap('@landscape_primary');phone.wait(page,'s.trade&&!s.busy')
  page.wait_for_timeout(500);shot('counter.png')
  goods=page.evaluate('OrbitalTouch.state.table_items')
@@ -48,9 +49,19 @@ with sync_playwright() as p:
  left=raw('@quote_step_-1');right=raw('@quote_step_1')
  page.touchscreen.tap((left['x']+right['x'])/2,left['y'])
  page.wait_for_function("document.activeElement?.tagName==='INPUT'&&!document.activeElement.disabled",timeout=10000)
- editor=page.locator('input:enabled');editor.fill(str(before+12));editor.press('Enter')
+ editor=page.locator('input:focus')
+ editor.fill(str(before+12))
+ page.wait_for_timeout(200)
+ assert str(before+12) in raw('出价')['label'], 'An actively typed quote must match the amount on the submit action'
+ page.set_viewport_size({'width':390,'height':844})
+ page.wait_for_function('OrbitalTouch.turned()')
+ assert editor.input_value()==str(before+12) and str(before+12) in raw('出价')['label']
+ page.set_viewport_size({'width':844,'height':390})
+ page.wait_for_function('!OrbitalTouch.turned()')
+ editor.press('Enter')
+ page.wait_for_function("document.activeElement===document.getElementById('canvas')")
  page.wait_for_timeout(300);assert str(before+12) in raw('出价')['label']
- shot('quote.png');tap('@modal_close');phone.wait(page,'!s.blocked');tap('@landscape_primary');phone.wait(page,'s.blocked')
+ shot('quote.png');page.keyboard.press('Escape');phone.wait(page,'!s.blocked');tap('@landscape_primary');phone.wait(page,'s.blocked')
  page.wait_for_timeout(250);assert str(before+12) in raw('出价')['label']
  old_line=page.evaluate('OrbitalTouch.state.dialogue_line');tap('出价');phone.wait(page,'!s.blocked');page.wait_for_function('line=>OrbitalTouch.state.dialogue_line!==line',arg=old_line);assert page.evaluate('OrbitalTouch.state.offer')==before+12
  phone.wait(page,'s.locked')

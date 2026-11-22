@@ -56,6 +56,7 @@ func _browser_resized(_args: Array) -> void:
 
 func configure(title: String, key: String, dimensions := Vector2(720,760)) -> void:
 	geometry_key = key
+	accessibility_name = title
 	logical_size = dimensions
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

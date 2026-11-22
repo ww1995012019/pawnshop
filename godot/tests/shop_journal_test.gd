@@ -1,4 +1,5 @@
 extends SceneTree
+const Commerce=preload("res://scripts/model/commerce.gd")
 var failures := 0
 var journal
 func _initialize() -> void: call_deferred("run")
@@ -51,6 +52,38 @@ func read_time(s: Dictionary) -> int:
   best=elapsed if sample==0 else mini(best,elapsed)
  return best
 
+func check_boxed_watch_counter_paper() -> void:
+ var s:=Model.create("JOURNAL-PHYSICAL-SUFFIX")
+ s.cash=100000
+ s.ap=30
+ s.trade=Commerce._new_merchant(s)
+ var offer:=BulkCrates.offer(s)
+ s=BulkCrates.reduce(s,{"type":"BUY_BULK_CRATE","id":offer.id})
+ var uid:=String(offer.id)+"-item-1"
+ journal.ensure(s)
+ var label: String=s.shopJournal.originals[uid].name
+ s=Commerce.reduce(s,{"type":"TRADE_OPEN"})
+ TradeSession.session(s).cash=5000
+ TradeSession.session(s).want_count=6
+ for action in [{"type":"TRADE_ADD","uid":uid,"direction":"sell"},{"type":"TRADE_REVIEW"},{"type":"TRADE_CONFIRM","uid":uid}]:
+  s=Commerce.reduce(s,action.merged({"tradeId":s.trade.id}))
+ var checkout:={"type":"TRADE_CHECKOUT","tradeId":s.trade.id,"version":TradeSession.session(s).version,"batch":"final"}
+ var after:=Commerce.reduce(s,checkout)
+ journal.observe(s,after,checkout)
+ var entry: Dictionary=journal.latest_receipt(after).entries[0]
+ check(entry.ledgerId.ends_with("/"+uid) and entry.uid==uid and entry.name==label,"selling a boxed original keeps its full UID when item-1 is also in stock")
+ var old: Dictionary=JSON.parse_string(JSON.stringify(after))
+ for record in old.shopJournal.receipts:
+  record.erase("serial")
+  record.erase("counterKind")
+ # Earlier journals matched the shorter inventory UID against the hyphenated suffix.
+ var old_entry: Dictionary=old.shopJournal.receipts.back().entries[0]
+ old_entry.uid="item-1"
+ old_entry.name=old.shopJournal.originals["item-1"].name
+ journal.ensure(old)
+ var printed: Array=journal.counter_paper(old).get("entries",[])
+ check(printed.size()==1 and printed[0].uid==uid and printed[0].name==label and printed[0].price==entry.price,"old boxed-watch sale restores the recorded original, its public name and its price")
+
 func check_long_save_reads() -> void:
  var early:=long_save(7)
  var late:=long_save(84)
@@ -70,6 +103,7 @@ func run() -> void:
  if journal == null:
   quit(1)
   return
+ check_boxed_watch_counter_paper()
  var s := Model.create("JOURNAL")
  var original := s.duplicate(true)
  s.inventory[0].evidence=["TOL-001"]

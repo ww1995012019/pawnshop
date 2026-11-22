@@ -25,6 +25,7 @@ const DEFAULT_CAMPAIGN_MODE := Life.LEGACY21
 
 var state: Dictionary = {}
 var prefs := {"sound": true, "reduced_motion": false, "music_volume": 0.6, "sfx_volume": 0.8}
+var _motion_chosen := false
 var focus_uid := ""          # object on the workbench / selected in storage
 var has_save := false
 
@@ -32,10 +33,8 @@ func _ready() -> void:
 	GameData.ensure()
 	load("res://scripts/app/debug_values.gd").load_overrides()
 	backup_legacy_save()
-	if FileAccess.file_exists(PREFS_PATH):
-		var p = JSON.parse_string(FileAccess.get_file_as_string(PREFS_PATH))
-		if p is Dictionary:
-			prefs.merge(p, true)
+	var system_reduced := OS.has_feature("web") and bool(JavaScriptBridge.eval("window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true", true))
+	_load_preferences(system_reduced)
 	if FileAccess.file_exists(SAVE_PATH):
 		var s = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
 		if s is Dictionary and s.get("schema", 0) == 4:
@@ -184,7 +183,10 @@ func _enrich_shop_feedback(previous: Dictionary, next: Dictionary, action: Dicti
 		var evidence := String(action.evidence)
 		if not trade.get("evidenceUsed",[]).has(evidence): return
 		var label: String = {"TOL-001":"标识","TOL-002":"编号","TOL-005":"称量"}.get(evidence,"鉴定")
-		trade.line = "已向对方出示%s记录，对方按已知依据回应。\n%s" % [label,String(trade.get("line",""))]
+		var notice := "已随 %s Cr 报价出示%s记录。" % [Model.jnum(action.price), label]
+		if next.notice != previous.notice:
+			notice += String(next.notice)
+		next.notice = notice
 
 func save() -> void:
 	ensure_shop_state(state)
@@ -202,10 +204,27 @@ func save() -> void:
 		f.close()
 		has_save = true
 
+func _load_preferences(system_reduced: bool) -> void:
+	var saved = JSON.parse_string(FileAccess.get_file_as_string(PREFS_PATH)) if FileAccess.file_exists(PREFS_PATH) else {}
+	_motion_chosen = saved is Dictionary and saved.get("reduced_motion") is bool
+	if saved is Dictionary:
+		prefs.merge(saved, true)
+	if not _motion_chosen:
+		prefs.reduced_motion = system_reduced
+
+func set_reduced_motion(enabled: bool) -> void:
+	_motion_chosen = true
+	prefs.reduced_motion = enabled
+	save_prefs()
+
 func save_prefs() -> void:
 	var f := FileAccess.open(PREFS_PATH, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify(prefs))
+		var saved := prefs.duplicate()
+		if not _motion_chosen:
+			saved.erase("reduced_motion")
+		f.store_string(JSON.stringify(saved))
+		f.close()
 	prefs_changed.emit()
 
 func item(uid: String):

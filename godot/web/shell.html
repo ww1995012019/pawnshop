@@ -57,7 +57,17 @@ html.turned .loading-title { top:14px; }
 	$GODOT_HEAD_INCLUDE
 </head>
 <body>
-	<canvas id="canvas">你的浏览器不支持画布。</canvas>
+	<div id="reader-ui" hidden>
+		<button id="reader-entry" type="button" aria-controls="reader-panel">文字操作</button>
+		<section id="reader-panel" aria-labelledby="reader-heading">
+			<header><h2 id="reader-heading" tabindex="-1">轨道旧货局</h2><button id="reader-exit" type="button" tabindex="-1">返回游戏画面</button></header>
+			<p id="reader-balance" role="status" aria-live="polite" aria-atomic="true"></p>
+			<p id="reader-context"></p>
+			<div id="reader-actions"></div>
+			<div id="reader-copy"></div>
+		</section>
+	</div>
+	<canvas id="canvas" aria-label="轨道旧货局游戏画面">你的浏览器不支持画布。</canvas>
 	<noscript><div style="position:fixed;inset:0;display:grid;place-items:center;color:#ece7d9">需要开启 JavaScript 才能开门营业。</div></noscript>
 
 	<div id="loader" role="status" aria-live="polite">

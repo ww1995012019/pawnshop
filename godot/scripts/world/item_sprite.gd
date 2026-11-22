@@ -66,9 +66,16 @@ func setup(id: String, item_uid := "", height := 300.0, start_back := false, wor
 	reveal = Label.new()
 	reveal.add_theme_font_override("font", UIKit.mono)
 	reveal.add_theme_font_size_override("font_size", 13)
-	reveal.add_theme_color_override("font_color", Color(0.64, 0.94, 0.86))
-	reveal.add_theme_color_override("font_outline_color", Color(0.22, 0.52, 0.49, 0.45))
-	reveal.add_theme_constant_override("outline_size", 1)
+	reveal.add_theme_color_override("font_color", Color("e4fff6"))
+	reveal.add_theme_color_override("font_outline_color", Color("0d1a19"))
+	reveal.add_theme_constant_override("outline_size", 3)
+	reveal.add_theme_constant_override("line_spacing", -2)
+	reveal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	reveal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	reveal.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	reveal.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Keep the illuminated lettering above the wand's violet halo.
+	reveal.z_index = 101
 	var rm := ShaderMaterial.new()
 	rm.shader = load("res://shaders/reveal.gdshader")
 	reveal.material = rm
@@ -87,6 +94,7 @@ func _apply_face() -> void:
 	logo_variant = WatchRules.logo_variant(it) if it != null else 0
 	if closeup:
 		body.texture = preload("res://scripts/ui/watch_workbench_texture.gd").texture(it if it != null else {"defId":def_id},back)
+		if not back: mat.set_shader_parameter("unmarked_dial",body.texture.get_meta("unmarked_dial"))
 		body.region_rect = Rect2(8.96,8.96,238.08,238.08)
 		asz = Vector2(256,256)
 	elif not back and logo_variant != 0:
@@ -159,7 +167,7 @@ func logo_world_position() -> Vector2:
 
 func set_reveal(text: String, at_uv: Vector2) -> void:
 	reveal.text = text
-	reveal.reset_size()
+	reveal.size = Vector2(90,60)
 	reveal.position = (at_uv - Vector2(0.5, 0.5)) * tex_size() - reveal.size * reveal.scale * 0.5
 	reveal.visible = true
 
@@ -182,7 +190,12 @@ func begin_drag(global_point: Vector2) -> void:
 		return
 	dragging = true
 	grab = position - get_parent().to_local(global_point)
-	lift_target = 34.0
+	if Game.prefs.reduced_motion:
+		if land_tween != null and land_tween.is_valid():
+			land_tween.kill()
+		body.scale = Vector2.ONE * display_scale
+	lift_target = 0.0 if Game.prefs.reduced_motion else 34.0
+	mat.set_shader_parameter("held_outline", Game.prefs.reduced_motion)
 	target = position
 
 func drag_to(global_point: Vector2) -> void:
@@ -190,18 +203,29 @@ func drag_to(global_point: Vector2) -> void:
 		target = get_parent().to_local(global_point) + grab
 		target.x = clampf(target.x, bounds.position.x, bounds.end.x)
 		target.y = clampf(target.y, bounds.position.y, bounds.end.y)
+		if Game.prefs.reduced_motion:
+			position = target
 
 func end_drag() -> void:
 	if dragging:
 		dragging = false
+		mat.set_shader_parameter("held_outline", false)
 		land()
 
 func land(height := 0.0) -> void:
 	lift_target = 0.0
-	if height > 0.0:
-		lift = height
 	if land_tween != null and land_tween.is_valid():
 		land_tween.kill()
+	if Game.prefs.reduced_motion:
+		lift = 0.0
+		vel = Vector2.ZERO
+		body.position = Vector2.ZERO
+		body.rotation = 0.0
+		body.scale = Vector2.ONE * display_scale
+		dropped.emit()
+		return
+	if height > 0.0:
+		lift = height
 	var tw := create_tween()
 	land_tween = tw
 	tw.tween_property(self, "lift", 0.0, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
@@ -251,7 +275,13 @@ func _process(delta: float) -> void:
 		_sync_robbery_mark(it)
 		last_visual_item = it
 		last_visual_back = back
-	if dragging:
+	if Game.prefs.reduced_motion:
+		vel = Vector2.ZERO
+		lift = 0.0
+		body.rotation = 0.0
+		if dragging:
+			position = target
+	elif dragging:
 		var prev := position
 		position = position.lerp(target, 1.0 - exp(-delta * 16.0))
 		vel = (position - prev) / maxf(delta, 0.0001)

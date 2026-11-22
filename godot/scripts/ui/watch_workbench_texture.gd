@@ -4,6 +4,8 @@ extends RefCounted
 const Comic = preload("res://scripts/ui/comic_assets.gd")
 const Reference = preload("res://scripts/ui/reference_atlas.gd")
 const CELL := Vector2i(256, 256)
+# Include one untouched texel around the ink for linear filtering at the edge.
+const DIAL_PATCH := Rect2i(103, 87, 50, 34)
 static var cache := {}
 static var order: Array[String] = []
 
@@ -52,11 +54,14 @@ static func texture(item: Dictionary, back: bool) -> ImageTexture:
 		var band := _paint(strap, back)
 		for area in [Rect2i(0,0,256,54), Rect2i(0,206,256,50)]:
 			image.blit_rect(band,area,area.position)
+	var unmarked_dial: ImageTexture
 	if not back:
+		unmarked_dial = ImageTexture.create_from_image(image.get_region(DIAL_PATCH))
 		var ink := Color(WatchLogo.art(shell).get("ink","#40382d"))
 		for point in WatchLogo.pixels(logo,variant):
 			image.fill_rect(Rect2i(104+int(point[0])*2,88+int(point[1])*2,2,2),ink)
 	var result := ImageTexture.create_from_image(image)
+	if unmarked_dial != null: result.set_meta("unmarked_dial",unmarked_dial)
 	cache[key] = result
 	order.append(key)
 	if order.size() > 32: cache.erase(order.pop_front())

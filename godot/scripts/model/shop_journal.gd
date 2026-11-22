@@ -119,10 +119,21 @@ static func _remember(j: Dictionary, it: Dictionary, day: int, imported: bool, r
   if GameData.items.has(model) and not record.inspectedModels.has(model): record.inspectedModels.append(model)
  return collection_changed
 
+## TradeSession writes visit ID / batch ID / complete original UID. A batch ID
+## can contain slashes, while a boxed watch's UID can end with another watch's UID.
+static func _batch_uid(id: String) -> String:
+ var first:=id.find("/")
+ var last:=id.rfind("/")
+ if first<1 or last<=first+1: return ""
+ return id.substr(last+1)
+
 static func _uid(row: Dictionary, originals: Dictionary, previous: Dictionary={}) -> String:
  var explicit:=String(row.get("uid",""))
  if explicit!="": return explicit
  var id:=String(row.get("id",""))
+ if row.get("kind","") in ["purchase","sale"]:
+  var batch_uid:=_batch_uid(id)
+  if batch_uid!="": return batch_uid
  for uid in originals:
   if id.ends_with("/"+uid) or id.ends_with("-"+uid): return uid
  var t:=_trade(previous)
@@ -158,6 +169,10 @@ static func ensure(s: Dictionary) -> void:
  else:
   _refresh_receipt_names(j,renamed)
   if collection_changed: _rebuild_collection(j)
+ # Older archives already preserve settlement order. Number those original
+ # receipts in place so a restored game and its next sale use the same series.
+ if not j.receipts.is_empty() and not j.receipts.back().has("serial"):
+  for index in j.receipts.size(): j.receipts[index].serial=index+1
 
 static func _migrate_legacy(s: Dictionary, j: Dictionary, originals: Dictionary, day: int) -> void:
  for uid in j.originals:
@@ -461,7 +476,10 @@ static func observe(previous: Dictionary, next: Dictionary, action: Dictionary) 
    if not ids.has(row.ledgerId): ids.append(row.ledgerId)
    cash+=float(row.cashImpact);complete=complete and row.complete
   var id: String="receipt/"+"+".join(ids)
-  j.receipts.append({"id":id,"day":day,"npcId":settlement_npc,"entries":rows,"cashImpact":cash,"complete":complete,"note":"按已记录的直接成本列示，未分摊店铺日常费用。" if complete else "部分历史成本未知；记录差额不代表完整利润。","historical":false})
+  var receipt := {"id":id,"serial":j.receipts.size()+1,"day":day,"npcId":settlement_npc,"entries":rows,"cashImpact":cash,"complete":complete,"note":"按已记录的直接成本列示，未分摊店铺日常费用。" if complete else "部分历史成本未知；记录差额不代表完整利润。","historical":false,"counterKind":""}
+  if action.type in ["DELIVER","TRADE_CHECKOUT","PAWN"]:
+   receipt.counterKind="pawn" if action.type=="PAWN" else ("batch" if old_trade.has("session") else old_trade.get("kind",""))
+  j.receipts.append(receipt)
   if settlement_npc!="" and successful_settlement:
    _memory(j,settlement_npc).deals+=1
    _note(j,settlement_npc,day,"上次已完成%d件原物交割" % rows.size(),settlement_trust)
@@ -533,6 +551,59 @@ static func timeline(s: Dictionary, uid: String) -> Array:
 static func latest_receipt(s: Dictionary) -> Dictionary:
  var archive: Array=_journal(s).receipts
  return archive.back().duplicate(true) if not archive.is_empty() else {}
+
+static func _legacy_counter_kind(s: Dictionary, entry: Dictionary) -> String:
+ var direction:=String(entry.get("direction",""))
+ if direction not in ["pawn","acquisition","sale"]: return ""
+ var id:=String(entry.get("ledgerId",""))
+ # Single deliveries and pawns save their visit IDs in completedTrades.
+ if s.get("completedTrades",[]).has(id):
+  return {"pawn":"pawn","acquisition":"buy","sale":"sell"}[direction]
+ return "batch" if direction!="pawn" and _batch_uid(id)!="" else ""
+
+static func _legacy_batch_entries(s: Dictionary, entries: Array) -> Array:
+ var printed:=entries.duplicate()
+ var originals: Dictionary=s.shopJournal.get("originals",{})
+ for index in entries.size():
+  var entry: Dictionary=entries[index]
+  var uid:=_batch_uid(String(entry.get("ledgerId","")))
+  if uid!="" and uid!=entry.get("uid",""):
+   # The ledger preserves the full UID even when an older journal attributed
+   # this line to a shorter inventory ID. Use only the archived public name.
+   printed[index]=entry.merged({"uid":uid,"name":originals.get(uid,{}).get("name","未登记型号")},true)
+ return printed
+
+## Only counter settlements produce a till slip. Other journal receipts, such
+## as workshop jobs, must not replace the last slip when returning to the till.
+static func counter_paper(s: Dictionary) -> Dictionary:
+ var archive: Array=s.get("shopJournal",{}).get("receipts",[])
+ for index in range(archive.size()-1,-1,-1):
+  var record: Dictionary=archive[index]
+  var entries: Array=record.get("entries",[])
+  if entries.is_empty(): continue
+  var kind:=String(record.counterKind) if record.has("counterKind") else _legacy_counter_kind(s,entries[0])
+  if kind=="": continue
+  if kind=="batch" and not record.has("counterKind"):
+   entries=_legacy_batch_entries(s,entries)
+  var cash:=float(record.cashImpact)
+  var terms:={"npcId":record.get("npcId",""),"kind":"buy" if cash<0 else "sell"}
+  var stock:=0
+  var income:=0.0
+  var expense:=0.0
+  for entry in entries:
+   if entry.direction=="sale":
+    income+=float(entry.price)
+    stock-=1
+   else:
+    expense+=float(entry.price)
+    stock+=1
+  if kind=="batch":
+   terms.batch_income=income
+   terms.batch_expense=expense
+  var name:=String(entries[0].name) if entries.size()==1 else "%d 件原物" % entries.size()
+  return {"serial":int(record.get("serial",index+1)),"day":int(record.day),"terms":terms,"pawn":kind=="pawn",
+   "item":name,"entries":entries,"cash":cash,"price":absf(cash),"stock":stock}
+ return {}
 
 static func receipts(s: Dictionary) -> Array:
  return _journal(s).receipts.duplicate(true)

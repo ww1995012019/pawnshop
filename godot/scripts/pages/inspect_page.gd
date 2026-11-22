@@ -45,6 +45,7 @@ var optical_dragging := false
 var optical_grab := Vector2.ZERO
 var optical_pinned := false
 var optical_pin_button: Button
+var optical_instruction: Label
 var optical_attempt_revision := ""
 var finding_panel: Panel
 var finding_label: Label
@@ -537,8 +538,10 @@ func _load_item() -> void:
 	item.position = item_home
 	item.target = item_home
 	item.bounds = Rect2(560,330,700,260)
-	item.set_reveal(WatchRules.serial(it),Vector2(.5,.62))
-	item.flipped.connect(func(_back: bool): _reset_optical_observation())
+	item.set_reveal(WatchRules.serial(it),Vector2(.5,.53))
+	item.flipped.connect(func(_back: bool):
+		_reset_optical_observation()
+		_update_optical_instruction())
 	item.flip_finished.connect(func(_back: bool): _orient_for_tool())
 	add_world(item,"fg")
 
@@ -593,7 +596,8 @@ func _set_tool(id: String) -> void:
 		shell.toast(problem)
 		return
 	if scale_occupied: _scale_remove()
-	if compact_finding.visible: _clear_finding()
+	if id != tool: _clear_finding()
+	optical_instruction = null
 	show_status("","info")
 	if is_instance_valid(optical_pin_button):
 		remove_child(optical_pin_button)
@@ -671,19 +675,32 @@ func _optical(id: String) -> void:
 		optical_position = shell.ui_to_world(mat_rect.get_center()+Vector2(-95,-25))
 		node.global_position = _clamp_lens_position(optical_position)
 		optical_position = node.global_position
-	bench_body.add_child(UIKit.label("拖动镜片寻找表盘印记，停稳后留下记录。" if id == "TOL-001" else "移动紫外灯寻找后盖编号，照稳后留下记录。",18,UIKit.TEXT,false,true))
+	optical_instruction = UIKit.label("",18,UIKit.TEXT,false,true)
+	bench_body.add_child(optical_instruction)
+	_update_optical_instruction()
 	var fixed := UIKit.button(_pin_caption(),"secondary",Vector2(108,30),16)
 	fixed.name = "inspection_pin"
-	fixed.tooltip_text = "定位并固定标识" if id == "TOL-001" else "定位并固定编号"
 	optical_pin_button = fixed
+	_update_pin_button()
 	fixed.pressed.connect(func():
 		optical_pinned = not optical_pinned
 		optical_fixed = id == "TOL-001" or optical_pinned
 		optical_dragging = false
 		if optical_pinned: optical_position = _optical_target()
-		fixed.text = _pin_caption())
+		_update_pin_button())
 	add_child(fixed)
 	if id == "TOL-002": bench_body.add_child(UIKit.label(_power_copy(id), 16, UIKit.CYAN, false, true))
+
+func _update_optical_instruction() -> void:
+	if not is_instance_valid(optical_instruction) or not is_instance_valid(item): return
+	if tool == "TOL-002":
+		optical_instruction.text = "当前为正面，请翻到后盖读取紫外编号。" if not item.back else "移动紫外灯寻找后盖编号，照稳后留下记录。"
+	elif tool == "TOL-001":
+		optical_instruction.text = "当前为后盖，请翻到正面观察表盘印记。" if item.back else "拖动镜片寻找表盘印记，停稳后留下记录。"
+
+func _update_pin_button() -> void:
+	optical_pin_button.text = _pin_caption()
+	optical_pin_button.tooltip_text = "" if optical_pinned else ("定位并固定标识" if tool == "TOL-001" else "定位并固定编号")
 
 func _pin_caption() -> String:
 	return "解除固定" if optical_pinned else "固定镜片" if tool == "TOL-001" else "固定紫外灯"
@@ -827,7 +844,11 @@ func _record() -> void:
 	var owner_shell: Node = shell.workspace_parent if shell.workspace_mode else shell
 	owner_shell.set_meta("latest_inspection",{"uid":it_uid,"tool":recorded_tool,"facts":new_facts.duplicate(true)})
 	finding_revision = Model.trade_revision(updated)
-	_show_finding("%s · %s" % [GameData.tool(recorded_tool).name,Model.displayed_clue(updated,recorded_tool)],before,Model.estimate(updated))
+	var after := Model.estimate(updated)
+	_show_finding("%s · %s" % [GameData.tool(recorded_tool).name,Model.displayed_clue(updated,recorded_tool)],before,after)
+	if shell.landscape_mode():
+		var reading_name: String = {"TOL-001":"标识","TOL-002":"编号","TOL-005":"质量"}[recorded_tool]
+		owner_shell.toast("%s已记录 · 估价 %s–%s Cr" % [reading_name, Model.jnum(after.low), Model.jnum(after.high)])
 	_refresh_info()
 
 func _show_finding(reading: String, before: Dictionary, after: Dictionary) -> void:
@@ -863,7 +884,7 @@ func on_changed(_p: Dictionary,_n: Dictionary,_a: Dictionary) -> void:
 		return
 	if current != null and is_instance_valid(item):
 		var serial: String = WatchRules.serial(current)
-		if item.reveal.text != serial: item.set_reveal(serial,Vector2(.5,.62))
+		if item.reveal.text != serial: item.set_reveal(serial,Vector2(.5,.53))
 	if _tool_problem(tool) != "": _set_tool("")
 	_refresh_info()
 
@@ -893,13 +914,13 @@ func _unhandled_input(e: InputEvent) -> void:
 					optical_pinned = false
 					optical_dragging = true
 					optical_grab = optical_position-p
-					if is_instance_valid(optical_pin_button): optical_pin_button.text = _pin_caption()
+					if is_instance_valid(optical_pin_button): _update_pin_button()
 				elif tool == "TOL-002" and mat_rect.has_point(shell.world_to_ui(p)):
 					optical_fixed = true
 					optical_pinned = false
 					optical_dragging = true
 					optical_position = p
-					if is_instance_valid(optical_pin_button): optical_pin_button.text = _pin_caption()
+					if is_instance_valid(optical_pin_button): _update_pin_button()
 			else:
 				optical_dragging = false
 				if item.dragging and tool == "TOL-005" and item.position.distance_to(scale_target)<125:

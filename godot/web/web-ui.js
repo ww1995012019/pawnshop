@@ -39,7 +39,8 @@
   }, true);
   for (const type of ['touchend', 'touchcancel']) {
     addEventListener(type, event => {
-      const done = Array.from(event.changedTouches, touch => touch.identifier);
+      const done = Array.from(event.changedTouches, touch => touch.identifier).filter(id => activeTouches.has(id));
+      if (!done.length) return;
       // Engine listeners must receive the release using the original mapping.
       setTimeout(() => {
         done.forEach(id => { shifts.delete(id); activeTouches.delete(id); });
@@ -114,7 +115,7 @@
   }
   window.OrbitalTouch = {
     state,
-    update(next) { state = next; this.state = next; },
+    update(next) { state = next; this.state = next; window.OrbitalReader?.update(next); },
     phone,
     toPhysical,
     toCanvas,
@@ -125,4 +126,163 @@
   screen.orientation?.addEventListener('change', render);
   coarse.addEventListener('change', render);
   render();
+})();
+
+// The reading view follows the active Godot sheet. Its controls keep their DOM
+// identity while prices, dialogue, and enabled states change under keyboard focus.
+(() => {
+  'use strict';
+  const byId = id => document.getElementById(id);
+  const host = byId('reader-ui');
+  if (!host) return;
+  const canvas = byId('canvas'), entry = byId('reader-entry'), panel = byId('reader-panel');
+  const heading = byId('reader-heading'), exit = byId('reader-exit'), actions = byId('reader-actions');
+  const copy = byId('reader-copy'), context = byId('reader-context'), balance = byId('reader-balance');
+  const elements = new Map(), returnFocus = new Map();
+  let view = null, opened = false, keyboardRow = null;
+
+  function setText(element, value) {
+    if (element.textContent !== value) element.textContent = value;
+  }
+  function open() {
+    if (!view || opened) return;
+    opened = true;
+    host.classList.add('reading');
+    canvas.setAttribute('inert', '');
+    if (view.dialog) panel.setAttribute('aria-modal', 'true');
+    exit.tabIndex = 0;
+    for (const {control} of elements.values()) control.tabIndex = 0;
+    heading.focus();
+  }
+  function close() {
+    if (!opened) return;
+    opened = false;
+    host.classList.remove('reading');
+    canvas.removeAttribute('inert');
+    panel.removeAttribute('aria-modal');
+    exit.tabIndex = -1;
+    for (const {control} of elements.values()) control.tabIndex = -1;
+    canvas.focus({preventScroll: true});
+  }
+  function send(id, change = {}) {
+    window.orbitalTouchSend?.(JSON.stringify({type: 'reader', id, ...change}));
+  }
+  function create(item) {
+    const button = item.kind === 'button';
+    const control = document.createElement(button ? 'button' : item.kind === 'select' ? 'select' : 'input');
+    const row = button ? control : document.createElement('label');
+    const label = button ? control : document.createElement('span');
+    if (!button) row.append(label, control);
+    control.dataset.key = item.id;
+    control.tabIndex = opened ? 0 : -1;
+    if (button) {
+      control.type = 'button';
+      control.addEventListener('click', () => { open(); send(item.id); });
+    } else if (item.kind === 'select') {
+      control.addEventListener('change', () => send(item.id, {value: control.selectedIndex}));
+    } else {
+      control.type = item.kind;
+      if (item.kind === 'number') control.inputMode = 'numeric';
+      control.addEventListener('input', () => send(item.id, {value: item.kind === 'range' ? control.valueAsNumber : control.value}));
+    }
+    return {row, label, control};
+  }
+  function sync(item, element) {
+    const {control, label} = element;
+    setText(label, item.name);
+    control.disabled = Boolean(item.disabled);
+    if ('pressed' in item) control.setAttribute('aria-pressed', String(item.pressed));
+    else control.removeAttribute('aria-pressed');
+    if (item.kind === 'select') {
+      const signature = JSON.stringify(item.options);
+      if (element.options !== signature) {
+        control.replaceChildren(...item.options.map(choice => {
+          const option = new Option(choice.name);
+          option.disabled = choice.disabled;
+          return option;
+        }));
+        element.options = signature;
+      }
+      control.selectedIndex = item.value;
+    } else if (item.kind !== 'button') {
+      for (const attr of ['min', 'max', 'step']) if (attr in item) control[attr] = item[attr];
+      if (control !== document.activeElement || item.kind === 'range') {
+        if (control.value !== String(item.value)) control.value = item.value;
+      }
+    }
+  }
+  // The pinned engine sets a lower-case inputmode expando before focusing its
+  // native keyboard field. Reflect it using the actual HTML attribute.
+  function labelKeyboard(field) {
+    let row = null;
+    if ((field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) &&
+        field.parentElement === canvas.parentElement) {
+      if (typeof field.inputmode === 'string') field.inputMode = field.inputmode;
+      const inputs = view?.controls.filter(i => i.kind === 'number' || i.kind === 'text') || [];
+      const current = inputs.find(i => i.id === view.editing) || (inputs.length === 1 ? inputs[0] : null);
+      if (current) {
+        field.setAttribute('aria-label', current.name);
+        if (!opened) row = elements.get(current.id)?.row;
+      } else field.removeAttribute('aria-label');
+    }
+    if (row !== keyboardRow) {
+      if (keyboardRow) keyboardRow.hidden = false;
+      if (row) row.hidden = true;
+      keyboardRow = row;
+    }
+  }
+  document.addEventListener('focusin', event => labelKeyboard(event.target));
+  document.addEventListener('focusout', () => queueMicrotask(() => labelKeyboard(document.activeElement)));
+  actions.addEventListener('focusin', event => {
+    if (view && event.target.dataset.key) returnFocus.set(view.id, event.target.dataset.key);
+  });
+  entry.addEventListener('click', open);
+  exit.addEventListener('click', close);
+  panel.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && opened) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (view.dialog) {
+        send(view.id, {dismiss: true});
+        return;
+      }
+      close();
+    }
+  });
+  function update(state) {
+    if (!state.reader) return;
+    const next = state.reader, changed = next.id !== view?.id;
+    const hadFocus = panel.contains(document.activeElement);
+    view = next;
+    host.hidden = false;
+    host.classList.toggle('at-title', Boolean(state.title && !state.blocked));
+    panel.setAttribute('role', next.dialog ? 'dialog' : 'region');
+    if (next.dialog && opened) panel.setAttribute('aria-modal', 'true');
+    else panel.removeAttribute('aria-modal');
+    setText(heading, next.title);
+    setText(balance, state.title ? '' : `第 ${state.day} 天 · 现金 ${state.cash} Cr · ${state.ap} AP`);
+    setText(context, state.title || next.dialog ? '' : [state.visitor, state.dialogue_line || state.notice].filter(Boolean).join(' · '));
+    setText(copy, next.copy.join('\n'));
+    const ids = new Set(next.controls.map(i => i.id));
+    for (const [id, {row}] of elements) {
+      if (!ids.has(id)) { row.remove(); elements.delete(id); }
+    }
+    let position = actions.firstElementChild;
+    for (const item of next.controls) {
+      if (!elements.has(item.id)) elements.set(item.id, create(item));
+      const element = elements.get(item.id);
+      sync(item, element);
+      if (element.row !== position) actions.insertBefore(element.row, position);
+      position = element.row.nextElementSibling;
+    }
+    if (opened && (changed || (hadFocus && !panel.contains(document.activeElement)))) {
+      const previous = elements.get(returnFocus.get(next.id))?.control;
+      if (previous && !previous.disabled) previous.focus();
+      else heading.focus();
+      panel.scrollTop = 0;
+    }
+    if (returnFocus.size > 32) returnFocus.delete(returnFocus.keys().next().value);
+    labelKeyboard(document.activeElement);
+  }
+  window.OrbitalReader = {open, update};
 })();

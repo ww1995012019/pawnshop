@@ -61,6 +61,8 @@ func run():
 	check(desk.get_node("settlement_stock").text=="库存 +1 件","stock note counts the transferred original")
 	var receipt = desk.filed_receipt
 	var tab = desk.receipt_tab
+	var first_archive := ShopJournal.latest_receipt(game.state)
+	check(int(first_archive.get("serial",0))==1 and shell.counter_receipt.serial==1,"first counter slip has a positive journal-issued number")
 	check(is_instance_valid(receipt) and receipt.visible,"mobile prints a receipt even with reduced motion")
 	shell.toast("批次交割完成，双方已经确认本次结算金额，库存和现金已经更新。")
 	await frames()
@@ -69,11 +71,24 @@ func run():
 	await create_timer(1.3).timeout
 	check(not receipt.visible and tab.visible,"receipt files to its edge tab")
 	check_tab(tab,shell,"collapsed")
-	root.size = Vector2i(600,320)
+	root.size = Vector2i(568,320)
 	await frames()
 	shell.toast("批次交割完成，双方已经确认本次结算金额，库存和现金已经更新。")
 	await frames()
-	check_tab(tab,shell,"600px landscape")
+	check_tab(tab,shell,"568px landscape")
+	tab.pressed.emit()
+	await frames()
+	var dock: Control=desk.find_child("landscape_nav_repair",true,false)
+	var shown: Rect2=receipt.get_global_transform()*Rect2(Vector2.ZERO,receipt.size)
+	check(shown.end.y<=dock.get_global_rect().position.y,"reading the receipt leaves the full 568px navigation bar visible")
+	var details: ScrollContainer=receipt.find_child("ReceiptDetails",true,false)
+	check(details!=null and not details.get_v_scroll_bar().visible,"a single original fits on the short receipt without scrolling")
+	var back := InputEventKey.new()
+	back.keycode=KEY_ESCAPE
+	back.pressed=true
+	shell._input(back)
+	check(not receipt.visible,"Escape files the open receipt without leaving the customer")
+	if receipt.visible: tab.pressed.emit()
 	root.size = Vector2i(844,390)
 	await frames()
 	var balance: float = game.state.cash
@@ -123,6 +138,39 @@ func run():
 	check(game.state.inventory.size()==stock and game.state.cash==balance and Model.find_inventory(game.state,incoming.uid)!=null and Model.find_inventory(game.state,outgoing.uid)==null,"mixed checkout exchanges both originals at zero net")
 	check(desk.get_node("settlement_stock").text=="库存 0 件" and desk.get_node("settlement_cash").text=="现金 0 Cr","even swaps show both zero changes")
 	check(shell.counter_receipt.stock==0 and shell.counter_receipt.cash==0,"the next checkout replaces the previous receipt")
+	var printed: Array=[]
+	for label in desk.filed_receipt.find_children("*","Label",true,false): printed.append(label.text)
+	for entry in ShopJournal.latest_receipt(game.state).entries:
+		var direction: String="售出" if entry.direction=="sale" else "购入"
+		check(printed.any(func(copy):return String(copy).begins_with(direction) and String(copy).contains(entry.name) and String(copy).contains("120")),"mixed receipt shows the direction, public name and price of "+entry.name)
+	var first_number: int=shell.counter_receipt.serial
+	var next_item=TradeSession.session(game.state).goods[4]
+	game.dispatch({"type":"COUNTER_FOCUS","tradeId":game.state.trade.id,"uid":next_item.uid})
+	var next_line:=TradeSession.row(game.state,next_item.uid)
+	next_line.context.price=maxf(next_line.context.price,Model.trade_terms(game.state,next_line.context,next_item).floor)
+	game.dispatch(CounterDialogue.action_for(game.state,"ACCEPT"))
+	check(TradeSession.row(game.state,next_item.uid).selected,"second original is ready for a separate checkout")
+	var next_checkout:=CounterDialogue.action_for(game.state,"DELIVER")
+	game.dispatch(next_checkout)
+	await frames()
+	var number: int=shell.counter_receipt.serial
+	check(number>first_number,"another batch at the same counter gets a distinct number")
+	game.dispatch(next_checkout)
+	check(ShopJournal.latest_receipt(game.state).get("serial",0)==number,"retrying the same checkout does not issue a new number")
+	var legacy: Dictionary=JSON.parse_string(JSON.stringify(game.state))
+	for record in legacy.shopJournal.receipts:
+		record.erase("serial")
+		record.erase("counterKind")
+	game.ensure_shop_state(legacy)
+	check(int(legacy.shopJournal.receipts.back().get("serial",0))==number,"existing archived receipts receive stable numbers on loading")
+	game.state=legacy
+	var restored=load("res://main.tscn").instantiate()
+	restored.phone_override=true
+	root.add_child(restored)
+	await frames()
+	check(is_instance_valid(restored.page.filed_receipt) and restored.counter_receipt.get("serial",0)==number,"a fresh counter restores the filed paper from the saved journal")
+	restored.queue_free()
+	await frames()
 	var saved: Dictionary = shell.counter_receipt.duplicate(true)
 	game.new_game("CHECKOUT-FEEDBACK")
 	await frames()

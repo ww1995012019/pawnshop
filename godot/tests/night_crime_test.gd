@@ -57,6 +57,46 @@ func theft_campaign(insured: bool) -> Dictionary:
 	s = act(close(s),"NEXT")
 	s = act(close(s),"NEXT")
 	return s
+
+func old_counter_paper(state: Dictionary) -> Dictionary:
+	var old: Dictionary=JSON.parse_string(JSON.stringify(state))
+	for receipt in old.shopJournal.receipts:
+		receipt.erase("serial")
+		receipt.erase("counterKind")
+	ShopJournal.ensure(old)
+	return ShopJournal.counter_paper(old)
+
+func check_legacy_fence_paper(before: Dictionary, paid: Dictionary) -> void:
+	var archived:=paid.duplicate(true)
+	ShopJournal.observe(before,archived,{"type":"DELIVER","tradeId":before.trade.id})
+	var fence_receipt:=ShopJournal.latest_receipt(archived)
+	var paper:=old_counter_paper(archived)
+	check(before.trade.id.begins_with("fence-") and paper.get("entries",[])==fence_receipt.entries and paper.get("serial",0)==fence_receipt.serial,"old night-market purchase restores its actual fence receipt and serial")
+	var merchant:=archived.duplicate(true)
+	merchant.trade=Commerce._new_merchant(merchant)
+	merchant.trade.rare={"available":true,"defId":"WCH-001","price":47}
+	var purchase:={"type":"BUY_RARE_ITEM"}
+	var after:=Commerce.reduce(merchant,purchase)
+	ShopJournal.observe(merchant,after,purchase)
+	check(ShopJournal.latest_receipt(after).entries[0].ledgerId.begins_with("merchant-purchase-") and old_counter_paper(after).get("entries",[])==fence_receipt.entries,"later merchant shop purchase does not replace the fence's counter paper")
+	var buy_material:={"type":"BUY_MATERIAL","id":"MAT-007","qty":1}
+	var supplied:=Commerce.reduce(after,buy_material)
+	ShopJournal.observe(after,supplied,buy_material)
+	check(supplied.materials["MAT-007"]==after.materials["MAT-007"]+1 and old_counter_paper(supplied).get("entries",[])==fence_receipt.entries,"merchant material supply preserves the last counter paper")
+	# This merchant's normal batch checkout produces a till slip, even though
+	# its separate shop purchase above also has an acquisition journal entry.
+	var batch_shop:=Commerce.reduce(merchant,{"type":"TRADE_OPEN"})
+	var session:=TradeSession.session(batch_shop)
+	var it: Dictionary=session.goods[0]
+	batch_shop=Commerce.reduce(batch_shop,{"type":"TRADE_ADD","tradeId":merchant.trade.id,"uid":it.uid,"direction":"buy"})
+	batch_shop=Commerce.reduce(batch_shop,{"type":"TRADE_CONFIRM","tradeId":merchant.trade.id,"uid":it.uid})
+	var checkout:={"type":"TRADE_CHECKOUT","tradeId":merchant.trade.id,"version":TradeSession.session(batch_shop).version,"batch":"old-merchant-batch"}
+	after=Commerce.reduce(batch_shop,checkout)
+	ShopJournal.observe(batch_shop,after,checkout)
+	var merchant_receipt:=ShopJournal.latest_receipt(after)
+	paper=old_counter_paper(after)
+	check(merchant_receipt.entries[0].ledgerId.begins_with(merchant.trade.id+"/") and paper.get("entries",[])==merchant_receipt.entries and paper.get("terms",{}).has("batch_expense"),"old merchant batch restores per-original prices and totals")
+
 func loop_tests(night) -> void:
 	var s := theft_campaign(false)
 	var uid: String = s.nightCrime.cases[0].items[0].uid
@@ -108,7 +148,9 @@ func loop_tests(night) -> void:
 	s = act(s,"GRAY_TRADE",{"tradeId":trade_id,"confirmed":true})
 	s = act(s,"ACCEPT")
 	var risk: float = s.risk
+	var fence_before:=s.duplicate(true)
 	s = act(s,"DELIVER",{"tradeId":trade_id})
+	check_legacy_fence_paper(fence_before,s)
 	check(Model.find_inventory(s,uid) != null and s.risk == mini(100,risk+8) and s.nightCrime.cases[0].items[0].holder == "inventory","actual gray purchase transfers one original and adds eight risk")
 	cash = s.cash
 	s = act(s,"REGISTER",{"uid":uid})

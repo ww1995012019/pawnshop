@@ -39,8 +39,12 @@ func run():
   if entry==null:shell.queue_free();await frames();quit(1);return
   check(entry.size.x>=40 and entry.text=="" and entry.icon!=null,"expansion icon retains visible width")
   for key in page.cabinet_buttons.values():check(key.size.x>=40,"cabinet captions retain readable touch width")
-  check(page.display_panel.get_global_rect().end.x<=page.holder.get_global_rect().position.x+2,"display stands to the left of the warehouse")
+  if shell.mobile_mode():
+   check(not page.display_panel.visible and page.cabinet_buttons.has("display"),"phone browses the display cabinet through its own tab")
+  else:
+   check(page.display_panel.get_global_rect().end.x<=page.holder.get_global_rect().position.x+2,"desktop display stands to the left of the warehouse")
   for box in [page.display_panel,page.holder,page.detail_panel]:
+   if not box.is_visible_in_tree():continue
    check(shell.active_shell().content_rect().grow(2).encloses(box.get_global_rect()),"drawer module stays within the workspace: "+str(dimensions)+" "+String(box.name)+" "+str(box.get_global_rect()))
   for kind in ["materials","isolation","pawn","warehouse"]:
    page.cabinet_buttons[kind].pressed.emit();await frames()
@@ -108,6 +112,15 @@ func run():
  var purchase=shell.active_shell().page.find_child("PawnSlotPurchase",true,false)
  check(purchase!=null,"insurance section offers permanent pawn slots")
  if purchase!=null:
-  purchase.quantity.value=5;purchase.buy.pressed.emit();await frames()
+  var reader=load("res://scripts/app/web_controls.gd").new(shell)
+  var snapshot:Dictionary=reader.snapshot({"busy":false})
+  for action in snapshot.controls:
+   if action.name=="抵押仓位":reader.interact({"id":action.id});break
+  snapshot=reader.snapshot({"busy":false})
+  var input_id:=str(purchase.quantity.get_line_edit().get_instance_id())
+  check(snapshot.controls.any(func(field):return field.id==input_id and field.name=="购买抵押仓位数量（个）" and field.kind=="number"),"the reader names the quantity field and exposes its numeric value")
+  reader.interact({"id":input_id,"value":"5"})
+  check(purchase.buy.text=="购买 · 25 Cr","editing five slots updates the price before the purchase")
+  reader.interact({"id":str(purchase.buy.get_instance_id())});await frames()
   check(game.state.cash==775 and WarehouseExpansion.capacity(game.state,"pawn")==25,"insurance-page slot purchase charges25 cash and adds5 permanent places")
  shell.queue_free();await frames();print("WAREHOUSE UI failures=",failures);quit(1 if failures else 0)

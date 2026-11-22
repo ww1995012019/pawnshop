@@ -89,12 +89,21 @@ func run() -> void:
   await create_timer(.4).timeout
   check(is_instance_valid(view.departing_face),"portrait remains present during the existing goodbye and goods handover")
   var deadline=Time.get_ticks_msec()+14000
-  while not view.departure_started and Time.get_ticks_msec()<deadline:await process_frame
   if is_instance_valid(view.departing_face):
    var start_position:Vector2=view.departing_face.position;var start_alpha:float=view.departing_face.modulate.a
-   await create_timer(.07).timeout
-   check(is_instance_valid(view.departing_face) and view.departing_face.modulate.a<start_alpha and view.departing_face.modulate.a>0.0 and (view.departing_face.position==start_position if reduced else view.departing_face.position!=start_position),"departure has a visible intermediate frame and reduced motion avoids the spatial sweep")
-  else:check(false,"departure starts with a visible painted visitor")
+   var saw_fading_frame:=false
+   var held_position:=true
+   # Timers can resume before the tween updates on the same frame. Observe
+   # the live drawing from its goodbye pose through the entire departure.
+   while is_instance_valid(view.departing_face) and Time.get_ticks_msec()<deadline:
+    if view.departure_started:
+     var offset:Vector2=view.departing_face.position-start_position
+     var alpha:float=view.departing_face.modulate.a
+     if not offset.is_zero_approx():held_position=false
+     if alpha>0.0 and alpha<start_alpha and (reduced or offset.x<0.0 and is_zero_approx(offset.y)):
+      saw_fading_frame=true
+    await process_frame
+   check(saw_fading_frame and (not reduced or held_position),"departure has a visible intermediate frame and reduced motion avoids the spatial sweep")
   while (page.busy or is_instance_valid(view.departing_face)) and Time.get_ticks_msec()<deadline:await process_frame
   check(not page.busy and not is_instance_valid(view.departing_face),"departure finishes and frees its portrait")
   # A restored/new visit can have the same NPC but must have its own entrance.

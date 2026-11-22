@@ -15,8 +15,10 @@ uniform float rare_time = 0.0;
 // Catalogue/reference art does not use this material or enable this mask.
 uniform float logo_hidden = 0.0;
 uniform bool workbench_face = false;
+uniform sampler2D unmarked_dial : source_color, filter_linear, repeat_disable;
 uniform vec4 logo_rect = vec4(0.0);
 uniform float hover = 0.0;
+uniform bool held_outline = false;
 uniform float found_seam = 0.0;
 uniform vec4 region = vec4(0.0, 0.0, 1.0, 1.0); // atlas UV rect of this face
 uniform vec3 refurb_finish = vec3(0.0); // case finish, replacement strap, surface cleaning
@@ -50,6 +52,7 @@ uniform vec4 inspection_poly_1_g = vec4(0.0);
 uniform vec4 inspection_poly_1_h = vec4(0.0);
 
 varying vec2 world;
+varying vec4 item_tint;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 
@@ -93,6 +96,7 @@ float scratches(vec2 uv) {
 }
 
 void vertex() {
+	item_tint = COLOR;
 	world = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
 }
 
@@ -105,6 +109,21 @@ void fragment() {
 	if (inspection_mask_2_on > 0.5 && all(greaterThanEqual(luv, inspection_mask_2.xy)) && all(lessThan(luv, inspection_mask_2.xy + inspection_mask_2.zw))) a = 0.0;
 	if (inspection_poly_0_on > 0.5 && all(greaterThanEqual(luv, inspection_mask_0.xy)) && all(lessThan(luv, inspection_mask_0.xy + inspection_mask_0.zw)) && inside_inspection_poly(luv, inspection_poly_0_a, inspection_poly_0_b, inspection_poly_0_c, inspection_poly_0_d, inspection_poly_0_e, inspection_poly_0_f, inspection_poly_0_g, inspection_poly_0_h)) a = 0.0;
 	if (inspection_poly_1_on > 0.5 && all(greaterThanEqual(luv, inspection_mask_1.xy)) && all(lessThan(luv, inspection_mask_1.xy + inspection_mask_1.zw)) && inside_inspection_poly(luv, inspection_poly_1_a, inspection_poly_1_b, inspection_poly_1_c, inspection_poly_1_d, inspection_poly_1_e, inspection_poly_1_f, inspection_poly_1_g, inspection_poly_1_h)) a = 0.0;
+	float in_lens = lens_r > 0.0 ? 1.0 - smoothstep(lens_r * 0.85, lens_r, distance(world, lens_pos)) : 0.0;
+	// The close-up's untouched paint includes the hands below the instance ink.
+	// Technical atlas dials have a flat, authored field behind the same mark.
+	vec2 texel = TEXTURE_PIXEL_SIZE / region.zw;
+	vec2 guard = workbench_face ? texel * 0.5 : vec2(0.0);
+	if (logo_hidden > 0.5 && back_face < 0.5 && all(greaterThanEqual(luv, logo_rect.xy - guard)) && all(lessThan(luv, logo_rect.xy + logo_rect.zw + guard))) {
+		vec3 dial;
+		if (workbench_face) {
+			vec2 patch_uv = (luv - logo_rect.xy + texel) / (logo_rect.zw + 2.0 * texel);
+			dial = texture(unmarked_dial, patch_uv).rgb;
+		} else {
+			dial = texture(TEXTURE, region.xy + region.zw * (logo_rect.xy + texel * 0.5)).rgb;
+		}
+		base.rgb = mix(dial * item_tint.rgb, base.rgb, in_lens);
+	}
 	// Visible exterior work remains on the physical sprite outside the bench.
 	float radial = length(luv - vec2(0.5));
 	float rim = smoothstep(0.18, 0.22, radial) * (1.0 - smoothstep(0.29, 0.33, radial));
@@ -113,7 +132,6 @@ void fragment() {
 	base.rgb = mix(base.rgb, min(vec3(1.0), base.rgb * 1.17 + vec3(0.025)), band * refurb_finish.y * a);
 	base.rgb = min(vec3(1.0), base.rgb + refurb_finish.z * 0.025 * a);
 	// Loupe: micro-scratches everywhere, a bright repaint seam near seam_uv.
-	float in_lens = lens_r > 0.0 ? 1.0 - smoothstep(lens_r * 0.85, lens_r, distance(world, lens_pos)) : 0.0;
 	// Cosmetic light stays inside the paint, outside the physical mark and
 	// instrument footprint. Existing alpha/cleaning/part masks remain authoritative.
 	bool on_logo = all(greaterThanEqual(luv, logo_rect.xy)) && all(lessThan(luv, logo_rect.xy + logo_rect.zw));
@@ -130,17 +148,6 @@ void fragment() {
 		if (rare_effect == 5) { pulse = pow(max(0.0, cos(angle + rare_time * 0.3)), 16.0); tint = vec3(0.72, 0.77, 1.0); }
 		base.rgb += tint * pulse * mask * 0.10 * a * (1.0 - in_lens);
 	}
-	// Linear-filtered close-ups include the half-texel fringe of each stroke.
-	vec2 guard = workbench_face ? TEXTURE_PIXEL_SIZE * 0.5 / region.zw : vec2(0.0);
-	if (logo_hidden > 0.5 && back_face < 0.5 && all(greaterThanEqual(luv, logo_rect.xy - guard)) && all(lessThan(luv, logo_rect.xy + logo_rect.zw + guard))) {
-		// A fixed coarse mosaic hides the shape, rather than downsampling the
-		// distinctive mark. Only the circular lens exposes original pixels.
-		vec2 tile = floor((luv - logo_rect.xy) / logo_rect.zw * vec2(6.0, 4.0));
-		vec3 paper = texture(TEXTURE, region.xy + region.zw * (logo_rect.xy + vec2(0.001))).rgb;
-		vec3 mosaic = paper * (0.55 + 0.35 * hash(tile + vec2(17.0, 31.0)));
-		if (workbench_face) mosaic = paper * (0.91 + 0.075 * hash(tile + vec2(17.0, 31.0)));
-		base.rgb = mix(mosaic, base.rgb, in_lens);
-	}
 	float sc = 0.0;
 	if (in_lens > 0.0) sc = scratches(luv * 1.6) * in_lens;
 	float seam_line = 1.0 - smoothstep(0.0, 0.006, abs((luv.x - seam_uv.x) * 0.8 + (luv.y - seam_uv.y) * 0.6));
@@ -152,6 +159,12 @@ void fragment() {
 	float in_uv = uv_r > 0.0 ? 1.0 - smoothstep(uv_r * 0.28, uv_r, length((world - uv_pos) * vec2(1.0, 1.6))) : 0.0;
 	base.rgb += vec3(0.25, 0.12, 0.45) * in_uv * a * 0.15;
 	base.rgb += vec3(1.0, 0.85, 0.6) * hover * 0.06 * a;
+	if (held_outline) {
+		vec2 stroke = TEXTURE_PIXEL_SIZE * 2.0;
+		float neighbors = min(min(texture(TEXTURE, UV + vec2(stroke.x, 0.0)).a, texture(TEXTURE, UV - vec2(stroke.x, 0.0)).a),
+			min(texture(TEXTURE, UV + vec2(0.0, stroke.y)).a, texture(TEXTURE, UV - vec2(0.0, stroke.y)).a));
+		base.rgb = mix(base.rgb, vec3(1.0, 0.86, 0.53), a * (1.0 - neighbors));
+	}
 	// Grime layer for the repair bench: brown film where the mask is still dirty.
 	if (grime > 0.0) {
 		float m = texture(grime_mask, luv).r * grime;

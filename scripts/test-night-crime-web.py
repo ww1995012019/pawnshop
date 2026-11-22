@@ -66,7 +66,10 @@ def main():
                     click(meta.get('buyButton','购买今晚保险'))
                     initial=fixture['before_insurance']['cash']
                     saved(lambda s:s['cash']==initial-meta['premium']);snap('insured')
-                    click('打烊结算');saved(lambda s:s['phase']=='report')
+                    click('打烊结算')
+                    phone.wait(page,"s.blocked || s.notice.startsWith('日结完成')")
+                    if page.evaluate('OrbitalTouch.state.blocked'):click('确认提前打烊')
+                    saved(lambda s:s['phase']=='report')
                     click(f"迎接第 {meta['openDay']} 天");phone.wait(page,f"s.day==={meta['openDay']} && s.blocked",timeout=20000)
                     loss=saved(lambda s:all(uid not in [it['uid'] for it in s['inventory']] for uid in meta['lossUIDs']))['state']
                     assert loss['cash']==initial-meta['premium']-meta['closingFee']+meta['payout'],loss['cash']

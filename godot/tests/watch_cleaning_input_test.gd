@@ -24,12 +24,14 @@ func drag_cloth(shell, page):
 			down.position = last
 			Input.parse_input_event(down)
 		await settle()
+	var held: Vector2 = page.cloth_uv
 	var up := InputEventMouseButton.new()
 	up.button_index = MOUSE_BUTTON_LEFT
 	up.pressed = false
 	up.position = last
 	Input.parse_input_event(up)
 	await settle()
+	return held
 func run():
 	# Use a desktop viewport for the embedded workbench's raw pointer projection.
 	root.size=Vector2i(1920,1080)
@@ -59,9 +61,10 @@ func run():
 		page.open_service()
 		page._select(uid)
 		await settle()
-		await drag_cloth(shell,page)
+		var held: Vector2 = await drag_cloth(shell,page)
 		if scenario in ["normal","no_ap"]:
-			check(page.dirty < 0.99 and page.cloth_uv.distance_to(Vector2(0.62,0.5)) < 0.01, scenario + " square watch cloth follows the real held pointer and removes grime")
+			check(page.dirty < 0.99 and held.distance_to(Vector2(0.62,0.5)) < 0.01, scenario + " square watch cloth follows the real held pointer and removes grime")
+			check(page.cloth_uv.x < 0 and not page.scrubbing, scenario + " releasing on the watch removes the cloth from the clean surface")
 			page._save_cleaning()
 			var saved: Dictionary = game.item(uid).service.operations.get("dust",{}).duplicate(true)
 			check(not saved.is_empty(), scenario + " partial wiping persists")

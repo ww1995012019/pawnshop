@@ -257,7 +257,14 @@ func _refresh() -> void:
 	body.add_child(cols)
 	body.add_child(UIKit.rule())
 	if s.phase == "open":
-		var rent_pending := Landlord.outstanding(s) > 0
+		var outstanding := Landlord.outstanding(s)
+		var rent_pending := outstanding > 0
+		var remaining := maxi(0, Model.daily_visit_limit(s) - int(s.cursor))
+		var fees := "租金 %s + 日结 %s" % [UIKit.money(outstanding),UIKit.money(costs.total)] if rent_pending else "本次扣费 " + UIKit.money(costs.total)
+		var summary := UIKit.label("%s · 结余 %s　|　未接待 %d 位 · 剩余 %d AP" % [
+			fees, UIKit.money(s.cash - outstanding - costs.total), remaining, int(s.ap)], 18, UIKit.INK, true, true)
+		summary.name = "ClosingSummary"
+		footer.add_child(summary)
 		var b := UIKit.button("请房东上门收租" if rent_pending else "打烊结算", "primary", Vector2(0, 64), 24)
 		b.disabled = s.trade != null or bool(NightCrime.public_report(s).inspection.pending)
 		if s.trade != null:
@@ -269,7 +276,7 @@ func _refresh() -> void:
 				host.close_workspace()
 				Game.dispatch({"type":"CALL_LANDLORD"})
 			else:
-				Game.dispatch({"type":"SETTLE"}), REPORT_ACTION_CONNECTION)
+				_request_close(day), REPORT_ACTION_CONNECTION)
 		footer.add_child(b)
 	elif s.phase == "report":
 		if Life.pending_closed_checkpoint(s):
@@ -302,6 +309,19 @@ func _refresh() -> void:
 					shell.go("counter"), REPORT_ACTION_CONNECTION)
 			footer.add_child(next)
 		if shell.mobile_mode() and continuation != null: body.move_child(continuation,2)
+
+func _request_close(day: int) -> void:
+	var state := Game.state
+	if state.day != day or state.phase != "open" or state.trade != null or shell.modal_open(): return
+	var remaining := maxi(0, Model.daily_visit_limit(state) - int(state.cursor))
+	if remaining == 0:
+		Game.dispatch({"type":"SETTLE"})
+		return
+	var charge: float = StoreCosts.quote(state).total
+	shell.confirm("提前打烊", "今天还有 %d 位来客未接待，剩余 %d AP。本次扣费 %s，结余 %s。打烊后今天的预约结束。" % [
+		remaining, int(state.ap), UIKit.money(charge), UIKit.money(state.cash-charge)], "确认提前打烊", func():
+		if Game.state.day == day and Game.state.phase == "open" and Game.state.trade == null:
+			Game.dispatch({"type":"SETTLE"}))
 
 func _add_evaluation(s: Dictionary) -> void:
 	var day := int(s.day)

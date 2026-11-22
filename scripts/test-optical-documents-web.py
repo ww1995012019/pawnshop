@@ -15,6 +15,7 @@ import shutil
 import statistics
 import subprocess
 import tempfile
+import time
 from PIL import Image
 from playwright.sync_api import sync_playwright
 
@@ -172,8 +173,11 @@ def main():
                     if mobile:
                         x,y=physical(*finish);cdp.send('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':[{'x':x,'y':y,'id':0}]})
                     else:page.mouse.move(*physical(*finish),steps=5)
-                    held=lens()
-                    drag_ok=math.hypot(held['x']-initial['x']-delta[0],held['y']-initial['y']-delta[1])<2.5 and held['dragging']
+                    deadline=time.monotonic()+3.0
+                    while True:
+                        held=lens()
+                        drag_ok=held['dragging'] and math.hypot(held['x']-initial['x']-delta[0],held['y']-initial['y']-delta[1])<2.5
+                        if drag_ok or time.monotonic()>=deadline:break
                     if not drag_ok:
                         print('LENS DRAG GEOMETRY',json.dumps({'view':view,'initial':initial,'held':held,'expected':{'x':initial['x']+delta[0],'y':initial['y']+delta[1]},'mat':mat,'css_delta':delta}),flush=True)
                     check(drag_ok,f'{view} held real handle drag moves the lens')
@@ -258,9 +262,13 @@ def main():
                         # Restore the owned/open wanted fixture through its real
                         # inventory control before paper and idle regressions.
                         cmd({'type':'page','page':'warehouse'});wait("OrbitalTouch.state.workspace==='warehouse'")
-                        for attempt in range(2):
-                            if loc('@wanted_close')['found']:break
-                            click('@wanted_inventory')
+                        label='查看通缉令'
+                        entry=loc(label)
+                        by_id=loc('@wanted_inventory')
+                        assert by_id['found'] and (by_id['x'], by_id['y']) == (entry['x'], entry['y']), (by_id, entry)
+                        assert entry['found'] and entry['label']==label,entry
+                        assert entry['width']>=120 and entry['height']>=44,('warehouse paper touch target',entry)
+                        click(label)
                         wait_wanted_visible(True)
                         progress('paper restored')
                         # Return to the suspended inspector rather than append

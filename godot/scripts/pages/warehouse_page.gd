@@ -5,6 +5,7 @@ const CELL := 56.0
 const DETAIL_WIDTH := 440.0
 const PANEL_GAP := 10.0
 const Commerce = preload("res://scripts/model/commerce.gd")
+const CABINET_TITLES := {"warehouse":"后仓","display":"展示柜","materials":"材料柜","isolation":"隔离柜","pawn":"抵押柜"}
 
 var grid: StorageGrid
 var lists: VBoxContainer
@@ -97,7 +98,9 @@ func enter() -> void:
 	# Purchases belong above the pawn slots, so small screens expose them first.
 	cabinet_body.move_child(materials_view,0)
 	cabinet_rail=UIKit.grid(4,4);cabinet_rail.name="CabinetTabs";body.add_child(cabinet_rail);body.move_child(cabinet_rail,1)
-	for spec in [["warehouse","后仓"],["materials","材料"],["isolation","隔离"],["pawn","抵押"]]:
+	var cabinets := [["warehouse","后仓"],["materials","材料"],["isolation","隔离"],["pawn","抵押"]]
+	if shell.mobile_mode(): cabinets.insert(1, ["display","陈列"])
+	for spec in cabinets:
 		var mode:String=spec[0]
 		var key:=UIKit.button(spec[1],"secondary",Vector2(42,36),14);key.name="cabinet_"+mode
 		key.custom_minimum_size.x=44
@@ -113,24 +116,26 @@ func enter() -> void:
 	var gutter:=MarginContainer.new();gutter.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	gutter.add_theme_constant_override("margin_right",4 if shell.mobile_mode() else 10);gutter.add_child(detail);sc.add_child(gutter);detail_panel.add_child(sc)
 	selected=Game.focus_uid if Model.find_inventory(Game.state,Game.focus_uid)!=null else ""
+	if selected != "" and cabinet_buttons.has(Game.item(selected).location):
+		cabinet_mode = Game.item(selected).location
 	set_process(true);_refresh();relayout()
 
 func _refresh() -> void:
 	_rotation_state = {}
 	dismiss_context_menu()
-	var title:String={"warehouse":"手表后仓","materials":"工具材料","isolation":"隔离保管","pawn":"抵押保管"}[cabinet_mode]
+	var title:String={"warehouse":"手表后仓","display":"展示柜","materials":"工具材料","isolation":"隔离保管","pawn":"抵押保管"}[cabinet_mode]
 	UIKit.clear(storage_header)
 	var caption: String="%d × %d · 拖动换位"%[WarehouseExpansion.columns(Game.state),WarehouseExpansion.rows(Game.state)] if cabinet_mode=="warehouse" else "独立仓位 · 点击查看原物"
-	if cabinet_mode in ["isolation","pawn"]:
+	if cabinet_mode in ["display","isolation","pawn"]:
 		var used:int=Game.state.inventory.filter(func(it):return it.location==cabinet_mode).size()
 		caption="%d / %d 位 · 剩余 %d"%[used,WarehouseExpansion.capacity(Game.state,cabinet_mode),maxi(0,WarehouseExpansion.capacity(Game.state,cabinet_mode)-used)]
 	if cabinet_mode=="materials":
 		var kinds:int=Game.state.materials.values().filter(func(value):return float(value)>0).size()
 		caption="材料 %d / %d 种"%[kinds,WarehouseExpansion.capacity(Game.state,"materials")]
 	if shell.mobile_mode():
-		title={"warehouse":"后仓","materials":"材料柜","isolation":"隔离柜","pawn":"抵押柜"}[cabinet_mode]
+		title=CABINET_TITLES[cabinet_mode]
 		caption="%d × %d"%[WarehouseExpansion.columns(Game.state),WarehouseExpansion.rows(Game.state)] if cabinet_mode=="warehouse" else caption
-		if cabinet_mode in ["isolation","pawn"]:
+		if cabinet_mode in ["display","isolation","pawn"]:
 			var count:int=Game.state.inventory.filter(func(it):return it.location==cabinet_mode).size()
 			caption="%d / %d 位"%[count,WarehouseExpansion.capacity(Game.state,cabinet_mode)]
 	storage_header.add_child(UIKit.label(title,16 if shell.mobile_mode() else 18,UIKit.AMBER,true,true));storage_header.add_child(UIKit.label(caption,13,UIKit.MUTED,false,true))
@@ -141,6 +146,13 @@ func switch_cabinet(mode: String) -> void:
 	var previous_scroll:ScrollContainer=grid_scroll if cabinet_mode=="warehouse" else cabinet_scroll
 	scroll_positions[cabinet_mode]=Vector2(0,previous_scroll.scroll_vertical)
 	cabinet_mode=mode
+	var original = Model.find_inventory(Game.state, selected)
+	if original == null or original.location != mode:
+		if Game.focus_uid == selected: Game.focus_uid = ""
+		selected = ""
+		grid.prepared_uid = ""
+		var receipt_scroll: ScrollContainer = detail_panel.get_child(0)
+		receipt_scroll.scroll_vertical = 0
 	_refresh()
 	var point:Vector2=scroll_positions.get(mode,Vector2.ZERO)
 	var active_scroll:ScrollContainer=grid_scroll if mode=="warehouse" else cabinet_scroll
@@ -155,26 +167,28 @@ func _resize_panels() -> void:
 	if not is_instance_valid(holder):return
 	var r:Rect2=shell.content_rect()
 	var gap:float=6 if shell.mobile_mode() else PANEL_GAP
-	var left_width:float=maxf(114,floorf(r.size.x*(0.21 if shell.mobile_mode() else 0.19)))
-	var middle_width:float=r.size.x-left_width-gap if shell.portrait_mode() else r.size.x-left_width-r.size.x*(0.41 if shell.mobile_mode() else 0.31)-gap*2
-	cabinet_rail.columns=2 if middle_width<220 else 4
+	var mobile:bool=shell.mobile_mode()
+	display_panel.visible=not mobile
+	var left_width:float=0.0 if mobile else maxf(114,floorf(r.size.x*0.19))
+	var left_gap:float=0.0 if mobile else gap
+	var detail_width:float=r.size.x*(0.43 if mobile else 0.31)
+	var middle_width:float=r.size.x if shell.portrait_mode() else r.size.x-left_width-left_gap-detail_width-gap
+	cabinet_rail.columns=5 if mobile else 2 if middle_width<220 else 4
 	var available:float=maxf(10,middle_width-holder.get_theme_stylebox("panel").get_minimum_size().x-14)
 	var next_cell:float=available/10.0
 	if next_cell!=cell_size:
 		cell_size=next_cell;grid.rebuild()
 		if cabinet_mode=="materials":_build_materials()
-		if cabinet_mode in ["isolation","pawn"]:cabinet_grid.rebuild()
+		if cabinet_mode in ["display","isolation","pawn"]:cabinet_grid.rebuild()
 	if shell.portrait_mode():
 		var top_height:float=r.size.y*0.43
-		display_panel.position=r.position;display_panel.size=Vector2(left_width,top_height)
-		holder.position=r.position+Vector2(left_width+gap,0);holder.size=Vector2(r.size.x-left_width-gap,top_height)
+		holder.position=r.position;holder.size=Vector2(middle_width,top_height)
 		detail_panel.position=r.position+Vector2(0,top_height+gap);detail_panel.size=Vector2(r.size.x,r.size.y-top_height-gap)
 	else:
-		var detail_width:float=r.size.x*(0.41 if shell.mobile_mode() else 0.31)
-		var middle:float=r.size.x-left_width-detail_width-gap*2
-		display_panel.position=r.position;display_panel.size=Vector2(left_width,r.size.y)
-		holder.position=r.position+Vector2(left_width+gap,0);holder.size=Vector2(middle,r.size.y)
-		detail_panel.position=r.position+Vector2(left_width+middle+gap*2,0);detail_panel.size=Vector2(detail_width,r.size.y)
+		if not mobile:
+			display_panel.position=r.position;display_panel.size=Vector2(left_width,r.size.y)
+		holder.position=r.position+Vector2(left_width+left_gap,0);holder.size=Vector2(middle_width,r.size.y)
+		detail_panel.position=r.position+Vector2(left_width+left_gap+middle_width+gap,0);detail_panel.size=Vector2(detail_width,r.size.y)
 	var content_height:float=grid.custom_minimum_size.y if cabinet_mode=="warehouse" else cabinet_scroll.get_child(0).get_combined_minimum_size().y
 	var frame_height:float=holder.get_theme_stylebox("panel").get_minimum_size().y+maxf(storage_header.get_combined_minimum_size().y,expand_button.get_combined_minimum_size().y)+cabinet_rail.get_combined_minimum_size().y+24+lists.get_combined_minimum_size().y
 	holder.size.y=minf(holder.size.y,content_height+frame_height)
@@ -189,7 +203,7 @@ func _lists() -> void:
 	display_count.text="展示柜 %d / %d"%[shown.size(),WarehouseExpansion.capacity(Game.state,"display")]
 	display_grid.rebuild()
 	grid_scroll.visible=cabinet_mode=="warehouse";cabinet_scroll.visible=cabinet_mode!="warehouse"
-	cabinet_grid.visible=cabinet_mode in ["isolation","pawn"];materials_view.visible=cabinet_mode in ["materials","pawn"]
+	cabinet_grid.visible=cabinet_mode in ["display","isolation","pawn"];materials_view.visible=cabinet_mode in ["materials","pawn"]
 	if cabinet_grid.visible:
 		cabinet_grid.location=cabinet_mode;cabinet_grid.rebuild()
 	UIKit.clear(materials_view)
@@ -230,6 +244,7 @@ func material_texture(id: String) -> AtlasTexture:
 	return texture
 
 func store_original(uid: String,location: String,point: Variant=null,rotated: Variant=null) -> void:
+	if Game.state.phase != "open": return
 	var action:Dictionary={"type":"STORE_ITEM","uid":uid,"location":location}
 	if point!=null:action.merge({"x":int(point.x),"y":int(point.y)})
 	if rotated!=null:action.rotated=rotated
@@ -264,6 +279,7 @@ func finish_cabinet_drag(uid: String,point: Vector2) -> void:
 	elif cabinet_scroll.visible and cabinet_mode=="isolation" and cabinet_content_rect(cabinet_scroll,cabinet_grid).has_point(point):store_original(uid,"isolation")
 
 func cabinet_content_rect(scroller: ScrollContainer,contents: Control) -> Rect2:
+	if not scroller.is_visible_in_tree() or not contents.is_visible_in_tree(): return Rect2()
 	var box:=scroller.get_global_rect()
 	if scroller.get_v_scroll_bar().visible:box.size.x-=scroller.get_v_scroll_bar().size.x
 	if scroller.get_h_scroll_bar().visible:box.size.y-=scroller.get_h_scroll_bar().size.y
@@ -290,7 +306,11 @@ func _document_inventory() -> void:
 	if not WantedCases.has_notice(Game.state): return
 	var row:=UIKit.hbox(8)
 	row.add_child(UIKit.label("桌面文件 / 1",16,UIKit.AMBER))
-	var open:=UIKit.button("桌面通缉令 · 展开 / 收起","secondary",Vector2(0,48),17)
+	var caption := "桌面通缉令 · 展开 / 收起"
+	var open:=UIKit.button("查看通缉令" if shell.mobile_mode() else caption,"secondary",Vector2(0,48),17)
+	open.tooltip_text = caption
+	open.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	open.custom_minimum_size.y = 48
 	open.icon = load("res://assets/ui/wanted-document.svg")
 	open.expand_icon = true
 	open.add_theme_constant_override("icon_max_width",40)
@@ -442,14 +462,16 @@ func rotate_selected() -> void:
 		shell.hint("方向已切换，拖到可容纳的空位后放开。")
 	shell.sound("click", -8)
 
-func _act(g: GridContainer, text: String, kind: String, a, enabled := true, tip := "") -> void:
+func _act(g: GridContainer, text: String, kind: String, a, enabled := true, tip := "", changes_stock := true) -> void:
 	var b := UIKit.button(text, kind, Vector2(0, 44), 15 if shell.mobile_mode() else 17)
 	if not shell.mobile_mode() and is_instance_valid(item_menu):UIKit.context_button(b,kind)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.disabled = not enabled
-	b.tooltip_text = tip
+	var closed: bool = changes_stock and Game.state.phase != "open"
+	b.disabled = not enabled or closed
+	b.tooltip_text = Model.business_hours_problem(Game.state) if closed else tip
 	# Deferred: the action rebuilds this panel, freeing the pressed button.
 	b.pressed.connect(func():
+		if changes_stock and Game.state.phase != "open": return
 		dismiss_context_menu()
 		if a is Callable:
 			a.call_deferred()
@@ -468,6 +490,9 @@ func _detail() -> void:
 		detail.add_child(banner)
 	var it = Game.item(selected)
 	if it == null:
+		if shell.mobile_mode():
+			_cabinet_contents()
+			return
 		detail.add_child(UIKit.note_card("库存登记簿", "选中一件货物查看详情。"))
 		_stock_summary()
 		return
@@ -515,8 +540,10 @@ func _detail() -> void:
 		record.add_child(distinction)
 	var owner: String = {"shop": "店铺自有", "customer": "顾客委修", "pawn": "抵押保管"}[it.owner]
 	var loc: String = {"warehouse": "后仓", "display": "陈列架", "isolation": "隔离柜", "pawn": "抵押柜"}[it.location]
-	record.add_child(UIKit.label("%s · %s · 占格 %d×%d" % [owner, loc, def.size[0], def.size[1]], 16, Color("6b5a40"), false, true))
-	record.add_child(UIKit.label("品相 %s · 物证 %d · 挂牌 %s" % [UIKit.pct(it.condition), Model.evidence_count(it), UIKit.money(it.listPrice)], 17, UIKit.INK, false, true))
+	var footprint := Model.dimensions(it)
+	record.add_child(UIKit.label("%s · %s · 占格 %d×%d" % [owner, loc, footprint[0], footprint[1]], 16, Color("6b5a40"), false, true))
+	var price: String = "挂牌 " + UIKit.money(it.listPrice) if it.owner == "shop" else "受托保管"
+	record.add_child(UIKit.label("品相 %s · 物证 %d · %s" % [UIKit.pct(it.condition), Model.evidence_count(it), price], 17, UIKit.INK, false, true))
 	record.add_child(UIKit.label(Model.appraisal_text(it) + " · 成本 " + UIKit.money(it.cost), 18, UIKit.RUST, false, true))
 	record.add_child(UIKit.label(("来源已核验" if it.sourceVerified else "来源待核") + " · " + String(it.source), 16, Color("2f6b3a") if it.sourceVerified else UIKit.RUST, false, true))
 	if known_crime:
@@ -541,9 +568,45 @@ func _detail() -> void:
 	if shell.mobile_mode():
 		var common_actions:=_item_actions(detail,it)
 		detail.move_child(common_actions,preview.get_index()+1)
+		var choose := UIKit.button("返回%s清单" % CABINET_TITLES[cabinet_mode], "secondary", Vector2(0,44), 15)
+		choose.pressed.connect(_select_from_receipt.bind("", cabinet_mode, selected), CONNECT_DEFERRED)
+		detail.add_child(choose)
+		detail.move_child(choose, 0)
 	else:
 		detail.add_child(UIKit.label("右键手表打开操作菜单",16,UIKit.MUTED,false,true))
-	_stock_summary()
+	if not shell.mobile_mode(): _stock_summary()
+
+func _cabinet_contents() -> void:
+	detail.add_child(UIKit.label("%s清单" % CABINET_TITLES[cabinet_mode], 17, UIKit.AMBER, true))
+	if cabinet_mode == "materials":
+		for material in GameData.materials:
+			var amount: float = Game.state.materials.get(material.id, 0)
+			if amount > 0: detail.add_child(UIKit.label("%s ×%s" % [material.name, Model.jnum(amount)], 16, UIKit.INK))
+		if detail.get_child_count() == 1: detail.add_child(UIKit.label("暂无材料", 16, UIKit.MUTED))
+		return
+	var items: Array = Game.state.inventory.filter(func(it): return it.location == cabinet_mode)
+	if items.is_empty():
+		detail.add_child(UIKit.label("柜内暂无手表", 16, UIKit.MUTED))
+	for it in items:
+		var uid: String = it.uid
+		var ownership: String = {"shop":"自有","customer":"委修","pawn":"抵押"}.get(it.owner, "受托")
+		var caption := "%s\n%s · 品相 %s" % [GameData.def(it.defId).name, ownership, UIKit.pct(it.condition)]
+		var pick := UIKit.button(caption, "secondary", Vector2(0,48), 16)
+		pick.name = "warehouse_pick_" + uid
+		pick.custom_minimum_size.y = 48
+		pick.icon = UIKit.physical_icon(it)
+		pick.expand_icon = true
+		pick.add_theme_constant_override("icon_max_width",30)
+		pick.pressed.connect(_select_from_receipt.bind(uid, cabinet_mode, ""), CONNECT_DEFERRED)
+		detail.add_child(pick)
+
+func _select_from_receipt(uid: String, cabinet: String, previous: String) -> void:
+	if not is_visible_in_tree() or cabinet_mode != cabinet or selected != previous: return
+	if uid != "":
+		var original = Game.item(uid)
+		if original == null or original.location != cabinet: return
+	select(uid)
+	detail_panel.get_child(0).scroll_vertical = 0
 
 func _known_crime(it: Dictionary) -> bool:
 	if it.get("crimeRevealed",false):return true
@@ -587,8 +650,8 @@ func _item_actions(target: VBoxContainer, it: Dictionary) -> GridContainer:
 	_act(g, "下架" if it.location == "display" else "上架陈列", "good", {"type": "DISPLAY", "uid": it.uid}, shelf_why == "", shelf_why)
 	# Rotation substitutes for right-click on phones, so keep it with common actions.
 	_act(g, "旋转方向", "chip", func(): rotate_selected(), can_rotate_selected(), "" if can_rotate_selected() else "需要后仓里有能容纳旋转后形状的空位")
-	_act(g, "去鉴定", "secondary", func(): shell.go("inspect", it.uid))
-	_act(g, "去维修", "secondary", func(): shell.go("repair", it.uid))
+	_act(g, "去鉴定", "secondary", func(): shell.go("inspect", it.uid), true, "", false)
+	_act(g, "去维修", "secondary", func(): shell.go("repair", it.uid), true, "", false)
 	var common_actions := g
 	target.add_child(common_actions)
 	target.add_child(UIKit.module_header("调价与来源", "扫描、登记及保管操作", "RECORDS"))
@@ -674,6 +737,9 @@ func on_changed(_p: Dictionary, _n: Dictionary, _a: Dictionary) -> void:
 	_rotation_state = {}
 	if Game.item(selected) == null:
 		selected = ""
+	elif shell.mobile_mode() and Game.item(selected).location != cabinet_mode:
+		if Game.focus_uid == selected: Game.focus_uid = ""
+		selected = ""
 	var prepared = Game.item(grid.prepared_uid) if grid.prepared_uid != "" else null
 	if prepared == null or prepared.location != "warehouse" or prepared.rotated == grid.prepared_rot:
 		grid.prepared_uid = ""
@@ -683,7 +749,7 @@ func on_changed(_p: Dictionary, _n: Dictionary, _a: Dictionary) -> void:
 		if before != null and after != null and before.location == "warehouse" and after.location == "warehouse" and grid.tiles.has(_a.uid):
 			dismiss_context_menu()
 			grid.update_item(after)
-			if shell.mobile_mode(): _detail()
+			if selected == after.uid: _detail()
 			return
 	_refresh()
 
@@ -717,27 +783,36 @@ class StorageGrid extends Control:
 		for it in Game.state.inventory:
 			if it.location != "warehouse":
 				continue
-			var tr := TextureRect.new()
-			tr.texture = UIKit.physical_icon(it)
-			tr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-			tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			var d := Model.dimensions(it)
-			tr.position = Vector2(it.x, it.y) * page.cell_size + Vector2(4, 4)
-			tr.size = Vector2(d[0], d[1]) * page.cell_size - Vector2(8, 8)
-			UIKit.decorate_item(tr, it, 20.0)
-			if it.uid==drag_uid and moved:tr.modulate.a=0.3
-			add_child(tr)
-			tiles[it.uid] = tr
+			var tile := Control.new()
+			tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var picture := TextureRect.new()
+			picture.name = "StockImage"
+			picture.texture = UIKit.physical_icon(it)
+			picture.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+			picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			tile.add_child(picture)
+			add_child(tile)
+			tiles[it.uid] = tile
+			update_item(it)
+			UIKit.decorate_item(tile, it, minf(20.0, page.cell_size * 0.6))
+			if it.uid==drag_uid and moved:tile.modulate.a=0.3
 		queue_redraw()
 
 	func update_item(it: Dictionary) -> void:
-		var tile: TextureRect = tiles[it.uid]
+		var tile: Control = tiles[it.uid]
 		var d := Model.dimensions(it)
 		tile.position = Vector2(it.x, it.y) * page.cell_size + Vector2(4, 4)
 		tile.size = Vector2(d[0], d[1]) * page.cell_size - Vector2(8, 8)
+		_orient_image(tile.get_node("StockImage"), Vector2.ZERO, tile.size, it.rotated)
 		queue_redraw()
+
+	func _orient_image(picture: TextureRect, origin: Vector2, extent: Vector2, rotated: bool) -> void:
+		picture.size = Vector2(extent.y, extent.x) if rotated else extent
+		picture.pivot_offset = Vector2.ZERO
+		picture.position = origin + (Vector2(extent.x, 0) if rotated else Vector2.ZERO)
+		picture.rotation = PI / 2 if rotated else 0.0
 
 	func _cell(p: Vector2) -> Vector2i:
 		return Vector2i(floori(p.x / page.cell_size), floori(p.y / page.cell_size))
@@ -781,6 +856,10 @@ class StorageGrid extends Control:
 				var uid := _uid_at(mb.position)
 				if uid != "":
 					page.dismiss_context_menu()
+					if Game.state.phase != "open":
+						page.select(uid)
+						accept_event()
+						return
 					handled = true
 					drag_uid = uid
 					var it = Game.item(uid)
@@ -860,8 +939,9 @@ class StorageGrid extends Control:
 			return
 		var it = Game.item(drag_uid)
 		var d := Model.dimensions(it, drag_rot)
-		ghost.size = Vector2(d[0], d[1]) * page.cell_size - Vector2(8, 8)
-		ghost.position = page.get_global_transform_with_canvas().affine_inverse() * (get_global_transform_with_canvas() * (pos - drag_offset + Vector2(4, 4)))
+		var extent: Vector2 = Vector2(d[0], d[1]) * page.cell_size - Vector2(8, 8)
+		var origin: Vector2 = page.get_global_transform_with_canvas().affine_inverse() * (get_global_transform_with_canvas() * (pos - drag_offset + Vector2(4, 4)))
+		_orient_image(ghost, origin, extent, drag_rot)
 		queue_redraw()
 
 	func _draw() -> void:
@@ -881,8 +961,8 @@ class StorageGrid extends Control:
 		if drag_uid != "" and moved and ghost != null:
 			var it = Game.item(drag_uid)
 			var d := Model.dimensions(it, drag_rot)
-			var local_ghost:Vector2=get_global_transform_with_canvas().affine_inverse()*(ghost.get_global_transform_with_canvas()*Vector2.ZERO)
-			var tl: Vector2 = ((local_ghost - Vector2(4, 4)) / cs).round()
+			var pointer: Vector2 = get_global_transform_with_canvas().affine_inverse() * drag_screen_pos
+			var tl: Vector2 = ((pointer - drag_offset) / cs).round()
 			var ok := Model.can_place(Game.state, drag_uid, int(tl.x), int(tl.y), drag_rot)
 			draw_rect(Rect2(tl * cs + Vector2(2, 2), Vector2(d[0], d[1]) * cs - Vector2(4, 4)), Color(0.4, 0.9, 0.6, 0.25) if ok else Color(0.95, 0.4, 0.3, 0.25))
 

@@ -981,7 +981,8 @@ func _on_changed(prev: Dictionary, next: Dictionary, action: Dictionary) -> void
 		if page != null: page.on_changed(prev, next, action)
 		return
 	_sync_wanted_notice()
-	if not workspace_open() and not quiet_save and next.notice != "" and (next.notice != prev.notice or action.type != "OFFER"):
+	var patrol_at_counter: bool = action.type == "REPORT_VISITOR" and page_name == "counter" and prev.trade != null and next.trade == null
+	if not workspace_open() and not quiet_save and not patrol_at_counter and next.notice != "" and (next.notice != prev.notice or action.type != "OFFER"):
 		toast(next.notice)
 	var spent: float = prev.ap - next.ap
 	if spent > 0 and hud.visible:
@@ -1343,6 +1344,7 @@ func modal(title_text: String, width := 900.0) -> Array:
 	var previous_focus: Control = focus_host._keyboard_owner()
 	focus_host._focus_keyboard(null)
 	var dim := ColorRect.new()
+	dim.accessibility_name = title_text
 	dim.color = Color(0.01, 0.02, 0.03, 0.62)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1465,13 +1467,13 @@ func close_top_modal() -> void:
 			return
 
 ## Irreversible actions ask first; nothing is dispatched until the player agrees.
-func confirm(title_text: String, message: String, ok_text: String, fn: Callable) -> void:
+func confirm(title_text: String, message: String, ok_text: String, fn: Callable, cancel_text := "取消") -> void:
 	var m := modal(title_text, 640)
 	var body: VBoxContainer = m[0]
 	var message_body := night_scroll(body, 240) if title_text.contains("灰色") or title_text.contains("本店失物") else body
 	message_body.add_child(UIKit.label(message, 21, UIKit.TEXT, false, true))
 	var row := UIKit.hbox(12)
-	var cancel := UIKit.button("取消", "secondary", Vector2(0, 56), 21)
+	var cancel := UIKit.button(cancel_text, "secondary", Vector2(0, 56), 21)
 	cancel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cancel.pressed.connect(func(): m[1].call())
 	row.add_child(cancel)
@@ -1785,6 +1787,7 @@ func _volume_row(text: String, key: String, fallback: float) -> Control:
 	caption.custom_minimum_size.x = 48 if landscape_mode() else 56 if mobile_mode() else 110
 	row.add_child(caption)
 	var slider := HSlider.new()
+	slider.accessibility_name = text
 	slider.min_value = 0
 	slider.max_value = 100
 	slider.step = 5
@@ -1817,9 +1820,7 @@ func open_settings() -> void:
 		_apply_sound()))
 	for spec in [["音乐", "music_volume", 0.6], ["音效", "sfx_volume", 0.8]]:
 		body.add_child(_volume_row(spec[0], spec[1], spec[2]))
-	body.add_child(UIKit.switch_row("减少动态效果", Game.prefs.reduced_motion, func(on: bool):
-		Game.prefs.reduced_motion = on
-		Game.save_prefs()))
+	body.add_child(UIKit.switch_row("减少动态效果", Game.prefs.reduced_motion, Game.set_reduced_motion))
 	body.add_child(UIKit.rule())
 	var entries := UIKit.grid(2 if portrait_mode() else 3,6)
 	entries.name = "SettingsEntries"
@@ -1844,7 +1845,17 @@ func open_settings() -> void:
 	var debug := UIKit.button("调试系统 · 数值编辑","secondary",Vector2(0,48),18)
 	debug.name = "open_debug_values"
 	debug.pressed.connect(open_debug_values)
-	body.add_child(debug)
+	if OS.has_feature("web"):
+		var utilities := UIKit.hbox(6)
+		body.add_child(utilities)
+		debug.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		utilities.add_child(debug)
+		var reading := UIKit.button("文字操作", "secondary", Vector2(0,44), 16)
+		reading.set_meta("opens_web_reader", true)
+		reading.pressed.connect(func(): JavaScriptBridge.eval("window.OrbitalReader?.open()"))
+		utilities.add_child(reading)
+	else:
+		body.add_child(debug)
 	var reset := UIKit.button("新开一家店（清除当前进度）", "danger", Vector2(0, 56))
 	reset.pressed.connect(func():
 		m[1].call()
@@ -2174,6 +2185,12 @@ func open_night_report(manual := true) -> void:
 	var m := modal("夜间失窃与查货记录" if manual else "昨夜失窃记录", 940)
 	var body: VBoxContainer = m[0]
 	var records := night_scroll(body)
+	var chrome: VBoxContainer = body.get_parent().get_parent() if mobile_mode() else body
+	if not report.mornings.is_empty():
+		var latest: Dictionary = report.morning
+		var summary := UIKit.label("第 %d 天 · 失窃 %d 件 · 保险已赔 %s" % [int(latest.day),latest.losses.size(),UIKit.money(latest.payout)], 18, UIKit.AMBER, true, true)
+		chrome.add_child(summary)
+		chrome.move_child(summary,body.get_parent().get_index() if mobile_mode() else 0)
 	if manual:
 		records.add_child(UIKit.label("今日抽查概率 %.2f%% · 关注度×0.03%%" % float(report.inspection.get("chancePercent",NightCrime.inspection_chance(Game.state.risk))),21,UIKit.TEXT,false,true))
 		records.add_child(UIKit.label("可先整理再确认检查。只没收现场赃物，隔离箱不检查；本次查到一件或多件均合计罚30 Cr。",18,UIKit.TEXT,false,true))
@@ -2213,7 +2230,7 @@ func open_night_report(manual := true) -> void:
 	ack.pressed.connect(func():
 		Game.dispatch({"type":"ACK_NIGHT_REPORT"})
 		m[1].call())
-	body.add_child(ack)
+	chrome.add_child(ack)
 
 func _open_plan_after_help() -> void:
 	for frame in 30:

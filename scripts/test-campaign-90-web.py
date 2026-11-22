@@ -210,6 +210,9 @@ def run_journey(context, url, output, fixtures, opening, mobile, screenshots, ma
             wait("!s.trade && !s.busy")
             open_report()
         click("打烊结算")
+        wait("s.blocked || s.notice.startsWith('日结完成')")
+        if state()["blocked"]:
+            click("确认提前打烊")
         wait("s.notice.startsWith('日结完成')")
         if not persist:
             live = state()

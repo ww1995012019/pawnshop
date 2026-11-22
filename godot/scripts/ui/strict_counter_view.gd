@@ -41,6 +41,7 @@ var stage_hint: Label
 var secondary: Button
 var order_count: Label
 var stock_count: Label
+var stock_entry: Button
 var trade_buttons: Array=[]
 var quote_controls: Array=[]
 var stock: GridContainer
@@ -84,7 +85,9 @@ var last_visit := ""
 var visitor_phase := "standing"
 var face_offset := Vector2.ZERO
 var visitor_tween: Tween
+var confirmation_tween: Tween
 var departing_face: TextureRect
+var patrol_faces: Array[TextureRect] = []
 var departure_tween: Tween
 var departure_started := false
 var motion_ready := false
@@ -306,8 +309,9 @@ func _build() -> void:
  stock_art=NinePatchRect.new();stock_art.texture=R.stock_frame();stock_art.position=Vector2(5,575);stock_art.size=Vector2(418,278)
  stock_art.patch_margin_left=20;stock_art.patch_margin_right=20;stock_art.patch_margin_top=65;stock_art.patch_margin_bottom=20
  stock_art.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(stock_art)
- stock_count=_label(self,"",Rect2(79,585,196,40),27,PAPER,true)
- _hit(self,"整理",Rect2(287,588,113,32),func():desk.shell.go("warehouse"))
+ stock_count=_label(self,"",Rect2(74,585,208,40),22,PAPER,true)
+ stock_entry=_hit(self,"整理",Rect2(287,588,113,32),func():desk.shell.go("warehouse"))
+ stock_entry.name="StrictStockEntry"
  stock_scroll=ScrollContainer.new();stock_scroll.position=Vector2(20,640);stock_scroll.size=Vector2(393,185)
  stock_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;stock_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO;add_child(stock_scroll)
  stock=GridContainer.new();stock.columns=6;stock.add_theme_constant_override("h_separation",2);stock.add_theme_constant_override("v_separation",3);stock_scroll.add_child(stock)
@@ -376,7 +380,7 @@ func _build() -> void:
  quick_list=preload("res://scripts/ui/quick_trade_list.gd").new();add_child(quick_list);quick_list.setup(self)
  var orders=_hit(self,"",Rect2(1198,711,233,113),func():desk.shell.go("orders"));orders.name="StrictOrders"
  _image(orders,R.orders_skin(),Rect2(0,0,233,113))
- order_count=_label(orders,"",Rect2(70,52,145,40),25,INK,true)
+ order_count=_label(orders,"",Rect2(70,52,160,40),18,INK,true)
  var people=_hit(self,"人物档案",Rect2(1437,711,223,113),func():desk.shell.open_people());people.name="StrictPeople"
  _image(people,R.region("people",Rect2i(1437,711,223,113)),Rect2(0,0,223,113))
  footer_art=_image(self,R.region("footer",Rect2i(0,866,1671,75)),Rect2(0,866,1671,75));footer_art.stretch_mode=TextureRect.STRETCH_SCALE
@@ -489,7 +493,7 @@ func _quick_action(verb: String,uid: String,trade_id: String,version: int,price:
   if TradeSession.summary(Game.state).buy_count+TradeSession.summary(Game.state).sell_count>0:
    Game.dispatch(CounterDialogue.action_for(Game.state,"DELIVER"))
   return
- if verb=="send":Game.dispatch({"type":"REFUSE"});return
+ if verb=="send":desk.request_sendoff(trade_id);return
  _quick_focus(uid)
  var context={"uid":uid,"trade_id":trade_id,"version":int(TradeSession.session(Game.state).version),"price":float(TradeSession.row(Game.state,uid).context.price)}
  match verb:
@@ -531,6 +535,7 @@ func _process(delta: float) -> void:
  if dirty or period>.10:
   _refresh(dirty);dirty=false;period=0.0
  _update_visitor_pose()
+ _update_patrol_actors()
  _advance_visible_departure()
  speech.visible_ratio=desk.bubble_label.visible_ratio
 
@@ -596,6 +601,14 @@ func _refresh(force := false) -> void:
   item_meta.tooltip_text=item_meta.text;selected.tooltip_text="";selected.mouse_filter=Control.MOUSE_FILTER_IGNORE
  ask_caption.text="挂牌" if preview!=null else "要价" if ordinary and t.kind=="buy" else "报价" if ordinary else "租金" if t!=null and t.kind=="landlord" else "商品" if t!=null and t.kind=="merchant" else "协查" if t!=null and t.kind=="police" else "今日接待"
  ask.text=(Model.jnum(preview.listPrice)+" Cr" if float(preview.get("listPrice",0))>0 else "未定价") if preview!=null else Model.jnum(t.get("price",0))+" Cr" if ordinary else desk.scr.price.text
+ if not desk.patrol_status.is_empty():
+  selected.texture=A.icon("shield-halved")
+  item_name.text=desk.patrol_status
+  item_meta.text=desk.patrol_detail
+  item_meta.tooltip_text=desk.patrol_detail
+  ask_caption.text="协查"
+  ask.text=desk.patrol_status
+  money.text=Model.jnum(desk.cash_tray.cash)+" Cr"
  var ask_width=R.latin().get_string_size(ask.text,HORIZONTAL_ALIGNMENT_LEFT,-1,32).x
  ask.add_theme_font_size_override("font_size",mini(32,maxi(17,int(32*132/maxf(132,ask_width)))))
  var cash_width=R.font(true).get_string_size(money.text,HORIZONTAL_ALIGNMENT_LEFT,-1,25).x
@@ -629,7 +642,8 @@ func _refresh(force := false) -> void:
  secondary.get_node("SecondarySkin").texture=R.region("secondary",Rect2i(1248,610,368,57)) if same_secondary else R.secondary_blank()
  secondary.visible=t!=null and CounterDialogue.active(s)
  secondary.disabled=desk.dialogue_put_aside.disabled
- order_count.text="%d 待办"%s.orders.filter(func(o):return o.status=="active").size()
+ order_count.text=desk.orders_readout.text.get_slice("\n",1)
+ order_count.get_parent().accessibility_name="委托订单 · "+order_count.text
  _sync_visitor(t)
  var speaking=t!=null and visitor_phase=="standing"
  name_key.visible=speaking;get_node("StrictNamePaper").visible=speaking
@@ -658,7 +672,7 @@ func _refresh(force := false) -> void:
    trade_buttons[i].get_node("ActionIcon").modulate=Color("fff1d6") if i==0 else INK
    var glyph={"交割":"handshake","出价":"gavel","接受":"handshake","鉴定":"magnifying-glass","抵押":"file-lines","送客":"right-from-bracket","取消":"arrow-rotate-left","选货":"box-archive","商品":"store","缴租":"coins","检查":"shield-halved","名单":"clipboard-list","接待":"bell","打烊":"sun"}
    trade_buttons[i].get_node("ActionIcon").texture=A.icon(glyph.get(caption,"file-lines"))
-  trade_buttons[i].modulate.a=1.0
+  trade_buttons[i].modulate.a=.58 if not desk.patrol_status.is_empty() else 1.0
  var inv_key=JSON.stringify([s.inventory,s.get("showroomLayout",{}),WantedCases.has_notice(s)])
  if inv_key!=stock_signature:
   stock_signature=inv_key;_inventory()
@@ -673,7 +687,8 @@ func _refresh(force := false) -> void:
  ticket_offer.position.x=193 if opening_inspection else 151
  ticket_offer.size.x=90 if opening_inspection else 132
  ticket_inspect.disabled=desk.busy or desk._scene_blocked()
- ticket_offer.disabled=ticket_inspect.disabled
+ ticket_offer.disabled=ticket_inspect.disabled or (list_active and bool(t.get("locked",false)))
+ ticket_offer.tooltip_text="请先取消这件的锁价，再议价" if list_active and t.locked else ""
  var backs=""
  for uid in desk.counter_table.sprites:backs+=str(desk.counter_table.sprites[uid].back)
  var table_key=str(CounterDialogue.table_items(s))+str(TradeSession.session(s).get("table_positions",{}))+str(desk.showroom.selected_uid)+str(desk.showroom.preview_back)+backs+parked_uid
@@ -684,7 +699,9 @@ func _inventory() -> void:
  for container in [stock,shelves]:
   for c in container.get_children():c.free()
  var goods: Array=Game.state.inventory
- stock_count.text="本店库存 %d" % goods.size()
+ stock_count.text=UIKit.stock_counts(goods)
+ stock_entry.accessibility_name="整理库存 · "+stock_count.text
+ get_node("StrictNav_box-archive").accessibility_name="仓储隔离 · "+stock_count.text
  wanted_paper.refresh()
  var layout=preload("res://scripts/model/showroom_layout.gd")
  layout.ensure(Game.state)
@@ -750,6 +767,11 @@ func _stock_button(it,display: bool,extent: Vector2) -> Button:
   if texture.has_meta("approved_art"):picture_rect=Rect2(Vector2(14+maxf(0,(70-texture.get_width())*.5),5),texture.get_size())
  _image(b,texture,picture_rect)
  b.tooltip_text=GameData.def(it.defId).name+" · "+UIKit.pct(it.condition)
+ if it.owner!="shop":
+  var custody=_label(b,"托",Rect2(3,3,23,24),17,PAPER,true)
+  custody.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+  custody.add_theme_stylebox_override("normal",UIKit.box(Color("744927"),Color.TRANSPARENT,0,3,1,0))
+  b.tooltip_text+=" · "+("抵押保管" if it.owner=="pawn" else "顾客委修")
  if display:
   var price=_label(b,Model.jnum(it.get("listPrice",0))+" Cr",Rect2(3,90,84,39),20,INK,true)
   price.clip_text=true
@@ -970,6 +992,11 @@ func _drop_data(at_position: Vector2,data) -> void:
 const DialogueLayout = preload("res://scripts/ui/counter_dialogue_layout.gd")
 
 func _configure_dialogue_actors() -> void:
+ for index in 2:
+  var portrait=_image(self,null,Rect2())
+  portrait.hide()
+  move_child(portrait,face.get_index()+index+1)
+  patrol_faces.append(portrait)
  var bubble=get_node("StrictSpeechBubble")
  if bubble.get_node_or_null("BubbleSkin")==null:
   # Preserve the original tail and rounded ink edges while extending the
@@ -982,6 +1009,26 @@ func _configure_dialogue_actors() -> void:
  speech.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
  speech.fit_content=false;speech.scroll_following=false
  _layout_dialogue_actors()
+
+func _update_patrol_actors() -> void:
+ if desk.patrol_visitor.is_empty():
+  for portrait in patrol_faces: portrait.hide()
+  return
+ var stage:=_actor_stage()
+ var actors:Array=[desk.customer,desk.resident_window.get_node_or_null("counter_patrol")]
+ var ids:Array=[desk.patrol_visitor,WantedCases.OFFICER_ID]
+ for i in patrol_faces.size():
+  var portrait:=patrol_faces[i]
+  var actor=actors[i]
+  portrait.visible=is_instance_valid(actor) and not actor.is_queued_for_deletion()
+  if not portrait.visible: continue
+  portrait.texture=DialogueLayout.portrait(ids[i])
+  var slot:=Rect2(stage.position+Vector2(stage.size.x*(-.18+.78*i),0),Vector2(stage.size.x*.78,stage.size.y))
+  var rect:=DialogueLayout.actor_rect(portrait.texture,slot)
+  var offset:float=actor.position.x-float(actor.get_meta("patrol_stand_x",actor.position.x))
+  portrait.position=rect.position+Vector2(offset*.65,0)
+  portrait.size=rect.size
+  portrait.modulate.a=actor.modulate.a
 
 func _sync_speech(text: String) -> void:
  if speech.text!=text:
@@ -1030,9 +1077,21 @@ func _update_visitor_pose() -> void:
  if not is_instance_valid(face) or face.texture==null:return
  var rect=DialogueLayout.actor_rect(face.texture,_actor_stage())
  face.size=rect.size
- # The old Customer rig still owns its gestures. A flat painted cutout
- # stands on one baseline; only its horizontal arrival/departure offset moves.
+ # Head gestures stay inside the cutout. Its baseline only moves when walking.
  face.position=rect.position+Vector2(face_offset.x,0)
+
+func acknowledge() -> void:
+ var painted: TextureRect=face if face.is_visible_in_tree() else departing_face
+ if not is_instance_valid(painted) or painted.texture==null:return
+ var material:=painted.material as ShaderMaterial
+ if material==null:
+  material=ShaderMaterial.new();material.shader=preload("res://shaders/counter_nod.gdshader")
+  if painted.texture is AtlasTexture:
+   var bounds: Rect2=painted.texture.region
+   var atlas_size: Vector2=painted.texture.atlas.get_size()
+   material.set_shader_parameter("region",Vector4(bounds.position.x/atlas_size.x,bounds.position.y/atlas_size.y,bounds.size.x/atlas_size.x,bounds.size.y/atlas_size.y))
+  painted.material=material
+ confirmation_tween=Customer.play_confirmation(self,confirmation_tween,func(amount: float):material.set_shader_parameter("nod",amount))
 
 func _sync_visitor(trade) -> void:
  face.visible=trade!=null
@@ -1043,6 +1102,8 @@ func _sync_visitor(trade) -> void:
   return
  last_visit=visit;last_npc=str(trade.npcId)
  if is_instance_valid(visitor_tween):visitor_tween.kill()
+ if is_instance_valid(confirmation_tween):confirmation_tween.kill()
+ face.material=null
  _clear_departure()
  face.texture=DialogueLayout.portrait(last_npc);face.modulate.a=1.0;face_offset=Vector2.ZERO
  _update_visitor_pose()
@@ -1067,6 +1128,7 @@ func _start_visible_departure() -> void:
  if face.texture==null:return
  departing_face=_image(self,face.texture,Rect2(face.position,face.size))
  departing_face.name="DepartingVisitor";departing_face.stretch_mode=face.stretch_mode
+ departing_face.material=face.material
  departing_face.modulate.a=face.modulate.a
  # This painted copy cannot retain the departed visit's click handlers.
  move_child(departing_face,face.get_index())
@@ -1206,7 +1268,7 @@ func _model_changed(previous: Dictionary,next: Dictionary,action: Dictionary) ->
  dirty=true
  if not visible:return
  var verb=str(action.get("type",""))
- if previous.get("trade")!=null and next.get("trade")==null:_start_visible_departure()
+ if previous.get("trade")!=null and next.get("trade")==null and verb!="REPORT_VISITOR":_start_visible_departure()
  if verb=="COUNTER_PREVIEW":
   var before=str(previous.get("counterPreviewUid",""));var after=str(next.get("counterPreviewUid",""))
   if before!=after:

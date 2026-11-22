@@ -583,6 +583,19 @@ static func clear(n: Node) -> void:
 static func money(n) -> String:
 	return "%s Cr" % Model.jnum(n)
 
+static func order_counts(state: Dictionary) -> String:
+	var available := Model.available_orders(state).size() if state.phase == "open" else 0
+	var active := 0
+	for order in state.orders:
+		if order.status == "active": active += 1
+	return "可接 %d · 进行中 %d" % [available, active]
+
+static func stock_counts(items: Array) -> String:
+	var owned := 0
+	for item in items:
+		if item.owner == "shop": owned += 1
+	return "自有 %d · 受托 %d" % [owned, items.size() - owned]
+
 static func batch_payment_caption(totals: Dictionary) -> String:
 	var count: int = totals.buy_count + totals.sell_count
 	if count == 0: return "统一结算"

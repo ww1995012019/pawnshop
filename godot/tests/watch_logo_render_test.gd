@@ -1,6 +1,6 @@
 extends SceneTree
 ## Run with a real renderer (e.g. DISPLAY=:91 godot --path godot --script ...).
-## Identical mosaics must conceal both mark variants; lens clipping must not leak.
+## Unobserved dials conceal both marks. The loupe and manual expose the actual ink.
 var failures := 0
 func _initialize() -> void: call_deferred("run")
 func check(ok: bool, label: String) -> void:
@@ -24,6 +24,7 @@ func run() -> void:
 	game.prefs.reduced_motion = false
 	var viewport := SubViewport.new()
 	viewport.size = Vector2i(512, 256)
+	viewport.transparent_bg = true
 	viewport.world_2d = World2D.new()
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	root.add_child(viewport)
@@ -52,24 +53,29 @@ func run() -> void:
 			for x in range(105, 152):
 				if not same(masked.get_pixel(x,y), masked.get_pixel(x+256,y)):
 					indistinguishable = false
-		check(indistinguishable, model + " mosaic conceals authentic versus altered mark shape")
-		for sprite in sprites:
-			sprite.mat.set_shader_parameter("lens_pos", sprite.logo_world_position())
-			sprite.mat.set_shader_parameter("lens_r", 12.0)
+		check(indistinguishable, model + " unobserved dial conceals authentic versus altered mark shape")
+		var probes: Array[Vector2] = []
+		for variant in 2:
+			# Hollow marks can have an empty centre. Place each probe on real ink.
+			var point: Array = WatchLogo.pixels(model,variant)[0]
+			var probe := Vector2(105+2*point[0],89+2*point[1])
+			probes.append(probe)
+			sprites[variant].mat.set_shader_parameter("lens_pos",probe+Vector2(256*variant,0))
+			sprites[variant].mat.set_shader_parameter("lens_r",12.0)
 		var lens := await capture(viewport)
 		var outside_unchanged := true
-		var revealed_pixels := 0
+		var revealed_pixels := [0,0]
 		for y in range(89, 120):
 			for x in range(105, 152):
-				var distance := Vector2(x+.5,y+.5).distance_to(Vector2(128,104))
 				for variant in 2:
+					var distance := Vector2(x+.5,y+.5).distance_to(probes[variant])
 					var changed := not same(lens.get_pixel(x+256*variant,y), masked.get_pixel(x+256*variant,y))
 					if distance > 13 and changed: outside_unchanged = false
-					if distance < 9 and changed: revealed_pixels += 1
-		check(outside_unchanged and revealed_pixels > 20, model + " lens reveals mark only inside its circle")
+					if distance < 9 and changed: revealed_pixels[variant] += 1
+		check(outside_unchanged and revealed_pixels[0]>0 and revealed_pixels[1]>0, model + " lens reveals both ink variants only inside its circle")
 		for sprite in sprites: sprite.mat.set_shader_parameter("lens_r", 0.0)
 		var removed := await capture(viewport)
-		check(removed.get_data() == masked.get_data(), model + " removing lens restores complete mosaic")
+		check(removed.get_data() == masked.get_data(), model + " removing lens restores the complete dial")
 		for uid in uids:
 			game.state = Model.reduce(game.state, {"type":"CHECK", "uid":uid, "tool":"TOL-001"})
 		for sprite in sprites: sprite._process(0.0)
@@ -79,20 +85,23 @@ func run() -> void:
 			for x in range(105, 152):
 				if not same(observed.get_pixel(x,y),observed.get_pixel(x+256,y)): distinct += 1
 		check(distinct > 0, model + " completed observation exposes distinct actual marks")
-		# Render the catalogue icon at exactly the same placement/crop as the
-		# authentic body. Its clear source remains unchanged by physical masking.
+		# The manual shows the original stamp separately from the painted watch.
+		# Render that actual reference control and compare its silhouette to the
+		# ink exposed by the completed physical observation, including empty pixels.
 		for sprite in sprites: sprite.visible = false
-		var reference := Sprite2D.new()
-		reference.texture = kit.item_icon(model)
-		reference.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		reference.position = Vector2(128,128)
+		var reference := WatchLogo.new()
+		reference.setup(model,0)
+		reference.custom_minimum_size = Vector2(48,32)
+		reference.size = reference.custom_minimum_size
+		reference.position = Vector2(104,88)
 		viewport.add_child(reference)
 		var catalogue := await capture(viewport)
 		var clear_matches := true
-		for y in range(89, 120):
-			for x in range(105, 152):
-				if not same(catalogue.get_pixel(x,y),observed.get_pixel(x,y)): clear_matches = false
-		check(clear_matches, model + " catalogue mark stays clear and matches observed original")
+		for y in range(88, 120):
+			for x in range(104, 152):
+				var physical_ink := not same(masked.get_pixel(x,y),observed.get_pixel(x,y))
+				if (catalogue.get_pixel(x,y).a > .5) != physical_ink: clear_matches = false
+		check(clear_matches, model + " manual mark matches the observed original ink")
 		reference.free()
 		for sprite in sprites: sprite.free()
 	viewport.queue_free()

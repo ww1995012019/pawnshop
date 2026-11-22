@@ -268,7 +268,6 @@ func _layout() -> void:
 	desk.bell.scale = desk.bell.resting_scale
 	_place(desk.cash_tray,Rect2(tx+74,top+12,right-88,44))
 	desk.cash_tray.show()
-	desk.mobile_cash = desk.cash_tray.note_center()
 	desk.mobile_goods = inset+Vector2(18+left*.5,bottom+22)
 	goods.visible = screen.y >= 320
 	var action_top := bottom-122 if goods.visible else bottom-84
@@ -406,12 +405,25 @@ func _process(_delta: float) -> void:
 		more.position.x += half_width + 4.0
 		more.size.x = half_width
 	more.disabled = desk.busy
-	more.text = "更多" if opening_inspection else "顾客操作" if trade != null else "柜台操作"
 	goods.disabled = desk.busy
-	goods.text = "货物 · %d 件" % shown.size() if dialogue else "选择货物"
+	var merchant: bool = trade != null and trade.kind == "merchant"
+	var patrol: bool = not desk.patrol_status.is_empty()
+	more.visible = not patrol
+	more.text = "更多" if opening_inspection else "商人操作" if merchant else "顾客操作" if trade != null else "柜台操作"
+	goods.visible = last_size.y >= 320 and not patrol
+	goods.text = "货物 · %d 件" % shown.size() if dialogue else "本店库存" if merchant else "选择货物"
+	flip.visible = not patrol and not merchant
 	flip.disabled = desk.busy or not is_instance_valid(desk.mat_item)
-	for key in tool_keys: key.disabled = flip.disabled
+	for key in tool_keys:
+		key.visible = flip.visible
+		key.disabled = flip.disabled
 	for key in dock_keys: key.disabled = desk.busy
-	var police: bool = desk.resident_window.has_node("counter_patrol")
-	if police: visitor_name.text = "巡警 · 现场核对"
-	hint.text = "巡警正在核对 · 请等候" if police else "正在交割 · 请等待钱货落稳" if desk.busy else "栗叔带来的停表" if opening_inspection else "选中手表后可用工具鉴定" if not is_instance_valid(desk.mat_item) else ""
+	hint.text = "正在交割 · 请等待钱货落稳" if desk.busy else adapter.item_hint.text if merchant else "栗叔带来的停表" if opening_inspection else "选中手表后可用工具鉴定" if not is_instance_valid(desk.mat_item) else ""
+	if patrol:
+		visitor_name.text = "巡警 · " + desk.patrol_status
+		speech_copy.text = desk.patrol_detail
+		item_name.text = desk.patrol_status
+		hint.text = desk.patrol_detail
+		price.text = "现场协查"
+		primary.text = desk.patrol_status
+		primary.disabled = true

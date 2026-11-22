@@ -16,6 +16,8 @@ var talking := 0.0
 var look := 0.0
 var walking := false
 var gesture := {"nod": 0.0, "turn": 0.0, "tilt": 0.0, "lean": 0.0, "shrug": 0.0, "flash": 0.0}
+var confirmation_nod := 0.0
+var confirmation_tween: Tween
 var mood := "neutral"
 static var _mesh_cache := {}
 
@@ -98,7 +100,7 @@ func _process(delta: float) -> void:
 	var breath := 0.0 if still else sin(t * (2.2 if talking > 0.0 else 1.55))
 	var talk_nod := 0.0 if still else sin(t * 11.0) * 1.6 * minf(1.0, talking * 3.0)
 	mat.set_shader_parameter("breath", breath)
-	mat.set_shader_parameter("head_nod", gesture.nod + talk_nod + (0.0 if still else sin(t * 0.8) * 0.8))
+	mat.set_shader_parameter("head_nod", confirmation_nod * 11.0 + gesture.nod + talk_nod + (0.0 if still else sin(t * 0.8) * 0.8))
 	mat.set_shader_parameter("head_turn", gesture.turn + look * 3.0)
 	mat.set_shader_parameter("head_tilt", gesture.tilt + (0.0 if still else sin(t * 0.63) * 0.018) + look * 0.03)
 	mat.set_shader_parameter("lean", gesture.lean + (0.0 if still else sin(t * 0.47) * 3.5))
@@ -107,6 +109,24 @@ func _process(delta: float) -> void:
 
 func say(seconds: float) -> void:
 	talking = seconds
+
+func acknowledge() -> void:
+	confirmation_tween = play_confirmation(self,confirmation_tween,func(amount: float): confirmation_nod = amount)
+
+## The desktop cutout and mobile mesh share one gesture for acknowledging a trade.
+static func play_confirmation(actor: Node, previous: Tween, pose: Callable) -> Tween:
+	if is_instance_valid(previous): previous.kill()
+	var tween := actor.create_tween()
+	if Game.prefs.reduced_motion:
+		pose.call(.8)
+		tween.tween_interval(.85)
+		tween.tween_callback(pose.bind(0.0))
+	else:
+		pose.call(0.0)
+		tween.tween_method(pose,0.0,1.0,.16).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tween.tween_interval(.1)
+		tween.tween_method(pose,1.0,0.0,.26).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	return tween
 
 func nod() -> void:
 	if Game.prefs.reduced_motion: return

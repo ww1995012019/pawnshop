@@ -31,14 +31,22 @@ def run(url='http://127.0.0.1:4174/'):
                 page.wait_for_function('window.__orbitalLocated !== null')
                 result=page.evaluate('window.__orbitalLocated');assert result['found'],text
                 return result
+            def paper():
+                close = locate('@document_close')
+                # The accessible close target stays at least 44 CSS pixels while the page scales.
+                reference = locate('浏览全部手表图鉴')
+                close['scale'] = reference['height'] / 48
+                close['content_width'] = reference['width']
+                return close
+            def top_right(close, outside=0):
+                inset = 16 * close['scale'] + outside
+                return close['x'] + close['width']/2 + inset, close['y'] - close['height']/2 - inset
             def cursor_style():
                 page.wait_for_timeout(200)
                 return page.evaluate('getComputedStyle(document.getElementById("canvas")).cursor')
             def assert_diagonal_cursors(close):
-                unit=close['width']/44
-                right=close['x']+close['width']/2+16*unit
-                top=close['y']-close['height']/2-16*unit
-                bottom=top+740*unit
+                right, top = top_right(close)
+                bottom = top + 740 * close['scale']
                 styles=[]
                 for name,x,y in [('tr',right+8,top-8),('br',right+8,bottom+8)]:
                     viewport=page.viewport_size
@@ -56,55 +64,54 @@ def run(url='http://127.0.0.1:4174/'):
             command({'type':'start'});page.wait_for_function('!OrbitalTouch.state.title && !OrbitalTouch.state.busy',timeout=15000)
             page.evaluate('window.__beforePaperListeners=new Set(__resizeListeners)')
             command({'type':'manual'});page.wait_for_timeout(600)
-            original=locate('X');assert not page.evaluate('OrbitalTouch.state.blocked')
+            original=paper();assert not page.evaluate('OrbitalTouch.state.blocked')
             assert page.evaluate('window.__paperListeners=[...__resizeListeners].filter(cb=>!__beforePaperListeners.has(cb));__paperListeners.length')==1,'paper owns exactly one resize listener'
             assert_diagonal_cursors(original)
             # Top-right corner: shrink diagonally toward its opposite anchor.
-            x=original['x']+original['width']/2+20;y=original['y']-original['height']/2-20
+            x, y = top_right(original, 8)
             page.mouse.move(x,y);page.mouse.down();page.mouse.move(x-65,y+70,steps=12);page.mouse.up()
-            small=locate('X');assert small['width']<original['width']-2,'top-right corner shrinks paper'
+            small=paper();assert small['content_width']<original['content_width']-2,'top-right corner shrinks paper'
             # Reverse the gesture to enlarge again, then shrink for drag/pinch checks.
-            x=small['x']+small['width']/2+20;y=small['y']-small['height']/2-20
+            x, y = top_right(small, 8)
             page.mouse.move(x,y);page.mouse.down();page.mouse.move(x+30,y-30,steps=8);page.mouse.up()
-            larger=locate('X');assert larger['width']>small['width']+1,'top-right corner enlarges paper'
+            larger=paper();assert larger['content_width']>small['content_width']+1,'top-right corner enlarges paper'
             small=larger
             # Drag using an empty piece of the header to the left of its action buttons.
             start=(small['x']-small['width']*4,small['y'])
             page.mouse.move(*start);page.mouse.down();page.mouse.move(start[0]-80,start[1]+35,steps=8);page.mouse.up()
-            moved=locate('X');assert moved['x']<small['x']-30,'header drags floating paper'
+            moved=paper();assert moved['x']<small['x']-30,'header drags floating paper'
             page.screenshot(path=str(output/'guide-desktop.png'))
-            tap('X');command({'type':'manual'});page.wait_for_timeout(400)
-            restored=locate('X');assert abs(restored['width']-moved['width'])<2,'reopen preserves zoom'
+            tap('@document_close');command({'type':'manual'});page.wait_for_timeout(400)
+            restored=paper();assert abs(restored['content_width']-moved['content_width'])<2,'reopen preserves zoom'
             # Real two-finger gesture on reference content. Both contacts stay off buttons.
             cdp=context.new_cdp_session(page)
-            tx=restored['x']+restored['width']/2+20;ty=restored['y']-restored['height']/2-20
+            tx, ty = top_right(restored, 8)
             cdp.send('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[{'x':tx,'y':ty,'id':0}]})
             for step in range(1,7):
                 cdp.send('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':[{'x':tx-step*4,'y':ty+step*4,'id':0}]});page.wait_for_timeout(30)
             cdp.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]});page.wait_for_timeout(300)
-            touched=locate('X');assert touched['width']<restored['width']-1,'one finger drags the paper corner'
+            touched=paper();assert touched['content_width']<restored['content_width']-1,'one finger drags the paper corner'
             restored=touched
             cx=restored['x']-restored['width']*5; cy=restored['y']+restored['height']*3
-            before=restored['width']
+            before=restored['content_width']
             for kind,gap in [('touchStart',25),('touchMove',38),('touchMove',50)]:
                 cdp.send('Input.dispatchTouchEvent',{'type':kind,'touchPoints':[{'x':cx-gap,'y':cy,'id':0},{'x':cx+gap,'y':cy,'id':1}]});page.wait_for_timeout(100)
             cdp.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]});page.wait_for_timeout(300)
-            assert locate('X')['width']>before+3,'two-finger pinch scales paper'
+            assert paper()['content_width']>before+3,'two-finger pinch scales paper'
             # A new viewport transform must refresh the cached CSS-sized
             # corner targets, including their portion outside the paper.
             page.set_viewport_size({'width':1100,'height':700})
             page.wait_for_timeout(600)
-            dpi=locate('X')
+            dpi=paper()
             page.mouse.move(dpi['x']-dpi['width']*4,dpi['y'])
             for _ in range(8):page.mouse.wheel(0,100);page.wait_for_timeout(50)
-            dpi=locate('X')
+            dpi=paper()
             hx=dpi['x']-dpi['width']*4
             page.mouse.move(hx,dpi['y']);page.mouse.down();page.mouse.move(hx-100,dpi['y']+20,steps=8);page.mouse.up()
-            dpi=locate('X');unit=dpi['height']/48
-            tx=dpi['x']+dpi['width']/2+16*unit+21
-            ty=dpi['y']-dpi['height']/2-16*unit-21
+            dpi=paper()
+            tx, ty = top_right(dpi, 21)
             page.mouse.move(tx,ty);page.mouse.down();page.mouse.move(tx-35,ty+35,steps=10);page.mouse.up()
-            assert locate('X')['width']<dpi['width']-1,'outside corner remains draggable after viewport change'
+            assert paper()['content_width']<dpi['content_width']-1,'outside corner remains draggable after viewport change'
             page.screenshot(path=str(output/'guide-dpr1-resized.png'))
             # No backing-pixel change is necessary for a CSS/DPR resize event
             # to invalidate the paper once. Hidden/reopened paper stays single.
@@ -112,19 +119,19 @@ def run(url='http://127.0.0.1:4174/'):
             def resize_reads():
                 page.evaluate('__dpiReads=0;dispatchEvent(new Event("resize"))');page.wait_for_timeout(1000)
                 return page.evaluate('__dpiReads')
-            tap('X');hidden_reads=resize_reads()
+            tap('@document_close');hidden_reads=resize_reads()
             command({'type':'manual'});page.wait_for_timeout(600)
             visible_reads=resize_reads()
             assert visible_reads>hidden_reads,('visible paper refreshes CSS scale on resize with unchanged backing pixels',hidden_reads,visible_reads)
             assert page.evaluate('__paperListeners.every(cb=>__resizeListeners.has(cb)) && [...__resizeListeners].filter(cb=>!__beforePaperListeners.has(cb)).length===1'),'reopening does not duplicate listener'
-            tap('X')
+            tap('@document_close')
             command({'type':'page','page':'inspect'});page.wait_for_function("OrbitalTouch.state.workspace==='inspect'")
             command({'type':'manual'});page.wait_for_timeout(400)
-            assert_diagonal_cursors(locate('X'))
+            assert_diagonal_cursors(paper())
             page.screenshot(path=str(output/'guide-above-workbench.png'))
-            tap('X');command({'type':'close'});page.wait_for_timeout(250)
+            tap('@document_close');command({'type':'close'});page.wait_for_timeout(250)
             command({'type':'settings'});page.wait_for_function('OrbitalTouch.state.blocked')
-            tap('全图鉴 · 全部手表');page.screenshot(path=str(output/'catalogue-grid.png'))
+            tap('@all_watch_catalogue');page.screenshot(path=str(output/'catalogue-grid.png'))
             tap('北辰 N01');page.screenshot(path=str(output/'catalogue-detail.png'))
             tap('返回全部手表');assert locate('北辰 N01')['found']
             command({'type':'close'});assert not errors,errors
@@ -147,16 +154,15 @@ def run(url='http://127.0.0.1:4174/'):
             command({'type':'manual'});page.wait_for_timeout(600)
             assert page.evaluate('window.__paperListeners=[...__resizeListeners].filter(cb=>!__beforePaperListeners.has(cb));__paperListeners.length')==1
             page.set_viewport_size({'width':1100,'height':700});page.wait_for_timeout(600)
-            dpi=locate('X');hx=dpi['x']-dpi['width']*4
+            dpi=paper();hx=dpi['x']-dpi['width']*4
             page.mouse.move(hx,dpi['y']);page.mouse.down();page.mouse.move(hx-100,dpi['y']+40,steps=8);page.mouse.up()
-            dpi=locate('X');unit=dpi['height']/48
-            tx=dpi['x']+dpi['width']/2+16*unit+21
-            ty=dpi['y']-dpi['height']/2-16*unit-21
+            dpi=paper()
+            tx, ty = top_right(dpi, 21)
             assert 0<tx<1100 and 0<ty<700,('outside-corner point must be on canvas',tx,ty)
             page.mouse.move(tx,ty);page.mouse.down();page.mouse.move(tx-35,ty+35,steps=10);page.mouse.up()
-            assert locate('X')['width']<dpi['width']-1,'fresh DPR2 outside-corner target stays finger-sized after ordinary resize'
+            assert paper()['content_width']<dpi['content_width']-1,'fresh DPR2 outside-corner target stays finger-sized after ordinary resize'
             page.screenshot(path=str(output/'guide-fresh-dpr2-resized.png'))
-            tap('X');command({'type':'manual'});page.wait_for_timeout(400)
+            tap('@document_close');command({'type':'manual'});page.wait_for_timeout(400)
             assert page.evaluate('[...__resizeListeners].filter(cb=>!__beforePaperListeners.has(cb)).length===1'),'DPR2 reopen owns one callback'
             assert not errors,errors
             page.evaluate('engine.requestQuit()');page.wait_for_function('window.orbitalTouchSend===null',timeout=15000)

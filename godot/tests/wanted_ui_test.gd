@@ -140,7 +140,8 @@ func run() -> void:
 	check(game.state.cash>cash and game.state.police.caught.has(target),"physical reporting triggers the real bounty")
 	check(not paper.visible and not game.state.police.issued and game.state.police.wanted.is_empty(),"successful arrest withdraws the entire visible paper")
 	check(game.state.documents.is_empty(),"successful arrest removes the paper from inventory")
-	await create_timer(.2).timeout
+	var patrol_timeout := create_timer(2.0)
+	while shell.page.busy and patrol_timeout.time_left > 0.0: await process_frame
 	check(not shell.page.busy,"reduced-motion police response finishes without trapping the counter")
 	shell.go("warehouse")
 	await frames()

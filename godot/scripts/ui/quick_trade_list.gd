@@ -142,12 +142,17 @@ func refresh(s: Dictionary) -> void:
   row.state.text = "已锁价 · 待结算" if selected else "物证 %d · 已商谈 %d 次" % [Model.evidence_count(it),int(line.get("context",{}).get("rounds",0))]
   row.state.tooltip_text = line.get("reason","")
   row.choose.text = "取消锁价" if selected else "按此价锁定"
+  for action in [row.inspect,row.offer,row.choose,row.more]:
+   action.accessibility_name = "%s · %s" % [action.text,row.title.text]
+  row.choose.accessibility_name += " · " + UIKit.money(info.price)
   row.choose.tooltip_text = "取消这件的锁价" if selected else "加入待结算，此时不扣款、不消耗 AP"
   row.choose.disabled = blocked or not selected and line.get("status","") in ["blocked","rejected"]
   if row.choose.disabled and not blocked: row.choose.tooltip_text = line.get("reason","")
   row.focus.disabled = blocked
-  for button in [row.inspect,row.offer,row.more]:
-   button.disabled = blocked
+  row.inspect.disabled = blocked
+  row.more.disabled = blocked
+  row.offer.disabled = blocked or selected
+  row.offer.tooltip_text = "请先取消这件的锁价，再议价" if selected else ""
   if row.get("focused") != focused:
    row.focused = focused
    row.panel.custom_minimum_size.y = ACTIVE_HEIGHT if focused else ROW_HEIGHT
@@ -194,20 +199,25 @@ func show_popup() -> void:
 
 func offer_popup(context: Dictionary) -> void:
  var it=TradeSession.item(Game.state,context.uid)
- if it==null:return
+ if it==null or TradeSession.row(Game.state,context.uid).get("selected",false):return
  var box=make_popup();var header=HBoxContainer.new();box.add_child(header)
+ popup.accessibility_name="议价"
  var title=view._label(header,GameData.def(WatchForgery.appearance_id(it)).name,Rect2(0,0,340,34),23,INK,true);title.size_flags_horizontal=Control.SIZE_EXPAND_FILL
- key(header,"",Rect2(0,0,36,36),close_popup,"xmark").custom_minimum_size=Vector2(36,36)
+ var close_button=key(header,"",Rect2(0,0,36,36),close_popup,"xmark")
+ close_button.custom_minimum_size=Vector2(36,36)
+ close_button.accessibility_name="关闭议价"
  var estimate=Model.estimate(it)
  box.add_child(UIKit.label("当前价 %s Cr · 估价 %s–%s"%[Model.jnum(context.price),Model.jnum(estimate.low),Model.jnum(estimate.high)],17,INK))
  var line=HBoxContainer.new();line.add_theme_constant_override("separation",6);box.add_child(line)
  var edit=LineEdit.new();edit.name="QuickOfferValue";edit.custom_minimum_size=Vector2(140,49)
+ edit.accessibility_name="我的报价（Cr）"
+ edit.virtual_keyboard_type=LineEdit.KEYBOARD_TYPE_NUMBER
  edit.add_theme_font_override("font",R.latin(true));edit.add_theme_font_size_override("font_size",28)
  for color in ["font_color","font_uneditable_color","caret_color"]:edit.add_theme_color_override(color,INK)
  edit.add_theme_color_override("font_selected_color",PAPER);edit.add_theme_color_override("selection_color",Color("243a30"))
  var style=view._source_style(R.quote_skin(),8);style.set_content_margin_all(10)
  for state in ["normal","focus","read_only"]:edit.add_theme_stylebox_override(state,style)
- edit.text=str(int(view.desk.dial.value));edit.editable=not CounterDialogue.current(Game.state).get("selected",false)
+ edit.text=str(int(view.desk.dial.value))
  for amount in [-10,-1]:
   var step:int=amount
   key(line,str(step),Rect2(0,0,42,43),func():
@@ -223,15 +233,13 @@ func offer_popup(context: Dictionary) -> void:
  reading.custom_minimum_size.x=390
  reading.size.x=390
  box.add_child(reading)
- for source in view.desk.chips.get_children():
-  if not source is Button:continue
-  var origin:Button=source
-  var chip=key(evidence,str(source.get_meta("evidence_caption",source.text)),Rect2(0,0,120,34),func():
-   if view._quick_valid(context.uid,context.trade_id,context.version,context.price) and is_instance_valid(origin) and not origin.disabled:
-    origin.pressed.emit()
-    sync_evidence(evidence,reading,it))
+ for tool_id in it.evidence:
+  var tool:=String(tool_id)
+  if not GameData.relevant_tool(it.defId,tool):continue
+  var chip=key(evidence,GameData.evidence_short(it.defId,tool),Rect2(0,0,120,34),func():
+   if view._quick_valid(context.uid,context.trade_id,context.version,context.price) and view.desk.toggle_quote_evidence(context.uid,tool):
+    sync_evidence(evidence,reading,TradeSession.item(Game.state,context.uid)))
   chip.custom_minimum_size=Vector2(120,34);chip.add_theme_font_size_override("font_size",16)
-  var tool:String=source.get_meta("evidence_tool","")
   chip.name="QuickEvidence_"+tool
   chip.set_meta("evidence_tool",tool)
   if view.desk.is_latest_inspection(it,tool):
@@ -260,7 +268,13 @@ func sync_evidence(box: Control,reading: Label,it: Dictionary) -> void:
    reading.text=Model.displayed_clue(it,tool)
 
 func more_popup(context: Dictionary) -> void:
- var box=make_popup();box.add_child(UIKit.label("这件物品 · 更多操作",23,INK))
+ var box=make_popup()
+ popup.accessibility_name="更多操作"
+ var header=HBoxContainer.new();box.add_child(header)
+ var title=UIKit.label("这件物品 · 更多操作",23,INK);title.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+ header.add_child(title)
+ var close=UIKit.close_button(Vector2(40,40));close.accessibility_name="关闭更多操作"
+ close.pressed.connect(close_popup);header.add_child(close)
  var count=0
  for source in view.desk.actions.get_children()+[view.desk.dialogue_put_aside]:
   var caption:String=source.text

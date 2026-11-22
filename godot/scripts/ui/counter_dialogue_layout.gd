@@ -5,6 +5,12 @@ const SPEECH_PADDING := Vector4(47,9,18,13)
 const SPEECH_MINIMUM := Vector2(285,101)
 static var portraits := {}
 
+## The resident illustrations rest their joined hands at the lower edge.
+## The full atlas cells include padding; the desktop cutouts are tightly cropped.
+static func hand_uv(id: String, padded: bool) -> Vector2:
+ if id=="CHR-034":return Vector2(.72,.77)
+ return Vector2(.54,.91 if padded else .94)
+
 static func portrait(id: String) -> Texture2D:
  if portraits.has(id):return portraits[id]
  var base=A.counter_portrait(id)

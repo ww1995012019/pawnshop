@@ -86,7 +86,10 @@ def main():
             capture('05-paid-original-retained')
             click('@QuickSendOff');wait('!s.trade&&!s.busy')
             command({'type':'page','page':'report'});wait("s.workspace==='report'")
-            click('打烊结算');wait("s.notice.startsWith('日结完成')")
+            click('打烊结算')
+            wait("s.blocked || s.notice.startsWith('日结完成')")
+            if state()['blocked']:click('确认提前打烊')
+            wait("s.notice.startsWith('日结完成')")
             closed=saved(lambda s:s['phase']=='report' and s['report']['day']==1)
             assert closed['cash']==paid['cash']-closed['report']['costs']['total']
             capture('06-day-one-report')
