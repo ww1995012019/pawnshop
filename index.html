@@ -53,11 +53,21 @@ html.turned .loading-title { top:14px; }
 @media (prefers-reduced-motion:reduce) { #loader, .fill, #loading-cast { transition:none; } #loading-portrait { animation:none; } }
 
 	</style>
-	<link rel="stylesheet" href="touch-bbbc9408e46b7b58.css">
+	<link rel="stylesheet" href="touch-c95eceaccecfac4f.css">
 	<link rel="icon" href="engine-309843874cfdebe8.icon.png"><link rel="apple-touch-icon" href="engine-309843874cfdebe8.apple-touch-icon.png">
 </head>
 <body>
-	<canvas id="canvas">你的浏览器不支持画布。</canvas>
+	<div id="reader-ui" hidden>
+		<button id="reader-entry" type="button" aria-controls="reader-panel">文字操作</button>
+		<section id="reader-panel" aria-labelledby="reader-heading">
+			<header><h2 id="reader-heading" tabindex="-1">轨道旧货局</h2><button id="reader-exit" type="button" tabindex="-1">返回游戏画面</button></header>
+			<p id="reader-balance" role="status" aria-live="polite" aria-atomic="true"></p>
+			<p id="reader-context"></p>
+			<div id="reader-actions"></div>
+			<div id="reader-copy"></div>
+		</section>
+	</div>
+	<canvas id="canvas" aria-label="轨道旧货局游戏画面">你的浏览器不支持画布。</canvas>
 	<noscript><div style="position:fixed;inset:0;display:grid;place-items:center;color:#ece7d9">需要开启 JavaScript 才能开门营业。</div></noscript>
 
 	<div id="loader" role="status" aria-live="polite">
@@ -75,10 +85,10 @@ html.turned .loading-title { top:14px; }
 	</div>
 
 	<script src="assets-533fed85b3ac376a.js"></script>
-	<script src="touch-91080e0134b03c38.js"></script>
+	<script src="touch-7fb2822e57e47acc.js"></script>
 	<script src="engine-309843874cfdebe8.js"></script>
 	<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":0,"executable":"engine-309843874cfdebe8","mainPack":"workbench-fa21ec2dbecf0491.pck","fileSizes":{"workbench-fa21ec2dbecf0491.pck":22698488,"engine-309843874cfdebe8.wasm":37700666},"focusCanvas":true,"experimentalVK":true,"gdextensionLibs":[],"ensureCrossOriginIsolationHeaders":false,"transport":{"workbench-fa21ec2dbecf0491.pck":{"sha256":"fa21ec2dbecf04912047f993dfca2d195acc361b8ca9f1b0feabec759d022858","bytes":22698488,"type":"application/octet-stream","gzip":"workbench-fa21ec2dbecf0491.pck.gz","gzipBytes":22082034},"engine-309843874cfdebe8.wasm":{"sha256":"26b61ce95247012ab3dca3ff51e96d1cdbff44ee91a8c20a83e150afca83f1b6","bytes":37700666,"type":"application/wasm","gzip":"engine-309843874cfdebe8.wasm.gz","gzipBytes":9382282},"music-8ad9f8f323428f98.ogg":{"sha256":"8ad9f8f323428f98804c867c2ca5c00c4e16885b804aa64650471b6b6d005b9c","bytes":846727,"type":"audio/ogg","gzip":null,"gzipBytes":846727},"music-73c915ee8894b734.ogg":{"sha256":"73c915ee8894b734dc255384aaf0c1ae2834b3d1fee00a62025bb5954849d7f3","bytes":654520,"type":"audio/ogg","gzip":null,"gzipBytes":654520},"music-f06ef4243f86b03f.ogg":{"sha256":"f06ef4243f86b03f6f7ed0719e450a193c826c1d94988d9eb357f73a6c296570","bytes":809644,"type":"audio/ogg","gzip":null,"gzipBytes":809644},"music-30ff78a0e0f53f91.ogg":{"sha256":"30ff78a0e0f53f91658c4ebd0a6c827c92dffdc59803f270ed0689288766778d","bytes":397829,"type":"audio/ogg","gzip":null,"gzipBytes":397829}},"music":{"shop":"music-8ad9f8f323428f98.ogg","workbench":"music-73c915ee8894b734.ogg","storeroom":"music-f06ef4243f86b03f.ogg","ledger":"music-30ff78a0e0f53f91.ogg"},"previousAssets":["workbench-85e3a31e82a9c28a.pck","engine-309843874cfdebe8.wasm","music-8ad9f8f323428f98.ogg","music-73c915ee8894b734.ogg","music-f06ef4243f86b03f.ogg","music-30ff78a0e0f53f91.ogg"]};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":0,"executable":"engine-309843874cfdebe8","mainPack":"workbench-e0f59131a963b758.pck","fileSizes":{"workbench-e0f59131a963b758.pck":22726604,"engine-309843874cfdebe8.wasm":37700666},"focusCanvas":true,"experimentalVK":true,"gdextensionLibs":[],"ensureCrossOriginIsolationHeaders":false,"transport":{"workbench-e0f59131a963b758.pck":{"sha256":"e0f59131a963b758f5041cfb5735563d350dbb38f6897064d93d32019b8322f6","bytes":22726604,"type":"application/octet-stream","gzip":"workbench-e0f59131a963b758.pck.gz","gzipBytes":22109670},"engine-309843874cfdebe8.wasm":{"sha256":"26b61ce95247012ab3dca3ff51e96d1cdbff44ee91a8c20a83e150afca83f1b6","bytes":37700666,"type":"application/wasm","gzip":"engine-309843874cfdebe8.wasm.gz","gzipBytes":9382282},"music-8ad9f8f323428f98.ogg":{"sha256":"8ad9f8f323428f98804c867c2ca5c00c4e16885b804aa64650471b6b6d005b9c","bytes":846727,"type":"audio/ogg","gzip":null,"gzipBytes":846727},"music-73c915ee8894b734.ogg":{"sha256":"73c915ee8894b734dc255384aaf0c1ae2834b3d1fee00a62025bb5954849d7f3","bytes":654520,"type":"audio/ogg","gzip":null,"gzipBytes":654520},"music-f06ef4243f86b03f.ogg":{"sha256":"f06ef4243f86b03f6f7ed0719e450a193c826c1d94988d9eb357f73a6c296570","bytes":809644,"type":"audio/ogg","gzip":null,"gzipBytes":809644},"music-30ff78a0e0f53f91.ogg":{"sha256":"30ff78a0e0f53f91658c4ebd0a6c827c92dffdc59803f270ed0689288766778d","bytes":397829,"type":"audio/ogg","gzip":null,"gzipBytes":397829}},"music":{"shop":"music-8ad9f8f323428f98.ogg","workbench":"music-73c915ee8894b734.ogg","storeroom":"music-f06ef4243f86b03f.ogg","ledger":"music-30ff78a0e0f53f91.ogg"},"previousAssets":["workbench-fa21ec2dbecf0491.pck","engine-309843874cfdebe8.wasm","music-8ad9f8f323428f98.ogg","music-73c915ee8894b734.ogg","music-f06ef4243f86b03f.ogg","music-30ff78a0e0f53f91.ogg"]};
 const GODOT_THREADS_ENABLED = false;
 window.OrbitalAssets.install(GODOT_CONFIG);
 const engine = new Engine(GODOT_CONFIG);
