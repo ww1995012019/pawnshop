@@ -14,6 +14,7 @@ uniform float rare_time = 0.0;
 // Physical instance marks stay unreadable until a current loupe observation.
 // Catalogue/reference art does not use this material or enable this mask.
 uniform float logo_hidden = 0.0;
+uniform bool workbench_face = false;
 uniform vec4 logo_rect = vec4(0.0);
 uniform float hover = 0.0;
 uniform float found_seam = 0.0;
@@ -129,12 +130,15 @@ void fragment() {
 		if (rare_effect == 5) { pulse = pow(max(0.0, cos(angle + rare_time * 0.3)), 16.0); tint = vec3(0.72, 0.77, 1.0); }
 		base.rgb += tint * pulse * mask * 0.10 * a * (1.0 - in_lens);
 	}
-	if (logo_hidden > 0.5 && back_face < 0.5 && all(greaterThanEqual(luv, logo_rect.xy)) && all(lessThan(luv, logo_rect.xy + logo_rect.zw))) {
+	// Linear-filtered close-ups include the half-texel fringe of each stroke.
+	vec2 guard = workbench_face ? TEXTURE_PIXEL_SIZE * 0.5 / region.zw : vec2(0.0);
+	if (logo_hidden > 0.5 && back_face < 0.5 && all(greaterThanEqual(luv, logo_rect.xy - guard)) && all(lessThan(luv, logo_rect.xy + logo_rect.zw + guard))) {
 		// A fixed coarse mosaic hides the shape, rather than downsampling the
 		// distinctive mark. Only the circular lens exposes original pixels.
 		vec2 tile = floor((luv - logo_rect.xy) / logo_rect.zw * vec2(6.0, 4.0));
 		vec3 paper = texture(TEXTURE, region.xy + region.zw * (logo_rect.xy + vec2(0.001))).rgb;
 		vec3 mosaic = paper * (0.55 + 0.35 * hash(tile + vec2(17.0, 31.0)));
+		if (workbench_face) mosaic = paper * (0.91 + 0.075 * hash(tile + vec2(17.0, 31.0)));
 		base.rgb = mix(mosaic, base.rgb, in_lens);
 	}
 	float sc = 0.0;

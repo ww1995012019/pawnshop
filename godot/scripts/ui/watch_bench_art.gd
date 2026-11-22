@@ -80,6 +80,10 @@ func configure(it: Dictionary, task: String, progress: Dictionary = {}) -> void:
 	_appearance = {"template":template, "case_shape":_art.get("shape","square" if template == 6 else "round"),
 		"strap":WatchLogo.art(WatchForgery.strap_id(it)).get("strap",STRAP_TYPES[WatchForgery.template(WatchForgery.strap_id(it))]), "strap_color":_strap_color(WatchForgery.strap_id(it)),
 		"case_color":_art.get("case_color", "bda064" if template == 13 or definition.get("tier", "") in ["luxury","ultra"] else "b6c0c0")}
+	if id == "WCH-001":
+		_appearance.case_color = "d7a169"
+		_art = _art.duplicate()
+		_art.face = "#f1ceaa"
 	_contour_rays.clear()
 	_started_opened = bool(it.get("service", {}).get("opened", false))
 	if progress.get("version", 0) == 1 and progress.get("task", "") == task:
@@ -747,7 +751,7 @@ func _draw_case() -> void:
 		var p := CENTER + _case_offset(121,angle) + Vector2.from_angle(angle)*3
 		draw_line(p - Vector2(0, 11), p + Vector2(0, 11), Color("bbc7b9"), 3)
 	var crown := _crown_rect()
-	_panel(crown, Color("768e80"), Color("bfccba"), 4)
+	_panel(crown, rim.darkened(0.27), rim.lightened(0.18), 4)
 	for offset in [8,12,16,20,24]: draw_line(crown.position+Vector2(offset,3),crown.position+Vector2(offset,19),Color("3c5146"),1)
 	if bool(_state.power_safe):
 		draw_line(crown.position+Vector2(27,3),crown.position+Vector2(27,19),GOLD,2)
@@ -931,18 +935,29 @@ func _draw_dial() -> void:
 	var dial_ink := Color(_art.get("ink", "#252a30"))
 	_case_shape(CENTER, 104, face.darkened(0.20))
 	_case_shape(CENTER, 100, face)
-	for i in range(60):
-		var angle := float(i) * TAU / 60 - PI * 0.5
-		draw_line(CENTER+_case_offset(87 if i%5==0 else 93,angle),CENTER+_case_offset(98,angle),dial_ink,3 if i%5==0 else 1,true)
-	for i in range(12):
-		if i in [0, 3, 6, 9]:
-			var offset := _case_offset(77,float(i)*TAU/12-PI*0.5)
-			_text(CENTER + offset - Vector2(6, -4), str(12 if i == 0 else i), 13, dial_ink, true)
-	_draw_model_dial(dial_ink)
-	draw_line(CENTER, CENTER + Vector2(-43, -29), dial_ink.darkened(0.2), 7, true)
-	draw_line(CENTER, CENTER + Vector2(38, -61), dial_ink, 4, true)
-	draw_line(CENTER, CENTER + Vector2(18, 65), Color("ac6a4a"), 1.5, true)
-	draw_circle(CENTER, 5, Color("c0aa6e"))
+	if WatchForgery.appearance_id(_item) == "WCH-001":
+		# The transparent texture corners lie outside the circular dial. Clip
+		# the painted disc to the bench case so moving parts stay independent.
+		var points := PackedVector2Array()
+		var uvs := PackedVector2Array()
+		for i in 80:
+			var direction := Vector2.from_angle(TAU * i / 80.0)
+			points.append(CENTER + direction*100.0)
+			uvs.append((Vector2(128,128) + direction*55.5) / 256.0)
+		draw_polygon(points, PackedColorArray([Color.WHITE]), uvs, UIKit.tex("res://assets/comic/n01-workbench.svg"))
+	else:
+		for i in range(60):
+			var angle := float(i) * TAU / 60 - PI * 0.5
+			draw_line(CENTER+_case_offset(87 if i%5==0 else 93,angle),CENTER+_case_offset(98,angle),dial_ink,3 if i%5==0 else 1,true)
+		for i in range(12):
+			if i in [0, 3, 6, 9]:
+				var offset := _case_offset(77,float(i)*TAU/12-PI*0.5)
+				_text(CENTER + offset - Vector2(6, -4), str(12 if i == 0 else i), 13, dial_ink, true)
+		_draw_model_dial(dial_ink)
+		draw_line(CENTER, CENTER + Vector2(-43, -29), dial_ink.darkened(0.2), 7, true)
+		draw_line(CENTER, CENTER + Vector2(38, -61), dial_ink, 4, true)
+		draw_line(CENTER, CENTER + Vector2(18, 65), Color("ac6a4a"), 1.5, true)
+		draw_circle(CENTER, 5, Color("c0aa6e"))
 	var fraction := float(_state.logo) if _task == "forge_logo" and not WatchForgery.active(_item,"logo") else 1.0
 	var variant := int(_item.get("watch", {}).get("logo_variant", 1))
 	if WatchForgery.active(_item, "logo"): variant = 0
@@ -1402,6 +1417,7 @@ func _text(at: Vector2, text: String, font_size: int, color: Color, mono := fals
 	draw_string(_mono if mono else _font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
 
 func _strap_color(id: String) -> String:
+	if id == "WCH-001": return "b65330"
 	var authored: Dictionary = WatchLogo.art(id)
 	if authored.has("strap_color"): return String(authored.strap_color)
 	var index := clampi(id.get_slice("-",1).to_int()-1,0,32)

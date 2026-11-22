@@ -2,6 +2,7 @@ extends Control
 ## Reference-sized presentation. Every action delegates to the existing game.
 const R = preload("res://scripts/ui/reference_atlas.gd")
 const A = preload("res://scripts/ui/comic_assets.gd")
+const OpeningGuide = preload("res://scripts/ui/opening_counter_guide.gd")
 const PAPER = Color("f7e5c3")
 const INK = Color("20241e")
 const RED = Color("b84e37")
@@ -68,9 +69,11 @@ var period := 0.0
 var stock_scroll: ScrollContainer
 var display_scroll: ScrollContainer
 var modal_bar: Control
+var bell_caption: Button
 var bell_art: TextureRect
 var letterbox: ColorRect
 var scenery: Array[TextureRect]=[]
+var window_light := preload("res://scripts/ui/station_window.gd").new()
 var hud_art: TextureRect
 var footer_art: TextureRect
 var stock_art: NinePatchRect
@@ -260,6 +263,7 @@ func _build() -> void:
  for rect in [Rect2(0,60,423,515),Rect2(423,60,763,403),Rect2(423,463,763,277),Rect2(423,740,763,126)]:
   var slice=AtlasTexture.new();slice.atlas=R.environment();slice.region=rect
   var art=_image(self,slice,rect);art.stretch_mode=TextureRect.STRETCH_SCALE;scenery.append(art)
+  art.material=window_light
  hud_art=_image(self,R.hud(),Rect2(0,0,1671,61));hud_art.stretch_mode=TextureRect.STRETCH_SCALE
  day=_label(self,"",Rect2(49,7,127,44),32,INK,true)
  business_label=_label(self,"",Rect2(184,7,90,46),31,Color("fff0d6"),false);business_label.name="StrictBusinessState";business_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
@@ -296,6 +300,8 @@ func _build() -> void:
  speech.mouse_filter=Control.MOUSE_FILTER_STOP;add_child(speech)
  bell_art=_image(self,R.bell(),Rect2(366,489,95,77));bell_art.stretch_mode=TextureRect.STRETCH_SCALE
  var bell_button=_hit(self,"",Rect2(366,489,95,77),func():desk._bell_clicked());bell_button.tooltip_text="接客铃 · 接待下一位来客"
+ bell_caption=_button(self,"按铃接待第一位来客",Rect2(465,499,252,50),func():desk._bell_clicked())
+ bell_caption.name="OpeningBellPrompt";bell_caption.hide()
  table=Control.new();table.mouse_filter=Control.MOUSE_FILTER_IGNORE;add_child(table)
  stock_art=NinePatchRect.new();stock_art.texture=R.stock_frame();stock_art.position=Vector2(5,575);stock_art.size=Vector2(418,278)
  stock_art.patch_margin_left=20;stock_art.patch_margin_right=20;stock_art.patch_margin_top=65;stock_art.patch_margin_bottom=20
@@ -310,7 +316,7 @@ func _build() -> void:
  _bind_button_feedback(wanted_paper)
  story_ticket=preload("res://scripts/ui/campaign_scene.gd").Letter.new()
  add_child(story_ticket)
- story_ticket.setup(desk.shell,false)
+ story_ticket.setup(desk.shell)
  story_ticket.position=Vector2(267,494);story_ticket.size=Vector2(90,58)
  var paper=Panel.new();paper.name="StrictTradePaper";paper.position=Vector2(1186,68);paper.size=Vector2(485,791)
  paper.mouse_filter=Control.MOUSE_FILTER_IGNORE;paper.add_theme_stylebox_override("panel",_style(PAPER,INK,8));add_child(paper)
@@ -510,6 +516,7 @@ func _quick_source(context: Dictionary,caption: String) -> void:
 
 func _process(delta: float) -> void:
  visible=not desk.shell.mobile_mode()
+ _opening_bell_cue()
  if not visible:return
  var old=desk.find_child("DesktopCounter",true,false)
  if old!=null:old.hide()
@@ -527,12 +534,31 @@ func _process(delta: float) -> void:
  _advance_visible_departure()
  speech.visible_ratio=desk.bubble_label.visible_ratio
 
+func _opening_bell_cue() -> void:
+ var shell=desk.shell
+ if not shell.get_meta("opening_bell_pending",false):return
+ if not OpeningGuide.first_counter(Game.state):
+  shell.remove_meta("opening_bell_pending");return
+ if desk._scene_blocked() or not is_visible_in_tree() and not shell.landscape_mode():return
+ for effect in shell.fx.get_children():
+  if effect.get_meta("blocks_shop_input",false):return
+ var art=bell_art if visible else desk.bell
+ if not art.is_visible_in_tree():return
+ shell.set_meta("opening_bell_pending",false)
+ art.modulate=Color(1.22,1.16,1.05)
+ var cue=art.create_tween()
+ cue.tween_interval(.45)
+ if Game.prefs.reduced_motion:cue.tween_callback(func():art.modulate=Color.WHITE)
+ else:cue.tween_property(art,"modulate",Color.WHITE,.4)
+
 func _refresh(force := false) -> void:
  if desk==null:return
  var s=Game.state;var t=s.trade
  day.text="第%d天"%int(s.day)
  utility_buttons.sound.icon=A.icon("volume-high" if Game.prefs.sound else "volume-xmark")
- business_label.text="营业" if s.phase=="open" else "休息" if s.phase=="closed" else "结束"
+ window_light.show_shift(self,s,Game.prefs.reduced_motion)
+ business_label.text={"open":"营业","report":"已打烊","closed":"休息"}.get(s.phase,"结束")
+ business_label.add_theme_font_size_override("font_size",26 if s.phase=="report" else 31)
  if int(s.day)%7==0:rent.text="租金待交" if Landlord.outstanding(s)>0 else "租金已交"
  else:rent.text="租期余%d天"%(7-(int(s.day)%7))
  money.text=Model.jnum(s.cash)+" Cr";ap.text="AP %d"%int(s.ap);risk.text="关注 %d"%int(s.risk)
@@ -540,6 +566,7 @@ func _refresh(force := false) -> void:
  var ordinary=t!=null and t.get("kind","") in ["buy","sell"]
  var preview=Game.item(desk.showroom.selected_uid) if t==null else null
  var it=preview if preview!=null else current
+ bell_caption.visible=desk.shell.has_meta("opening_bell_pending") and OpeningGuide.first_counter(s) and preview==null
  own.visible=preview!=null
  for button in detail_tools.get_children():button.disabled=desk.busy or desk._scene_blocked()
  for child in trade_buttons:child.visible=preview==null
@@ -615,7 +642,7 @@ func _refresh(force := false) -> void:
   speech.tooltip_text=""
  for i in trade_buttons.size():
   var keys=desk.actions.get_children();trade_buttons[i].disabled=i>=keys.size() or keys[i].disabled or desk.busy
-  trade_buttons[i].visible=preview==null and i<keys.size()
+  trade_buttons[i].visible=preview==null and i<keys.size() and not bell_caption.visible
   if i<keys.size():
    var source_text: String=keys[i].text
    trade_buttons[i].tooltip_text=keys[i].tooltip_text
@@ -639,6 +666,12 @@ func _refresh(force := false) -> void:
  detail_layer.visible=not list_active;quick_list.visible=list_active
  get_node("StrictTradePaper").visible=not list_active
  if list_active:quick_list.refresh(s)
+ var opening_inspection=OpeningGuide.inspect_original(s)
+ ticket_inspect.text=OpeningGuide.INSPECT_CAPTION if opening_inspection else "鉴定"
+ ticket_inspect.icon=null if opening_inspection else A.icon("magnifying-glass")
+ ticket_inspect.size.x=174 if opening_inspection else 132
+ ticket_offer.position.x=193 if opening_inspection else 151
+ ticket_offer.size.x=90 if opening_inspection else 132
  ticket_inspect.disabled=desk.busy or desk._scene_blocked()
  ticket_offer.disabled=ticket_inspect.disabled
  var backs=""
@@ -783,7 +816,7 @@ func _table() -> void:
     appraisal_ticket.position=point+Vector2(95,-28) if close_up else Vector2(_table_project(Vector2(820,0)).x-147,footer_art.position.y-118)
     appraisal_ticket.show()
    var key=_table_watch(it,point,info.price,info.focused,func():
-    _quick_focus(info.uid),visitor,130.0 if close_up else tag_width,close_up)
+    _quick_focus(info.uid),visitor,130.0 if close_up else tag_width,close_up,info.selected and info.status=="confirmed")
    _animate_table_watch(key,previous,visitor)
  if Game.state.trade==null and desk.showroom.selected_uid!="":
   var it=Game.item(desk.showroom.selected_uid)
@@ -792,7 +825,7 @@ func _table() -> void:
    _animate_table_watch(key,previous,false)
  watch_sources.clear()
 
-func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visitor:=false,tag_width:=90.0,close_up:=false) -> Button:
+func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visitor:=false,tag_width:=90.0,close_up:=false,locked:=false) -> Button:
  var b=TradeWatch.new();b.mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND;b.controller=self;b.uid=it.uid;b.name="strict_table_"+str(it.uid)
  b.position=center-Vector2(tag_width/2,43);b.size=Vector2(tag_width,118 if visitor else 130)
  for state in ["normal","hover","pressed","focus"]:b.add_theme_stylebox_override(state,StyleBoxEmpty.new())
@@ -826,6 +859,9 @@ func _table_watch(it,center: Vector2,price: float,focus: bool,fn: Callable,visit
    dirty=true;b.accept_event())
  var tag_font=24 if visitor and tag_width>110 else 20
  var tag=_label(b,"未定价" if Game.state.trade==null and price<=0 else Model.jnum(price)+" Cr",Rect2(0,82 if visitor else 93,tag_width,34 if visitor else 37),tag_font,Color("f7e7c6"))
+ if locked:
+  tag.text="锁价 "+Model.jnum(price)
+  tag.tooltip_text="已锁价 "+Model.jnum(price)+" Cr"
  tag.name="PriceTag";tag.clip_text=true
  if close_up:tag.position.y=113
  var text_width=tag.get_theme_font("font").get_string_size(tag.text,HORIZONTAL_ALIGNMENT_LEFT,-1,tag_font).x
@@ -967,9 +1003,12 @@ func _layout_speech() -> void:
  if bubble.get_meta("speech_layout_key",[])!=key:
   geometry=DialogueLayout.speech_rects(font,font_size,speech.text,origin,right,bottom,top)
   bubble.set_meta("speech_layout_key",key);bubble.set_meta("speech_geometry",geometry)
+ var moved:bool=bubble.position!=geometry.bubble.position or bubble.size!=geometry.bubble.size
  bubble.position=geometry.bubble.position;bubble.size=geometry.bubble.size
  speech.position=geometry.text.position;speech.size=geometry.text.size
  speech.scroll_active=geometry.scroll
+ if moved and is_instance_valid(desk.shell.toast_box) and desk.shell.toast_box.get_child_count()>0:
+  desk.shell.call_deferred("_place_toasts")
 
 func _actor_stage() -> Rect2:
  var stage:Rect2=layout_rects.get(face,Rect2(474,94,383,362))

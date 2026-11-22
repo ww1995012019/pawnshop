@@ -231,7 +231,11 @@ func offer_popup(context: Dictionary) -> void:
     origin.pressed.emit()
     sync_evidence(evidence,reading,it))
   chip.custom_minimum_size=Vector2(120,34);chip.add_theme_font_size_override("font_size",16)
-  chip.set_meta("evidence_tool",source.get_meta("evidence_tool",""))
+  var tool:String=source.get_meta("evidence_tool","")
+  chip.name="QuickEvidence_"+tool
+  chip.set_meta("evidence_tool",tool)
+  if view.desk.is_latest_inspection(it,tool):
+   chip.text="新录 · "+chip.text
  sync_evidence(evidence,reading,it)
  var hint=UIKit.label("物证 %d · 已商谈 %d 次"%[Model.evidence_count(it),int(CounterDialogue.current(Game.state).context.rounds)],16,INK);box.add_child(hint)
  var submit=key(box,"出价",Rect2(0,0,390,48),func():

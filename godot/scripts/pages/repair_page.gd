@@ -186,7 +186,7 @@ func _select(uid: String) -> void:
 		Game.dispatch({"type":"SERVICE_BEGIN", "uid":uid})
 		it = Game.item(uid)
 		item = ItemSprite.new()
-		item.setup(it.defId, uid, 360.0)
+		item.setup(it.defId, uid, 360.0, false, true)
 		item.draggable = false
 		add_world(item)
 		_reload_cleaning(it)

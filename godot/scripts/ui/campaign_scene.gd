@@ -12,18 +12,27 @@ var leaving := false
 class Letter extends Button:
 	var host: Node
 	var beat: Dictionary
+	var envelope := TextureRect.new()
+	var delivered_id := ""
+	var delivery: Tween
 
-	func setup(shell: Node, compact: bool) -> void:
+	func setup(shell: Node) -> void:
 		host = shell
 		name = "campaign_story_ticket"
-		text = "来信"
 		accessibility_name = "柜台来信"
-		icon = Art.icon("file-lines")
-		expand_icon = true
-		add_theme_constant_override("icon_max_width",15 if compact else 20)
-		add_theme_font_size_override("font_size",14 if compact else 21)
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		UIKit.context_button(self)
+		for state in ["normal","hover","pressed","hover_pressed","disabled"]:
+			add_theme_stylebox_override(state, StyleBoxEmpty.new())
+		envelope.name = "SealedLetter"
+		envelope.texture = preload("res://assets/comic/station-letter.svg")
+		envelope.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		envelope.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		envelope.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(envelope)
+		envelope.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		mouse_entered.connect(func(): envelope.self_modulate = Color.WHITE if disabled else Color(1.12,1.08,1.0))
+		mouse_exited.connect(func(): envelope.self_modulate = Color.WHITE)
 		pressed.connect(func(): host.open_campaign_scene(String(beat.get("id",""))))
 		Game.changed.connect(_changed)
 		_changed({},Game.state,{})
@@ -35,10 +44,23 @@ class Letter extends Button:
 	func update_interaction() -> void:
 		visible = not beat.is_empty() and host.campaign_scene_priority_problem() == ""
 		if not visible:
+			if beat.is_empty(): delivered_id = ""
 			return
 		var problem: String = host.campaign_scene_problem()
 		disabled = problem != "" or host.modal_open()
 		tooltip_text = String(beat.title) if problem == "" else String(beat.title) + " · " + problem
+		var id := String(beat.id)
+		if not disabled and is_visible_in_tree() and id != delivered_id:
+			delivered_id = id
+			if delivery: delivery.kill()
+			envelope.position = Vector2.ZERO
+			if not Game.prefs.reduced_motion:
+				envelope.position = Vector2(-22, -6)
+				delivery = create_tween()
+				delivery.tween_property(envelope, "position", Vector2.ZERO, 0.34).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		elif Game.prefs.reduced_motion and delivery and delivery.is_running():
+			delivery.kill()
+			envelope.position = Vector2.ZERO
 
 func setup(shell: Node, close: Callable, beat: Dictionary) -> void:
 	host = shell

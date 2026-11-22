@@ -112,6 +112,20 @@ func sync(state: Dictionary, animate:=false, from:=Vector2.ZERO) -> void:
   origins[uid]=info.direction
   card.visible = not mobile
   sprite.visible = not show_focused_only or info.focused
+  var lock_tag := sprite.get_node_or_null("LockedLot") as Label
+  if show_focused_only and info.selected and info.status=="confirmed":
+   if lock_tag==null:
+    lock_tag=UIKit.label("",14,UIKit.INK)
+    lock_tag.name="LockedLot"
+    lock_tag.mouse_filter=Control.MOUSE_FILTER_IGNORE
+    lock_tag.add_theme_stylebox_override("normal",UIKit.paper_style(3))
+    sprite.add_child(lock_tag)
+   lock_tag.text="锁价 "+Model.jnum(info.price)+" Cr"
+   lock_tag.reset_size()
+   lock_tag.position=Vector2(-lock_tag.size.x*.5,height*.25)
+  elif lock_tag!=null:
+   sprite.remove_child(lock_tag)
+   lock_tag.queue_free()
   sprite.bounds = bounds
   if not sprite.busy and sprite.get_meta("display_height",0.0) != height:
    var next_scale := height/sprite.tex_size().y

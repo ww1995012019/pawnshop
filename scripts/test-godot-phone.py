@@ -215,6 +215,8 @@ def main():
             tap(page, '去鉴定')
             wait(page, f"s.workspace === 'inspect' && s.inspection_uid === {repair_uid!r}", 10000)
             tap(page, '收起')
+            wait(page, f"s.workspace === 'repair' && s.repair_uid === {repair_uid!r}")
+            tap(page, '收起')
             wait(page, "s.workspace === ''")
 
             tap(page, '送客')

@@ -15,7 +15,9 @@ var speech_copy: Label
 var item_name: Label
 var hint: Label
 var price: Label
+const OpeningGuide = preload("res://scripts/ui/opening_counter_guide.gd")
 var primary: Button
+var opening_quote: Button
 var more: Button
 var flip: Button
 var goods: Button
@@ -33,6 +35,7 @@ var last_size := Vector2.ZERO
 var inset := Vector2.ZERO
 var mat := Rect2()
 var wanted_paper: Button
+var window_light := preload("res://scripts/ui/station_window.gd").new()
 var story_ticket: Button
 var last_notice := false
 
@@ -58,6 +61,7 @@ func setup(owner_adapter) -> void:
 		surface.texture = preload("res://assets/comic/reference-clean-room.png")
 		surface.region_rect = region[1]
 		panels[region[0]].add_theme_stylebox_override("panel",surface)
+		panels[region[0]].material = window_light
 	# The dock also owns its gaps; nearby business actions must not attract them.
 	panels[4].set_meta("touch_assist_no_expand",true)
 	heading = _label("轨道旧货局",20,UIKit.TEXT)
@@ -78,10 +82,13 @@ func setup(owner_adapter) -> void:
 	price = _label("",18,UIKit.AMBER)
 	price.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	price.max_lines_visible = 2
-	primary = _key("",adapter._primary,true)
+	primary = _key("",_primary,true)
 	primary.name = "landscape_primary"
 	more = _key("顾客操作",func(): adapter._actions(put_aside.visible))
 	more.name = "landscape_more"
+	opening_quote = _key("议价",adapter._primary)
+	opening_quote.name = "landscape_opening_quote"
+	opening_quote.hide()
 	flip = _key("翻面",func():
 		if is_instance_valid(desk.mat_item) and not desk.busy and not desk._scene_blocked(): desk.mat_item.flip())
 	flip.name = "landscape_flip"
@@ -112,7 +119,7 @@ func setup(owner_adapter) -> void:
 	wanted_paper.name="wanted_inventory"
 	story_ticket = preload("res://scripts/ui/campaign_scene.gd").Letter.new()
 	add_child(story_ticket)
-	story_ticket.setup(shell,true)
+	story_ticket.setup(shell)
 	for spec in [["放大镜","TOL-001"],["紫外灯","TOL-002"],["称重","TOL-005"]]:
 		var id: String = spec[1]
 		var key := _key(spec[0],func():
@@ -235,7 +242,6 @@ func _layout() -> void:
 			actor.scale=Vector2.ONE*minf(customer_h/actor.size.y,(left-12)*.46/actor.size.x)
 			if not actor.walking: actor.position=Vector2((left-12)*(.25 if actor==desk.customer else .75),customer_h)
 	_place(speech,Rect2(14,top+customer_h+34,left-16,inner_h-customer_h-40))
-	_place(story_ticket,Rect2(left-87,top+customer_h-14,80,44))
 	_place(item_name,Rect2(mat.position+Vector2(8,4),Vector2(mat.size.x-76,24)))
 	_place(flip,Rect2(mat.end.x-64,mat.position.y+4,58,28))
 	_place(hint,Rect2(mat.position+Vector2(8,33),Vector2(mat.size.x-16,20)))
@@ -266,13 +272,29 @@ func _layout() -> void:
 	desk.mobile_goods = inset+Vector2(18+left*.5,bottom+22)
 	goods.visible = screen.y >= 320
 	var action_top := bottom-122 if goods.visible else bottom-84
+	var letter_position := Vector2(tx, top+69) if action_top-38 >= top+113 else Vector2(left-87, top+customer_h-14)
+	_place(story_ticket,Rect2(letter_position,Vector2(80,44)))
 	_place(price,Rect2(tx,action_top-38,right-12,36))
 	_place(primary,Rect2(tx,action_top,right-12,32))
 	_place(more,Rect2(tx,action_top+36,right-12,30))
 	_place(put_aside,Rect2(mat.end.x-132,mat.position.y+35,126,30))
 	if goods.visible: _place(goods,Rect2(tx,bottom-34,right-12,30))
-	var dock_width := (screen.x-16)/5
-	for i in 5: _place(dock_keys[i],Rect2(8+i*dock_width,bottom+4,dock_width-4,dock_height))
+	layout_dock(area)
+
+func layout_dock(area: Rect2) -> void:
+	var height := maxf(44.0,ceilf(44.0/maxf(shell.touch_scale(),.01)))
+	var y := area.end.y-height-4
+	var available := area.size.x-16
+	if is_instance_valid(desk.receipt_tab):
+		var tab: Button = desk.receipt_tab
+		tab.custom_minimum_size = Vector2(90,height)
+		tab.reset_size()
+		tab.position = Vector2(area.end.x-8-tab.size.x,y)
+		available -= tab.size.x+4
+	var column := available/dock_keys.size()
+	for i in dock_keys.size():
+		dock_keys[i].position = Vector2(area.position.x+8+i*column,y)
+		dock_keys[i].size = Vector2(column-4,height)
 
 func _layout_paper_tools() -> void:
 	# Paper ownership may change during a police handover. Reflow only the
@@ -286,6 +308,13 @@ func _layout_paper_tools() -> void:
 	for i in 3:
 		_place(tool_keys[i],Rect2(start+i*(width+4.0),mat.end.y-38,width,34))
 	_place(wanted_paper,Rect2(mat.position.x+4,mat.end.y-38,56,34))
+
+func _primary() -> void:
+	if desk.busy or desk._scene_blocked(): return
+	if OpeningGuide.inspect_original(Game.state):
+		desk._open_instrument("inspect")
+	else:
+		adapter._primary()
 
 func _refresh_goods_strip(shown: Array) -> void:
 	goods_strip.visible = not shown.is_empty()
@@ -334,7 +363,9 @@ func _process(_delta: float) -> void:
 	wanted_paper.refresh()
 	story_ticket.update_interaction()
 	desk.cash_tray.show()
+	window_light.show_shift(self,Game.state,Game.prefs.reduced_motion)
 	heading.text = "轨道旧货局 · 第 %02d 天" % Game.state.day
+	if Game.state.phase == "report": heading.text += " · 已打烊"
 	balance.text = "%s Cr   ·   AP %s" % [Model.jnum(desk.cash_tray.cash if desk.busy else Game.state.cash),Game.state.ap]
 	visitor_name.text = adapter.visitor_name.text
 	if speech_copy.text != adapter.speech.text:
@@ -346,8 +377,9 @@ func _process(_delta: float) -> void:
 	var dialogue := CounterDialogue.active(Game.state)
 	var shown := CounterDialogue.table_items(Game.state) if dialogue else []
 	_refresh_goods_strip(shown)
-	primary.text = adapter.primary.text
-	primary.disabled = adapter.primary.disabled
+	var opening_inspection := OpeningGuide.inspect_original(Game.state)
+	primary.text = OpeningGuide.INSPECT_CAPTION if opening_inspection else adapter.primary.text
+	primary.disabled = (desk.busy or desk._scene_blocked()) if opening_inspection else adapter.primary.disabled
 	if dialogue and trade.locked:
 		primary.text = UIKit.batch_payment_caption(TradeSession.summary(Game.state))
 		problem = TradeSession.checkout_problem(Game.state)
@@ -363,8 +395,18 @@ func _process(_delta: float) -> void:
 	if put_aside.visible:
 		var action := CounterDialogue.action_for(Game.state,"COUNTER_UNSELECT")
 		if put_aside.get_meta("action",{}) != action: put_aside.set_meta("action",action)
+	opening_quote.visible = opening_inspection
+	opening_quote.disabled = desk.busy or desk._scene_blocked()
+	more.position.x = primary.position.x
+	more.size.x = primary.size.x
+	if opening_inspection:
+		var half_width := (primary.size.x - 4.0) * .5
+		opening_quote.position = more.position
+		opening_quote.size = Vector2(half_width, more.size.y)
+		more.position.x += half_width + 4.0
+		more.size.x = half_width
 	more.disabled = desk.busy
-	more.text = "顾客操作" if trade != null else "柜台操作"
+	more.text = "更多" if opening_inspection else "顾客操作" if trade != null else "柜台操作"
 	goods.disabled = desk.busy
 	goods.text = "货物 · %d 件" % shown.size() if dialogue else "选择货物"
 	flip.disabled = desk.busy or not is_instance_valid(desk.mat_item)
@@ -372,4 +414,4 @@ func _process(_delta: float) -> void:
 	for key in dock_keys: key.disabled = desk.busy
 	var police: bool = desk.resident_window.has_node("counter_patrol")
 	if police: visitor_name.text = "巡警 · 现场核对"
-	hint.text = "巡警正在核对 · 请等候" if police else "正在交割 · 请等待钱货落稳" if desk.busy else "选中手表后可用工具鉴定" if not is_instance_valid(desk.mat_item) else ""
+	hint.text = "巡警正在核对 · 请等候" if police else "正在交割 · 请等待钱货落稳" if desk.busy else "栗叔带来的停表" if opening_inspection else "选中手表后可用工具鉴定" if not is_instance_valid(desk.mat_item) else ""

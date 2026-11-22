@@ -10,7 +10,13 @@ func run():
  check(view.meta_cover.visible and not view.detail_layer.get_node("StrictEvidence").visible,"empty desk hides item-only icons and inactive evidence target")
  var business=view.get_node_or_null("StrictBusinessState")
  check(business!=null and business.text=="休息","closed counter does not retain painted open status")
+ game.state.phase="report";view._refresh(true)
+ check(business.text=="已打烊","daily closing has its own state instead of the campaign ending")
+ var lighting = view.scenery[1].material as ShaderMaterial
+ check(lighting!=null and lighting.get_shader_parameter("after_hours")==1.0,"closed shop switches off the painted lamp with reduced motion")
  game.state.phase="open";game.state.day=3
+ view._refresh(true)
+ check(lighting!=null and lighting.get_shader_parameter("after_hours")==0.0,"next business day restores the open counter lighting")
  var uid:String=game.state.inventory[0].uid;game.item(uid).listPrice=321;game.item(uid).sourceVerified=true
  page._refresh();await frames();page.showroom.select_original(uid);await frames()
  var caption=view.detail_layer.get_node_or_null("StrictAskCaption")

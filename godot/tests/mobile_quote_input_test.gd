@@ -22,8 +22,14 @@ func run():
  await create_timer(2.5).timeout
  var desk = shell.page
  var adapter = desk.find_child("PortraitCounter",true,false)
+ var it=Model.trade_item(game.state)
+ it.evidence.append("TOL-002")
+ var facts=Model.record_inspection(it,"TOL-002")
+ shell.set_meta("latest_inspection",{"uid":it.uid,"tool":"TOL-002","facts":facts.duplicate(true)})
  adapter._quote_popup()
  await frames()
+ var chip=shell.find_child("mobile_evidence_TOL-002",true,false)
+ check(chip!=null and chip.text.begins_with("新录") and not chip.button_pressed,"phone marks the newly recorded UV proof without selecting it")
  var quote: SpinBox = adapter.quote
  var original: int = desk.dial.value
  quote.value = original + 5

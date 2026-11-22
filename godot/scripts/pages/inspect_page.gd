@@ -46,6 +46,11 @@ var optical_grab := Vector2.ZERO
 var optical_pinned := false
 var optical_pin_button: Button
 var optical_attempt_revision := ""
+var finding_panel: Panel
+var finding_label: Label
+var compact_finding: Label
+var finding_tween: Tween
+var finding_revision := ""
 var pending_tool := ""
 var portrait_tools: HBoxContainer
 var rules_expanded := false
@@ -135,8 +140,26 @@ func _build_panels() -> void:
 	bench_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	bench.add_child(bench_scroll)
 	bench_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bench_scroll.add_child(bench_body)
+	var instructions := UIKit.vbox(6)
+	instructions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bench_scroll.add_child(instructions)
+	compact_finding = UIKit.label("",14,UIKit.INK,false,true)
+	compact_finding.name = "compact_inspection_finding"
+	compact_finding.hide()
+	instructions.add_child(compact_finding)
+	instructions.add_child(bench_body)
 	bench_body.minimum_size_changed.connect(queue_relayout)
+	finding_panel = Panel.new()
+	finding_panel.name = "inspection_finding"
+	finding_panel.add_theme_stylebox_override("panel",UIKit.paper_style(6))
+	finding_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	finding_label = UIKit.label("",15,UIKit.INK,false,true)
+	finding_label.clip_text = true
+	finding_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	finding_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	finding_panel.add_child(finding_label)
+	add_child(finding_panel)
+	finding_panel.hide()
 
 func relayout() -> void:
 	if not is_instance_valid(instrument_panel): return
@@ -204,6 +227,50 @@ func relayout() -> void:
 			scale_target = scale_pan.to_global(scale_pan.pan_position())-Vector2(0,item.tex_size().y*item.display_scale*.5)
 		if optical_pinned: optical_position = _optical_target()
 	_layout_scale_console()
+	if is_instance_valid(optical_pin_button):
+		var height := minf(maxf(44,44/maxf(shell.touch_scale(),.1)),maxf(30,mat_rect.size.y*.42))
+		optical_pin_button.size = Vector2(maxf(112,optical_pin_button.get_combined_minimum_size().x),height)
+		optical_pin_button.position = mat_rect.end-optical_pin_button.size-Vector2(6,6)
+	_layout_finding()
+
+func _layout_finding() -> void:
+	if not finding_panel.visible and not compact_finding.visible: return
+	var padding := Vector2(8,5)
+	var left := mat_rect.position.x+6
+	var right := mat_rect.end.x-6
+	var watch_half := item.tex_size().x*item.display_scale*.5
+	var watch_left: float = shell.world_to_ui(item.position-Vector2(watch_half,0)).x
+	var watch_right: float = shell.world_to_ui(item.position+Vector2(watch_half,0)).x
+	if tool in ["TOL-001","TOL-002"] and is_instance_valid(lens_ring):
+		var optic := lens if tool=="TOL-001" else wand
+		var radius := float(lens_ring.radius)*optic.scale.x+4
+		watch_left = minf(watch_left,shell.world_to_ui(_optical_target()-Vector2(radius,0)).x)
+		watch_right = maxf(watch_right,shell.world_to_ui(_optical_target()+Vector2(radius,0)).x)
+	var available := watch_left-left-6
+	var on_right := right-watch_right-6>available+24
+	if on_right: available = right-watch_right-6
+	var natural_width := 0.0
+	var font := finding_label.get_theme_font("font")
+	for line in finding_label.text.split("\n"):
+		natural_width = maxf(natural_width,font.get_string_size(line,HORIZONTAL_ALIGNMENT_LEFT,-1,finding_label.get_theme_font_size("font_size")).x)
+	var width := maxf(1,minf(natural_width+padding.x*2+2,available))
+	finding_label.position = padding
+	finding_label.size.x = maxf(1,width-padding.x*2)
+	var lines := finding_label.get_line_count()
+	var height := float(maxi(0,lines-1)*finding_label.get_theme_constant("line_spacing"))
+	for i in lines: height += finding_label.get_line_height(i)
+	finding_label.size.y = height
+	var use_details: bool = shell.landscape_mode() and (available<120 or height+padding.y*2+12>mat_rect.size.y)
+	if use_details:
+		var lines_of_text := finding_label.text.split("\n",true,1)
+		var reading := lines_of_text[0].split(" · ",true,1)
+		compact_finding.text = String(lines_of_text[1])+"\n"+String(reading[-1]).trim_prefix("可见标识：")
+		if not compact_finding.visible: bench_scroll.scroll_vertical = 0
+	compact_finding.visible = use_details
+	finding_panel.visible = not use_details
+	if use_details: return
+	finding_panel.size = Vector2(width,height+padding.y*2)
+	finding_panel.position = Vector2(right-width if on_right else left,mat_rect.position.y+(62 if shell.portrait_mode() else 6))
 
 func _layout_scale_console() -> void:
 	if not is_instance_valid(instrument) or not is_instance_valid(scale_pan): return
@@ -447,7 +514,15 @@ func _refresh_info() -> void:
 		note.name = "inspection_rules"
 		info.add_child(note)
 
+func _clear_finding() -> void:
+	if finding_tween:
+		finding_tween.kill()
+		finding_tween = null
+	finding_panel.hide()
+	compact_finding.hide()
+
 func _load_item() -> void:
+	_clear_finding()
 	_set_tool("")
 	if is_instance_valid(item): item.queue_free()
 	item = null
@@ -458,7 +533,7 @@ func _load_item() -> void:
 	_refresh_info()
 	if it == null: return
 	item = ItemSprite.new()
-	item.setup(it.defId,it.uid,360.0)
+	item.setup(it.defId,it.uid,360.0, false, true)
 	item.position = item_home
 	item.target = item_home
 	item.bounds = Rect2(560,330,700,260)
@@ -518,7 +593,12 @@ func _set_tool(id: String) -> void:
 		shell.toast(problem)
 		return
 	if scale_occupied: _scale_remove()
+	if compact_finding.visible: _clear_finding()
 	show_status("","info")
+	if is_instance_valid(optical_pin_button):
+		remove_child(optical_pin_button)
+		optical_pin_button.queue_free()
+		optical_pin_button = null
 	tool = id
 	pending_tool = id if id in ["TOL-001", "TOL-002"] else ""
 	progress = 0.0
@@ -592,17 +672,21 @@ func _optical(id: String) -> void:
 		node.global_position = _clamp_lens_position(optical_position)
 		optical_position = node.global_position
 	bench_body.add_child(UIKit.label("拖动镜片寻找表盘印记，停稳后留下记录。" if id == "TOL-001" else "移动紫外灯寻找后盖编号，照稳后留下记录。",18,UIKit.TEXT,false,true))
-	var fixed := UIKit.button("辅助：定位并固定标识" if id == "TOL-001" else "辅助：定位并固定编号","secondary",Vector2(0,36),15)
-	fixed.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	var fixed := UIKit.button(_pin_caption(),"secondary",Vector2(108,30),16)
+	fixed.name = "inspection_pin"
+	fixed.tooltip_text = "定位并固定标识" if id == "TOL-001" else "定位并固定编号"
 	optical_pin_button = fixed
 	fixed.pressed.connect(func():
 		optical_pinned = not optical_pinned
 		optical_fixed = id == "TOL-001" or optical_pinned
 		optical_dragging = false
 		if optical_pinned: optical_position = _optical_target()
-		fixed.text = "解除固定" if optical_pinned else "辅助：定位并固定观察点")
-	bench_body.add_child(fixed)
+		fixed.text = _pin_caption())
+	add_child(fixed)
 	if id == "TOL-002": bench_body.add_child(UIKit.label(_power_copy(id), 16, UIKit.CYAN, false, true))
+
+func _pin_caption() -> String:
+	return "解除固定" if optical_pinned else "固定镜片" if tool == "TOL-001" else "固定紫外灯"
 
 func _optical_target() -> Vector2:
 	return item.logo_world_position() if tool == "TOL-001" else item.reveal_center()
@@ -733,8 +817,36 @@ func _record() -> void:
 	var recorded_condition: float = facts.get("appraisalObservation", {}).get("condition", -1.0)
 	var recorded_model: String = facts.get("appraisalObservation",{}).get("publicModel","")
 	if Model.inspection_current(it,tool) and is_equal_approx(recorded_condition,float(it.condition)) and recorded_model==WatchForgery.appearance_id(it): return
-	Game.dispatch({"type":"CHECK","uid":it_uid,"tool":tool})
+	var before := Model.estimate(it)
+	var recorded_tool := tool
+	if not Game.dispatch({"type":"CHECK","uid":it_uid,"tool":recorded_tool}): return
+	var updated = Game.item(it_uid)
+	if updated == null or not updated.evidence.has(recorded_tool): return
+	var new_facts: Dictionary = updated.get("inspectionFacts",{}).get(recorded_tool,{})
+	if new_facts.is_empty() or facts == new_facts: return
+	var owner_shell: Node = shell.workspace_parent if shell.workspace_mode else shell
+	owner_shell.set_meta("latest_inspection",{"uid":it_uid,"tool":recorded_tool,"facts":new_facts.duplicate(true)})
+	finding_revision = Model.trade_revision(updated)
+	_show_finding("%s · %s" % [GameData.tool(recorded_tool).name,Model.displayed_clue(updated,recorded_tool)],before,Model.estimate(updated))
 	_refresh_info()
+
+func _show_finding(reading: String, before: Dictionary, after: Dictionary) -> void:
+	if finding_tween:
+		finding_tween.kill()
+		finding_tween = null
+	finding_panel.show()
+	var from_range := Vector2(before.low,before.high)
+	var to_range := Vector2(after.low,after.high)
+	var caption := "%s\n估价 %s–%s → " % [reading,Model.jnum(before.low),Model.jnum(before.high)]
+	var display_range := func(value: Vector2):
+		finding_label.text = "%s%s–%s Cr" % [caption,Model.jnum(roundi(value.x)),Model.jnum(roundi(value.y))]
+		_layout_finding()
+	if Game.prefs.reduced_motion or from_range==to_range:
+		display_range.call(to_range)
+	else:
+		display_range.call(from_range)
+		finding_tween = create_tween()
+		finding_tween.tween_method(display_range,from_range,to_range,.36).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 func _inspection_attempt(it: Dictionary) -> String:
 	return Model.inspection_revision(it,tool)+":"+str(snappedf(float(it.condition),0.000001))+":"+str(Game.state.ap)
@@ -743,6 +855,8 @@ func on_changed(_p: Dictionary,_n: Dictionary,_a: Dictionary) -> void:
 	# A linked repair workspace can replace the physical UV marking while
 	# this exact item stays on the inspection mat. Refresh only its marking.
 	var current = Game.item(it_uid)
+	if (finding_panel.visible or compact_finding.visible) and (current==null or Model.trade_revision(current)!=finding_revision):
+		_clear_finding()
 	if current == null and _a.get("type", "") == "WORKSPACE_RESUME":
 		_load_item()
 		queue_relayout()
@@ -779,13 +893,13 @@ func _unhandled_input(e: InputEvent) -> void:
 					optical_pinned = false
 					optical_dragging = true
 					optical_grab = optical_position-p
-					if is_instance_valid(optical_pin_button): optical_pin_button.text = "辅助：定位并固定标识"
+					if is_instance_valid(optical_pin_button): optical_pin_button.text = _pin_caption()
 				elif tool == "TOL-002" and mat_rect.has_point(shell.world_to_ui(p)):
 					optical_fixed = true
 					optical_pinned = false
 					optical_dragging = true
 					optical_position = p
-					if is_instance_valid(optical_pin_button): optical_pin_button.text = "辅助：定位并固定标识" if tool == "TOL-001" else "辅助：定位并固定编号"
+					if is_instance_valid(optical_pin_button): optical_pin_button.text = _pin_caption()
 			else:
 				optical_dragging = false
 				if item.dragging and tool == "TOL-005" and item.position.distance_to(scale_target)<125:

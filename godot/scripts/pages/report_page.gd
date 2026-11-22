@@ -214,6 +214,7 @@ func _refresh() -> void:
 	# Historic reports preserve the old single charge; never recalculate them.
 	var costs: Dictionary = s.report.get("costs", {"legacy":true,"maintenance":s.report.get("maintenance",20),"electricity":0,"cleaning":0,"total":s.report.get("maintenance",20),"details":{}}) if paid else StoreCosts.quote(s)
 	if paid:
+		_row(g, "结余现金", UIKit.money(s.report.cash), UIKit.RUST)
 		if s.report.get("closed",false):
 			_row(g,"歇业一天 · 打砸维修费",UIKit.money(s.report.get("robberyRepair",0)),UIKit.RUST)
 		_row(g, "收入", UIKit.money(s.report.income), Color("2f6b3a"))
@@ -235,8 +236,8 @@ func _refresh() -> void:
 	if not next_rent.is_empty():
 		_row(g, "第 %d 天应付租金" % next_rent.day, UIKit.money(next_rent.amount))
 	_row(g, "本次支付" if paid else "本次日结预计支付", UIKit.money(costs.total + settlement_rent), UIKit.RUST)
-	_row(g, "结余现金" if paid else "支付后现金", UIKit.money(s.report.cash if paid else s.cash - costs.total), UIKit.RUST)
 	if not paid:
+		_row(g, "支付后现金", UIKit.money(s.cash - costs.total), UIKit.RUST)
 		_row(g, "剩余行动点", "%d AP" % int(s.ap))
 	right.add_child(g)
 	_add_cost_details(right, costs)

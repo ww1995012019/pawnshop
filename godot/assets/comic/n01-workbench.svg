@@ -1,0 +1,27 @@
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+ <defs>
+  <linearGradient id="hide"><stop stop-color="#742f20"/><stop offset=".12" stop-color="#c96939"/><stop offset=".24" stop-color="#a44124"/><stop offset=".8" stop-color="#bc5430"/><stop offset="1" stop-color="#712c21"/></linearGradient>
+  <linearGradient id="brass" x2=".7" y2="1"><stop stop-color="#845037"/><stop offset=".22" stop-color="#ffe6ae"/><stop offset=".38" stop-color="#ac733e"/><stop offset=".63" stop-color="#f1bf75"/><stop offset=".84" stop-color="#b46a39"/><stop offset="1" stop-color="#6f3c2b"/></linearGradient>
+  <linearGradient id="ivory" x2="1" y2="1"><stop stop-color="#ddae84"/><stop offset=".46" stop-color="#ffe1b9"/><stop offset="1" stop-color="#e6c098"/></linearGradient>
+  <path id="tick" d="M128 77v5" stroke="#48382f" stroke-width="2" stroke-linecap="round"/>
+ </defs>
+ <rect x="99" y="17" width="58" height="222" rx="5" fill="url(#hide)" stroke="#372923" stroke-width="2.8"/>
+ <path d="M105 22v212m46-212v212" stroke="#532e22" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="3 4"/>
+ <path d="M102 22v45m52 135v33" stroke="#e39560" fill="none"/>
+ <path d="M100 40q27 4 56 0v9q-25 4-56 0z" fill="url(#hide)" stroke="#592e21" stroke-width="1.4"/>
+ <g fill="#502e22"><ellipse cx="128" cy="216" rx="2" ry="2.7"/><ellipse cx="128" cy="229" rx="2" ry="2.7"/></g>
+ <g fill="url(#brass)" stroke="#342921" stroke-width="2.6">
+  <path d="M87 89l8-27q2-6 7-5l2 19h48l2-19q6 0 8 6l8 27-6 76-4 29q-1 5-6 5l-3-19h-47l-2 19q-6 0-7-5l-7-31z"/>
+  <rect x="188" y="119" width="10" height="19" rx="4"/>
+  <circle cx="128" cy="128" r="62"/>
+ </g>
+ <path d="M192 122v12m3-11v9" stroke="#975e36" fill="none"/>
+ <circle cx="128" cy="128" r="55.8" fill="url(#ivory)" stroke="#573a2a" stroke-width="2"/>
+ <path d="M77 115a53 53 0 0 1 36-39m36 100a53 53 0 0 0 29-34" fill="none" stroke="#fff0c9" stroke-width="1.2"/>
+ <g fill="#44332a"><path d="M125 78l3-3 3 3-1 6h-4zM125 179l1-7h4l1 7zM76 126h8v3h-8zm96 0h8v3h-8z"/></g>
+ <use xlink:href="#tick" transform="rotate(30 128 128)"/><use xlink:href="#tick" transform="rotate(60 128 128)"/><use xlink:href="#tick" transform="rotate(120 128 128)"/><use xlink:href="#tick" transform="rotate(150 128 128)"/><use xlink:href="#tick" transform="rotate(210 128 128)"/><use xlink:href="#tick" transform="rotate(240 128 128)"/><use xlink:href="#tick" transform="rotate(300 128 128)"/><use xlink:href="#tick" transform="rotate(330 128 128)"/>
+ <path d="M128 128l-23-14 2-2 21 13 31-19 1 2z" fill="#3e302a"/>
+ <circle cx="128" cy="128" r="3.2" fill="#62442e" stroke="#2c2623"/>
+ <path d="M122 151h12m-10 2h8" stroke="#a38162" stroke-width=".8"/>
+ <path d="M80 160l5-3m-2 6 5-3m55 24 5-2m-2 4 4-2" fill="none" stroke="#885336" stroke-width=".8"/>
+</svg>

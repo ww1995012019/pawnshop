@@ -23,9 +23,11 @@ func run() -> void:
  var long="本次采购：我想找品相好的旧表，请挑几件来看看。你先检查实物，价格合适咱们再谈。"
  for extent in [Vector2i(1920,1080),Vector2i(1440,900),Vector2i(1160,700)]:
   root.size=extent;await frames();view._layout_desktop()
+  shell.toast("已记录检验证据。".repeat(12),"warning")
   for text in [long,short,"这趟带了常用耗材，也收多余零件。稀罕货要看运气。",long+" 每件原物的来源、品相和价格都要说清楚。",long.repeat(4),CHECKOUT_DIALOGUE]:
    set_speech(view,text);await frames(2)
    var bubble:Rect2=view.get_node("StrictSpeechBubble").get_rect()
+   check(not view.get_node("StrictSpeechBubble").get_global_rect().intersects(shell.toast_box.get_child(0).get_global_rect()),"notice clears the full bubble after dialogue reflows")
    check(view.speech.get_content_height()<=view.speech.size.y and not view.speech.get_v_scroll_bar().visible,"full dialogue fits without a scrollbar at %s (%d characters)"%[extent,text.length()])
    check(bubble.encloses(view.speech.get_rect()) and bubble.end.x<=view.get_node("StrictTradePaper").position.x-12 and bubble.end.y<view._table_project(Vector2(700,451)).y,"speech and its bubble remain inside the open counter area")
    check(view.speech.get_theme_font_size("normal_font_size")>=18,"dialogue keeps its readable font size")

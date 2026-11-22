@@ -77,6 +77,10 @@ var dialogue_choices: HBoxContainer
 var dialogue_put_aside: Button
 var chosen_evidence_uid := ""
 var handover_history: Array = []
+var filed_receipt: Control
+var receipt_tab: Button
+var receipt_reading := false
+var receipt_preview: Tween
 var stage_root: Node2D
 var back_root: Node2D
 var resident_window: Control
@@ -174,6 +178,12 @@ func hint_text() -> String:
 		return "在陈列柜或下方货物抽屉里，点一件合格的自有货推荐给顾客。"
 	return "拖动实物、右键翻面；点击鉴定仪取证，再转动报价旋钮出价。"
 
+func is_latest_inspection(it: Dictionary, tool: String) -> bool:
+	var host = shell.workspace_parent if shell.workspace_mode else shell
+	var latest: Dictionary = host.get_meta("latest_inspection", {})
+	var facts: Dictionary = it.get("inspectionFacts", {}).get(tool, {})
+	return not facts.is_empty() and it.get("uid") == latest.get("uid") and tool == latest.get("tool") and facts == latest.get("facts") and Model.inspection_current(it, tool)
+
 func toast_rect() -> Rect2:
 	if is_instance_valid(strict_view) and not shell.mobile_mode():
 		var speech_rect: Rect2 = strict_view.get_node("StrictSpeechBubble").get_global_rect()
@@ -231,6 +241,8 @@ func enter() -> void:
 		strict_view=preload("res://scripts/ui/strict_counter_view.gd").new()
 		add_child(strict_view)
 		strict_view.setup(self)
+		if shell.mobile_mode() and not shell.counter_receipt.is_empty():
+			_print_receipt(shell.counter_receipt,true)
 
 func _align_stage() -> void:
 	var inv := get_viewport().get_canvas_transform().affine_inverse() * Transform2D(0.0, shell.counter_offset())
@@ -246,6 +258,9 @@ func _scene_blocked() -> bool:
 ## an existing GUI drag can retain pointer capture even behind the new sheet.
 func workspace_state_changed(opened: bool) -> void:
 	_workspace_suspended = opened
+	if is_instance_valid(receipt_tab):
+		_collapse_receipt()
+		receipt_tab.visible = not opened and shell.mobile_mode()
 	_departure_key = ""
 	if opened:
 		if is_instance_valid(dial):
@@ -571,6 +586,7 @@ func _open_instrument(which: String) -> void:
 	shell.go(which, it.uid if it != null else "")
 
 func relayout() -> void:
+	_layout_filed_receipt.call_deferred()
 	if is_instance_valid(mat_item) and mat_item.dragging: _finish_table_drag()
 	if is_instance_valid(dial): dial.cancel_drag()
 	if not is_instance_valid(terminal) or not is_instance_valid(crate):
@@ -1492,6 +1508,7 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 	if _workspace_suspended and a.type in ["SERVICE_PROGRESS", "REFURB_PROGRESS", "MOVE"]: return
 	if a.type in CounterDialogue.VERBS or a.type in TradeSession.ACTIONS or a.type == "ISSUE_WANTED":
 		_departure_key = ""
+	if prev.day != next.day: _collapse_receipt()
 	var pt = prev.trade
 	var nt = next.trade
 	var scene_action: String = a.type
@@ -1500,6 +1517,7 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 	match scene_action:
 		"ARRIVE", "ARRIVE_INSPECTION":
 			if pt == null and nt != null:
+				_collapse_receipt()
 				busy = true
 				_refresh()
 				await get_tree().create_timer(0.35).timeout
@@ -1567,10 +1585,10 @@ func on_changed(prev: Dictionary, next: Dictionary, a: Dictionary) -> void:
 				var item_name := "本次说好的 %d 件原物" % int(receipt.count)
 				if proxy.handoffs.size() == 1:
 					item_name = GameData.def(proxy.handoffs[0].original.defId).name
-				await _deal(proxy,false,item_name,true)
+				await _deal(proxy,false,item_name,prev,next,true)
 			elif pt != null and nt == null:
 				var sold = Model.trade_item(prev)
-				await _deal(pt, a.type == "PAWN", WatchForgery.sale_name(sold) if sold != null else "货物")
+				await _deal(pt, a.type == "PAWN", WatchForgery.sale_name(sold) if sold != null else "货物",prev,next)
 		"ISSUE_WANTED", "ASK_VISITOR":
 			if nt != null: _say(nt.line,true,"focused")
 		"PAY_RENT":
@@ -1629,13 +1647,16 @@ func _cash_point() -> Vector2:
 	if shell.landscape_mode(): return mobile_cash
 	return cash_tray.note_center()
 
-func _deal(t: Dictionary, pawn: bool, item_name: String, stay := false) -> void:
+func _deal(t: Dictionary, pawn: bool, item_name: String, before: Dictionary, after: Dictionary, stay := false) -> void:
 	busy = true
 	_refresh()
 	var buy: bool = t.kind == "buy"
 	var price: float = absf(Game.state.ledger[-1].amount) if pawn and not Game.state.ledger.is_empty() else float(t.price)
-	var cash_change := -price if buy else price
-	var before_cash: float = float(Game.state.cash) - cash_change
+	var cash_change := snappedf(float(after.cash) - float(before.cash),0.01)
+	var stock_change: int = after.inventory.size() - before.inventory.size()
+	var before_cash: float = before.cash
+	_clear_filed_receipt()
+	_settlement_changes(cash_change,stock_change)
 	cash_tray.set_cash(before_cash)
 	if not is_instance_valid(customer):
 		cash_tray.set_cash(float(Game.state.cash))
@@ -1656,7 +1677,7 @@ func _deal(t: Dictionary, pawn: bool, item_name: String, stay := false) -> void:
 	cash_tray.set_cash(float(Game.state.cash))
 	# The receipt can print while the goods change hands. Departure waits for
 	# the actual item tween, rather than a shorter, unrelated timer.
-	_receipt(t, price, pawn, item_name)
+	_receipt(t, price, pawn, item_name,cash_change,stock_change)
 	customer.nod()
 	handover_history=[]
 	if stay:
@@ -1744,7 +1765,19 @@ func _bill(from: Vector2, to: Vector2, i: int, landing_cash: float) -> Tween:
 
 ## A thermal-paper slip prints out of the till, gets stamped and is torn
 ## off. It belongs to this page, so leaving the counter takes it away too.
-func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> void:
+func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String, cash_change: float, stock_change: int) -> void:
+	var terms := {"kind":t.kind,"npcId":t.npcId}
+	if t.has("batch_income"):
+		terms.batch_income=t.batch_income
+		terms.batch_expense=t.batch_expense
+	shell.counter_receipt = {"terms":terms,"price":price,"pawn":pawn,"item":item_name,
+		"cash":cash_change,"stock":stock_change,"day":Game.state.day,"serial":Game.state.completedTrades.size()}
+	_print_receipt(shell.counter_receipt,false)
+
+func _print_receipt(record: Dictionary, archived: bool) -> void:
+	var t: Dictionary = record.terms
+	var pawn: bool = record.pawn
+	_clear_filed_receipt()
 	var kind := "双方钱货回执" if t.has("batch_income") else "抵押凭据" if pawn else ("收购凭据" if t.kind == "buy" else "销售凭据")
 	var paper := UIKit.plate(UIKit.paper_style(12 if shell.landscape_mode() else 20))
 	paper.name = "trade_receipt"
@@ -1756,25 +1789,26 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 	var head := UIKit.hbox(8)
 	head.add_child(UIKit.label("轨道旧货局", 20, UIKit.INK))
 	head.add_child(UIKit.spacer(false))
-	head.add_child(UIKit.label("No.%04d" % Game.state.completedTrades.size(), 16, Color("6b5a40"), true))
+	head.add_child(UIKit.label("No.%04d" % record.serial, 16, Color("6b5a40"), true))
 	v.add_child(head)
 	v.add_child(UIKit.label("回环九号 · 下层旧港 · %s" % kind, 14, Color("6b5a40")))
 	v.add_child(_dashes())
-	var item_label := UIKit.label(item_name, 22, UIKit.INK, false, true)
+	var item_label := UIKit.label(record.item, 22, UIKit.INK, false, true)
 	item_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	item_label.size.x = content_width
 	v.add_child(item_label)
 	var row := UIKit.hbox(8)
 	row.add_child(UIKit.label("本金" if pawn else "成交", 18, Color("6b5a40")))
 	row.add_child(UIKit.spacer(false))
-	row.add_child(UIKit.label(UIKit.money(price), 30, UIKit.RUST, true))
+	row.add_child(UIKit.label(UIKit.money(record.price), 30, UIKit.RUST, true))
 	v.add_child(row)
 	if t.has("batch_income"):
 		var totals := UIKit.label("卖出收入 %s · 买入支出 %s" % [UIKit.money(t.batch_income),UIKit.money(t.batch_expense)],15,UIKit.INK,false,true)
 		totals.size.x = content_width
 		v.add_child(totals)
+	v.add_child(UIKit.label("现金 %s Cr   库存 %s 件" % [_signed(record.cash),_signed(record.stock)],16,UIKit.INK))
 	v.add_child(_dashes())
-	v.add_child(UIKit.label("来客  %s · 第 %d 天" % [GameData.npc(t.npcId).name, int(Game.state.day)], 15, Color("6b5a40")))
+	v.add_child(UIKit.label("来客  %s · 第 %d 天" % [GameData.npc(t.npcId).name, int(record.day)], 15, Color("6b5a40")))
 	# Room for the stamp so it never lands on the text.
 	var stamp_room := Control.new()
 	stamp_room.custom_minimum_size = Vector2(0, 54)
@@ -1793,7 +1827,9 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 		var at := Vector2(checkout_edge.x-16-paper.size.x,dock_y-paper.size.y-28)
 		final_pos = get_global_transform_with_canvas().affine_inverse()*at
 		exit_offset = Vector2(-36,14)
-	if shell.landscape_mode(): final_pos = Vector2((get_viewport_rect().size.x-paper.size.x)*0.5,maxf(6,(get_viewport_rect().size.y-paper.size.y)*0.5))
+	if shell.mobile_mode():
+		_file_mobile_receipt(paper,pawn,t,archived)
+		return
 	paper.pivot_offset = Vector2(paper.size.x * 0.5, 0)
 	if Game.prefs.reduced_motion:
 		paper.position = final_pos
@@ -1819,6 +1855,112 @@ func _receipt(t: Dictionary, price: float, pawn: bool, item_name: String) -> voi
 	tw.parallel().tween_property(paper, "modulate:a", 0.0, 0.45)
 	tw.tween_callback(paper.queue_free)
 
+func _signed(amount: float) -> String:
+	return ("+" if amount>0 else "")+Model.jnum(amount)
+
+func _settlement_changes(cash: float, stock: int) -> void:
+	var cash_anchor: Control = cash_tray
+	var stock_anchor: Control = stock_count
+	var mobile = get_node_or_null("PortraitCounter")
+	if shell.landscape_mode() and mobile != null:
+		cash_anchor = mobile.landscape.balance
+		stock_anchor = mobile.landscape.dock_keys[1]
+	elif shell.portrait_mode() and mobile != null:
+		cash_anchor = mobile.balance
+		stock_anchor = mobile.find_child("portrait_nav_warehouse",true,false)
+	elif is_instance_valid(strict_view):
+		cash_anchor = strict_view.money
+		stock_anchor = strict_view.stock_count
+	_delta_note(cash_anchor,"settlement_cash","现金 "+_signed(cash)+" Cr",false)
+	_delta_note(stock_anchor,"settlement_stock","库存 "+_signed(stock)+" 件",shell.mobile_mode())
+
+func _delta_note(anchor: Control, id: String, copy: String, above: bool) -> void:
+	var old := get_node_or_null(id)
+	if old != null:
+		remove_child(old)
+		old.queue_free()
+	var note := UIKit.label(copy,16 if shell.mobile_mode() else 21,UIKit.INK)
+	note.name = id
+	note.add_theme_stylebox_override("normal",UIKit.paper_style(4))
+	note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(note)
+	note.reset_size()
+	var rect := anchor.get_global_rect()
+	var at := Vector2(rect.get_center().x-note.size.x*.5,rect.position.y-note.size.y if above else rect.end.y)
+	var view := get_viewport_rect()
+	at = at.clamp(view.position,view.end-note.size)
+	note.position = get_global_transform().affine_inverse()*at
+	var hold := note.create_tween()
+	hold.tween_interval(2.5)
+	hold.tween_callback(note.queue_free)
+
+func _clear_filed_receipt() -> void:
+	if receipt_preview != null:
+		receipt_preview.kill()
+		receipt_preview = null
+	for node in [filed_receipt,receipt_tab]:
+		if is_instance_valid(node):
+			node.hide()
+			remove_child(node)
+			node.queue_free()
+	filed_receipt = null
+	receipt_tab = null
+	receipt_reading = false
+
+func _collapse_receipt() -> void:
+	if not is_instance_valid(receipt_tab): return
+	if receipt_preview != null: receipt_preview.kill()
+	filed_receipt.hide()
+	receipt_reading = false
+	receipt_tab.text = "上笔回执"
+
+func _file_mobile_receipt(paper: Control,pawn: bool,t: Dictionary,archived: bool) -> void:
+	filed_receipt = paper
+	receipt_tab = UIKit.button("收起回执","secondary",Vector2(86,30),14)
+	receipt_tab.name = "receipt_tab"
+	receipt_tab.clip_text = false
+	receipt_tab.set_meta("touch_assist_no_expand",true)
+	add_child(receipt_tab)
+	receipt_reading = true
+	_layout_filed_receipt()
+	receipt_tab.pressed.connect(func():
+		if _scene_blocked(): return
+		if receipt_preview != null: receipt_preview.kill()
+		receipt_reading = not receipt_reading
+		paper.visible = receipt_reading
+		receipt_tab.text = "收起回执" if receipt_reading else "上笔回执")
+	if archived:
+		_stamp(paper,pawn,t,false)
+		_collapse_receipt()
+		return
+	if not Game.prefs.reduced_motion:
+		var presentation := paper.create_tween()
+		shell.sound("click",-12,2.4)
+		presentation.tween_property(paper,"scale:y",paper.scale.y,.3).from(.05)
+		presentation.tween_callback(func(): _stamp(paper,pawn,t,true))
+	else:
+		_stamp(paper,pawn,t,false)
+	receipt_preview = paper.create_tween()
+	receipt_preview.tween_interval(.85 if Game.prefs.reduced_motion else 1.15)
+	receipt_preview.tween_callback(func():
+		if filed_receipt==paper:
+			_collapse_receipt())
+
+func _layout_filed_receipt() -> void:
+	if not is_instance_valid(filed_receipt): return
+	if not shell.mobile_mode():
+		filed_receipt.hide()
+		receipt_tab.hide()
+		receipt_reading = false
+		receipt_tab.text = "上笔回执"
+		return
+	receipt_tab.visible = not _workspace_suspended
+	var area: Rect2 = shell.safe_area()
+	get_node("PortraitCounter/LandscapeCounter").layout_dock(area)
+	var fit := minf(1.0,minf((area.size.y-8)/filed_receipt.size.y,(area.size.x-8)/filed_receipt.size.x))
+	filed_receipt.scale = Vector2.ONE*fit
+	filed_receipt.position = area.get_center()-filed_receipt.size*fit*.5
+
 func _dashes() -> Control:
 	var l := UIKit.label("- ".repeat(60), 14, Color("a8987a"))
 	l.clip_text = true
@@ -1827,7 +1969,7 @@ func _dashes() -> Control:
 func _stamp(paper: Control, pawn: bool, t: Dictionary, animate: bool) -> void:
 	if not is_instance_valid(paper):
 		return
-	var text := "已抵押" if pawn else ("已收购" if t.kind == "buy" else "已售出")
+	var text := "已交割" if t.has("batch_income") else "已抵押" if pawn else ("已收购" if t.kind == "buy" else "已售出")
 	var stamp := PanelContainer.new()
 	stamp.add_theme_stylebox_override("panel", UIKit.box(Color(0, 0, 0, 0), Color(0.72, 0.13, 0.1, 0.85), 6, 3, 8, 0))
 	var l := UIKit.label(text, 30, Color(0.72, 0.13, 0.1, 0.9))
@@ -1838,14 +1980,18 @@ func _stamp(paper: Control, pawn: bool, t: Dictionary, animate: bool) -> void:
 	var room: Control = paper.get_meta("stamp_room")
 	room.add_child(stamp)
 	stamp.reset_size()
-	stamp.position = Vector2(room.size.x - stamp.size.x - 4, room.size.y - stamp.size.y + 6)
+	stamp.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT,Control.PRESET_MODE_KEEP_SIZE)
+	stamp.offset_left -= 8
+	stamp.offset_right -= 8
+	stamp.offset_top -= 5
+	stamp.offset_bottom -= 5
 	stamp.pivot_offset = stamp.size * 0.5
 	stamp.rotation = -0.2
 	if not animate:
 		return
 	stamp.scale = Vector2.ONE * 2.2
 	stamp.modulate.a = 0.0
-	var st := create_tween()
+	var st := stamp.create_tween()
 	st.tween_property(stamp, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	st.parallel().tween_property(stamp, "modulate:a", 1.0, 0.08)
 	st.tween_callback(func():

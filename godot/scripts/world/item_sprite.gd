@@ -8,6 +8,7 @@ signal dropped
 signal flipped(back: bool)
 signal flip_finished(back: bool)
 
+var closeup := false
 var def_id := ""
 var uid := ""
 var body: Sprite2D
@@ -38,7 +39,8 @@ var last_visual_back := false
 var last_rare_effect := -1
 
 ## height: on-screen height in px for the front face.
-func setup(id: String, item_uid := "", height := 300.0, start_back := false) -> void:
+func setup(id: String, item_uid := "", height := 300.0, start_back := false, workbench := false) -> void:
+	closeup = workbench and id.begins_with("WCH-")
 	def_id = id
 	uid = item_uid
 	back = start_back
@@ -48,10 +50,11 @@ func setup(id: String, item_uid := "", height := 300.0, start_back := false) -> 
 	shadow.material = Util.unshaded()
 	add_child(shadow)
 	body = Sprite2D.new()
-	body.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	body.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if closeup else CanvasItem.TEXTURE_FILTER_NEAREST
 	body.region_enabled = true
 	mat = ShaderMaterial.new()
 	mat.shader = load("res://shaders/item.gdshader")
+	mat.set_shader_parameter("workbench_face",closeup)
 	body.material = mat
 	motion_pivot = Node2D.new()
 	motion_pivot.name = "motion_pivot"
@@ -82,11 +85,15 @@ func _apply_face() -> void:
 	var asz: Vector2 = UIKit.tex("res://assets/atlas/%s.png" % cell.key).get_size()
 	var it = Game.item(uid) if not uid.is_empty() else null
 	logo_variant = WatchRules.logo_variant(it) if it != null else 0
-	if not back and logo_variant != 0:
+	if closeup:
+		body.texture = preload("res://scripts/ui/watch_workbench_texture.gd").texture(it if it != null else {"defId":def_id},back)
+		body.region_rect = Rect2(8.96,8.96,238.08,238.08)
+		asz = Vector2(256,256)
+	elif not back and logo_variant != 0:
 		body.texture = UIKit.watch_variant_texture(def_id)
 		body.region_rect = Rect2(8.96, 8.96, 238.08, 238.08)
 		asz = Vector2(256, 256)
-	if it!=null and WatchForgery.target_id(it)!="":
+	if not closeup and it!=null and WatchForgery.target_id(it)!="":
 		body.texture=UIKit.physical_texture(it,back)
 		body.region_rect=Rect2(8.96,8.96,238.08,238.08)
 		asz=Vector2(256,256)

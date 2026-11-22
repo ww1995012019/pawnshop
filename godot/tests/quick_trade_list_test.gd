@@ -9,8 +9,15 @@ func run():
  var ids=se.goods.map(func(it):return it.uid)
  se.lines=se.lines.filter(func(line):return line.uid in ids)
  for line in se.lines:line.context.price=minf(Model.trade_terms(game.state,line.context,TradeSession.item(game.state,line.uid)).marketCap,ceil(Model.trade_terms(game.state,line.context,TradeSession.item(game.state,line.uid)).floor*1.5))
+ var inspected=se.goods[0];inspected.evidence=["TOL-001"];Model.record_inspection(inspected,"TOL-001")
  game.state=CounterDialogue.begin(game.state)
  var shell=load("res://main.tscn").instantiate();root.add_child(shell);await frames();shell._close_title();await frames()
+ var proof={"uid":ids[0],"tool":"TOL-001","facts":inspected.inspectionFacts["TOL-001"].duplicate(true)}
+ shell.set_meta("latest_inspection",proof)
+ var other=inspected.duplicate(true);other.uid=ids[1]
+ check(not shell.page.is_latest_inspection(other,"TOL-001"),"another original with identical readings is not highlighted")
+ other.uid=ids[0];other.inspectionFacts["TOL-001"].condition=0
+ check(not shell.page.is_latest_inspection(other,"TOL-001"),"changed evidence does not inherit the latest mark")
  var view=shell.page.strict_view;var list=view.get_node_or_null("QuickTradeList")
  check(list!=null and list.is_visible_in_tree(),"ordinary customer opens the direct item quick list")
  if list==null:shell.queue_free();await frames();quit(1);return
@@ -33,14 +40,18 @@ func run():
  await click(named(list,"quick_offer_"+first));await frames()
  var edit=list.find_child("QuickOfferValue",true,false)
  check(edit!=null and edit.is_visible_in_tree(),"row negotiation opens the quote editor for this original")
+ var fresh=named(list,"QuickEvidence_TOL-001")
+ check(fresh!=null and fresh.text.begins_with("新录") and shell.page.chosen_evidence=="","quick quote marks latest evidence without selecting it")
  var agreed=TradeSession.row(game.state,first).context.price+5
  var untouched=game.state.duplicate(true)
  if edit!=null:
   edit.text="abc";await click(named(list,"QuickOfferSubmit"));await frames()
   check(game.state==untouched and is_instance_valid(edit),"invalid price stays in the editor without changing the quote")
  if edit!=null:
+  shell.toast("已记录紫外编号")
   edit.text=str(int(agreed));await click(named(list,"QuickOfferSubmit"));await frames()
  check(TradeSession.row(game.state,first).selected and TradeSession.row(game.state,first).context.price==agreed,"quote submit uses the typed price and exact row UID")
+ check(shell.toast_box.get_children().all(func(b):return b.get_meta("message","")!="已记录紫外编号"),"submitting removes old inspection feedback")
  var stable=game.state.duplicate(true)
  view._quick_action("toggle",second,game.state.trade.id,int(TradeSession.session(game.state).version)-1,TradeSession.row(game.state,second).context.price)
  check(game.state==stable,"stale list version cannot change a selection")
@@ -114,4 +125,6 @@ func run():
  check(withdraw!=null and not withdraw.disabled,"rejected and unselected originals retain explicit withdrawal in More")
  await click(withdraw);await frames()
  check(not TradeSession.row(game.state,rejected_uid).included and not CounterDialogue.table_items(game.state).any(func(info):return info.uid==rejected_uid) and TradeSession.row(game.state,other_uid).selected and game.state.cash==cash and game.state.ap==ap,"explicit withdrawal frees a full presentation slot without paying or canceling other selections")
+ game.new_game("FRESH-COUNTER")
+ check(not shell.has_meta("latest_inspection"),"a new shop starts with no freshly recorded evidence from the previous save")
  shell.queue_free();await frames();print("QUICK LIST failures=",failures);quit(1 if failures else 0)

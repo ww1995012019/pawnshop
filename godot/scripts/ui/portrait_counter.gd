@@ -197,6 +197,7 @@ func _build() -> void:
 		var key := _key(spec[0], func():
 			if target == "tasks": _tasks()
 			else: shell.go(target), "primary" if target == "counter" else "secondary",spec[2])
+		key.name = "portrait_nav_"+target
 		key.custom_minimum_size.y = 62
 		key.icon = null
 		key.tooltip_text = spec[0]
@@ -264,6 +265,7 @@ func _refresh() -> void:
 	var line: String = desk.bubble_label.get_parsed_text()
 	speech.text = line if t != null and line != "" else "柜台已经准备好了。\n按响服务铃，接待下一位来客。"
 	item_name.text = GameData.def(item.defId).name if item != null else "等候查验的旧物" if t == null else "请先挑选货物"
+	if item != null and t.get("locked",false): item_name.text = "【锁价】" + item_name.text
 	item_hint.text = "点实物查看详情 · 已有 %d 条物证" % Model.evidence_count(item) if item != null else "鉴定旧物 · 商议价格 · 经营柜台"
 	if t != null and t.kind in ["buy", "sell"]:
 		item_hint.text = "价格已谈妥 · 确认交割" if t.locked else ("鉴定 → 出价 · %d 条物证" % Model.evidence_count(item) if item != null else "选货 → 鉴定 → 出价")
@@ -433,6 +435,7 @@ func _quote_popup() -> void:
 			if not GameData.relevant_tool(original_item.defId,tool): continue
 			var tool_id: String = tool
 			var caption: String = {"TOL-001":"表盘印记","TOL-002":"后盖编号","TOL-005":"称重记录"}.get(tool_id,GameData.evidence_short(original_item.defId,tool_id))
+			if desk.is_latest_inspection(original_item,tool_id): caption = "新录 · " + caption
 			var evidence_key := UIKit.button(caption,"chip",Vector2(0,30 if shell.landscape_mode() else 36),14)
 			evidence_key.clip_text = false
 			evidence_key.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING

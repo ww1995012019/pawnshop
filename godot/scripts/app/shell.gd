@@ -36,6 +36,7 @@ var toast_box: VBoxContainer
 var hint_label: Label
 var modal_layer: Control
 var page: Page
+var counter_receipt := {}
 var page_name := ""
 var nav_buttons := {}
 var gauges := {}
@@ -959,24 +960,22 @@ func _on_changed(prev: Dictionary, next: Dictionary, action: Dictionary) -> void
 	if action.type=="STORAGE_SAVE_FAILED":
 		toast("扩仓保存失败，原表和现金均已保留。")
 		return
-	if action.type in ["DEBUG_EDIT","DEBUG_RESTORE"]:
+	if action.type in ["NEW_GAME", "DEBUG_EDIT", "DEBUG_RESTORE"]:
 		if workspace_mode: return
 		close_workspace(true, true)
-		Game.set_meta("counter_offer_drafts",{})
-		go("counter")
-		_refresh_hud()
-		if is_instance_valid(wanted_notice): wanted_notice.last_signature=""
-		_sync_wanted_notice()
-		return
-	if action.type == "NEW_GAME":
-		if workspace_mode:
-			return
-		close_workspace(true, true)
+		counter_receipt.clear()
+		remove_meta("latest_inspection")
 		Game.set_meta("counter_offer_drafts", {})
 		go("counter")
 		_refresh_hud()
+		if action.type != "NEW_GAME" and is_instance_valid(wanted_notice): wanted_notice.last_signature=""
 		_sync_wanted_notice()
 		return
+	if action.type == "OFFER" and page_name == "counter":
+		for banner in toast_box.get_children():
+			if banner.get_meta("tone","info") == "info":
+				toast_box.remove_child(banner)
+				banner.queue_free()
 	var quiet_save: bool = action.type in ["SERVICE_PROGRESS", "SERVICE_BEGIN"] and next.notice == prev.notice
 	if action.type in ["SERVICE_PROGRESS", "REFURB_PROGRESS"] and next.notice == prev.notice:
 		if page != null: page.on_changed(prev, next, action)
@@ -1941,8 +1940,9 @@ func _show_title() -> void:
 	intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(intro)
 	v.add_child(UIKit.rule())
-	var cont := UIKit.button("继续营业 · 第 %d 天" % int(Game.state.day) if Game.has_save else "开门营业", "primary", Vector2(0, 66), 26)
+	var cont := UIKit.button("继续营业 · 第 %d 天" % int(Game.state.day) if Game.has_save else "开门营业 · 21 天经营", "primary", Vector2(0, 66), 26)
 	cont.pressed.connect(func():
+		if not Game.has_save: set_meta("opening_bell_pending", true)
 		sound("open")
 		_close_title()
 		shutter(int(Game.state.day)))
@@ -1953,6 +1953,7 @@ func _show_title() -> void:
 		story.pressed.connect(func():
 			_close_title()
 			Game.new_game("", CampaignLife.STORY90)
+			set_meta("opening_bell_pending", true)
 			shutter(1))
 		v.add_child(story)
 	if Game.has_save:
@@ -1961,6 +1962,7 @@ func _show_title() -> void:
 			confirm("新开一家店", "当前存档（第 %d 天）的现金、库存和订单都会清除，无法恢复。" % int(Game.state.day), "清除并新开", func():
 				_close_title()
 				Game.new_game()
+				set_meta("opening_bell_pending", true)
 				shutter(1)))
 		v.add_child(fresh)
 	var hb := UIKit.hbox(12)

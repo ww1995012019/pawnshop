@@ -68,7 +68,8 @@ def main():
             page.wait_for_function("document.getElementById('loader') === null", timeout=10000)
             assert page.locator('#touch-nav').is_hidden(), "Phone navigation must not cover the desktop"
             page.screenshot(path=str(args.screenshots / '01-desktop-title.png'))
-            page.mouse.click(800,551)
+            start = phone.locate(page, '开门营业')
+            page.mouse.click(start['x'], start['y'])
             page.wait_for_function("!window.OrbitalTouch.state.title && !window.OrbitalTouch.state.busy",timeout=15000)
             page.wait_for_timeout(2500)
             audio = page.evaluate("({state:__audioProbe.state,max:Math.max(0,...__audioProbe.levels.slice(-20)),samples:__audioProbe.levels.length})")
